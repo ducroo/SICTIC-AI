@@ -1,0 +1,147 @@
+import os
+from pathlib import Path
+from typing import List, Optional
+
+from skills.utils.logger import get_logger
+from skills.utils.env import get_env_var
+from skills.config_load.config_load import config_load
+from skills.dataset_chat.dataset_search import dataset_search
+from skills.utils.ranking_writeup import ranking_writeup
+from skills.utils.find_top_k import find_top_k
+from skills.llm_chat.llm_chat import llm_chat
+
+from rapidfuzz import process, fuzz
+
+logger = get_logger(__name__)
+
+# ==========================================
+# HELPER FUNCTIONS (Single Responsibility)
+# ==========================================
+
+def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], optout: Optional[List[str]]) -> List[str]:
+    """Determines the final list of candidates to rank by fuzzy-matching against available profiles."""
+    dataset_dir = Path(get_env_var("GDRIVE_MOUNT")) / "datasets" / dataset_name
+    available_profiles = []
+    for f in dataset_dir.glob("*.md"):
+        if f.is_file():
+            name = f.stem
+            if '-person-profile' in name:
+                name = name.split('-person-profile')[0]
+            available_profiles.append(name)
+            
+    if not available_profiles:
+        raise RuntimeError(f"No profile files found in {dataset_dir}. Cannot rank candidates.")
+        
+    final_candidates = []
+    
+    if candidates:
+        missing_candidates = []
+        for c in candidates:
+            match = process.extractOne(c, available_profiles, scorer=fuzz.WRatio)
+            if match and match[1] >= 80:
+                final_candidates.append(match[0])
+            else:
+                missing_candidates.append(c)
+                
+        if missing_candidates:
+            err_msg = f"The following requested candidates could not be found in the dataset: {', '.join(missing_candidates)}"
+            logger.error(err_msg)
+            raise ValueError(err_msg)
+    else:
+        final_candidates = available_profiles.copy()
+        
+    if optout:
+        missing_optouts = []
+        optout_matches = set()
+        for o in optout:
+            match = process.extractOne(o, available_profiles, scorer=fuzz.WRatio)
+            if match and match[1] >= 80:
+                optout_matches.add(match[0])
+            else:
+                missing_optouts.append(o)
+                
+        if missing_optouts:
+            err_msg = f"The following optout candidates could not be found in the dataset: {', '.join(missing_optouts)}"
+            logger.error(err_msg)
+            raise ValueError(err_msg)
+            
+        final_candidates = [c for c in final_candidates if c not in optout_matches]
+        
+    return list(set(final_candidates))
+
+# ==========================================
+# MAIN ORCHESTRATOR
+# ==========================================
+
+async def people_ranking(
+    dataset_name: str = "person_profile",
+    objective: str = "", 
+    query: str = "",
+    candidates: Optional[List[str]] = None, 
+    optout: Optional[List[str]] = None, 
+    top_k: int = 8
+) -> str:
+    """
+    Core engine to rank SICTIC members using pairwise comparisons.
+    Returns the generated markdown report as a string.
+    """
+    logger.info("Starting people_ranking")
+    
+    gdrive_path = Path(get_env_var("GDRIVE_MOUNT"))
+    
+    # 1. Resolve Candidates
+    final_candidates = _resolve_candidates(dataset_name, candidates, optout)
+
+    # 2. Semantic Search & Filtering
+    cutoff_m = top_k * 4
+    logger.info(f"Starting semantic search on dataset '{dataset_name}' with query: '{query[:50]}...'")
+    chunks = await dataset_search(
+        dataset_name=dataset_name, 
+        query=query, 
+        max_chunks=cutoff_m * 10, 
+        return_full_docs=True
+    )
+    
+    if not chunks:
+        err_msg = f"No documents found in dataset {dataset_name} during semantic search."
+        logger.error(err_msg)
+        raise RuntimeError(err_msg)
+
+    id_to_text = {}
+    
+    # Filter chunks based on the resolved candidates list
+    for c in chunks:
+        clean_name = c.document_name
+        if '-person-profile' in clean_name:
+            clean_name = clean_name.split('-person-profile')[0]
+        elif clean_name.endswith('.md'):
+            clean_name = clean_name[:-3]
+            
+        if clean_name in final_candidates and clean_name not in id_to_text:
+            id_to_text[clean_name] = c.text
+            if len(id_to_text) >= cutoff_m:
+                break
+                
+    if not id_to_text:
+        err_msg = "No documents remained after filtering semantic search results against the candidate list."
+        logger.error(err_msg)
+        raise RuntimeError(err_msg)
+
+    # 3. Execute Find Top K
+    logger.info(f"Starting find_top_k with {len(id_to_text)} candidates (target top_k: {top_k}).")
+    ranked_items, actual_top_k = await find_top_k(
+        objective=objective,
+        all_profiles=id_to_text,
+        top_k=top_k
+    )
+
+    # 4. Synthesize Final Report
+    logger.info(f"Starting ranking_writeup with top {actual_top_k} out of {len(ranked_items)} ranked candidates.")
+    result = await ranking_writeup(
+        ranked_items=ranked_items,
+        objective=objective,
+        top_k=actual_top_k
+    )
+
+    logger.info(f"[{dataset_name}] people_ranking complete.")
+    return result

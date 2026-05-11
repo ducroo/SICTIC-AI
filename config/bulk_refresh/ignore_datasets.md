@@ -1,0 +1,3 @@
+investor_appetite
+person_profile
+startup_profile

@@ -1,0 +1,4 @@
+* Software: Focuses on SaaS, Web/Mobile Apps, pure AI/ML, FinTech, Marketplaces, and Platforms. Crucially, these companies do not have proprietary hardware at the core of their value proposition.  
+* Hardware: Includes Deep Tech, Robotics, Drones, IoT, Semiconductors, MedTech devices, and CleanTech. These companies produce and sell physical products or proprietary physical components.   
+* Biology: Includes Biotech, Pharma, Life Sciences, Therapeutics, Industrial Bio, Computational Bio, and Diagnostics. These companies typically involve "wet lab" work or biological research.   
+* General: Includes E-commerce, D2C/CPG, Traditional Services, Real Estate, Food & Beverage, and any sector not covered by the high-tech/bio categories above.

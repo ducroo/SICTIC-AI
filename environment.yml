@@ -1,0 +1,26 @@
+name: sictic-env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - aiohttp
+  - litellm
+  - polars
+  - pydantic
+  - pytest
+  - pytest-mock
+  - python-dotenv
+  - qdrant-client
+  - rapidfuzz
+  - requests
+  - rich
+  - typer
+  - pip:
+      - apify-client
+      - langchain-text-splitters
+      - ollama
+
+variables:
+  PYTHONPATH: /home/node/.openclaw/workspace-sictic-ai

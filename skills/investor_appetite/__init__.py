@@ -1,0 +1,1 @@
+# Investor Appetite Skill
