@@ -6,9 +6,17 @@ A collection of Python skills (LLM-powered analysis routines for startups, inves
 
 This directory is part of an **openclaw** runtime system — the skills are normally invoked from the openclaw harness via the containerized stack in `docker-compose.yml`. The skills themselves are pure Python and have no hard dependency on openclaw; they could be wired into other harnesses (Claude Code subagents, a CLI runner, an MCP server, etc.) as long as the required env vars and backing services are reachable.
 
+## Prerequisites
+
+Before either OS-specific setup, you need:
+
+- **Homebrew** (macOS): https://brew.sh
+- **Miniconda or Anaconda**: `brew install --cask miniconda` (macOS) or https://docs.conda.io
+- **Python 3.13** (macOS only, used by the docling venv — see note below): `brew install python@3.13`
+
 ## Environment setup (conda)
 
-The canonical Python environment is defined in `environment.yml` (env name: `sictic-env`, Python 3.12).
+The canonical Python environment for **running the skills** is defined in `environment.yml` (env name: `sictic-env`, Python 3.12).
 
 ```bash
 conda env create -f environment.yml
@@ -21,6 +29,8 @@ The skills package expects to be importable as `skills.*`. Either run from the r
 export PYTHONPATH="$(pwd)"
 ```
 
+> **Two Python environments, on purpose.** The skills run in the **conda env (Python 3.12)** described above. The **docling-serve binary** (one of the backing services on macOS) runs from a **separate venv at `./venv` (Python 3.13)**, because docling-serve's dependencies expect 3.13. The two never share an interpreter — keep them separate.
+
 ### Configuration: `.env`
 
 Copy the template and fill in values:
@@ -29,13 +39,13 @@ Copy the template and fill in values:
 cp .env-template .env
 ```
 
-Required variables (the four `*_HOST` vars are not in the template yet — add them manually):
+Required variables:
 
 | Variable | Purpose | Example |
 |---|---|---|
 | `GDRIVE_MOUNT` | Local path to the rclone/Google Drive mount | `/data` or `~/gdrive` |
 | `WORKSPACE_DIR` | Path to this repo on the host | `/Users/you/.openclaw/workspace-ops/SICTIC-AI` |
-| `DEFAULT_LLM`, `DEFAULT_VLM`, `DEFAULT_EMBEDDINGS` | litellm-style model names | `ollama/qwen3.5:9b` |
+| `DEFAULT_LLM`, `DEFAULT_VLM`, `DEFAULT_EMBEDDINGS` | litellm-style model names | `ollama/qwen3:8b` |
 | `OLLAMA_MAX_CONTEXT`, `OLLAMA_CONTEXT_LENGTH` | Context window sizing | `32768` / `16384` |
 | `RANKED_LLMS` | Preferred LLM fallback order (CSV) | see `.env-template` |
 | `MAX_CONCURRENT_EMBEDS`, `MAX_CONCURRENT_LLMS`, `MAX_CONCURRENT_DOCLING` | Gateway concurrency caps | `16` / `10` / `16` |
@@ -65,15 +75,60 @@ Four services need to be running before most skills will work: **qdrant**, **oll
 
 ### macOS
 
-On macOS the services run as a mix of native processes and one container (qdrant), managed by `macos_launch.sh`. The container is launched via `podman compose -f docker-compose.macos.yml` (lighter than the full Linux compose file — only qdrant runs in a container; docling and llama run from a local venv / binary, and rclone mounts via the native CLI).
+On macOS **all four services run natively** — no containers, no Linux VM. `macos_launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
 
-Prerequisites:
-- `podman` (and a running podman machine: `podman machine start`)
-- A local Python venv at `./venv` with `docling-serve` installed
-- `llama.cpp` checked out at `./llama.cpp` with a model under `./models/`
-- `rclone` configured with a `gdrive:` remote
+#### Prerequisites (macOS-only)
 
-Usage:
+Install the host-side tools via Homebrew:
+
+```bash
+brew install rclone ollama
+```
+
+**Qdrant** — native macOS binary, downloaded from the official release:
+
+```bash
+curl -sL -o /tmp/qdrant.tar.gz \
+  https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz
+mkdir -p qdrant && tar -xzf /tmp/qdrant.tar.gz -C qdrant
+```
+
+The launcher runs `./qdrant/qdrant` with `QDRANT__STORAGE__STORAGE_PATH=./qdrant_data`, so all state stays under `./qdrant_data/` in the repo.
+
+**Ollama** — runs as a regular process. `macos_launch.sh start ollama` launches `ollama serve` in the background. Do **not** also run `brew services start ollama` — that would start a second instance and fight the launcher for port 11434.
+
+To pre-pull the models referenced in `.env`:
+
+```bash
+ollama pull qwen3:8b
+ollama pull qwen3-vl:8b
+ollama pull qwen3-embedding:8b
+ollama pull qwen3:4b
+ollama pull qwen3:30b
+ollama pull gemma3:27b
+```
+
+The set above totals ~55 GB. Trim it to whatever subset you actually need (at minimum: the `DEFAULT_LLM`, `DEFAULT_VLM`, and `DEFAULT_EMBEDDINGS` from `.env`).
+
+**Docling-serve** — installed into a local Python 3.13 venv at `./venv`:
+
+```bash
+python3.13 -m venv venv
+./venv/bin/pip install --upgrade pip
+./venv/bin/pip install docling-serve
+```
+
+That installs `docling`, `docling-core`, `docling-ibm-models`, `docling-serve`, plus the FastAPI/uvicorn/torch stack. For optional UI and RAG extras: `./venv/bin/pip install "docling-serve[ui,rag]"`. (Note: this venv is for the docling service binary only. The skills themselves use the conda env from `environment.yml`.)
+
+**rclone** — configure a `gdrive:` remote once:
+
+```bash
+rclone config        # follow the interactive flow; name the remote "gdrive"
+```
+
+Set `GDRIVE_MOUNT` in `.env` to the absolute path you want the Drive mounted at (e.g. `/Users/you/gdrive`). The launcher creates the directory if missing and starts rclone with `--rc --rc-addr 0.0.0.0:5572` so `RcloneAdapter.refresh_vfs()` works.
+
+#### Usage
 
 ```bash
 ./macos_launch.sh start              # start all four services
@@ -82,9 +137,9 @@ Usage:
 ./macos_launch.sh status             # show status of all
 ```
 
-Services: `qdrant docling llama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`.
+Services: `qdrant docling ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`.
 
-With this setup, the four `*_HOST` env vars all point at `localhost` on the standard ports (see table above).
+With this setup, the four `*_HOST` env vars all point at `localhost` on the standard ports (see the variable table above).
 
 ### Linux
 

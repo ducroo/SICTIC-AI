@@ -19,3 +19,6 @@ __pycache__/
 venv/
 logs/
 .pids/
+qdrant/
+qdrant_data/
+.qdrant-initialized
