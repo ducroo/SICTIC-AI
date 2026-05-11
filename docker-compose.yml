@@ -1,1 +1,200 @@
-/home/lucas/openclaw/docker-compose.yml
+services:
+  # --- Vector Database ---
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./qdrant_data:/qdrant/storage:z
+
+  # --- Document Intelligence (GPU Accelerated) ---
+  docling-serve:
+    # using the cpu version for now. Not quay.io/docling-project/docling-serve-cu128:latest 
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    container_name: docling-serve
+    restart: unless-stopped
+    environment:
+      - DOCLING_SERVE_ENABLE_UI=false
+      - DOCLING_SERVE_ENABLE_REMOTE_SERVICES=true
+      # 1. Limit workers (Each worker can double the VRAM usage)
+      - DOCLING_SERVE_ENG_LOC_NUM_WORKERS=16
+      # 2. Force workers to share one set of model weights
+      - DOCLING_SERVE_ENG_LOC_SHARE_MODELS=true
+      # 3. Only keep 1 converter configuration in memory at a time
+      - DOCLING_SERVE_OPTIONS_CACHE_SIZE=1
+      # 4. Don't load models until the first file arrives
+      - DOCLING_SERVE_LOAD_MODELS_AT_BOOT=false
+      # 5. Prevent "upscaling" images which spikes VRAM (Default is 2.0)
+      - DOCLING_SERVE_DEFAULT_IMAGE_SCALE=1.0
+      # Keep your existing management toggle
+      - DOCLING_SERVE_ENABLE_MANAGEMENT_ENDPOINTS=true
+    ports:
+      - "5001:5001"
+    volumes:
+      # Maps your GDrive mirror so Docling can see the files directly
+      - ${GDRIVE_MOUNT_PATH}:/data:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # --- Rclone Mount Service ---
+  rclone-mount:
+    image: rclone/rclone:latest
+    container_name: rclone-mount
+    restart: unless-stopped
+    environment:
+      - RCLONE_CONFIG_GDRIVE_TYPE=drive
+      - RCLONE_CONFIG_GDRIVE_SCOPE=drive
+      - RCLONE_CONFIG_GDRIVE_CLIENT_ID=${GDRIVE_CLIENT_ID}
+      - RCLONE_CONFIG_GDRIVE_CLIENT_SECRET=${GDRIVE_CLIENT_SECRET}
+      - RCLONE_CONFIG_GDRIVE_TOKEN=${GDRIVE_TOKEN}
+    volumes:
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+      - ${GDRIVE_MOUNT_PATH}:/data:shared
+      - ${RCLONE_CACHE_MOUNT_PATH}:/root/.cache/rclone
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+      - label:disable
+    ports:
+      - "5572:5572"
+    command: >
+      mount gdrive: /data
+      --drive-root-folder-id 0AD2IcBbb8QiHUk9PVA
+      --uid 1000
+      --gid 1000      
+      --allow-other
+      --allow-non-empty
+      --vfs-cache-mode full
+      --vfs-cache-max-size 50G
+      --vfs-cache-max-age 24h
+      --vfs-fast-fingerprint 
+      --dir-cache-time 24h 
+      --attr-timeout 24h
+      --poll-interval 1m      
+      --rc
+      --rc-no-auth
+      --rc-addr 0.0.0.0:5572
+ 
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace-sictic-ai
+      - ${GDRIVE_MOUNT_PATH}:/home/node/gdrive:rslave
+    depends_on:
+      - rclone-mount
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
+    restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
+    network_mode: "service:openclaw-gateway"
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace-sictic-ai
+      - ${GDRIVE_MOUNT_PATH}:/home/node/gdrive:rslave
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    depends_on:
+      - openclaw-gateway
+      
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      # --- Performance & VRAM Optimizations ---
+      - OLLAMA_NUM_PARALLEL=16
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_CONTEXT_LENGTH=16384
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          cpus: '16'
+
+volumes:
+  ollama_data:
