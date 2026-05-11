@@ -15,3 +15,7 @@ test_runner.py
 __pycache__/
 *.py[cod]
 *$py.class
+
+venv/
+logs/
+.pids/

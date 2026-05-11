@@ -7,8 +7,11 @@ logger = get_logger(__name__)
 
 app = typer.Typer(help="Environment variable utility.")
 
-# Auto-load dotenv when module is imported
-dotenv_path = os.path.join(os.path.expanduser("~"), ".openclaw", "workspace-sictic-ai", ".env")
+# Auto-load dotenv when module is imported.
+# Resolve .env relative to this file (repo_root/.env) so it works regardless of CWD
+# or host (the same repo runs from different absolute paths on different machines).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+dotenv_path = os.path.join(_REPO_ROOT, ".env")
 if os.path.exists(dotenv_path):
     load_dotenv(dotenv_path, override=True)
 
