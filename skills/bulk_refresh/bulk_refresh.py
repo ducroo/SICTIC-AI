@@ -1,9 +1,7 @@
-import os
 from typing import Optional
-from pathlib import Path
 
-from lib.env import get_env_var
 from lib.logger import get_logger
+from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.core.ingestion import sync_datasets
 
@@ -57,21 +55,20 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     ignore_datasets = [s.strip().lower() for s in ignore_raw.replace(',', '\n').split('\n') if s.strip()]
     ignore_datasets.extend(SKILL_MAP.keys())
 
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    datasets_dir = os.path.join(gdrive_mount, "datasets")
+    storage = get_storage()
 
-    # Discover Datasets
+    # Discover Datasets — every direct child of `datasets/` is treated as a dataset folder.
     all_datasets = []
-    if os.path.exists(datasets_dir):
-        for item in os.listdir(datasets_dir):
-            item_path = os.path.join(datasets_dir, item)
+    if storage.exists("datasets"):
+        for item in storage.list("datasets"):
             item_lower = item.lower()
-            if os.path.isdir(item_path):
-                if item_lower in ignore_datasets:
-                    continue
-                if target_datasets and item_lower not in target_datasets:
-                    continue
-                all_datasets.append(item)
+            if not storage.is_dir(f"datasets/{item}"):
+                continue
+            if item_lower in ignore_datasets:
+                continue
+            if target_datasets and item_lower not in target_datasets:
+                continue
+            all_datasets.append(item)
 
     if not all_datasets:
         logger.warning("No valid datasets found to process.")

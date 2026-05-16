@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import typer
-from skills.config_load.config_load import config_load, get_base_paths
+from skills.config_load.config_load import config_load, _local_cache_paths
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -29,7 +29,7 @@ def load():
         else:
             logger.info(f"Successfully pulled configuration for {skill_count} skills.")
             
-        _, _, _, cache_file = get_base_paths()
+        _, cache_file = _local_cache_paths()
         print(f"RESULT_PATH: {cache_file}")
     except Exception as e:
         logger.error(f"Execution failed: {e}")

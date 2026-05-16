@@ -1,8 +1,7 @@
-import os
 import re
 from typing import List, Dict
 from lib.logger import get_logger
-from lib.env import get_env_var
+from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
 from lib.json_parser import repair_json_payload
@@ -10,14 +9,13 @@ from lib.json_parser import repair_json_payload
 logger = get_logger(__name__)
 
 def _get_person_profile_content(inv_name: str) -> str | None:
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
+    storage = get_storage()
     sanitized_name = re.sub(r'[^\w]+', '_', inv_name.strip()).strip('_').lower()
-    pp_dir = os.path.join(gdrive_mount, "insights", "sictic_members", "person_profile")
-    if os.path.exists(pp_dir):
-        for f in os.listdir(pp_dir):
-            if f.startswith(sanitized_name) and f.endswith(".md"):
-                with open(os.path.join(pp_dir, f), 'r', encoding='utf-8') as file:
-                    return file.read()
+    pp_dir = "insights/sictic_members/person_profile"
+    if storage.exists(pp_dir):
+        for f in storage.list(pp_dir, suffix=".md"):
+            if f.startswith(sanitized_name):
+                return storage.read_text(f"{pp_dir}/{f}")
     return None
 
 async def rank_investors(filtered_investors: List[str], profile_content: str, max_investors: int, default_llm: str) -> List[Dict]:

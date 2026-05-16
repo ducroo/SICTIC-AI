@@ -1,4 +1,3 @@
-import os
 import json
 import re
 import unicodedata
@@ -8,6 +7,7 @@ except ImportError:
     process = None
     fuzz = None
 from lib.logger import get_logger
+from lib.storage import get_storage
 from lib.adapters.apify import ApifyAdapter
 from lib.adapters.web_search import WebSearchAdapter
 from lib.slugify import slugify
@@ -15,12 +15,33 @@ from lib.slugify import slugify
 logger = get_logger(__name__)
 
 class LinkedInAdapter:
-    def __init__(self, cache_dir: str):
-        self.cache_dir = cache_dir
-        os.makedirs(self.cache_dir, exist_ok=True)
+    def __init__(self, cache_rel: str):
+        """
+        Stores cached LinkedIn JSON under `cache_rel` (a storage-relative path,
+        e.g. "datasets/sictic_members/linkedin"). All reads/writes go through
+        the storage abstraction, so the same code works under both
+        LocalStorage (rclone-mount mode) and GoogleDriveStorage (API mode).
+        """
+        self.cache_rel = cache_rel.strip("/")
+        self.storage = get_storage()
         self.apify = ApifyAdapter()
         self.google = WebSearchAdapter()
         self._cache_index = None
+
+    def _list_cached_json(self) -> list[str]:
+        if not self.storage.exists(self.cache_rel):
+            return []
+        return [f for f in self.storage.list(self.cache_rel, suffix=".json")]
+
+    def _read_cached_json(self, filename: str) -> dict | None:
+        try:
+            return json.loads(self.storage.read_text(f"{self.cache_rel}/{filename}"))
+        except Exception as e:
+            logger.error(f"Failed to read cached LinkedIn JSON {filename}: {e}")
+            return None
+
+    def _write_cached_json(self, filename: str, data: dict) -> None:
+        self.storage.write_text(f"{self.cache_rel}/{filename}", json.dumps(data, indent=2))
 
         
     def _clean_linkedin_data(self, data: dict) -> dict:
@@ -82,66 +103,48 @@ class LinkedInAdapter:
         """Loads fullName from all JSON files in the cache to enable fuzzy matching."""
         if self._cache_index is not None:
             return
-            
+
         self._cache_index = []
-        try:
-            candidates = [f for f in os.listdir(self.cache_dir) if f.endswith('.json')]
-        except Exception as e:
-            logger.error(f"Failed to list cache dir for index: {e}")
-            return
-            
-        for filename in candidates:
-            filepath = os.path.join(self.cache_dir, filename)
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    first_name = data.get("firstName", "").strip()
-                    last_name = data.get("lastName", "").strip()
-                    full_name = f"{first_name} {last_name}".strip()
-                    if not full_name:
-                        full_name = data.get("fullName", "").strip()
-                    
-                    if full_name:
-                        # Remove emojis for cleaner matching
-                        full_name = ''.join(c for c in full_name if not unicodedata.category(c).startswith('So')).strip()
-                        self._cache_index.append({
-                            "filename": filename,
-                            "fullName": full_name
-                        })
-            except Exception:
-                pass
+        for filename in self._list_cached_json():
+            data = self._read_cached_json(filename)
+            if not data:
+                continue
+            first_name = data.get("firstName", "").strip()
+            last_name = data.get("lastName", "").strip()
+            full_name = f"{first_name} {last_name}".strip()
+            if not full_name:
+                full_name = data.get("fullName", "").strip()
+
+            if full_name:
+                # Remove emojis for cleaner matching
+                full_name = ''.join(c for c in full_name if not unicodedata.category(c).startswith('So')).strip()
+                self._cache_index.append({
+                    "filename": filename,
+                    "fullName": full_name
+                })
 
     def get_all_persons(self) -> list[str]:
         """
         Iterates through all JSON profiles in the cache directory, extracts the full names,
         cleans emojis, and returns a sorted list of names.
         """
-        try:
-            candidates = [f for f in os.listdir(self.cache_dir) if f.endswith('.json')]
-        except Exception as e:
-            logger.error(f"Failed to list cache dir for get_all_persons: {e}")
-            return []
-            
         all_persons = []
-        for filename in candidates:
-            filepath = os.path.join(self.cache_dir, filename)
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    first_name = data.get("firstName", "").strip()
-                    last_name = data.get("lastName", "").strip()
-                    full_name = f"{first_name} {last_name}".strip()
-                    if not full_name:
-                        full_name = data.get("fullName", "").strip()
-                    
-                    if full_name:
-                        # Remove emojis for cleaner matching
-                        full_name = ''.join(c for c in full_name if not unicodedata.category(c).startswith('So')).strip()
-                        if full_name:
-                            all_persons.append(full_name)
-            except Exception:
-                pass
-                
+        for filename in self._list_cached_json():
+            data = self._read_cached_json(filename)
+            if not data:
+                continue
+            first_name = data.get("firstName", "").strip()
+            last_name = data.get("lastName", "").strip()
+            full_name = f"{first_name} {last_name}".strip()
+            if not full_name:
+                full_name = data.get("fullName", "").strip()
+
+            if full_name:
+                # Remove emojis for cleaner matching
+                full_name = ''.join(c for c in full_name if not unicodedata.category(c).startswith('So')).strip()
+                if full_name:
+                    all_persons.append(full_name)
+
         all_persons.sort()
         return all_persons
 
@@ -200,27 +203,21 @@ class LinkedInAdapter:
             cache_filename = None
             if url:
                 username = self._extract_username(url)
-                if username:
-                    candidate_path = os.path.join(self.cache_dir, f"{username}.json")
-                    if os.path.exists(candidate_path):
-                        cache_filename = f"{username}.json"
-            
+                if username and self.storage.exists(f"{self.cache_rel}/{username}.json"):
+                    cache_filename = f"{username}.json"
+
             # If not found by URL, attempt to cross-check by fuzzy matching name
             if not cache_filename and name:
                 cache_filename = self._fuzzy_match_in_cache(name)
-                
-            cache_path = None
+
             if cache_filename:
-                cache_path = os.path.join(self.cache_dir, cache_filename)
-                
-            if cache_path and os.path.exists(cache_path):
-                logger.info(f"Loaded {name or url} from cache ({cache_path}).")
-                try:
-                    with open(cache_path, 'r') as f:
-                        profiles.append(json.load(f))
-                except Exception as e:
-                    logger.error(f"Failed to read cache for {name or url}: {e}")
-            else:
+                cached = self._read_cached_json(cache_filename)
+                if cached is not None:
+                    logger.info(f"Loaded {name or url} from cache ({self.cache_rel}/{cache_filename}).")
+                    profiles.append(cached)
+                    continue
+
+            if True:
                 if url and "linkedin.com/in/" in url.lower():
                     final_url = url
                 else:
@@ -246,11 +243,9 @@ class LinkedInAdapter:
                 for res in results:
                     cleaned_res = self._clean_linkedin_data(res)
                     profiles.append(cleaned_res)
-                    
+
                     filename = self.get_filename_for_profile(cleaned_res, res.get('fullName', 'unknown'))
-                    cache_path = os.path.join(self.cache_dir, filename)
-                    with open(cache_path, "w") as f:
-                        json.dump(cleaned_res, f, indent=2)
+                    self._write_cached_json(filename, cleaned_res)
             except Exception as e:
                 logger.error(f"Failed to fetch profiles via Apify: {e}")
                 
@@ -266,17 +261,15 @@ class LinkedInAdapter:
             try:
                 cleaned_profile = self._clean_linkedin_data(profile)
                 filename = self.get_filename_for_profile(cleaned_profile, profile.get('fullName', ''))
-                
+
                 if not filename or filename == 'unknown.json':
                     logger.warning("Skipping bulk import for profile without valid URL, publicIdentifier or name.")
                     continue
-                    
-                cache_path = os.path.join(self.cache_dir, filename)
-                with open(cache_path, "w") as f:
-                    json.dump(cleaned_profile, f, indent=2)
+
+                self._write_cached_json(filename, cleaned_profile)
                 success_count += 1
             except Exception as e:
                 logger.error(f"Failed to import profile: {e}")
-                
+
         logger.info(f"Successfully bulk imported {success_count} profiles into the cache.")
         return success_count

@@ -1,8 +1,7 @@
-import os
-from pathlib import Path
 from typing import List, Optional
 
 from lib.env import get_env_var
+from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.insight_refresh import check_insight_refresh
@@ -15,21 +14,16 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     """
     Provides a ranked list of potential advocates for a given event based on quickselect ranking and LLM refinement.
     """
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
+    storage = get_storage()
     event_name_slug = slugify(event_name)
-    default_llm = get_env_var("DEFAULT_LLM")
-    safe_llm_name = default_llm.split("/")[-1]
-    
-    gdrive_path = Path(gdrive_mount)
-    out_dir = gdrive_path / "insights" / "sictic_members" / "advocates"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    
+    safe_llm_name = get_env_var("DEFAULT_LLM").split("/")[-1]
+
     raw_filename_prefix = f"{event_name_slug}-advocates"
     output_filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-    out_path = out_dir / output_filename
-    
+    out_path = f"insights/sictic_members/advocates/{output_filename}"
+
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", "advocates", event_name_slug], str(out_path), safe_llm_name)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", "advocates", event_name_slug], out_path, safe_llm_name)
     if not needs_refresh:
         logger.info(f"[{event_name_slug}] Using cached advocates from {matched_file}")
         return cached_content
@@ -57,9 +51,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     )
     
     # 3. Output & Persistence
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(result)
-        
+    storage.write_text(out_path, result)
     logger.info(f"[{event_name_slug}] Advocates search complete. Results saved to {out_path}")
-    
+
     return result

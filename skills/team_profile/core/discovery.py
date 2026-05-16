@@ -1,7 +1,5 @@
-import os
 import json
 from typing import Dict, List, Any, Tuple, Optional
-from lib.env import get_env_var
 from lib.logger import get_logger
 from lib.adapters.web_search import WebSearchAdapter
 from lib.adapters.linkedin import LinkedInAdapter
@@ -26,12 +24,7 @@ async def discover_team(dataset_name: str) -> Tuple[List[dict], str]:
     cleaned_profiles = []
     public_identifiers = []
     if profiles:
-        gdrive_mount = get_env_var("GDRIVE_MOUNT")
-        dataset_dir = os.path.join(gdrive_mount, "datasets", dataset_name.lower())
-        linkedin_cache_dir = os.path.join(dataset_dir, "linkedin")
-        os.makedirs(linkedin_cache_dir, exist_ok=True)
-        
-        linkedin_adapter = LinkedInAdapter(cache_dir=linkedin_cache_dir)
+        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name.lower()}/linkedin")
         logger.info(f"[{dataset_name}] Fetching full LinkedIn profiles...")
         cleaned_profiles = linkedin_adapter.get_profiles(profiles)
         

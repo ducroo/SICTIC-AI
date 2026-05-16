@@ -1,95 +1,83 @@
 import json
-import os
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 from lib.env import get_env_var
+from lib.storage import get_storage
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-# logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+SOURCE_REL = "config"
 
-def get_base_paths():
-    workspace_dir_str = get_env_var("WORKSPACE_DIR")
-    gdrive_mount_str = get_env_var("GDRIVE_MOUNT")
-    workspace_dir = Path(workspace_dir_str)
-    source_dir = Path(gdrive_mount_str) / "config"
+
+def _local_cache_paths() -> tuple[Path, Path]:
+    """Local cache lives outside the storage abstraction — it's a derivative."""
+    workspace_dir = Path(get_env_var("WORKSPACE_DIR"))
     cache_dir = workspace_dir / "cache"
     cache_file = cache_dir / "config.json"
-    return workspace_dir, source_dir, cache_dir, cache_file
+    return cache_dir, cache_file
 
-def get_latest_mtime(directory: Path) -> float:
-    latest = 0.0
-    for file in directory.rglob("*.md"):
-        try:
-            mtime = file.stat().st_mtime
-            if mtime > latest:
-                latest = mtime
-        except OSError:
-            pass
-    return latest
 
-def build_config_tree(directory: Path) -> Union[Dict[str, Any], str]:
+def _build_tree_from_flat_files(files: list[tuple[str, float]]) -> Dict[str, Any]:
+    """Given (relpath, mtime) pairs for every .md under SOURCE_REL, build the nested config dict.
+    Directory entries are inferred from path segments; file contents are read on demand.
+    """
+    storage = get_storage()
     tree: Dict[str, Any] = {}
-    try:
-        items = sorted(directory.iterdir())
-    except PermissionError as e:
-        logger.error(f"Permission error reading {directory}: {e}")
-        return ""
-    except OSError as e:
-        logger.error(f"OS error reading {directory}: {e}")
-        return ""
-
-    has_content = False
-    for item in items:
-        if item.is_dir():
-            subtree = build_config_tree(item)
-            tree[item.name] = subtree
-            has_content = True
-        elif item.is_file() and item.suffix.lower() == ".md":
-            try:
-                content = item.read_text(encoding="utf-8").strip()
-                tree[item.stem] = content
-                has_content = True
-            except Exception as e:
-                logger.warning(f"Warning: Failed to read {item}: {e}")
-                tree[item.stem] = ""
-                has_content = True
-
-    if not has_content:
-        return ""
+    for relpath, _mt in files:
+        parts = relpath.split("/")
+        stem = parts[-1][:-3] if parts[-1].lower().endswith(".md") else parts[-1]
+        cur = tree
+        for segment in parts[:-1]:
+            existing = cur.get(segment)
+            if not isinstance(existing, dict):
+                existing = {}
+                cur[segment] = existing
+            cur = existing
+        try:
+            content = storage.read_text(f"{SOURCE_REL}/{relpath}").strip()
+        except Exception as e:
+            logger.warning(f"Failed to read config file {relpath}: {e}")
+            content = ""
+        cur[stem] = content
     return tree
 
-def config_load() -> Dict[str, Any]:
-    workspace_dir, source_dir, cache_dir, cache_file = get_base_paths()
 
-    latest_source_mtime = 0.0
-    if source_dir.exists() and source_dir.is_dir():
-        latest_source_mtime = get_latest_mtime(source_dir)
-    else:
-        logger.warning(f"Source path not found at {source_dir}. Attempting to use cache.")
-    
+def config_load() -> Dict[str, Any]:
+    cache_dir, cache_file = _local_cache_paths()
+    storage = get_storage()
+
+    # Find every .md under SOURCE_REL (recursive) along with its mtime.
+    try:
+        all_items = storage.list_with_mtime(SOURCE_REL, recursive=True)
+        md_files = [(name, mt) for name, mt in all_items if name.lower().endswith(".md")]
+    except Exception as e:
+        logger.warning(f"Cannot enumerate {SOURCE_REL!r} on storage ({e}); falling back to cache if present.")
+        md_files = []
+
+    latest_source_mtime = max((mt for _, mt in md_files), default=0.0)
+
+    # Fresh cache hit?
     if cache_file.exists():
         cache_mtime = cache_file.stat().st_mtime
         if cache_mtime >= latest_source_mtime:
             try:
-                with open(cache_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                return json.loads(cache_file.read_text(encoding="utf-8"))
             except Exception as e:
                 logger.error(f"Failed to load existing cache file: {e}. Rebuilding...")
 
-    if not source_dir.exists() or not source_dir.is_dir():
-        logger.error(f"Cannot rebuild cache: Source path not found at {source_dir}.")
+    if not md_files:
+        logger.error(f"Cannot rebuild cache: no .md files found at storage path {SOURCE_REL!r}.")
         return {}
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    config_data = build_config_tree(source_dir)
+    config_data = _build_tree_from_flat_files(md_files)
 
+    # Persist to local cache (derivative artifact — stays on disk, not on Drive).
+    cache_dir.mkdir(parents=True, exist_ok=True)
     try:
-        with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(config_data, f, indent=4)
+        cache_file.write_text(json.dumps(config_data, indent=4), encoding="utf-8")
     except OSError as e:
         logger.error(f"Error writing cache file: {e}")
 

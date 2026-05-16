@@ -1,8 +1,8 @@
 import os
-import re
 import json
 
 from lib.env import get_env_var
+from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.person_profile.core.retrieval import get_filtered_chunks
 from skills.llm_chat.llm_chat import llm_chat
@@ -13,18 +13,13 @@ from lib.slugify import slugify
 
 logger = get_logger(__name__)
 
-def _get_output_paths(dataset_name: str, name: str) -> tuple[str, str, str, str, str]:
-    """Helper to generate consistent file paths and names."""
+def _get_output_paths(dataset_name: str, name: str) -> tuple[str, str, str, str]:
+    """Helper to generate consistent file paths and names. Returns relative storage paths."""
     safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
-    
     raw_filename_prefix = f"{name}-person-profile"
     output_filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-    
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    output_dir = os.path.join(gdrive_mount, "insights", dataset_name, "person_profile")
-    output_file = os.path.join(output_dir, output_filename)
-    
-    return raw_filename_prefix, safe_llm_name, output_filename, output_dir, output_file
+    output_file = f"insights/{dataset_name}/person_profile/{output_filename}"
+    return raw_filename_prefix, safe_llm_name, output_filename, output_file
 
 async def person_profile(dataset_name: str, name: str = None) -> str | dict:
     """
@@ -36,8 +31,7 @@ async def person_profile(dataset_name: str, name: str = None) -> str | dict:
     
     if not name:
         logger.info(f"[{dataset_name}] No name provided. Fetching all persons from dataset.")
-        linkedin_cache_dir = os.path.join(get_env_var("GDRIVE_MOUNT"), "datasets", dataset_name_lower, "linkedin")
-        linkedin_adapter = LinkedInAdapter(cache_dir=linkedin_cache_dir)
+        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name_lower}/linkedin")
         persons_list = linkedin_adapter.get_all_persons()
         
         results = {}
@@ -49,7 +43,7 @@ async def person_profile(dataset_name: str, name: str = None) -> str | dict:
                 results[p] = f"Error: Could not retrieve person profile. ({e})"
         return results
 
-    raw_filename_prefix, safe_llm_name, output_filename, output_dir, output_file = _get_output_paths(dataset_name_lower, name)
+    raw_filename_prefix, safe_llm_name, output_filename, output_file = _get_output_paths(dataset_name_lower, name)
     
     # 1. Cache Check
     from lib.insight_refresh import check_insight_refresh
@@ -73,8 +67,7 @@ async def person_profile(dataset_name: str, name: str = None) -> str | dict:
     logger.info(f"[{dataset_name}] Collating profile for '{name}'...")
 
     # 3. Retrieve LinkedIn Profile
-    linkedin_cache_dir = os.path.join(get_env_var("GDRIVE_MOUNT"), "datasets", dataset_name_lower, "linkedin")
-    linkedin_adapter = LinkedInAdapter(cache_dir=linkedin_cache_dir)
+    linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name_lower}/linkedin")
     
     import asyncio
     linkedin_profiles = await asyncio.to_thread(linkedin_adapter.get_profiles, [{"name": name}])
@@ -126,9 +119,6 @@ async def person_profile(dataset_name: str, name: str = None) -> str | dict:
         raise ValueError(f"LLM returned empty response for the person profile output of '{name}'.")
 
     # 7. Save and Return
-    os.makedirs(output_dir, exist_ok=True)
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(profile_output)
-        
+    get_storage().write_text(output_file, profile_output)
     logger.info(f"[{dataset_name}] Successfully saved person profile for '{name}' to {output_file}")
     return profile_output

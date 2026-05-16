@@ -1,7 +1,6 @@
-import os
-import shutil
 from typing import Optional
 from lib.env import get_env_var
+from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
 from qdrant_client import QdrantClient
@@ -11,31 +10,30 @@ logger = get_logger(__name__)
 def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = None):
     if not dataset and not embeddings:
         raise ValueError("Must provide either a dataset or an embeddings target to delete.")
-        
+
     client = QdrantClient(url=get_env_var("QDRANT_HOST"), timeout=60.0)
     all_collections = [col.name for col in client.get_collections().collections]
-    
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    
+    storage = get_storage()
+
     # Scenario A: Delete specific dataset completely (all embeddings)
     if dataset and not embeddings:
         dataset = dataset.lower()
-        parsed_base_path = os.path.join(gdrive_mount, "datasets_parsed", dataset)
-        
+        parsed_base_path = f"datasets_parsed/{dataset}"
+
         prefix = f"{dataset}_"
         to_delete = [c for c in all_collections if c.startswith(prefix)]
-        
+
         for col in to_delete:
             client.delete_collection(col)
             logger.info(f"[{dataset}] Deleted Qdrant collection: {col}")
-            
-        if os.path.exists(parsed_base_path):
+
+        if storage.exists(parsed_base_path):
             try:
-                shutil.rmtree(parsed_base_path)
+                storage.rmtree(parsed_base_path)
                 logger.info(f"[{dataset}] Deleted cached parsed directory: {parsed_base_path}")
             except Exception as e:
                 logger.error(f"[{dataset}] Failed to delete cached parsed directory {parsed_base_path}: {e}")
-                
+
         logger.info(f"[{dataset}] Dataset fully deleted from parsed cache and Qdrant.")
         return
 

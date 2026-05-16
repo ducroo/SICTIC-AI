@@ -73,16 +73,18 @@ class DoclingAdapter:
     def __init__(self, concurrency_limit: int = 10):
         self.concurrency_limit = concurrency_limit
 
-    async def extract_documents(
-        self,
-        files_to_process: List[dict],
-        oc_base_path: str,
-    ):
-        """Yield (filename, markdown) for each file as conversion finishes."""
+    async def extract_documents(self, files_to_process: List[dict]):
+        """Yield (filename, markdown) for each file as conversion finishes.
+
+        Each item in files_to_process must include:
+          - "filename": the logical name used in returned tuples and downstream paths
+          - "local_path": an on-disk absolute path docling can open (use
+            storage.local_path(rel) to materialize a Drive file locally first).
+        """
         tasks = []
         for f_data in files_to_process:
             filename = f_data["filename"]
-            filepath = os.path.join(oc_base_path, filename)
+            filepath = str(f_data["local_path"])
 
             async def run(fname=filename, fp=filepath):
                 txt = await self._process_single_file(fp, fname)

@@ -1,8 +1,8 @@
-import os
 import re
 from typing import Dict
 
 from lib.env import get_env_var
+from lib.storage import get_storage
 from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.json_parser import repair_json_payload
 from lib.batch_audit.utils.outliner import DecimalOutliner
@@ -44,11 +44,9 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
         raise ValueError("No chapter title found in the provided checklist.")
         
     raw_filename_prefix = f"batch-audit/{slugify(chapter)}"
-    
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
     file_name = f"{slugify(raw_filename_prefix)}-{slugify(model_suffix)}.md"
-    file_path = os.path.join(gdrive_mount, "insights", dataset_name.lower(), file_name)
-    
+    file_path = f"insights/{dataset_name.lower()}/{file_name}"
+
     needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name], file_path, model_suffix)
     if not needs_refresh:
         logger.info(f"[{dataset_name}] Using cached batch audit results from {matched_file}")
@@ -90,10 +88,6 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
             table_lines += f"\n| {idx_string} | {safe_display} | {author} | {status} | {summary} | {concerns} |"
 
     result_md = table_lines
-    
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(result_md)
+    get_storage().write_text(file_path, result_md)
 
     return result_md

@@ -23,8 +23,7 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
     
     # Resolve default investors using LinkedInAdapter for the community dataset
     if not investors:
-        linkedin_cache_dir = os.path.join(get_env_var("GDRIVE_MOUNT"), "datasets", dataset_name.lower(), "linkedin")
-        linkedin_adapter = LinkedInAdapter(cache_dir=linkedin_cache_dir)
+        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name.lower()}/linkedin")
         investors = linkedin_adapter.get_all_persons()
         
     # Resolve default startups dynamically using config
@@ -33,17 +32,17 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
         bulk_config = config.get("bulk_refresh", {})
         community_datasets = [s.lower() for s in bulk_config.get("community_datasets", ["sictic_members"])]
         ignore_datasets = [s.lower() for s in bulk_config.get("ignore_datasets", ["investor_appetite", "person_profile"])]
-        
-        gdrive_mount = get_env_var("GDRIVE_MOUNT")
-        datasets_dir = os.path.join(gdrive_mount, "datasets")
-        
+
+        from lib.storage import get_storage as _gs
+        _s = _gs()
         discovered = []
-        if os.path.exists(datasets_dir):
-            for item in os.listdir(datasets_dir):
+        if _s.exists("datasets"):
+            for item in _s.list("datasets"):
                 item_lower = item.lower()
-                if os.path.isdir(os.path.join(datasets_dir, item)):
-                    if item_lower not in community_datasets and item_lower not in ignore_datasets:
-                        discovered.append(item)
+                if not _s.is_dir(f"datasets/{item}"):
+                    continue
+                if item_lower not in community_datasets and item_lower not in ignore_datasets:
+                    discovered.append(item)
         startups = discovered
     
     if not startups or not investors:
@@ -56,20 +55,20 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
         logger.error(f"[{dataset_name}] Missing configuration: {e}")
         raise ValueError(f"Missing configuration for suggest_startups: {e}")
 
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
+    from lib.storage import get_storage
+    storage = get_storage()
     safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
-    
-    out_dir = os.path.join(gdrive_mount, "insights", dataset_name.lower(), "suggest_startups")
-    os.makedirs(out_dir, exist_ok=True)
-    
+
+    out_dir = f"insights/{dataset_name.lower()}/suggest_startups"
+
     # Filter investors whose cache is already up-to-date
     investors_to_process = []
     datasets_to_check = [dataset_name.lower()] + [s.lower() for s in startups]
-    
+
     for investor in investors:
         raw_filename_prefix = f"{investor}-suggest-startups"
         filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-        output_file = os.path.join(out_dir, filename)
+        output_file = f"{out_dir}/{filename}"
         
         needs_refresh, cached_content, matched_file = check_insight_refresh(datasets_to_check, output_file, safe_llm_name)
         if not needs_refresh:
@@ -103,8 +102,7 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
         if new_lines:
             header = f"# Startup Suggestions for {investor}\n\n| Startup | Rationale |\n|---|---|\n"
             content = header + "\n".join(new_lines)
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(content)
+            storage.write_text(output_file, content)
             logger.info(f"[{dataset_name}] Saved suggestions for {investor} to {output_file}")
             return f"Processed {investor}"
         return f"No results for {investor}"

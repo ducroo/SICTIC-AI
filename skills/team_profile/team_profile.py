@@ -1,10 +1,10 @@
-import os
 import json
 from typing import Tuple, List, Optional
 from skills.config_load.config_load import config_load
 from skills.team_profile.core.discovery import discover_team
 from skills.llm_chat.llm_chat import llm_chat
 from lib.env import get_env_var
+from lib.storage import get_storage
 from lib.insight_refresh import check_insight_refresh
 from lib.ephemeral_dataset import prepare_ephemeral_dataset
 from lib.slugify import slugify
@@ -21,16 +21,14 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
         dataset_name = "temp_team_profile"
 
     logger.info(f"[{dataset_name}] Starting Team Profiling")
-    
+
+    storage = get_storage()
     model_name = get_env_var("DEFAULT_LLM")
     clean_model_name = model_name.split("/")[-1]
-    
+
     raw_filename_prefix = f"{startup_name.lower()}-team-profile"
     output_filename = f"{slugify(raw_filename_prefix)}-{slugify(clean_model_name)}.md"
-    
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    insights_dir = os.path.join(gdrive_mount, "insights", startup_name.lower())
-    output_filepath = os.path.join(insights_dir, output_filename)
+    output_filepath = f"insights/{startup_name.lower()}/{output_filename}"
     
     needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name], output_filepath, clean_model_name)
     if not needs_refresh:
@@ -72,11 +70,7 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
         raise RuntimeError(f"LLM Generation error: {e}")
     
     # 3. Output Generation
-    os.makedirs(insights_dir, exist_ok=True)
-    
-    with open(output_filepath, "w") as f:
-        f.write(report_md)
-        
+    storage.write_text(output_filepath, report_md)
     logger.info(f"[{dataset_name}] Team Profile saved to {output_filepath}")
-        
+
     return report_md, output_filepath
