@@ -16,12 +16,15 @@ A robust, production-grade CLI tool for interacting with Large Language Models (
 
 You can run the script directly from the CLI.
 
+Always invoke the skill through the repo's `./run` wrapper. The wrapper picks the
+right Python interpreter automatically (override with `SICTIC_PYTHON` env var):
+
 ```bash
 # Basic usage with default model
-python -m skills.llm_chat "What is startup due diligence?"
+./run llm_chat "What is startup due diligence?"
 
 # Override the default model
-python -m skills.llm_chat "Summarize the risks." --model ollama/llama3
+./run llm_chat "Summarize the risks." --model ollama/llama3
 ```
 
 ## Features

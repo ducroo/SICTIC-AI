@@ -1,0 +1,48 @@
+#!/bin/sh
+# Run a SICTIC-AI skill with the right Python interpreter.
+#
+# Interpreter precedence:
+#   1. $SICTIC_PYTHON          (explicit override)
+#   2. <repo>/venv/bin/python  (the bundled venv, if present)
+#   3. python / python3        (whatever's on PATH)
+#
+# Usage:
+#   ./run <skill_name> [args...]
+#
+# Examples:
+#   ./run startup_profile --startup "Avientus" --files "/path/to/deck.pdf"
+#   ./run dataset_chat chat sictic_members "summarize the documents"
+#   ./run llm_chat "What is startup due diligence?"
+#
+# Override the interpreter (e.g. to use a conda env):
+#   SICTIC_PYTHON=$HOME/miniconda3/envs/sictic-env/bin/python ./run startup_profile --startup ...
+
+set -e
+
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+if [ -n "${SICTIC_PYTHON:-}" ]; then
+    PY="$SICTIC_PYTHON"
+elif [ -x "$REPO_ROOT/venv/bin/python" ]; then
+    PY="$REPO_ROOT/venv/bin/python"
+else
+    PY="$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)"
+fi
+
+if [ -z "${PY:-}" ] || [ ! -x "$PY" ]; then
+    echo "run: no usable Python interpreter found." >&2
+    echo "Set SICTIC_PYTHON=/path/to/python, or create ./venv, or put python on PATH." >&2
+    exit 127
+fi
+
+if [ $# -lt 1 ]; then
+    echo "run: missing skill name." >&2
+    echo "Usage: ./run <skill_name> [args...]" >&2
+    exit 2
+fi
+
+SKILL="$1"
+shift
+
+cd "$REPO_ROOT"
+exec "$PY" -m "skills.$SKILL" "$@"

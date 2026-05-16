@@ -9,9 +9,10 @@ Compiles Markdown-based configuration files from Google Drive (via `skills.utils
 - "Compile the Google Drive config"
 
 **Instructions:**
-1. Run the Python utility:
+1. Run the Python utility via the repo's `./run` wrapper (it picks the right
+   Python interpreter automatically; override with `SICTIC_PYTHON` env var):
    ```bash
-   python -m skills.config_load
+   ./run config_load
    ```
 2. The script will output the path to the cached JSON file (e.g., `RESULT_PATH: $CONFIG_CACHE_DIR/config.json`).
 3. Use the `read` tool to load the contents of that JSON file if the user requests the specific configuration data, or just confirm to the user that the configuration has been updated.

@@ -61,11 +61,22 @@ Optional — Drive API mode (see [Google Drive access](#google-drive-access)):
 
 ## Running a skill
 
-Each skill is a runnable module:
+Use the repo's `./run` wrapper — it picks the right Python interpreter
+automatically (preferring `./venv/bin/python`, then `python` on PATH), and you
+can override it with the `SICTIC_PYTHON` env var:
+
+```bash
+./run llm_chat "What is startup due diligence?"
+./run dataset_chat chat <dataset_name> "your question"
+./run startup_profile --startup "<startup_name>" --files /path/to/deck.pdf
+```
+
+Under the hood it's just `<interpreter> -m skills.<name> [args]`, so you can
+also invoke skills directly if you've activated the right Python yourself
+(e.g. `conda activate sictic-env`):
 
 ```bash
 python -m skills.llm_chat "What is startup due diligence?"
-python -m skills.dataset_chat chat <dataset_name> "your question"
 ```
 
 ## Backing services

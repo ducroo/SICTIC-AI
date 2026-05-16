@@ -108,7 +108,7 @@ skills/
 ```
 
 * **`SKILL.md`:** This file is mandatory and must always be present in the root of the skill directory. It contains the prompt instructions and metadata that OpenClaw uses to understand and trigger the skill.
-* **`__main__.py`:** Contains zero business logic. Handles Typer CLI routing, argument parsing, and top-level exception catching. Allows execution via `python -m skills.<SKILL_NAME>`. This is the *only* allowed Typer CLI entry point for a skill.
+* **`__main__.py`:** Contains zero business logic. Handles Typer CLI routing, argument parsing, and top-level exception catching. Allows execution via `python -m skills.<SKILL_NAME>` (or, more portably, `./run <SKILL_NAME>` — see top-level README). This is the *only* allowed Typer CLI entry point for a skill.
 * **`<skill_name>.py`:** The primary programmatic entry point (orchestrator/facade) for the skill. 
   * **Function Naming Rule:** The main API function inside this file must be named identically to the skill itself (e.g., `def startup_profile(...):` inside `startup_profile.py`). External modules must call this specific function.
   * **Parameter Standardization:** When applicable, the primary API function of a skill must always take `dataset_name: str` as its very first parameter. This ensures consistency for automated batch runners like `bulk_refresh`.

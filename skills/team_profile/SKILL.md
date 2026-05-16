@@ -30,6 +30,9 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
 
 ## Usage
 
+Always invoke the skill through the repo's `./run` wrapper. The wrapper picks the
+right Python interpreter automatically (override with `SICTIC_PYTHON` env var):
+
 ```bash
-python -m skills.team_profile --startup "<STARTUP_NAME>"
+./run team_profile --startup "<STARTUP_NAME>"
 ```

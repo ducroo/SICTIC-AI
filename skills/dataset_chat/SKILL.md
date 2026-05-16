@@ -24,16 +24,19 @@ Required python packages: `qdrant-client`, `requests`, `pydantic`, `langchain-te
 
 ## Usage
 
+Always invoke the skill through the repo's `./run` wrapper. The wrapper picks the
+right Python interpreter automatically (override with `SICTIC_PYTHON` env var):
+
 ```bash
 # Chat with a dataset (sync runs automatically if needed)
-python -m skills.dataset_chat chat <DATASET_NAME> "Your question here"
+./run dataset_chat chat <DATASET_NAME> "Your question here"
 
 # Force a sync (Drive → docling → Qdrant) without chatting
-python -m skills.dataset_chat sync <DATASET_NAME>
+./run dataset_chat sync <DATASET_NAME>
 
 # Search the vector store directly (returns matched chunks, no LLM)
-python -m skills.dataset_chat search <DATASET_NAME> "Your query"
+./run dataset_chat search <DATASET_NAME> "Your query"
 
 # Delete a dataset's Qdrant collection (will be rebuilt on next chat/sync)
-python -m skills.dataset_chat delete <DATASET_NAME>
+./run dataset_chat delete <DATASET_NAME>
 ```
