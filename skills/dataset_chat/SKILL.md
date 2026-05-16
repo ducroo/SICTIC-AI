@@ -5,8 +5,8 @@ A high-precision, multi-tenant RAG engine designed for deep document inspection 
 ## Architecture
 
 - **Qdrant (Port 6333):** Vector storage with document-level differential sync.
-- **Docling-Serve (Port 5001):** High-fidelity document parsing with VLM support.
-- **Ollama (Port 11434):** Dynamic embedding generation.
+- **Docling (in-process):** High-fidelity document parsing with Apple Vision OCR + Ollama-backed picture descriptions. No separate service — runs in the calling Python process.
+- **Ollama (Port 11434):** Dynamic embedding generation + VLM for picture descriptions.
 - **Google Drive:** Source files accessed via `skills.utils.storage.get_storage()`
   — either an rclone FUSE mount (default) or the native Drive API
   (`GDRIVE_USE_API=1`). See top-level README for setup.
@@ -15,10 +15,9 @@ A high-precision, multi-tenant RAG engine designed for deep document inspection 
 
 The following environment variables must be present in the workspace `.env` file:
 - `QDRANT_HOST`: e.g., `http://host.docker.internal:6333`
-- `DOCLING_HOST`: e.g., `http://host.docker.internal:5001`
 - `OLLAMA_HOST`: e.g., `http://host.docker.internal:11434`
 - `GDRIVE_MOUNT` (mount mode) or `GDRIVE_USE_API=1` (API mode) — see README.
-- `DEFAULT_VLM`: Used by Docling-Serve/Ollama for image-to-text generation.
+- `DEFAULT_VLM`: Used by docling (via Ollama) for picture descriptions.
 - `DEFAULT_EMBEDDINGS`: Model used for vector embeddings via Ollama.
 
 Required python packages: `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.

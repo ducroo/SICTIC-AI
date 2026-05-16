@@ -23,6 +23,8 @@ dependencies:
       - apify-client
       - langchain-text-splitters
       - ollama
+      - docling[ocrmac]
+      - ocrmac
 
 variables:
   PYTHONPATH: /home/node/.openclaw/workspace-sictic-ai

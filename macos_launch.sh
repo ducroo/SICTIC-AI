@@ -5,7 +5,7 @@ PID_DIR="./.pids"
 LOG_DIR="./logs"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
-SERVICES=(qdrant docling ollama rclone)
+SERVICES=(qdrant ollama rclone)
 
 # Pull GDRIVE_MOUNT out of .env so rclone knows where to mount.
 # Targeted extraction (not `source .env`) because the file has python-dotenv-style
@@ -30,16 +30,6 @@ start_qdrant() {
     QDRANT__STORAGE__STORAGE_PATH="./qdrant_data" \
         ./qdrant/qdrant > "$LOG_DIR/qdrant.log" 2>&1 &
     echo $! > "$PID_DIR/qdrant.pid"
-}
-
-start_docling() {
-    if [ -f "$PID_DIR/docling.pid" ] && ps -p "$(cat "$PID_DIR/docling.pid")" > /dev/null 2>&1; then
-        echo "docling already running (pid $(cat "$PID_DIR/docling.pid"))"
-        return
-    fi
-    echo "Starting docling..."
-    ./venv/bin/docling-serve run --port 5001 > "$LOG_DIR/docling.log" 2>&1 &
-    echo $! > "$PID_DIR/docling.pid"
 }
 
 start_ollama() {
@@ -90,7 +80,6 @@ stop_pidfile() {
 }
 
 stop_qdrant()  { stop_pidfile qdrant; }
-stop_docling() { stop_pidfile docling; }
 stop_ollama()  { stop_pidfile ollama; }
 stop_rclone()  { stop_pidfile rclone; }
 
@@ -106,7 +95,6 @@ status_pidfile() {
 }
 
 status_qdrant()  { status_pidfile qdrant; }
-status_docling() { status_pidfile docling; }
 status_ollama()  { status_pidfile ollama; }
 status_rclone()  { status_pidfile rclone; }
 

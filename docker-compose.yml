@@ -10,40 +10,6 @@ services:
     volumes:
       - ./qdrant_data:/qdrant/storage:z
 
-  # --- Document Intelligence (GPU Accelerated) ---
-  docling-serve:
-    # using the cpu version for now. Not quay.io/docling-project/docling-serve-cu128:latest 
-    image: quay.io/docling-project/docling-serve-cpu:latest
-    container_name: docling-serve
-    restart: unless-stopped
-    environment:
-      - DOCLING_SERVE_ENABLE_UI=false
-      - DOCLING_SERVE_ENABLE_REMOTE_SERVICES=true
-      # 1. Limit workers (Each worker can double the VRAM usage)
-      - DOCLING_SERVE_ENG_LOC_NUM_WORKERS=16
-      # 2. Force workers to share one set of model weights
-      - DOCLING_SERVE_ENG_LOC_SHARE_MODELS=true
-      # 3. Only keep 1 converter configuration in memory at a time
-      - DOCLING_SERVE_OPTIONS_CACHE_SIZE=1
-      # 4. Don't load models until the first file arrives
-      - DOCLING_SERVE_LOAD_MODELS_AT_BOOT=false
-      # 5. Prevent "upscaling" images which spikes VRAM (Default is 2.0)
-      - DOCLING_SERVE_DEFAULT_IMAGE_SCALE=1.0
-      # Keep your existing management toggle
-      - DOCLING_SERVE_ENABLE_MANAGEMENT_ENDPOINTS=true
-    ports:
-      - "5001:5001"
-    volumes:
-      # Maps your GDrive mirror so Docling can see the files directly
-      - ${GDRIVE_MOUNT_PATH}:/data:ro
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
   # --- Rclone Mount Service ---
   rclone-mount:
     image: rclone/rclone:latest

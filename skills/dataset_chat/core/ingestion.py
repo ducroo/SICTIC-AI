@@ -50,7 +50,6 @@ async def _sync_single_dataset(dataset_name: str):
     storage = get_storage()
     oc_base = f"datasets/{dataset_name}"
     parsed_base = f"datasets_parsed/{dataset_name}"
-    docling_base_path = f"/data/datasets/{dataset_name}"
 
     if not storage.exists(oc_base):
         raise ValueError(f"Dataset '{dataset_name}' does not exist on drive.")
@@ -58,12 +57,12 @@ async def _sync_single_dataset(dataset_name: str):
     storage.mkdir(parsed_base)
 
     # 1. OCR Phase: Sync original files to parsed markdown on disk
-    await _sync_ocr_to_disk(dataset_name, oc_base, parsed_base, docling_base_path)
+    await _sync_ocr_to_disk(dataset_name, oc_base, parsed_base)
 
     # 2. Ingest Phase: Sync parsed markdown from disk to Qdrant
     await _sync_disk_to_qdrant(dataset_name, oc_base, parsed_base)
 
-async def _sync_ocr_to_disk(dataset_name: str, oc_base: str, parsed_base: str, docling_base_path: str):
+async def _sync_ocr_to_disk(dataset_name: str, oc_base: str, parsed_base: str):
     """Checks Drive vs Parsed Disk. Runs Docling for missing/outdated files and saves to disk."""
     storage = get_storage()
     dataset_path = f"datasets/{dataset_name}"
@@ -113,11 +112,11 @@ async def _sync_ocr_to_disk(dataset_name: str, oc_base: str, parsed_base: str, d
         max_concurrent = 10
     docling = DoclingAdapter(concurrency_limit=max_concurrent)
 
-    # Docling adapter still takes filesystem paths; resolve via storage.local_path
+    # Docling needs filesystem paths; resolve via storage.local_path
     # (trivial for LocalStorage; GoogleDriveStorage materializes to a temp dir).
     oc_base_path = str(storage.local_path(oc_base)) if hasattr(storage, "local_path") else oc_base
     async def run_ocr_and_save():
-        async for filename, text in docling.extract_documents(files_to_ocr, oc_base_path, docling_base_path):
+        async for filename, text in docling.extract_documents(files_to_ocr, oc_base_path):
             if text:
                 parsed_rel = f"{parsed_base}/{filename}.md"
                 storage.write_text(parsed_rel, text)

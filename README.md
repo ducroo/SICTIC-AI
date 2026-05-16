@@ -1,6 +1,6 @@
 # SICTIC-AI
 
-A collection of Python skills (LLM-powered analysis routines for startups, investors, and due-diligence work) backed by local services: Qdrant (vector DB), Ollama (LLM inference), Docling (document parsing), and Google Drive (either as an rclone FUSE mount or via the native Drive API).
+A collection of Python skills (LLM-powered analysis routines for startups, investors, and due-diligence work) backed by local services: Qdrant (vector DB), Ollama (LLM inference), and Google Drive (either as an rclone FUSE mount or via the native Drive API). Document parsing is done in-process via the [docling](https://github.com/docling-project/docling) library (Apple Vision OCR on macOS).
 
 ## Runtime context
 
@@ -12,7 +12,6 @@ Before either OS-specific setup, you need:
 
 - **Homebrew** (macOS): https://brew.sh
 - **Miniconda or Anaconda**: `brew install --cask miniconda` (macOS) or https://docs.conda.io
-- **Python 3.13** (macOS only, used by the docling venv — see note below): `brew install python@3.13`
 
 ## Environment setup (conda)
 
@@ -28,8 +27,6 @@ The skills package expects to be importable as `skills.*`. Either run from the r
 ```bash
 export PYTHONPATH="$(pwd)"
 ```
-
-> **Two Python environments, on purpose.** The skills run in the **conda env (Python 3.12)** described above. The **docling-serve binary** (one of the backing services on macOS) runs from a **separate venv at `./venv` (Python 3.13)**, because docling-serve's dependencies expect 3.13. The two never share an interpreter — keep them separate.
 
 ### Configuration: `.env`
 
@@ -51,7 +48,6 @@ Required variables:
 | `MAX_CONCURRENT_EMBEDS`, `MAX_CONCURRENT_LLMS`, `MAX_CONCURRENT_DOCLING` | Gateway concurrency caps | `16` / `10` / `16` |
 | `QDRANT_HOST` | Qdrant base URL | `http://localhost:6333` |
 | `OLLAMA_HOST` | Ollama base URL | `http://localhost:11434` |
-| `DOCLING_HOST` | Docling-serve base URL | `http://localhost:5001` |
 | `APIFY_KEY` | Apify API token | secret |
 | `GEMINI_API_KEY` | Used implicitly by litellm | secret |
 
@@ -80,7 +76,9 @@ python -m skills.dataset_chat chat <dataset_name> "your question"
 
 ## Backing services
 
-Four services need to be running before most skills will work: **qdrant**, **ollama**, **docling**, **rclone**.
+Three services need to be running before most skills will work: **qdrant**, **ollama**, **rclone** (mount-mode only — skip if using Drive API mode).
+
+Document parsing (OCR) is done in-process by the `docling` Python library — no separate service to start.
 
 ### macOS
 
@@ -119,15 +117,7 @@ ollama pull gemma3:27b
 
 The set above totals ~55 GB. Trim it to whatever subset you actually need (at minimum: the `DEFAULT_LLM`, `DEFAULT_VLM`, and `DEFAULT_EMBEDDINGS` from `.env`).
 
-**Docling-serve** — installed into a local Python 3.13 venv at `./venv`:
-
-```bash
-python3.13 -m venv venv
-./venv/bin/pip install --upgrade pip
-./venv/bin/pip install docling-serve
-```
-
-That installs `docling`, `docling-core`, `docling-ibm-models`, `docling-serve`, plus the FastAPI/uvicorn/torch stack. For optional UI and RAG extras: `./venv/bin/pip install "docling-serve[ui,rag]"`. (Note: this venv is for the docling service binary only. The skills themselves use the conda env from `environment.yml`.)
+**docling** — installed into the conda env via `environment.yml` (`docling[ocrmac]` + `ocrmac`). The `ocrmac` package routes OCR through Apple's Vision framework (Neural Engine accelerated on Apple Silicon). First convert call downloads the docling layout + table models (~1 GB) into `~/.cache/docling/`; subsequent runs reuse them.
 
 **rclone** (mount mode only — skip if you'll use [Drive API mode](#google-drive-access)) — configure a `gdrive:` remote once:
 
@@ -140,15 +130,15 @@ Set `GDRIVE_MOUNT` in `.env` to the absolute path you want the Drive mounted at 
 #### Usage
 
 ```bash
-./macos_launch.sh start              # start all four services
-./macos_launch.sh start docling      # start one
+./macos_launch.sh start              # start all three services
+./macos_launch.sh start qdrant       # start one
 ./macos_launch.sh stop rclone        # stop one
 ./macos_launch.sh status             # show status of all
 ```
 
-Services: `qdrant docling ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`.
+Services: `qdrant ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`.
 
-With this setup, the four `*_HOST` env vars all point at `localhost` on the standard ports (see the variable table above).
+With this setup, the `*_HOST` env vars all point at `localhost` on the standard ports (see the variable table above).
 
 ### Linux
 
@@ -158,7 +148,7 @@ On Linux everything runs in containers via the main compose file:
 docker compose -f docker-compose.yml up -d
 ```
 
-This brings up qdrant, docling-serve (GPU-accelerated), ollama, rclone-mount, plus the openclaw gateway/CLI containers. With this setup the `*_HOST` env vars use the service hostnames (e.g. `http://qdrant:6333`, `http://ollama:11434`) when called from inside the compose network, or `http://host.docker.internal:...` when called from the host.
+This brings up qdrant, ollama, rclone-mount, plus the openclaw gateway/CLI containers. With this setup the `*_HOST` env vars use the service hostnames (e.g. `http://qdrant:6333`, `http://ollama:11434`) when called from inside the compose network, or `http://host.docker.internal:...` when called from the host. Document parsing runs in-process inside the skill container; no docling service is started.
 
 `docker-compose.yml` also expects a number of host-side variables (`OPENCLAW_*`, `GDRIVE_*`, `OPENCLAW_WORKSPACE_DIR`, etc.) — see the file for the full list.
 
