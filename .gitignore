@@ -27,3 +27,6 @@ qdrant_data/
 *.egg-info/
 build/
 dist/
+
+# personal scratch files
+claude_resume.txt
