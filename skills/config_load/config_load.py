@@ -11,11 +11,16 @@ logger = get_logger(__name__)
 
 # logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
+# Repo root = three directories up from this file (skills/config_load/config_load.py).
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 def get_base_paths():
     workspace_dir_str = get_env_var("WORKSPACE_DIR")
-    gdrive_mount_str = get_env_var("GDRIVE_MOUNT")
     workspace_dir = Path(workspace_dir_str)
-    source_dir = Path(gdrive_mount_str) / "config"
+    # Config is in-repo (git-tracked), not on Drive. Anchored to the repo so it
+    # works regardless of where the repo is checked out.
+    source_dir = _REPO_ROOT / "config"
     cache_dir = workspace_dir / "cache"
     cache_file = cache_dir / "config.json"
     return workspace_dir, source_dir, cache_dir, cache_file

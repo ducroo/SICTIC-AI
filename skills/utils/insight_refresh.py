@@ -1,9 +1,9 @@
-import os
-from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
+
 from skills.utils.env import get_env_var
 from skills.utils.logger import get_logger
 from skills.utils.slugify import slugify
+from skills.utils.storage import get_storage
 
 logger = get_logger(__name__)
 
@@ -13,64 +13,58 @@ def get_acceptable_models(current_model_suffix: str) -> List[str]:
         raw_acceptable = get_env_var("RANKED_LLMS")
     except Exception:
         pass
-        
+
     acceptable_list = [s.strip() for s in raw_acceptable.split(",") if s.strip()]
-    
+
     slugified_acceptable = [slugify(m) for m in acceptable_list]
     slugified_current = slugify(current_model_suffix)
-    
+
     models = []
     for m in slugified_acceptable:
         if m not in models:
             models.append(m)
-            
+
     if slugified_current not in models:
         models.append(slugified_current)
-        
+
     return models
 
-def check_insight_refresh(datasets: List[str], file_path: str, model_name: str) -> Tuple[bool, Optional[str], Optional[str]]:
+
+def check_insight_refresh(
+    datasets: List[str], file_path: str, model_name: str
+) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Returns (needs_refresh, content, matched_file_path).
     Iterates through acceptable LLM outputs by swapping the model_name part of the file_path
     and checks if one is up to date against ALL provided datasets.
+
+    `file_path` is a storage-relative path like "insights/widgetco/foo-qwen3-8b.md".
     """
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    gdrive_path = Path(gdrive_mount)
-    
+    storage = get_storage()
+
     models = get_acceptable_models(model_name)
     current_model_slug = slugify(model_name)
-    
-    dataset_dirs = []
+
+    # Pre-compute the max source mtime across all datasets once
+    max_source_mtime = 0.0
     for name in datasets:
-        d_dir = gdrive_path / "datasets" / name.lower()
-        if d_dir.exists():
-            dataset_dirs.append(d_dir)
-            
+        dataset_rel = f"datasets/{name.lower()}"
+        for _, mtime in storage.list_with_mtime(dataset_rel, recursive=True):
+            if mtime > max_source_mtime:
+                max_source_mtime = mtime
+
     for m in models:
-        # Swap the current model slug in the file path with the acceptable model slug
-        # Note: we swap specifically "-{current_model_slug}.md" to avoid partial replacements elsewhere
-        candidate_path = Path(file_path.replace(f"-{current_model_slug}.md", f"-{m}.md"))
-        
-        if candidate_path.exists():
-            candidate_mtime = candidate_path.stat().st_mtime
-            
-            is_valid = True
-            for d_dir in dataset_dirs:
-                for f in d_dir.rglob("*"):
-                    if f.is_file() and f.stat().st_mtime > candidate_mtime:
-                        is_valid = False
-                        break
-                if not is_valid:
-                    break
-                    
-            if is_valid:
-                logger.info(f"Using valid cached insight: {candidate_path.name}")
+        candidate_rel = file_path.replace(f"-{current_model_slug}.md", f"-{m}.md")
+
+        if storage.exists(candidate_rel):
+            candidate_mtime = storage.mtime(candidate_rel) or 0.0
+
+            if candidate_mtime >= max_source_mtime:
+                logger.info(f"Using valid cached insight: {candidate_rel}")
                 try:
-                    with open(candidate_path, "r", encoding="utf-8") as f:
-                        return False, f.read(), str(candidate_path)
+                    return False, storage.read_text(candidate_rel), candidate_rel
                 except Exception as e:
-                    logger.warning(f"Failed to read cache {candidate_path}: {e}")
-                    
+                    logger.warning(f"Failed to read cache {candidate_rel}: {e}")
+
     logger.info(f"No valid cache found for {file_path}. Refresh needed.")
     return True, None, None

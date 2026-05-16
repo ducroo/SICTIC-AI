@@ -1,10 +1,9 @@
-import os
 from typing import Union, List
 from skills.dataset_chat.core.models import Chunk
 from skills.dataset_chat.core.ingestion import sync_datasets
 from skills.utils.adapters.qdrant import QdrantAdapter
-from skills.utils.env import get_env_var
 from skills.utils.logger import get_logger
+from skills.utils.storage import get_storage
 
 logger = get_logger(__name__)
 
@@ -47,19 +46,19 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
 
     if return_full_docs:
         unique_docs = {}
-        parsed_base_path = os.path.join(get_env_var("GDRIVE_MOUNT"), "datasets_parsed", dataset_name)
-        
+        storage = get_storage()
+        parsed_base = f"datasets_parsed/{dataset_name}"
+
         for chunk in sorted_chunks:
             doc_name = chunk.document_name
             if doc_name not in unique_docs:
                 if max_chunks is not None and len(unique_docs) >= max_chunks:
                     break
-                    
-                parsed_filepath = os.path.join(parsed_base_path, doc_name + ".md")
+
+                parsed_rel = f"{parsed_base}/{doc_name}.md"
                 try:
-                    with open(parsed_filepath, "r", encoding="utf-8") as f:
-                        text = f.read()
-                    
+                    text = storage.read_text(parsed_rel)
+
                     # Store as a full-document Chunk
                     unique_docs[doc_name] = Chunk(
                         chunk_id=doc_name,
@@ -70,7 +69,7 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
                         score=chunk.score
                     )
                 except Exception as e:
-                    logger.error(f"[{dataset_name}] Failed to load full document {parsed_filepath}: {e}")
+                    logger.error(f"[{dataset_name}] Failed to load full document {parsed_rel}: {e}")
                     unique_docs[doc_name] = chunk
                     
         return list(unique_docs.values())

@@ -1,10 +1,10 @@
 import os
-import shutil
 from typing import List
+
 from skills.dataset_chat.core.ingestion import sync_datasets
 from skills.utils.adapters.qdrant import QdrantAdapter
-from skills.utils.env import get_env_var
 from skills.utils.logger import get_logger
+from skills.utils.storage import get_storage
 
 logger = get_logger(__name__)
 
@@ -16,32 +16,31 @@ def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -> str:
     4. Runs the ingestion pipeline to parse and embed them.
     5. Returns the dataset name (e.g., 'temp') for the skill to use.
     """
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    raw_dataset_path = os.path.join(gdrive_mount, "datasets", temp_name)
-    parsed_dataset_path = os.path.join(gdrive_mount, "datasets_parsed", temp_name)
-    
+    storage = get_storage()
+    raw_dataset_rel = f"datasets/{temp_name}"
+    parsed_dataset_rel = f"datasets_parsed/{temp_name}"
+
     # 1. Cleanup previous run
     logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")
-    if os.path.exists(raw_dataset_path):
-        shutil.rmtree(raw_dataset_path, ignore_errors=True)
-    if os.path.exists(parsed_dataset_path):
-        shutil.rmtree(parsed_dataset_path, ignore_errors=True)
+    storage.rmtree(raw_dataset_rel)
+    storage.rmtree(parsed_dataset_rel)
     try:
         qdrant = QdrantAdapter(temp_name)
         qdrant.delete_collection()
     except Exception as e:
         logger.debug(f"Could not delete collection during cleanup (might not exist): {e}")
-        
-    # 2. Setup: Create directories and copy files
-    os.makedirs(raw_dataset_path, exist_ok=True)
+
+    # 2. Setup: Copy external files (absolute OS paths) into the storage tree
+    storage.mkdir(raw_dataset_rel)
     for file_path in files:
         if os.path.exists(file_path):
-            shutil.copy(file_path, raw_dataset_path)
+            with open(file_path, "rb") as src:
+                storage.write_bytes(f"{raw_dataset_rel}/{os.path.basename(file_path)}", src.read())
         else:
             logger.warning(f"Provided file does not exist: {file_path}")
-            
+
     # 3. Ingest: Parse to markdown and embed in Qdrant
     logger.info(f"Ingesting ephemeral dataset '{temp_name}'...")
     sync_datasets([temp_name])
-    
+
     return temp_name

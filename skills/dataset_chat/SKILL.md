@@ -7,7 +7,9 @@ A high-precision, multi-tenant RAG engine designed for deep document inspection 
 - **Qdrant (Port 6333):** Vector storage with document-level differential sync.
 - **Docling-Serve (Port 5001):** High-fidelity document parsing with VLM support.
 - **Ollama (Port 11434):** Dynamic embedding generation.
-- **Rclone-Mount (Port 5572):** Real-time remote file monitoring via the RC API.
+- **Google Drive:** Source files accessed via `skills.utils.storage.get_storage()`
+  — either an rclone FUSE mount (default) or the native Drive API
+  (`GDRIVE_USE_API=1`). See top-level README for setup.
 
 ## Setup
 
@@ -15,7 +17,7 @@ The following environment variables must be present in the workspace `.env` file
 - `QDRANT_HOST`: e.g., `http://host.docker.internal:6333`
 - `DOCLING_HOST`: e.g., `http://host.docker.internal:5001`
 - `OLLAMA_HOST`: e.g., `http://host.docker.internal:11434`
-- `RCLONE_HOST`: e.g., `http://host.docker.internal:5572`
+- `GDRIVE_MOUNT` (mount mode) or `GDRIVE_USE_API=1` (API mode) — see README.
 - `DEFAULT_VLM`: Used by Docling-Serve/Ollama for image-to-text generation.
 - `DEFAULT_EMBEDDINGS`: Model used for vector embeddings via Ollama.
 

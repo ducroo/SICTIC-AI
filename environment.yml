@@ -17,6 +17,8 @@ dependencies:
   - requests
   - rich
   - typer
+  - google-api-python-client
+  - google-auth-oauthlib
   - pip:
       - apify-client
       - langchain-text-splitters

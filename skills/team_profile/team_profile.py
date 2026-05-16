@@ -1,4 +1,3 @@
-import os
 import json
 from typing import Tuple, List, Optional
 from skills.config_load.config_load import config_load
@@ -8,6 +7,7 @@ from skills.utils.env import get_env_var
 from skills.utils.insight_refresh import check_insight_refresh
 from skills.utils.ephemeral_dataset import prepare_ephemeral_dataset
 from skills.utils.slugify import slugify
+from skills.utils.storage import get_storage
 from skills.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,10 +28,10 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
     raw_filename_prefix = f"{startup_name.lower()}-team-profile"
     output_filename = f"{slugify(raw_filename_prefix)}-{slugify(clean_model_name)}.md"
     
-    gdrive_mount = get_env_var("GDRIVE_MOUNT")
-    insights_dir = os.path.join(gdrive_mount, "insights", startup_name.lower())
-    output_filepath = os.path.join(insights_dir, output_filename)
-    
+    storage = get_storage()
+    insights_dir = f"insights/{startup_name.lower()}"
+    output_filepath = f"{insights_dir}/{output_filename}"
+
     needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name], output_filepath, clean_model_name)
     if not needs_refresh:
         logger.info(f"[{dataset_name}] Using cached team profile from {matched_file}")
@@ -72,11 +72,8 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
         raise RuntimeError(f"LLM Generation error: {e}")
     
     # 3. Output Generation
-    os.makedirs(insights_dir, exist_ok=True)
-    
-    with open(output_filepath, "w") as f:
-        f.write(report_md)
-        
+    storage.write_text(output_filepath, report_md)
+
     logger.info(f"[{dataset_name}] Team Profile saved to {output_filepath}")
-        
+
     return report_md, output_filepath
