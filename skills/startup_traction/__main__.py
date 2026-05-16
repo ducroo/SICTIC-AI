@@ -1,6 +1,6 @@
 import typer
 from skills.startup_traction.startup_traction import startup_traction
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

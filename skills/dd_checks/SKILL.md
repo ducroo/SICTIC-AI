@@ -23,3 +23,9 @@ The skill executes a python script in the background that manages the process:
 3. **Comprehensive Review:** For each selected checklist, it uses `batch_audit` to process all items against the data room.
 4. **Resiliency:** If a chapter fails (e.g., LLM timeout, context window limit), the script logs the error inside the Markdown output file for that specific chapter, safely catches the exception, and continues processing the remaining chapters.
 5. **Output:** All chapter results are collated and saved to a file named `<STARTUP_NAME>_dd_checks_<MODEL_NAME>.md` inside the directory `<GDRIVE_MOUNT>/insights/<STARTUP_NAME>/`. Each chapter's findings are appended to this file as soon as they become available.
+
+## Usage
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.dd_checks --startup "<STARTUP_NAME>"
+```

@@ -5,38 +5,36 @@ A high-precision, multi-tenant RAG engine designed for deep document inspection 
 ## Architecture
 
 - **Qdrant (Port 6333):** Vector storage with document-level differential sync.
-- **Docling (in-process):** High-fidelity document parsing with Apple Vision OCR + Ollama-backed picture descriptions. No separate service — runs in the calling Python process.
-- **Ollama (Port 11434):** Dynamic embedding generation + VLM for picture descriptions.
-- **Google Drive:** Source files accessed via `skills.utils.storage.get_storage()`
-  — either an rclone FUSE mount (default) or the native Drive API
-  (`GDRIVE_USE_API=1`). See top-level README for setup.
+- **Docling-Serve (Port 5001):** High-fidelity document parsing with VLM support.
+- **Ollama (Port 11434):** Dynamic embedding generation.
+- **Rclone-Mount (Port 5572):** Real-time remote file monitoring via the RC API.
 
 ## Setup
 
-The following environment variables must be present in the workspace `.env` file:
+The following environment variables must be present in the repo's `.env` file (`{{REPO_ROOT}}/.env`):
 - `QDRANT_HOST`: e.g., `http://localhost:6333`
+- `DOCLING_HOST`: e.g., `http://localhost:5001`
 - `OLLAMA_HOST`: e.g., `http://localhost:11434`
-- `GDRIVE_MOUNT` (mount mode) or `GDRIVE_USE_API=1` (API mode) — see README.
-- `DEFAULT_VLM`: Used by docling (via Ollama) for picture descriptions.
+- `RCLONE_HOST`: e.g., `http://localhost:5572`
+- `DEFAULT_VLM`: Used by Docling-Serve/Ollama for image-to-text generation.
 - `DEFAULT_EMBEDDINGS`: Model used for vector embeddings via Ollama.
 
-Required python packages: `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
+Required python packages (installed into `{{REPO_ROOT}}/venv/` by `install_skills.sh`): `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
 
 ## Usage
 
-Always invoke the skill through the repo's `./run` wrapper. The wrapper picks the
-right Python interpreter automatically (override with `SICTIC_PYTHON` env var):
+You can use the commands through OpenClaw or run the script directly.
+
+### Chat with a Dataset
 
 ```bash
-# Chat with a dataset (sync runs automatically if needed)
-./run dataset_chat chat <DATASET_NAME> "Your question here"
-
-# Force a sync (Drive → docling → Qdrant) without chatting
-./run dataset_chat sync <DATASET_NAME>
-
-# Search the vector store directly (returns matched chunks, no LLM)
-./run dataset_chat search <DATASET_NAME> "Your query"
-
-# Delete a dataset's Qdrant collection (will be rebuilt on next chat/sync)
-./run dataset_chat delete <DATASET_NAME>
+{{REPO_ROOT}}/venv/bin/python -m skills.dataset_chat chat <DATASET_NAME> "Your question here"
 ```
+
+### Delete a Dataset
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.dataset_chat delete <DATASET_NAME>
+```
+
+*(Note: Deleting a dataset drops the entire Qdrant collection, which will be rebuilt upon the next chat request).*

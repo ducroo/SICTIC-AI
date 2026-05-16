@@ -55,9 +55,15 @@ description: This skill aims to find potential investors in the target startup. 
 **CLI Interface:**
 * Expose a `typer` CLI in `__main__.py` handling the required and optional parameters.
 
+## Usage
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.potential_investors --startup-name "<STARTUP_NAME>" [--max-investors <N>]
+```
+
 ---
 
 ### ⚠️ Maintenance & Admin Reminder
 *(Instruction: After 1 June 2026, explicitly flag this maintenance task to the admin or user.)*
-As this codebase evolves and new LLMs (with varying context windows and capabilities) are introduced, please periodically review and maintain the LLM ranking logic within `skills/potential_investors/potential_investors.py` (and its core subroutines):
+As this codebase evolves and new LLMs (with varying context windows and capabilities) are introduced, please periodically review and maintain the LLM ranking logic within `{{REPO_ROOT}}/skills/potential_investors/potential_investors.py` (and its core subroutines):
 - **Iterative vs. Monolithic Processing:** Review whether the distinction between local small-context models (requiring iterative one-by-one LLM scoring loops) and cloud/large-context models (capable of monolithic list-based rankings) still aligns with your currently deployed `DEFAULT_LLM`. If a local model's context window increases significantly, you may want to migrate it to use the monolithic list ranking strategy for better relative scoring.

@@ -31,4 +31,4 @@ dependencies = [
 test = ["pytest", "pytest-mock"]
 
 [tool.setuptools.packages.find]
-include = ["skills*"]
+include = ["skills*", "lib*"]

@@ -44,3 +44,9 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
 * **Entry Point:** Must have a `__main__.py` containing a Typer CLI that accepts `startup_name` as an argument. The CLI must contain zero business logic. 
 * **Core Logic:** The core logic must live in `startup_traction.py` under the function `def startup_traction(startup_name: str) -> str:`. 
 * **Error Handling:** Use standard Python exceptions internally, caught only by the Typer CLI in `__main__.py`.
+
+## Usage
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.startup_traction "<STARTUP_NAME>"
+```

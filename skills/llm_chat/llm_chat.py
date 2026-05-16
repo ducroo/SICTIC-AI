@@ -1,9 +1,9 @@
 from typing import Dict, Any, Optional
 import litellm
 from litellm.exceptions import APIConnectionError
-from skills.utils.services_gateway import gateway, Priority
-from skills.utils.env import get_env_var
-from skills.utils.logger import get_logger
+from lib.services_gateway import gateway, Priority
+from lib.env import get_env_var
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

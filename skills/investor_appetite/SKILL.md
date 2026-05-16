@@ -40,3 +40,9 @@ description: Determines the ideal startup profile for one or more investors base
 
 **CLI Interface:**
 * Expose a `typer` CLI in `__main__.py` that accepts an optional list of investor names as arguments.
+
+## Usage
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.investor_appetite [investor_name ...]
+```

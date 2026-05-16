@@ -1,8 +1,8 @@
 from typing import List
 from skills.startup_profile.startup_profile import startup_profile
 from skills.llm_chat.llm_chat import llm_chat
-from skills.utils.json_parser import repair_json_payload
-from skills.utils.logger import get_logger
+from lib.json_parser import repair_json_payload
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

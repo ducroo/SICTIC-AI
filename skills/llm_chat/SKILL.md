@@ -4,9 +4,8 @@ A robust, production-grade CLI tool for interacting with Large Language Models (
 
 ## Setup
 
-1. Make sure you have the required dependencies installed:
-   `pip install typer python-dotenv rich litellm`
-2. Create a `.env` file in the root of your workspace (or where you run the tool) with the following variables:
+1. All runtime dependencies (`typer`, `python-dotenv`, `rich`, `litellm`) are installed in `{{REPO_ROOT}}/venv/` by `{{REPO_ROOT}}/install_skills.sh`.
+2. The `.env` file at `{{REPO_ROOT}}/.env` must define:
    - `DEFAULT_LLM`: The default model to use (e.g., `gemini/gemini-1.5-pro`, `ollama/llama3`).
    - `GEMINI_API_KEY`: Your Google Gemini API key.
    - `OLLAMA_HOST`: The host URL for Ollama (if using Ollama).
@@ -16,15 +15,12 @@ A robust, production-grade CLI tool for interacting with Large Language Models (
 
 You can run the script directly from the CLI.
 
-Always invoke the skill through the repo's `./run` wrapper. The wrapper picks the
-right Python interpreter automatically (override with `SICTIC_PYTHON` env var):
-
 ```bash
 # Basic usage with default model
-./run llm_chat "What is startup due diligence?"
+{{REPO_ROOT}}/venv/bin/python -m skills.llm_chat "What is startup due diligence?"
 
 # Override the default model
-./run llm_chat "Summarize the risks." --model ollama/llama3
+{{REPO_ROOT}}/venv/bin/python -m skills.llm_chat "Summarize the risks." --model ollama/llama3
 ```
 
 ## Features

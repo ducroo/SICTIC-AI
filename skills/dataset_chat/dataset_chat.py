@@ -3,7 +3,7 @@ from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.core.rag import generate_multi_queries
 from skills.dataset_chat.dataset_search import dataset_search
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

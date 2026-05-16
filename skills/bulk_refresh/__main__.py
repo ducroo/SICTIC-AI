@@ -1,7 +1,7 @@
 import typer
 from typing import Optional
 from skills.bulk_refresh.bulk_refresh import bulk_refresh
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 app = typer.Typer(help="Automatically refreshes caches and profiles for all SICTIC members and startups in bulk.")

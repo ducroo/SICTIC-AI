@@ -1,11 +1,13 @@
+import os
+from pathlib import Path
 from typing import List, Optional
 
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
+from lib.env import get_env_var
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.dataset_search import dataset_search
-from skills.utils.ranking_writeup import ranking_writeup
-from skills.utils.find_top_k import find_top_k
-from skills.utils.storage import get_storage
+from lib.ranking_writeup import ranking_writeup
+from lib.find_top_k import find_top_k
 from skills.llm_chat.llm_chat import llm_chat
 
 from rapidfuzz import process, fuzz
@@ -18,17 +20,17 @@ logger = get_logger(__name__)
 
 def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], optout: Optional[List[str]]) -> List[str]:
     """Determines the final list of candidates to rank by fuzzy-matching against available profiles."""
-    storage = get_storage()
-    dataset_rel = f"datasets/{dataset_name}"
+    dataset_dir = Path(get_env_var("GDRIVE_MOUNT")) / "datasets" / dataset_name
     available_profiles = []
-    for filename in storage.list(dataset_rel, suffix=".md"):
-        name = filename[:-3]  # strip .md
-        if '-person-profile' in name:
-            name = name.split('-person-profile')[0]
-        available_profiles.append(name)
-
+    for f in dataset_dir.glob("*.md"):
+        if f.is_file():
+            name = f.stem
+            if '-person-profile' in name:
+                name = name.split('-person-profile')[0]
+            available_profiles.append(name)
+            
     if not available_profiles:
-        raise RuntimeError(f"No profile files found in {dataset_rel}. Cannot rank candidates.")
+        raise RuntimeError(f"No profile files found in {dataset_dir}. Cannot rank candidates.")
         
     final_candidates = []
     
@@ -84,7 +86,9 @@ async def people_ranking(
     Returns the generated markdown report as a string.
     """
     logger.info("Starting people_ranking")
-
+    
+    gdrive_path = Path(get_env_var("GDRIVE_MOUNT"))
+    
     # 1. Resolve Candidates
     final_candidates = _resolve_candidates(dataset_name, candidates, optout)
 

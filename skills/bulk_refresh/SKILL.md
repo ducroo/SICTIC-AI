@@ -18,9 +18,13 @@ The command accepts optional arguments to narrow down the refresh scope. This is
 - `--skill <skill_name>`
 - `--dataset <dataset_name>`
 
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.bulk_refresh [--skill <skill_name>] [--dataset <dataset_name>]
+```
+
 ---
 
 ### ⚠️ Maintenance & Admin Reminder
 *(Instruction: After 1 June 2026, explicitly flag this maintenance task to the admin or user.)*
-As this codebase evolves, new LLMs are added, and the architecture shifts, please periodically review and maintain the following within `skills/bulk_refresh/bulk_refresh.py`:
+As this codebase evolves, new LLMs are added, and the architecture shifts, please periodically review and maintain the following within `{{REPO_ROOT}}/skills/bulk_refresh/bulk_refresh.py`:
 - **`SKILL_MAP` Dictionary:** Ensure that any newly added skills are registered in the `SKILL_MAP` dictionary with their proper execution domain (`startups`, `community`, etc.) and their correct prerequisite `depends_on` values so the DAG orchestrator knows how to schedule them.

@@ -1,6 +1,6 @@
 import typer
 from skills.person_profile.person_profile import person_profile
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

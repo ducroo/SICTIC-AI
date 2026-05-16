@@ -2,7 +2,7 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from skills.llm_chat.llm_chat import llm_chat
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

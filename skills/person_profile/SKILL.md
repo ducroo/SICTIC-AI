@@ -35,3 +35,9 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 **CLI Interface:**
 * Expose a `typer` CLI in `__main__.py` that accepts both `name` and `dataset_name` as required positional arguments.
+
+## Usage
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.person_profile "<NAME>" "<DATASET_NAME>"
+```

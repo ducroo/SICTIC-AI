@@ -1,8 +1,9 @@
+import os
+import shutil
 from typing import Optional
-from skills.utils.env import get_env_var
-from skills.utils.logger import get_logger
-from skills.utils.slugify import slugify
-from skills.utils.storage import get_storage
+from lib.env import get_env_var
+from lib.logger import get_logger
+from lib.slugify import slugify
 from qdrant_client import QdrantClient
 
 logger = get_logger(__name__)
@@ -13,28 +14,28 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
         
     client = QdrantClient(url=get_env_var("QDRANT_HOST"), timeout=60.0)
     all_collections = [col.name for col in client.get_collections().collections]
-
-    storage = get_storage()
-
+    
+    gdrive_mount = get_env_var("GDRIVE_MOUNT")
+    
     # Scenario A: Delete specific dataset completely (all embeddings)
     if dataset and not embeddings:
         dataset = dataset.lower()
-        parsed_rel = f"datasets_parsed/{dataset}"
-
+        parsed_base_path = os.path.join(gdrive_mount, "datasets_parsed", dataset)
+        
         prefix = f"{dataset}_"
         to_delete = [c for c in all_collections if c.startswith(prefix)]
-
+        
         for col in to_delete:
             client.delete_collection(col)
             logger.info(f"[{dataset}] Deleted Qdrant collection: {col}")
-
-        if storage.exists(parsed_rel):
+            
+        if os.path.exists(parsed_base_path):
             try:
-                storage.rmtree(parsed_rel)
-                logger.info(f"[{dataset}] Deleted cached parsed directory: {parsed_rel}")
+                shutil.rmtree(parsed_base_path)
+                logger.info(f"[{dataset}] Deleted cached parsed directory: {parsed_base_path}")
             except Exception as e:
-                logger.error(f"[{dataset}] Failed to delete cached parsed directory {parsed_rel}: {e}")
-
+                logger.error(f"[{dataset}] Failed to delete cached parsed directory {parsed_base_path}: {e}")
+                
         logger.info(f"[{dataset}] Dataset fully deleted from parsed cache and Qdrant.")
         return
 

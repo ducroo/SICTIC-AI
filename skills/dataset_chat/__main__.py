@@ -4,8 +4,8 @@ from skills.dataset_chat.dataset_chat import dataset_chat
 from skills.dataset_chat.dataset_search import dataset_search
 from skills.dataset_chat.dataset_delete import dataset_delete
 from skills.dataset_chat.core.ingestion import sync_datasets
-from skills.utils.adapters.qdrant import QdrantAdapter
-from skills.utils.logger import get_logger
+from lib.adapters.qdrant import QdrantAdapter
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

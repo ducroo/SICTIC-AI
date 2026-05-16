@@ -1,7 +1,7 @@
 from typing import List
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 from skills.dataset_chat.dataset_search import dataset_search
-from skills.utils.slugify import slugify
+from lib.slugify import slugify
 
 logger = get_logger(__name__)
 

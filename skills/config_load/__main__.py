@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import typer
 from skills.config_load.config_load import config_load, get_base_paths
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 

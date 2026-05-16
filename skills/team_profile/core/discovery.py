@@ -1,10 +1,12 @@
+import os
+import json
 from typing import Dict, List, Any, Tuple, Optional
-from skills.utils.logger import get_logger
-from skills.utils.adapters.web_search import WebSearchAdapter
-from skills.utils.adapters.linkedin import LinkedInAdapter
-from skills.utils.storage import get_storage
+from lib.env import get_env_var
+from lib.logger import get_logger
+from lib.adapters.web_search import WebSearchAdapter
+from lib.adapters.linkedin import LinkedInAdapter
 from skills.dataset_chat.dataset_search import dataset_search
-from skills.utils.adapters.qdrant import QdrantAdapter
+from lib.adapters.qdrant import QdrantAdapter
 from skills.config_load.config_load import config_load
 
 logger = get_logger(__name__)
@@ -24,9 +26,11 @@ async def discover_team(dataset_name: str) -> Tuple[List[dict], str]:
     cleaned_profiles = []
     public_identifiers = []
     if profiles:
-        storage = get_storage()
-        linkedin_cache_dir = str(storage.local_path(f"datasets/{dataset_name.lower()}/linkedin"))
-
+        gdrive_mount = get_env_var("GDRIVE_MOUNT")
+        dataset_dir = os.path.join(gdrive_mount, "datasets", dataset_name.lower())
+        linkedin_cache_dir = os.path.join(dataset_dir, "linkedin")
+        os.makedirs(linkedin_cache_dir, exist_ok=True)
+        
         linkedin_adapter = LinkedInAdapter(cache_dir=linkedin_cache_dir)
         logger.info(f"[{dataset_name}] Fetching full LinkedIn profiles...")
         cleaned_profiles = linkedin_adapter.get_profiles(profiles)

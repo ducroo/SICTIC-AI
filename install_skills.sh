@@ -10,25 +10,24 @@
 #   2. Runs `pip install -e .` so the editable install (and all runtime deps
 #      declared in pyproject.toml) reflects the current location.
 #   3. Mirrors every skills/<name>/ that has a SKILL.md into <target>/<name>/,
-#      rewriting `./run X` -> `<repo_abs>/run X` so the openclaw agent gets
-#      unambiguous commands regardless of its CWD.
+#      substituting `{{REPO_ROOT}}` -> `<repo_abs>` in the mirrored SKILL.md so
+#      every command becomes an absolute, copy-pastable invocation.
 #   4. Removes any stale `env.vars.PYTHONPATH` from ~/.openclaw/openclaw.json
 #      (the editable install makes it unnecessary, and a stale value actively
 #      breaks skill imports).
 #
 # Usage:
-#   ./install_skills.sh                       # default target, full bootstrap
-#   ./install_skills.sh --target /custom/dir  # custom openclaw skill dir
-#   ./install_skills.sh --symlink             # symlink mirrors instead of copy
-#   ./install_skills.sh --prune               # remove target subdirs no longer in source
-#   ./install_skills.sh --rebuild-venv        # force a fresh venv even if one exists
-#   ./install_skills.sh --skip-venv           # skip steps 1+2 (skills + openclaw.json only)
-#   ./install_skills.sh --skip-openclaw-json  # skip step 4
+#   ./install_skills.sh --target /path/to/openclaw/skill/dir   # required
+#   ./install_skills.sh --target ... --symlink                 # symlink mirrors instead of copy
+#   ./install_skills.sh --target ... --prune                   # remove target subdirs no longer in source
+#   ./install_skills.sh --target ... --rebuild-venv            # force a fresh venv even if one exists
+#   ./install_skills.sh --target ... --skip-venv               # skip steps 1+2 (skills + openclaw.json only)
+#   ./install_skills.sh --target ... --skip-openclaw-json      # skip step 4
 
 set -eu
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-TARGET="$HOME/.openclaw/skills/workspace-skills"
+TARGET=""
 OPENCLAW_JSON="$HOME/.openclaw/openclaw.json"
 MODE="copy"
 PRUNE=0
@@ -54,12 +53,13 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+if [ -z "$TARGET" ]; then
+    echo "install_skills: --target is required." >&2
+    usage
+    exit 2
+fi
 if [ ! -d "$REPO_ROOT/skills" ]; then
     echo "install_skills: $REPO_ROOT/skills not found." >&2
-    exit 1
-fi
-if [ ! -x "$REPO_ROOT/run" ]; then
-    echo "install_skills: $REPO_ROOT/run not found or not executable." >&2
     exit 1
 fi
 if [ ! -f "$REPO_ROOT/pyproject.toml" ]; then
@@ -125,7 +125,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: mirror skills + rewrite ./run to absolute path
+# Step 3: mirror skills + substitute {{REPO_ROOT}} placeholder
 # ---------------------------------------------------------------------------
 echo "[3/4] Mirroring skills into $TARGET ..."
 mkdir -p "$TARGET"
@@ -147,7 +147,10 @@ for src in "$REPO_ROOT/skills"/*/; do
         cp -R "$src" "$dst"
         find "$dst" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
         if [ -f "$dst/SKILL.md" ]; then
-            sed -i.bak "s|\\./run |$REPO_ROOT/run |g" "$dst/SKILL.md"
+            # Substitute {{REPO_ROOT}} placeholder with the absolute repo path.
+            # Source SKILL.md files mark every substitution point explicitly;
+            # nothing here pattern-matches. Idempotent.
+            sed -i.bak "s|{{REPO_ROOT}}|$REPO_ROOT|g" "$dst/SKILL.md"
             rm -f "$dst/SKILL.md.bak"
         fi
     fi
@@ -168,14 +171,12 @@ Re-run that command after editing SKILL.md or moving the repo.
 
 ## Invocation
 
-SKILL.md files in this directory reference \`$REPO_ROOT/run\` (absolute path).
-The agent should always invoke a skill via:
+Each SKILL.md "Usage" section contains absolute, copy-pastable commands of the form:
 
-    $REPO_ROOT/run <skill_name> [args...]
+    $REPO_ROOT/venv/bin/python -m skills.<skill_name> [args...]
 
-Override the Python interpreter with:
-
-    export SICTIC_PYTHON=/path/to/python
+Run them exactly as written. The \`{{REPO_ROOT}}\` placeholder in the source
+SKILL.md files has already been substituted to \`$REPO_ROOT\` in this mirror.
 EOF
 
 if [ "$PRUNE" -eq 1 ]; then

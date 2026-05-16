@@ -17,9 +17,6 @@ This skill generates a neutral, objective 5-point diagnostic of a startup using 
 
 ## Usage
 
-Always invoke the skill through the repo's `./run` wrapper. The wrapper picks the
-right Python interpreter automatically (override with `SICTIC_PYTHON` env var):
-
 ```bash
-./run startup_profile --startup "<STARTUP_NAME>" [--files <file1> <file2> ...]
+{{REPO_ROOT}}/venv/bin/python -m skills.startup_profile --startup "<STARTUP_NAME>" [--files <file1> <file2> ...]
 ```

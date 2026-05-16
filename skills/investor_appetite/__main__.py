@@ -1,6 +1,6 @@
 import typer
 from typing import Optional, List
-from skills.utils.logger import get_logger
+from lib.logger import get_logger
 from skills.investor_appetite.investor_appetite import investor_appetite
 
 logger = get_logger(__name__)

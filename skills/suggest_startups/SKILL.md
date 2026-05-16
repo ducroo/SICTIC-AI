@@ -46,3 +46,9 @@ description: Rank a provided list of startups against a list of investors by mat
  | :--- | :--- | :--- | :--- | 
  
 5. **Output Generation:** Save the final Markdown table to the following path: `<GDRIVE_MOUNT>/insights/sictic_members/suggested_startups_<model_name>.md`
+
+## Usage
+
+```bash
+{{REPO_ROOT}}/venv/bin/python -m skills.suggest_startups --startups "<startup1>,<startup2>" --investors "<name1>,<name2>"
+```

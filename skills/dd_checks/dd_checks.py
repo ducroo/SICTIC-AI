@@ -1,25 +1,29 @@
-from skills.utils.env import get_env_var
+import os
+from lib.env import get_env_var
 from skills.config_load.config_load import config_load
-from skills.batch_audit.batch_audit import batch_audit
+from lib.batch_audit.batch_audit import batch_audit
 from skills.dataset_chat.dataset_chat import dataset_chat
-from skills.utils.adapters.qdrant import QdrantAdapter
-from skills.utils.slugify import slugify
-from skills.utils.storage import get_storage
-from skills.utils.logger import get_logger
+from lib.adapters.qdrant import QdrantAdapter
+from lib.slugify import slugify
+from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 
 def initialize_report_file(startup_name_lower: str, startup: str) -> str:
-    storage = get_storage()
+    gdrive_mount = get_env_var("GDRIVE_MOUNT")
     default_llm = get_env_var("DEFAULT_LLM")
     safe_llm_name = default_llm.split('/')[-1]
-
+    
+    output_dir = os.path.join(gdrive_mount, "insights", startup_name_lower)
+    os.makedirs(output_dir, exist_ok=True)
+    
     raw_filename = f"{startup_name_lower}-dd-checks-{safe_llm_name}"
-    output_file = f"insights/{startup_name_lower}/{slugify(raw_filename)}.md"
-
-    storage.write_text(output_file, f"# M&A Due Diligence Checks for {startup}\n\n")
+    output_file = os.path.join(output_dir, f"{slugify(raw_filename)}.md")
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(f"# M&A Due Diligence Checks for {startup}\n\n")
     return output_file
 
 async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_industry_types: set) -> str:
@@ -45,14 +49,13 @@ async def chapter_by_chapter(startup_name_lower: str, sorted_chapters: list, ind
             continue
             
         checklist_string = checklists[checklist_key]
-        storage = get_storage()
         try:
             chapter_output = await batch_audit(dataset_name=startup_name_lower, checklist_string=checklist_string)
-            existing = storage.read_text(output_file)
-            storage.write_text(output_file, existing + f"## Chapter: {chapter}\n\n{chapter_output}\n\n")
+            with open(output_file, 'a', encoding='utf-8') as f:
+                f.write(f"## Chapter: {chapter}\n\n{chapter_output}\n\n")
         except Exception as e:
-            existing = storage.read_text(output_file)
-            storage.write_text(output_file, existing + f"## Chapter: {chapter}\n\n**Error:** Failed to process chapter due to: {e}\n\n")
+            with open(output_file, 'a', encoding='utf-8') as f:
+                f.write(f"## Chapter: {chapter}\n\n**Error:** Failed to process chapter due to: {e}\n\n")
 
 async def dd_checks(startup: str) -> str:
     """
