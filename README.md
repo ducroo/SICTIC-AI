@@ -4,14 +4,14 @@ A collection of Python skills (LLM-powered analysis routines for startups, inves
 
 ## Runtime context
 
-This directory is part of an **openclaw** runtime system — the skills are normally invoked from the openclaw harness via the containerized stack in `docker-compose.yml`. The skills themselves are pure Python and have no hard dependency on openclaw; they could be wired into other harnesses (Claude Code subagents, a CLI runner, an MCP server, etc.) as long as the required env vars and backing services are reachable.
+This directory is part of an **openclaw** runtime system — the skills are normally invoked from the openclaw harness. The skills themselves are pure Python and have no hard dependency on openclaw; they can be wired into other harnesses (Claude Code subagents, a CLI runner, an MCP server, etc.) as long as the required env vars and backing services are reachable.
+
+The supported platform is **macOS** (Apple Silicon). All services run natively; there is no containerised path.
 
 ## Prerequisites
 
-Before either OS-specific setup, you need:
-
-- **Homebrew** (macOS): https://brew.sh
-- **Miniconda or Anaconda**: `brew install --cask miniconda` (macOS) or https://docs.conda.io
+- **Homebrew**: https://brew.sh
+- **Miniconda or Anaconda**: `brew install --cask miniconda`
 
 ## Environment setup (conda)
 
@@ -61,8 +61,6 @@ Optional — Drive API mode (see [Google Drive access](#google-drive-access)):
 | `GDRIVE_ROOT_FOLDER_ID` | Drive folder ID to treat as the storage root | `root` (your My Drive root) |
 | `CACHE_DIR` | Local cache dir for re-derivable artifacts (`datasets_parsed/…`) | `~/.cache/sictic` |
 
-Host URLs differ per setup — see the macOS and Linux sections below.
-
 `skills/utils/env.py` auto-loads this file on import (resolved relative to the repo root, so CWD doesn't matter).
 
 ## Running a skill
@@ -80,13 +78,11 @@ Three services need to be running before most skills will work: **qdrant**, **ol
 
 Document parsing (OCR) is done in-process by the `docling` Python library — no separate service to start.
 
-### macOS
+`macos_launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
 
-On macOS **all four services run natively** — no containers, no Linux VM. `macos_launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
+### Install the host-side tools
 
-#### Prerequisites (macOS-only)
-
-Install the host-side tools via Homebrew:
+Via Homebrew:
 
 ```bash
 brew install rclone ollama
@@ -127,7 +123,7 @@ rclone config        # follow the interactive flow; name the remote "gdrive"
 
 Set `GDRIVE_MOUNT` in `.env` to the absolute path you want the Drive mounted at (e.g. `/Users/you/gdrive`). The launcher creates the directory if missing and starts rclone with `--rc --rc-addr 0.0.0.0:5572`.
 
-#### Usage
+### Launcher
 
 ```bash
 ./macos_launch.sh start              # start all three services
@@ -136,21 +132,7 @@ Set `GDRIVE_MOUNT` in `.env` to the absolute path you want the Drive mounted at 
 ./macos_launch.sh status             # show status of all
 ```
 
-Services: `qdrant ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`.
-
-With this setup, the `*_HOST` env vars all point at `localhost` on the standard ports (see the variable table above).
-
-### Linux
-
-On Linux everything runs in containers via the main compose file:
-
-```bash
-docker compose -f docker-compose.yml up -d
-```
-
-This brings up qdrant, ollama, rclone-mount, plus the openclaw gateway/CLI containers. With this setup the `*_HOST` env vars use the service hostnames (e.g. `http://qdrant:6333`, `http://ollama:11434`) when called from inside the compose network, or `http://host.docker.internal:...` when called from the host. Document parsing runs in-process inside the skill container; no docling service is started.
-
-`docker-compose.yml` also expects a number of host-side variables (`OPENCLAW_*`, `GDRIVE_*`, `OPENCLAW_WORKSPACE_DIR`, etc.) — see the file for the full list.
+Services: `qdrant ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`. The `*_HOST` env vars all point at `localhost` on the standard ports (see the variable table above).
 
 ## Google Drive access
 
@@ -158,7 +140,7 @@ All skills read/write Drive through `skills.utils.storage.get_storage()`, which 
 
 | Mode | Backend | Required setup |
 |---|---|---|
-| **Mount** *(default)* | `LocalStorage($GDRIVE_MOUNT)` reading the FUSE mount | rclone configured + running (see [rclone setup](#macos)) |
+| **Mount** *(default)* | `LocalStorage($GDRIVE_MOUNT)` reading the FUSE mount | rclone configured + running (see rclone setup above) |
 | **API** | `GoogleDriveStorage` — native Drive API via `google-api-python-client` | OAuth credentials (below); no rclone needed |
 
 Set `GDRIVE_USE_API=1` in `.env` to switch to API mode. With it unset, you get mount mode.

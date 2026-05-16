@@ -55,7 +55,7 @@ class ServicesGateway:
         self._initialized = True
 
     def _clean_pids(self, pids: List[int]) -> List[int]:
-        """Returns only the PIDs that are still alive according to the Linux kernel."""
+        """Returns only the PIDs that are still alive."""
         alive = []
         for pid in pids:
             try:

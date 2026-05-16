@@ -14,8 +14,8 @@ A high-precision, multi-tenant RAG engine designed for deep document inspection 
 ## Setup
 
 The following environment variables must be present in the workspace `.env` file:
-- `QDRANT_HOST`: e.g., `http://host.docker.internal:6333`
-- `OLLAMA_HOST`: e.g., `http://host.docker.internal:11434`
+- `QDRANT_HOST`: e.g., `http://localhost:6333`
+- `OLLAMA_HOST`: e.g., `http://localhost:11434`
 - `GDRIVE_MOUNT` (mount mode) or `GDRIVE_USE_API=1` (API mode) — see README.
 - `DEFAULT_VLM`: Used by docling (via Ollama) for picture descriptions.
 - `DEFAULT_EMBEDDINGS`: Model used for vector embeddings via Ollama.
