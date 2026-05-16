@@ -15,14 +15,31 @@ The supported platform is **macOS** (Apple Silicon). All services run natively; 
 
 ## Environment setup (conda)
 
-The canonical Python environment for **running the skills** is defined in `environment.yml` (env name: `sictic-env`, Python 3.12).
+### One-shot bootstrap (recommended)
+
+```bash
+./install_skills.sh
+```
+
+This script is idempotent and handles everything needed to make the repo work under openclaw:
+
+1. Creates `./venv` if missing — or rebuilds it if you moved the repo
+2. Runs `pip install -e .` so the `skills` package and all runtime deps (from `pyproject.toml`) are installed in the venv and reflect the current location
+3. Mirrors every skill into `~/.openclaw/skills/workspace-skills/<name>/` (override with `--target`), rewriting `./run` references in `SKILL.md` to the repo's absolute path so openclaw's agent gets unambiguous commands
+4. Removes any stale `env.vars.PYTHONPATH` from `~/.openclaw/openclaw.json` (the editable install makes it unnecessary)
+
+Re-run it after moving the repo, editing any `SKILL.md`, or pulling a branch that adds skills. See `./install_skills.sh --help` for flags (`--target`, `--symlink`, `--prune`, `--rebuild-venv`, `--skip-venv`, `--skip-openclaw-json`).
+
+### Or: conda env
+
+If you prefer conda over venv, use `environment.yml` (env name: `sictic-env`, Python 3.12):
 
 ```bash
 conda env create -f environment.yml
 conda activate sictic-env
 ```
 
-`environment.yml` includes `--editable .`, so `pip` installs the `skills` package in editable mode as part of env creation. After that, `import skills.foo.bar` works from any directory, without needing `PYTHONPATH`. If you ever bootstrap a venv by hand instead of conda, run `pip install -e .` from the repo root once.
+The `pip:` block in `environment.yml` includes `--editable .`, so the `skills` package is installed editable as part of env creation. After that, `import skills.foo.bar` works from any directory without `PYTHONPATH`.
 
 ### Configuration: `.env`
 

@@ -7,6 +7,28 @@ name = "sictic-skills"
 version = "0.0.0"
 description = "SICTIC-AI Python skills"
 requires-python = ">=3.10"
+dependencies = [
+    "aiohttp",
+    "apify-client",
+    "docling[ocrmac]",
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "langchain-text-splitters",
+    "litellm",
+    "ocrmac",
+    "ollama",
+    "polars",
+    "pydantic",
+    "python-dotenv",
+    "qdrant-client",
+    "rapidfuzz",
+    "requests",
+    "rich",
+    "typer",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-mock"]
 
 [tool.setuptools.packages.find]
 include = ["skills*"]
