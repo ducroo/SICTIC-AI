@@ -24,18 +24,16 @@ Required python packages: `qdrant-client`, `requests`, `pydantic`, `langchain-te
 
 ## Usage
 
-You can use the commands through OpenClaw or run the script directly.
-
-### Chat with a Dataset
-
 ```bash
-/home/node/miniconda3/envs/claw-env/bin/python /home/node/.openclaw/workspace-sictic-ai/skills/dataset_chat/main.py chat <DATASET_NAME> "Your question here"
+# Chat with a dataset (sync runs automatically if needed)
+python -m skills.dataset_chat chat <DATASET_NAME> "Your question here"
+
+# Force a sync (Drive → docling → Qdrant) without chatting
+python -m skills.dataset_chat sync <DATASET_NAME>
+
+# Search the vector store directly (returns matched chunks, no LLM)
+python -m skills.dataset_chat search <DATASET_NAME> "Your query"
+
+# Delete a dataset's Qdrant collection (will be rebuilt on next chat/sync)
+python -m skills.dataset_chat delete <DATASET_NAME>
 ```
-
-### Delete a Dataset
-
-```bash
-/home/node/miniconda3/envs/claw-env/bin/python /home/node/.openclaw/workspace-sictic-ai/skills/dataset_chat/main.py delete <DATASET_NAME>
-```
-
-*(Note: Deleting a dataset drops the entire Qdrant collection, which will be rebuilt upon the next chat request).*

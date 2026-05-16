@@ -1,9 +1,11 @@
 import logging
-import os
 from pathlib import Path
 
-# Define the log directory and file
-LOG_DIR = Path.home() / ".openclaw" / "workspace-sictic-ai" / "log"
+# Logs land in the repo's logs/ directory (gitignored). Resolved from this file's
+# location so it works regardless of CWD or which Python invokes the skill.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+LOG_DIR = _REPO_ROOT / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "sictic-ai.log"
 
 def get_logger(name: str) -> logging.Logger:

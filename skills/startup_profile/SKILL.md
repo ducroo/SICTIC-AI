@@ -17,8 +17,6 @@ This skill generates a neutral, objective 5-point diagnostic of a startup using 
 
 ## Usage
 
-Use the provided Python script to execute the diagnostic.
-
 ```bash
-python scripts/run_startup_profile.py --startup "<STARTUP_NAME>" [--files <file1> <file2> ...]
+python -m skills.startup_profile --startup "<STARTUP_NAME>" [--files <file1> <file2> ...]
 ```

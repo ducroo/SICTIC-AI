@@ -18,10 +18,10 @@ You can run the script directly from the CLI.
 
 ```bash
 # Basic usage with default model
-/home/node/miniconda3/bin/conda run -n claw-env python scripts/llm_chat.py "What is startup due diligence?"
+python -m skills.llm_chat "What is startup due diligence?"
 
 # Override the default model
-/home/node/miniconda3/bin/conda run -n claw-env python scripts/llm_chat.py "Summarize the risks." --model ollama/llama3
+python -m skills.llm_chat "Summarize the risks." --model ollama/llama3
 ```
 
 ## Features

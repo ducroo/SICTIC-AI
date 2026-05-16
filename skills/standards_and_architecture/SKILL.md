@@ -1,6 +1,6 @@
 ---
 name: standards_and_architecture
-description: The definitive source of truth for all coding conventions, environment constraints, and architecture layouts in the workspace-sictic-ai repository. The AI must review this skill before writing, modifying, or refactoring any Python code to ensure strict adherence.
+description: The definitive source of truth for all coding conventions, environment constraints, and architecture layouts in the SICTIC-AI repository. The AI must review this skill before writing, modifying, or refactoring any Python code to ensure strict adherence.
 ---
 
 # Standards and Architecture
@@ -16,8 +16,8 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
   * **Only** after the user explicitly agrees to the proposed approach are you allowed to execute the refactor and edit the code.
 * **Testing Protocol:**
   * If you write or use temporary Python scripts to test or verify functionality in the codebase, you must always ask the user afterwards if that script should be converted into a formal `pytest` unit/integration test.
-* **Environment:** All code is executed in the `sictic-env` conda environment.
-* **Python Path:** `workspace-sictic-ai` is included in the Python path.
+* **Environment:** All code is executed in the `sictic-env` conda environment defined in `environment.yml`.
+* **Python Path:** The `skills` package is installed editable (`pip install -e .`), so `import skills.<SKILL_NAME>.<SCRIPT_NAME>` works from any directory without setting `PYTHONPATH`.
 * **Imports:** All internal Python libraries are imported strictly using the pattern: `import skills.<SKILL_NAME>.<SCRIPT_NAME>`.
 * **Naming Conventions:** 
   * All skill directory names must only contain underscores (`_`). **Never** hyphens (`-`).
@@ -30,7 +30,7 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
 * **Logging vs. Printing:** 
   * Extensive logging must be implemented using the centralized logger utility. 
   * Every script must import it at the top level: `from skills.utils.logger import get_logger` followed by `logger = get_logger(__name__)`.
-  * This ensures all logs, across all skills and levels (INFO, WARNING, ERROR, DEBUG), flow into the single `~/.openclaw/workspace-sictic-ai/log/sictic-ai.log` file chronologically.
+  * This ensures all logs, across all skills and levels (INFO, WARNING, ERROR, DEBUG), flow into the single `<REPO_ROOT>/logs/sictic-ai.log` file chronologically.
   * `print()` and `rich` consoles are reserved **strictly** for final output delivery to the user/GUI. All internal state, progress steps, and warnings must use the `logger`.
 * **CLI/Routing:** 
   * `typer` is used for function descriptions, CLI routing, and argument parsing.
