@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sictic-skills"
+version = "0.0.0"
+description = "SICTIC-AI Python skills"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["skills*"]

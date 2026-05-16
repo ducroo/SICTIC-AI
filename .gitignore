@@ -22,3 +22,8 @@ logs/
 qdrant/
 qdrant_data/
 .qdrant-initialized
+
+# editable-install / packaging artifacts
+*.egg-info/
+build/
+dist/

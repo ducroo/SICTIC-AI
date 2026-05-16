@@ -22,11 +22,7 @@ conda env create -f environment.yml
 conda activate sictic-env
 ```
 
-The skills package expects to be importable as `skills.*`. Either run from the repo root or set `PYTHONPATH`:
-
-```bash
-export PYTHONPATH="$(pwd)"
-```
+`environment.yml` includes `--editable .`, so `pip` installs the `skills` package in editable mode as part of env creation. After that, `import skills.foo.bar` works from any directory, without needing `PYTHONPATH`. If you ever bootstrap a venv by hand instead of conda, run `pip install -e .` from the repo root once.
 
 ### Configuration: `.env`
 

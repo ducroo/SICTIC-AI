@@ -25,6 +25,4 @@ dependencies:
       - ollama
       - docling[ocrmac]
       - ocrmac
-
-variables:
-  PYTHONPATH: /home/node/.openclaw/workspace-sictic-ai
+      - --editable .   # makes `skills` importable from anywhere
