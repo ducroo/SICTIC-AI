@@ -37,6 +37,31 @@ start_ollama() {
         echo "ollama already running (pid $(cat "$PID_DIR/ollama.pid"))"
         return
     fi
+
+    # Export every OLLAMA_* key from .env into our env so `ollama serve` reads
+    # them at startup (NUM_PARALLEL, KV_CACHE_TYPE, FLASH_ATTENTION, HOST, …).
+    # Skill code reads .env separately via lib/env.py; this block is only for
+    # the daemon. Existing shell env wins over .env values.
+    if [ -f .env ]; then
+        while IFS= read -r line; do
+            case "$line" in
+                OLLAMA_*=*)
+                    key="${line%%=*}"
+                    val="${line#*=}"
+                    # strip optional surrounding double-quotes
+                    case "$val" in
+                        \"*\") val="${val#\"}"; val="${val%\"}" ;;
+                    esac
+                    # don't override if already set in the shell environment
+                    if [ -z "$(eval "printf '%s' \"\${$key:-}\"")" ]; then
+                        export "$key=$val"
+                        echo "  ollama env: $key=$val"
+                    fi
+                    ;;
+            esac
+        done < .env
+    fi
+
     echo "Starting ollama..."
     ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
     echo $! > "$PID_DIR/ollama.pid"
