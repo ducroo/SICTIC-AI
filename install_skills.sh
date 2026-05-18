@@ -12,28 +12,25 @@
 #   3. Mirrors every skills/<name>/ that has a SKILL.md into <target>/<name>/,
 #      substituting `{{REPO_ROOT}}` -> `<repo_abs>` in the mirrored SKILL.md so
 #      every command becomes an absolute, copy-pastable invocation.
-#   4. Removes any stale `env.vars.PYTHONPATH` from ~/.openclaw/openclaw.json
-#      (the editable install makes it unnecessary, and a stale value actively
-#      breaks skill imports).
+#
+# This script never touches ~/.openclaw/openclaw.json or any other openclaw
+# config — only the venv, the mirror target, and (transitively) pyproject.toml.
 #
 # Usage:
 #   ./install_skills.sh --target /path/to/openclaw/skill/dir   # required
 #   ./install_skills.sh --target ... --symlink                 # symlink mirrors instead of copy
 #   ./install_skills.sh --target ... --prune                   # remove target subdirs no longer in source
 #   ./install_skills.sh --target ... --rebuild-venv            # force a fresh venv even if one exists
-#   ./install_skills.sh --target ... --skip-venv               # skip steps 1+2 (skills + openclaw.json only)
-#   ./install_skills.sh --target ... --skip-openclaw-json      # skip step 4
+#   ./install_skills.sh --target ... --skip-venv               # skip steps 1+2 (mirror only)
 
 set -eu
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 TARGET=""
-OPENCLAW_JSON="$HOME/.openclaw/openclaw.json"
 MODE="copy"
 PRUNE=0
 REBUILD_VENV=0
 SKIP_VENV=0
-SKIP_OPENCLAW_JSON=0
 
 usage() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -47,7 +44,6 @@ while [ $# -gt 0 ]; do
         --prune) PRUNE=1; shift ;;
         --rebuild-venv) REBUILD_VENV=1; shift ;;
         --skip-venv) SKIP_VENV=1; shift ;;
-        --skip-openclaw-json) SKIP_OPENCLAW_JSON=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
     esac
@@ -82,10 +78,10 @@ if [ "$SKIP_VENV" -eq 0 ]; then
 
     needs_rebuild=0
     if [ ! -x "$venv_pip" ]; then
-        echo "[1/4] venv: not found — creating..."
+        echo "[1/3] venv: not found — creating..."
         needs_rebuild=1
     elif [ "$REBUILD_VENV" -eq 1 ]; then
-        echo "[1/4] venv: --rebuild-venv — recreating from scratch..."
+        echo "[1/3] venv: --rebuild-venv — recreating from scratch..."
         needs_rebuild=1
     else
         # The shebang line of venv/bin/pip points to the python that owns the
@@ -94,10 +90,10 @@ if [ "$SKIP_VENV" -eq 0 ]; then
         shebang=$(head -1 "$venv_pip" 2>/dev/null || true)
         case "$shebang" in
             *"$VENV/"*)
-                echo "[1/4] venv: present and anchored to this repo. Keeping it."
+                echo "[1/3] venv: present and anchored to this repo. Keeping it."
                 ;;
             *)
-                echo "[1/4] venv: shebang doesn't match repo path (was moved) — rebuilding..."
+                echo "[1/3] venv: shebang doesn't match repo path (was moved) — rebuilding..."
                 needs_rebuild=1
                 ;;
         esac
@@ -117,17 +113,17 @@ if [ "$SKIP_VENV" -eq 0 ]; then
         "$venv_pip" install --quiet --upgrade pip
     fi
 
-    echo "[2/4] pip install -e . (editable install + runtime deps from pyproject.toml)..."
+    echo "[2/3] pip install -e . (editable install + runtime deps from pyproject.toml)..."
     # --quiet keeps output tame; we still see errors.
     "$venv_pip" install --quiet -e "$REPO_ROOT"
 else
-    echo "[1+2/4] venv: skipped (--skip-venv)"
+    echo "[1+2/3] venv: skipped (--skip-venv)"
 fi
 
 # ---------------------------------------------------------------------------
 # Step 3: mirror skills + substitute {{REPO_ROOT}} placeholder
 # ---------------------------------------------------------------------------
-echo "[3/4] Mirroring skills into $TARGET ..."
+echo "[3/3] Mirroring skills into $TARGET ..."
 mkdir -p "$TARGET"
 
 INSTALLED_LIST=""
@@ -192,42 +188,6 @@ if [ "$PRUNE" -eq 1 ]; then
 fi
 
 echo "       Installed $installed_count skill(s)."
-
-# ---------------------------------------------------------------------------
-# Step 4: remove stale PYTHONPATH from openclaw.json
-# ---------------------------------------------------------------------------
-if [ "$SKIP_OPENCLAW_JSON" -eq 0 ] && [ -f "$OPENCLAW_JSON" ]; then
-    echo "[4/4] Checking $OPENCLAW_JSON for stale env.vars.PYTHONPATH ..."
-    # Use the venv's python (we just ensured it works) to do a safe JSON edit.
-    PY="$REPO_ROOT/venv/bin/python"
-    if [ ! -x "$PY" ]; then
-        PY="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
-    fi
-    if [ -n "$PY" ] && [ -x "$PY" ]; then
-        "$PY" - "$OPENCLAW_JSON" <<'PYEOF'
-import json, shutil, sys
-path = sys.argv[1]
-with open(path) as f:
-    cfg = json.load(f)
-env_vars = cfg.get("env", {}).get("vars", {})
-if "PYTHONPATH" in env_vars:
-    shutil.copyfile(path, path + ".bak.install_skills")
-    del env_vars["PYTHONPATH"]
-    # If env.vars became empty, leave the dict in place (harmless).
-    with open(path, "w") as f:
-        json.dump(cfg, f, indent=2)
-    print(f"       Removed stale env.vars.PYTHONPATH (backup: {path}.bak.install_skills)")
-else:
-    print("       No PYTHONPATH set in openclaw.json. Nothing to do.")
-PYEOF
-    else
-        echo "       (no Python available to safely edit JSON; skipping)" >&2
-    fi
-elif [ "$SKIP_OPENCLAW_JSON" -eq 0 ]; then
-    echo "[4/4] openclaw.json not found at $OPENCLAW_JSON; skipping."
-else
-    echo "[4/4] openclaw.json: skipped (--skip-openclaw-json)"
-fi
 
 echo
 echo "Done."

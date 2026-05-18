@@ -17,27 +17,27 @@
 #         {{REPO_ROOT}}/venv/bin/python  ->  <conda env python absolute path>
 #         {{REPO_ROOT}}                  ->  <repo absolute path>
 #      so SKILL.md commands work without conda activation.
-#   4. Removes any stale `env.vars.PYTHONPATH` from ~/.openclaw/openclaw.json.
+#
+# This script never touches ~/.openclaw/openclaw.json or any other openclaw
+# config — only the conda env, the mirror target, and (transitively)
+# pyproject.toml / environment.yml.
 #
 # Usage:
 #   ./install_skills_conda.sh --target /path/to/openclaw/skill/dir   # required
 #   ./install_skills_conda.sh --target ... --symlink                 # symlink mirrors instead of copy
 #   ./install_skills_conda.sh --target ... --prune                   # remove target subdirs no longer in source
 #   ./install_skills_conda.sh --target ... --rebuild-env             # force a fresh conda env (env remove + create)
-#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2
-#   ./install_skills_conda.sh --target ... --skip-openclaw-json      # skip step 4
+#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2 (mirror only)
 
 set -eu
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 TARGET=""
-OPENCLAW_JSON="$HOME/.openclaw/openclaw.json"
 ENV_FILE="$REPO_ROOT/environment.yml"
 MODE="copy"
 PRUNE=0
 REBUILD_ENV=0
 SKIP_ENV=0
-SKIP_OPENCLAW_JSON=0
 
 usage() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -51,7 +51,6 @@ while [ $# -gt 0 ]; do
         --prune) PRUNE=1; shift ;;
         --rebuild-env) REBUILD_ENV=1; shift ;;
         --skip-env) SKIP_ENV=1; shift ;;
-        --skip-openclaw-json) SKIP_OPENCLAW_JSON=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
     esac
@@ -109,16 +108,16 @@ if [ "$SKIP_ENV" -eq 0 ]; then
     fi
 
     if [ "$env_exists" -eq 1 ] && [ "$REBUILD_ENV" -eq 1 ]; then
-        echo "[1/4] conda env: --rebuild-env — removing existing '$ENV_NAME'..."
+        echo "[1/3] conda env: --rebuild-env — removing existing '$ENV_NAME'..."
         conda env remove -n "$ENV_NAME" --yes >/dev/null
         env_exists=0
     fi
 
     if [ "$env_exists" -eq 0 ]; then
-        echo "[1/4] conda env: creating '$ENV_NAME' from $ENV_FILE..."
+        echo "[1/3] conda env: creating '$ENV_NAME' from $ENV_FILE..."
         conda env create -n "$ENV_NAME" -f "$ENV_FILE"
     else
-        echo "[1/4] conda env: '$ENV_NAME' present — updating from $ENV_FILE (with --prune)..."
+        echo "[1/3] conda env: '$ENV_NAME' present — updating from $ENV_FILE (with --prune)..."
         conda env update -n "$ENV_NAME" -f "$ENV_FILE" --prune
     fi
 
@@ -130,13 +129,13 @@ if [ "$SKIP_ENV" -eq 0 ]; then
         exit 1
     fi
 
-    echo "[2/4] pip install -e . (inside conda env $ENV_NAME)..."
+    echo "[2/3] pip install -e . (inside conda env $ENV_NAME)..."
     # environment.yml already lists `-e .` in its pip: section, so this is
     # idempotent. We re-run it explicitly to pick up any pyproject.toml change
     # that landed since the env was last touched (without rebuilding the env).
     "$ENV_PY" -m pip install --quiet -e "$REPO_ROOT"
 else
-    echo "[1+2/4] conda env: skipped (--skip-env)"
+    echo "[1+2/3] conda env: skipped (--skip-env)"
     ENV_PY=$(conda run -n "$ENV_NAME" --no-capture-output which python 2>/dev/null | tail -1 | tr -d '\r' || true)
     if [ -z "$ENV_PY" ] || [ ! -x "$ENV_PY" ]; then
         echo "install_skills_conda: --skip-env requested but env '$ENV_NAME' has no usable python." >&2
@@ -149,7 +148,7 @@ echo "  env python: $ENV_PY"
 # ---------------------------------------------------------------------------
 # Step 3: mirror skills + substitute {{REPO_ROOT}} placeholder
 # ---------------------------------------------------------------------------
-echo "[3/4] Mirroring skills into $TARGET ..."
+echo "[3/3] Mirroring skills into $TARGET ..."
 mkdir -p "$TARGET"
 
 INSTALLED_LIST=""
@@ -217,32 +216,6 @@ if [ "$PRUNE" -eq 1 ]; then
 fi
 
 echo "       Installed $installed_count skill(s)."
-
-# ---------------------------------------------------------------------------
-# Step 4: remove stale PYTHONPATH from openclaw.json
-# ---------------------------------------------------------------------------
-if [ "$SKIP_OPENCLAW_JSON" -eq 0 ] && [ -f "$OPENCLAW_JSON" ]; then
-    echo "[4/4] Checking $OPENCLAW_JSON for stale env.vars.PYTHONPATH ..."
-    "$ENV_PY" - "$OPENCLAW_JSON" <<'PYEOF'
-import json, shutil, sys
-path = sys.argv[1]
-with open(path) as f:
-    cfg = json.load(f)
-env_vars = cfg.get("env", {}).get("vars", {})
-if "PYTHONPATH" in env_vars:
-    shutil.copyfile(path, path + ".bak.install_skills_conda")
-    del env_vars["PYTHONPATH"]
-    with open(path, "w") as f:
-        json.dump(cfg, f, indent=2)
-    print(f"       Removed stale env.vars.PYTHONPATH (backup: {path}.bak.install_skills_conda)")
-else:
-    print("       No PYTHONPATH set in openclaw.json. Nothing to do.")
-PYEOF
-elif [ "$SKIP_OPENCLAW_JSON" -eq 0 ]; then
-    echo "[4/4] openclaw.json not found at $OPENCLAW_JSON; skipping."
-else
-    echo "[4/4] openclaw.json: skipped (--skip-openclaw-json)"
-fi
 
 echo
 echo "Done."
