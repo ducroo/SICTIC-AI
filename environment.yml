@@ -1,28 +1,44 @@
 name: sictic-env
+
+# Channels: prefer conda-forge for everything; defaults left as a fallback.
 channels:
   - conda-forge
   - defaults
+
+# Source of truth for the runtime is pyproject.toml — this file mirrors it.
+# Anything listed under `dependencies:` is installed via conda-forge.
+# Anything under `pip:` is installed via pip because it isn't on conda-forge,
+# has an `extra` we need (e.g. docling[ocrmac]), or is the editable project.
+
 dependencies:
-  - python=3.12
+  # Match the venv build (install_skills.sh uses python3.13).
+  - python=3.13
   - pip
+
+  # === Runtime deps available on conda-forge (mirrors pyproject.toml) ===
   - aiohttp
+  - google-api-python-client
+  - google-auth-oauthlib
   - litellm
   - polars
   - pydantic
-  - pytest
-  - pytest-mock
   - python-dotenv
   - qdrant-client
   - rapidfuzz
   - requests
   - rich
   - typer
-  - google-api-python-client
-  - google-auth-oauthlib
+
+  # === Test deps (optional in pyproject; included here for convenience) ===
+  - pytest
+  - pytest-mock
+
   - pip:
+      # Not on conda-forge (or we need the [ocrmac] extras for docling):
       - apify-client
       - langchain-text-splitters
       - ollama
       - docling[ocrmac]
       - ocrmac
-      - --editable .   # makes `skills` importable from anywhere
+      # Editable install of this repo — makes `skills.*` and `lib.*` importable.
+      - --editable .

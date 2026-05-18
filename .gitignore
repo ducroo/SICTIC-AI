@@ -28,5 +28,10 @@ qdrant_data/
 build/
 dist/
 
+# conda env-create writes a temp requirements file next to environment.yml
+# (named like `condaenv.<random>.requirements.txt`) while materializing the
+# pip: section. Usually cleaned up automatically; ignore in case it's not.
+condaenv.*.requirements.txt
+
 # personal scratch files
 claude_resume.txt

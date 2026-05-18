@@ -10,36 +10,72 @@ The supported platform is **macOS** (Apple Silicon). All services run natively; 
 
 ## Prerequisites
 
-- **Homebrew**: https://brew.sh
-- **Miniconda or Anaconda**: `brew install --cask miniconda`
+Both install paths need:
 
-## Environment setup (conda)
+- **Homebrew** — https://brew.sh
+- **rclone** and **Ollama** — `brew install rclone ollama` (rclone only needed in mount mode; see [Google Drive access](#google-drive-access))
+- **Qdrant** — native binary, downloaded separately (see [Backing services](#backing-services))
 
-### One-shot bootstrap (recommended)
+Then pick **one** of the two Python-env paths below.
 
-```bash
-./install_skills.sh
-```
+### Path A — pip + venv (default)
 
-This script is idempotent and handles everything needed to make the repo work under openclaw:
-
-1. Creates `./venv` if missing — or rebuilds it if you moved the repo
-2. Runs `pip install -e .` so the `skills` package and all runtime deps (from `pyproject.toml`) are installed in the venv and reflect the current location
-3. Mirrors every skill into `~/.openclaw/skills/workspace-skills/<name>/` (override with `--target`), rewriting `./run` references in `SKILL.md` to the repo's absolute path so openclaw's agent gets unambiguous commands
-4. Removes any stale `env.vars.PYTHONPATH` from `~/.openclaw/openclaw.json` (the editable install makes it unnecessary)
-
-Re-run it after moving the repo, editing any `SKILL.md`, or pulling a branch that adds skills. See `./install_skills.sh --help` for flags (`--target`, `--symlink`, `--prune`, `--rebuild-venv`, `--skip-venv`, `--skip-openclaw-json`).
-
-### Or: conda env
-
-If you prefer conda over venv, use `environment.yml` (env name: `sictic-env`, Python 3.12):
+No extra brew prerequisites — `install_skills.sh` uses whatever `python3.13` (or `python3`) is on `PATH`. macOS ships with Python; if you want a controlled version:
 
 ```bash
-conda env create -f environment.yml
-conda activate sictic-env
+brew install python@3.13
 ```
 
-The `pip:` block in `environment.yml` includes `--editable .`, so the `skills` package is installed editable as part of env creation. After that, `import skills.foo.bar` works from any directory without `PYTHONPATH`.
+### Path B — conda
+
+```bash
+brew install --cask miniforge
+conda init zsh        # or `conda init bash`, depending on $SHELL
+exec $SHELL           # reload shell so `conda` is on PATH
+conda --version       # verify
+```
+
+Miniforge is the conda-forge-preconfigured installer, recommended for Apple Silicon. (Miniconda/Anaconda work too, but miniforge avoids Anaconda's licensing concerns and is smaller.)
+
+## Environment setup
+
+Choose one path. They produce equivalent end states — same skills, same SKILL.md commands, different Python interpreter location.
+
+### Path A — pip + venv (recommended default)
+
+```bash
+./install_skills.sh --target /path/to/openclaw/skill/dir
+```
+
+What it does (idempotent — safe to re-run any time):
+
+1. Creates `./venv` (Python 3.13) if missing — or rebuilds it if the venv was copied from another location.
+2. Runs `pip install -e .` so the `skills` and `lib` packages plus all runtime deps (from `pyproject.toml`) are installed in the venv and reflect the current location.
+3. Mirrors every `skills/<name>/` directory that has a `SKILL.md` into `<target>/<name>/`, substituting `{{REPO_ROOT}}` placeholders in each mirrored `SKILL.md` with this repo's absolute path. The resulting commands point at `./venv/bin/python` directly — no activation required, openclaw can copy-paste them verbatim.
+4. Removes any stale `env.vars.PYTHONPATH` from `~/.openclaw/openclaw.json` (the editable install makes it unnecessary).
+
+Re-run after moving the repo, editing any `SKILL.md`, or pulling a branch that adds dependencies. Flags: `--target` (required), `--symlink`, `--prune`, `--rebuild-venv`, `--skip-venv`, `--skip-openclaw-json`. See `./install_skills.sh --help`.
+
+Resulting Python: `<repo>/venv/bin/python` (1.7 GB env).
+
+### Path B — conda
+
+```bash
+./install_skills_conda.sh --target /path/to/openclaw/skill/dir
+```
+
+Same idempotent four-step flow as Path A, with the env step swapped:
+
+1. Creates the `sictic-env` conda env from `environment.yml` (Python 3.13, 12 conda-forge deps + 5 pip-section deps), or runs `conda env update --prune` if it already exists.
+2. Runs `pip install -e .` inside the conda env.
+3. Mirrors skills as above. The substituted SKILL.md commands point at the conda env's absolute python path (e.g. `/opt/homebrew/Caskroom/miniforge/.../envs/sictic-env/bin/python`) — so `conda activate` is not required at invocation time.
+4. Same `openclaw.json` cleanup as Path A.
+
+Flags mirror Path A: `--target` (required), `--symlink`, `--prune`, `--rebuild-env`, `--skip-env`, `--skip-openclaw-json`. See `./install_skills_conda.sh --help`.
+
+Resulting Python: `~/miniforge/envs/sictic-env/bin/python` (or wherever your conda lives). First env-create takes ~5-8 min; subsequent updates < 1 min.
+
+`environment.yml` is kept in sync with `pyproject.toml` — anything you add to one should land in the other.
 
 ### Configuration: `.env`
 
@@ -74,26 +110,36 @@ Optional — Drive API mode (see [Google Drive access](#google-drive-access)):
 | `GDRIVE_ROOT_FOLDER_ID` | Drive folder ID to treat as the storage root | `root` (your My Drive root) |
 | `CACHE_DIR` | Local cache dir for re-derivable artifacts (`datasets_parsed/…`) | `~/.cache/sictic` |
 
-`skills/utils/env.py` auto-loads this file on import (resolved relative to the repo root, so CWD doesn't matter).
+`lib/env.py` auto-loads this file on import (resolved relative to the repo root, so CWD doesn't matter).
 
 ## Running a skill
 
-Use the repo's `./run` wrapper — it picks the right Python interpreter
-automatically (preferring `./venv/bin/python`, then `python` on PATH), and you
-can override it with the `SICTIC_PYTHON` env var:
+After running the installer, each mirrored `SKILL.md` under `<target>/<name>/` contains a ready-to-copy bash command with the absolute Python path already substituted in. The pattern is always:
 
 ```bash
-./run llm_chat "What is startup due diligence?"
-./run dataset_chat chat <dataset_name> "your question"
-./run startup_profile --startup "<startup_name>" --files /path/to/deck.pdf
+<absolute-path-to-python> -m skills.<name> [args]
 ```
 
-Under the hood it's just `<interpreter> -m skills.<name> [args]`, so you can
-also invoke skills directly if you've activated the right Python yourself
-(e.g. `conda activate sictic-env`):
+For Path A (venv) installs, that resolves to:
 
 ```bash
-python -m skills.llm_chat "What is startup due diligence?"
+/abs/path/to/repo/venv/bin/python -m skills.llm_chat "What is startup due diligence?"
+/abs/path/to/repo/venv/bin/python -m skills.dataset_chat chat <dataset_name> "your question"
+/abs/path/to/repo/venv/bin/python -m skills.startup_profile --startup "<startup_name>" --files /path/to/deck.pdf
+```
+
+For Path B (conda) installs, the prefix is the conda env's python instead — e.g. `/opt/homebrew/Caskroom/miniforge/.../envs/sictic-env/bin/python -m skills.…`.
+
+Either way, no activation is needed. If you'd rather work from an activated shell:
+
+```bash
+# Path A
+source venv/bin/activate
+python -m skills.llm_chat "..."
+
+# Path B
+conda activate sictic-env
+python -m skills.llm_chat "..."
 ```
 
 ## Backing services
@@ -137,7 +183,7 @@ ollama pull gemma3:27b
 
 The set above totals ~55 GB. Trim it to whatever subset you actually need (at minimum: the `DEFAULT_LLM`, `DEFAULT_VLM`, and `DEFAULT_EMBEDDINGS` from `.env`).
 
-**docling** — installed into the conda env via `environment.yml` (`docling[ocrmac]` + `ocrmac`). The `ocrmac` package routes OCR through Apple's Vision framework (Neural Engine accelerated on Apple Silicon). First convert call downloads the docling layout + table models (~1 GB) into `~/.cache/docling/`; subsequent runs reuse them.
+**docling** — installed into the Python env automatically by either installer (`docling[ocrmac]` + `ocrmac` from `pyproject.toml` / `environment.yml`). The `ocrmac` package routes OCR through Apple's Vision framework (Neural Engine accelerated on Apple Silicon). First convert call downloads the docling layout + table models (~1 GB) into `~/.cache/docling/`; subsequent runs reuse them.
 
 **rclone** (mount mode only — skip if you'll use [Drive API mode](#google-drive-access)) — configure a `gdrive:` remote once:
 
@@ -160,7 +206,7 @@ Services: `qdrant ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`. Th
 
 ## Google Drive access
 
-All skills read/write Drive through `skills.utils.storage.get_storage()`, which returns one of two backends depending on env vars:
+All skills read/write Drive through `lib.storage.get_storage()`, which returns one of two backends depending on env vars:
 
 | Mode | Backend | Required setup |
 |---|---|---|
@@ -191,10 +237,18 @@ One-time setup against a Google Cloud project:
 Quick verification:
 
 ```bash
-GDRIVE_USE_API=1 PYTHONPATH=. python -c "
-from skills.utils.storage import get_storage
-s = get_storage()
-print(s.list('datasets'))
+# Path A
+./venv/bin/python -c "
+import lib.env  # triggers .env auto-load
+from lib.storage import get_storage
+print(get_storage().list('datasets'))
+"
+
+# Path B
+conda run -n sictic-env --no-capture-output python -c "
+import lib.env
+from lib.storage import get_storage
+print(get_storage().list('datasets'))
 "
 ```
 
@@ -203,5 +257,11 @@ If you ever need to revoke or rotate access, delete `~/.openclaw/gdrive-ops-toke
 ## Tests
 
 ```bash
-pytest skills/tests
+# Path A
+./venv/bin/python -m pytest tests/
+
+# Path B
+conda run -n sictic-env --no-capture-output pytest tests/
 ```
+
+`tests/utils/test_storage_api_smoke.py` is a useful end-to-end probe — it exercises every `lib.storage` method against the currently configured backend (LocalStorage in mount mode, GoogleDriveStorage when `GDRIVE_USE_API=1`).
