@@ -39,8 +39,6 @@ Miniforge is the conda-forge-preconfigured installer, recommended for Apple Sili
 
 ## Environment setup
 
-Choose one path. They produce equivalent end states — same skills, same SKILL.md commands, different Python interpreter location.
-
 ### Path A — pip + venv (recommended default)
 
 ```bash
@@ -52,8 +50,6 @@ What it does (idempotent — safe to re-run any time):
 1. Creates `./venv` (Python 3.13) if missing — or rebuilds it if the venv was copied from another location.
 2. Runs `pip install -e .` so the `skills` and `lib` packages plus all runtime deps (from `pyproject.toml`) are installed in the venv and reflect the current location.
 3. Mirrors every `skills/<name>/` directory that has a `SKILL.md` into `<target>/<name>/`, substituting `{{REPO_ROOT}}` placeholders in each mirrored `SKILL.md` with this repo's absolute path. The resulting commands point at `./venv/bin/python` directly — no activation required, openclaw can copy-paste them verbatim.
-
-Neither installer ever touches `~/.openclaw/openclaw.json` or any other openclaw config — they only manage the Python env, the mirror target, and (transitively) the dependency files.
 
 Re-run after moving the repo, editing any `SKILL.md`, or pulling a branch that adds dependencies. Flags: `--target` (required), `--symlink`, `--prune`, `--rebuild-venv`, `--skip-venv`. See `./install_skills.sh --help`.
 
@@ -144,19 +140,11 @@ python -m skills.llm_chat "..."
 
 ## Backing services
 
-Three services need to be running before most skills will work: **qdrant**, **ollama**, **rclone** (mount-mode only — skip if using Drive API mode).
-
-Document parsing (OCR) is done in-process by the `docling` Python library — no separate service to start.
-
-`macos_launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
+Three services need to be running before most skills will work: **qdrant**, **ollama**, **rclone** (only in mount mode). `macos_launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
 
 ### Install the host-side tools
 
-Via Homebrew:
-
-```bash
-brew install rclone ollama
-```
+`rclone` and `ollama` come from the Prerequisites step above (`brew install rclone ollama`). The remaining pieces:
 
 **Qdrant** — native macOS binary, downloaded from the official release:
 
@@ -185,7 +173,7 @@ The set above totals ~55 GB. Trim it to whatever subset you actually need (at mi
 
 **docling** — installed into the Python env automatically by either installer (`docling[ocrmac]` + `ocrmac` from `pyproject.toml` / `environment.yml`). The `ocrmac` package routes OCR through Apple's Vision framework (Neural Engine accelerated on Apple Silicon). First convert call downloads the docling layout + table models (~1 GB) into `~/.cache/docling/`; subsequent runs reuse them.
 
-**rclone** (mount mode only — skip if you'll use [Drive API mode](#google-drive-access)) — configure a `gdrive:` remote once:
+**rclone** — configure a `gdrive:` remote once (skip in Drive API mode):
 
 ```bash
 rclone config        # follow the interactive flow; name the remote "gdrive"
@@ -202,18 +190,14 @@ Set `GDRIVE_MOUNT` in `.env` to the absolute path you want the Drive mounted at 
 ./macos_launch.sh status             # show status of all
 ```
 
-Services: `qdrant ollama rclone`. Logs land in `./logs/`, PIDs in `./.pids/`. The `*_HOST` env vars all point at `localhost` on the standard ports (see the variable table above).
-
 ## Google Drive access
 
 All skills read/write Drive through `lib.storage.get_storage()`, which returns one of two backends depending on env vars:
 
 | Mode | Backend | Required setup |
 |---|---|---|
-| **Mount** *(default)* | `LocalStorage($GDRIVE_MOUNT)` reading the FUSE mount | rclone configured + running (see rclone setup above) |
-| **API** | `GoogleDriveStorage` — native Drive API via `google-api-python-client` | OAuth credentials (below); no rclone needed |
-
-Set `GDRIVE_USE_API=1` in `.env` to switch to API mode. With it unset, you get mount mode.
+| **Mount** *(default, `GDRIVE_USE_API` unset)* | `LocalStorage($GDRIVE_MOUNT)` reading the FUSE mount | rclone configured + running (see rclone setup above) |
+| **API** *(`GDRIVE_USE_API=1`)* | `GoogleDriveStorage` — native Drive API via `google-api-python-client` | OAuth credentials (below); no rclone needed |
 
 In both modes, cache-only paths (`datasets_parsed/…`) are automatically routed to the local `CACHE_DIR` (`~/.cache/sictic` by default), so re-derivable artifacts never round-trip through Drive.
 
