@@ -52,9 +52,10 @@ What it does (idempotent — safe to re-run any time):
 1. Creates `./venv` (Python 3.13) if missing — or rebuilds it if the venv was copied from another location.
 2. Runs `pip install -e .` so the `skills` and `lib` packages plus all runtime deps (from `pyproject.toml`) are installed in the venv and reflect the current location.
 3. Mirrors every `skills/<name>/` directory that has a `SKILL.md` into `<target>/<name>/`, substituting `{{REPO_ROOT}}` placeholders in each mirrored `SKILL.md` with this repo's absolute path. The resulting commands point at `./venv/bin/python` directly — no activation required, openclaw can copy-paste them verbatim.
-4. Removes any stale `env.vars.PYTHONPATH` from `~/.openclaw/openclaw.json` (the editable install makes it unnecessary).
 
-Re-run after moving the repo, editing any `SKILL.md`, or pulling a branch that adds dependencies. Flags: `--target` (required), `--symlink`, `--prune`, `--rebuild-venv`, `--skip-venv`, `--skip-openclaw-json`. See `./install_skills.sh --help`.
+Neither installer ever touches `~/.openclaw/openclaw.json` or any other openclaw config — they only manage the Python env, the mirror target, and (transitively) the dependency files.
+
+Re-run after moving the repo, editing any `SKILL.md`, or pulling a branch that adds dependencies. Flags: `--target` (required), `--symlink`, `--prune`, `--rebuild-venv`, `--skip-venv`. See `./install_skills.sh --help`.
 
 Resulting Python: `<repo>/venv/bin/python` (1.7 GB env).
 
@@ -64,14 +65,13 @@ Resulting Python: `<repo>/venv/bin/python` (1.7 GB env).
 ./install_skills_conda.sh --target /path/to/openclaw/skill/dir
 ```
 
-Same idempotent four-step flow as Path A, with the env step swapped:
+Same idempotent three-step flow as Path A, with the env step swapped:
 
 1. Creates the `sictic-env` conda env from `environment.yml` (Python 3.13, 12 conda-forge deps + 5 pip-section deps), or runs `conda env update --prune` if it already exists.
 2. Runs `pip install -e .` inside the conda env.
 3. Mirrors skills as above. The substituted SKILL.md commands point at the conda env's absolute python path (e.g. `/opt/homebrew/Caskroom/miniforge/.../envs/sictic-env/bin/python`) — so `conda activate` is not required at invocation time.
-4. Same `openclaw.json` cleanup as Path A.
 
-Flags mirror Path A: `--target` (required), `--symlink`, `--prune`, `--rebuild-env`, `--skip-env`, `--skip-openclaw-json`. See `./install_skills_conda.sh --help`.
+Flags mirror Path A: `--target` (required), `--symlink`, `--prune`, `--rebuild-env`, `--skip-env`. See `./install_skills_conda.sh --help`.
 
 Resulting Python: `~/miniforge/envs/sictic-env/bin/python` (or wherever your conda lives). First env-create takes ~5-8 min; subsequent updates < 1 min.
 
