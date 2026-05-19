@@ -203,40 +203,63 @@ In both modes, cache-only paths (`datasets_parsed/…`) are automatically routed
 
 ### API-mode setup
 
-One-time setup against a Google Cloud project:
+Four steps total. The first two happen in [Google Cloud Console](https://console.cloud.google.com) (one-time per Google account); the last two are local.
 
-1. **Create / pick a Google Cloud project.** Go to [console.cloud.google.com](https://console.cloud.google.com), create a project (or use an existing one) — e.g. `ai-sictic`.
-2. **Enable the Google Drive API.** APIs & Services → Library → search "Google Drive API" → Enable.
-3. **Configure the OAuth consent screen** (only required once per project). User type: **External**. Add yourself as a test user. Scope `https://www.googleapis.com/auth/drive` is requested at runtime — you don't need to add it here.
-4. **Create OAuth credentials.** APIs & Services → Credentials → **Create credentials → OAuth client ID**.
-   - **Application type: `Desktop app`.** This is important — *not* "Web application". Desktop-app clients support the loopback redirect that the Python flow uses, and download as a JSON with `"installed"` as the top-level key. Web-app clients download with `"web"` and won't work with `InstalledAppFlow`.
-   - Name it anything (e.g. `sictic-ops`).
-5. **Download the JSON** and place it at:
-   ```
-   ~/.openclaw/gdrive-ops-credentials.json
-   ```
-   (or any path you prefer, then set `GDRIVE_CREDENTIALS=/some/path` in `.env`).
-6. **First run.** On the first call to `get_storage()` in API mode, the OAuth flow opens your browser, you grant the requested Drive access, and a refresh token is cached at `~/.openclaw/gdrive-ops-token.json` (override with `GDRIVE_TOKEN`). Subsequent runs reuse the token silently.
+**1. Create a project and enable the Drive API.**
 
-Quick verification:
+- Create a new project (or pick an existing one) — e.g. `ai-sictic`.
+- **APIs & Services → Library** → search "Google Drive API" → **Enable**.
+
+**2. Create OAuth credentials.**
+
+- **APIs & Services → OAuth consent screen** → User type **External**. Add yourself as a test user. Skip the scope step — `https://www.googleapis.com/auth/drive` is requested at runtime, not declared up front.
+- **APIs & Services → Credentials → Create credentials → OAuth client ID**.
+  - **Application type: `Desktop app`** ← important; *not* "Web application". Desktop-app clients support the loopback redirect that the Python flow uses, and download as a JSON with `"installed"` as the top-level key. Web-app clients download with `"web"` and won't work with `InstalledAppFlow`.
+  - Name it anything (e.g. `sictic-ops`).
+- **Download the JSON.**
+
+**3. Save credentials + enable API mode locally.**
+
+```bash
+mv ~/Downloads/client_secret_*.json ~/.openclaw/gdrive-ops-credentials.json
+echo "GDRIVE_USE_API=1" >> .env
+```
+
+(If you keep the credentials at a different path, set `GDRIVE_CREDENTIALS=/your/path` in `.env`.)
+
+**4. Verify — the first run completes OAuth and caches a refresh token.**
 
 ```bash
 # Path A
 ./venv/bin/python -c "
-import lib.env  # triggers .env auto-load
+import lib.env
 from lib.storage import get_storage
-print(get_storage().list('datasets'))
+s = get_storage()
+print('backend:', type(s).__name__)
+print('datasets/:', s.list('datasets')[:5])
 "
 
 # Path B
 conda run -n sictic-env --no-capture-output python -c "
 import lib.env
 from lib.storage import get_storage
-print(get_storage().list('datasets'))
+s = get_storage()
+print('backend:', type(s).__name__)
+print('datasets/:', s.list('datasets')[:5])
 "
 ```
 
-If you ever need to revoke or rotate access, delete `~/.openclaw/gdrive-ops-token.json` and re-run — the OAuth flow will fire again.
+On the first run, your browser opens for the OAuth grant. After you approve, a refresh token gets cached at `~/.openclaw/gdrive-ops-token.json` (override with `GDRIVE_TOKEN`) and subsequent runs use it silently.
+
+Expected output: `backend: RoutedStorage`, followed by up to 5 dataset names from your Drive root (`[]` if `datasets/` is empty on Drive).
+
+To revoke or rotate access, delete `~/.openclaw/gdrive-ops-token.json` and re-run — the OAuth flow fires again.
+
+For a deeper smoke test that exercises every storage operation (write/read/list/mkdir/rmtree/mtime) against the live Drive API, run `tests/utils/test_storage_api_smoke.py`:
+
+```bash
+./venv/bin/python tests/utils/test_storage_api_smoke.py
+```
 
 ## Tests
 
