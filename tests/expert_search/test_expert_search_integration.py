@@ -16,11 +16,11 @@ TEST_CASES = [
 def check_dataset_exists(startup):
     """Check if required datasets exist in the local workspace."""
     try:
-        gdrive_mount = get_env_var("GDRIVE_MOUNT")
+        repository_dir = get_env_var("REPOSITORY_DIR")
     except Exception:
         return False
         
-    datasets_dir = Path(gdrive_mount) / "datasets"
+    datasets_dir = Path(repository_dir) / "datasets"
     
     if not (datasets_dir / "sictic_members").exists():
         return False

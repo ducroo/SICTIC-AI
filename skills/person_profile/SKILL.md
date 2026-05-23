@@ -15,7 +15,7 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 1. **Filename Generation & Caching:** 
    * Sanitize the input `name` into a safe string.
-   * Construct the output file path: `<GDRIVE_MOUNT>/insights/<dataset_name>/profile_<sanitized_name>_<model_name>.md`.
+   * Construct the output file path: `<REPOSITORY_DIR>/insights/<dataset_name>/profile_<sanitized_name>_<model_name>.md`.
    * Check if this file already exists using the `check_insight_refresh` utility. If it does, read and return its contents immediately, bypassing the LLM.
 
 2. **Data Retrieval & Synthesis:**

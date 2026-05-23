@@ -49,7 +49,7 @@ description: This skill aims to find potential investors in the target startup. 
 
 4. **Output Generation:** 
    * Construct a final Markdown string containing a table of the ranked results: `| Investor Name | Score | Rationale |`. 
-   * Save this Markdown table to: `<GDRIVE_MOUNT>/insights/<startup_name>/<startup_name>_potential_investors_<model_name>.md`. 
+   * Save this Markdown table to: `<REPOSITORY_DIR>/insights/<startup_name>/<startup_name>_potential_investors_<model_name>.md`. 
    * Return the Markdown string.
 
 **CLI Interface:**

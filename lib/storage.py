@@ -1,14 +1,13 @@
 """
-Storage abstraction for skills that read/write data under $GDRIVE_MOUNT.
+Storage abstraction for skills that read/write data under $REPOSITORY_DIR.
 
 Skills should call `get_storage().write_text("insights/foo/bar.md", content)`
-instead of `open(os.path.join(gdrive_mount, "insights", "foo", "bar.md"), "w")`.
+instead of `open(os.path.join(repository_dir, "insights", "foo", "bar.md"), "w")`.
 
 Two backends:
-  - LocalStorage(base_path):     today's behavior — reads/writes the FUSE mount
-                                 (or any local dir).
+  - LocalStorage(base_path):     today's behavior — reads/writes a local directory.
   - GoogleDriveStorage(...):     Google Drive via the native Drive API
-                                 (see storage_gdrive.py). No rclone in the loop.
+                                 (see storage_gdrive.py).
 
 RoutedStorage dispatches by path prefix so caches always stay local even
 when the source/output backend is remote.
@@ -42,17 +41,17 @@ class Storage(Protocol):
 def _validate_rel(rel: str) -> str:
     """Return a clean relative storage path.
 
-    Accepts a relative path as-is, or an absolute path under GDRIVE_MOUNT —
+    Accepts a relative path as-is, or an absolute path under REPOSITORY_DIR —
     the prefix is stripped to yield the equivalent relative path. This lets
     legacy skill code that builds full filesystem paths (e.g.
-    `os.path.join(GDRIVE_MOUNT, "insights", ...)`) work transparently under
+    `os.path.join(REPOSITORY_DIR, "insights", ...)`) work transparently under
     both mount and API storage modes.
 
-    Raises ValueError for absolute paths outside GDRIVE_MOUNT, or any path
+    Raises ValueError for absolute paths outside REPOSITORY_DIR, or any path
     containing '..'.
     """
     if rel.startswith("/"):
-        mount = os.environ.get("GDRIVE_MOUNT", "").rstrip("/")
+        mount = os.environ.get("REPOSITORY_DIR", "").rstrip("/")
         if mount and (rel == mount or rel.startswith(mount + "/")):
             rel = rel[len(mount):].lstrip("/")
         else:
@@ -255,8 +254,8 @@ def get_storage() -> Storage:
     """
     Returns the process-wide Storage instance.
 
-    Mount mode (default):  LocalStorage($GDRIVE_MOUNT) — reads/writes the
-                           FUSE mount provided by `rclone mount`.
+    Mount mode (default):  LocalStorage($REPOSITORY_DIR) — reads/writes the
+                           local disk directory.
 
     API mode (GDRIVE_USE_API=1):  RoutedStorage with GoogleDriveStorage for
                            drive paths and LocalStorage($CACHE_DIR) for caches.
@@ -291,7 +290,7 @@ def get_storage() -> Storage:
         os.makedirs(cache_dir, exist_ok=True)
         _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir))
     else:
-        mount = os.environ["GDRIVE_MOUNT"]
+        mount = os.environ["REPOSITORY_DIR"]
         _storage_singleton = LocalStorage(mount)
 
     return _storage_singleton

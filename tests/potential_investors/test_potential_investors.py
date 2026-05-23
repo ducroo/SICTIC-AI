@@ -37,8 +37,8 @@ async def test_potential_investors_generation(mock_env, mocker):
     assert "90" in output
 
     # Assert File System
-    gdrive_mount = mock_env["gdrive_mount"]
-    expected_dir = os.path.join(gdrive_mount, "insights", "teststartup")
+    repository_dir = mock_env["repository_dir"]
+    expected_dir = os.path.join(repository_dir, "insights", "teststartup")
     expected_file = os.path.join(expected_dir, "teststartup-potential-investors-test-model-1b.md")
     assert os.path.exists(expected_file)
 

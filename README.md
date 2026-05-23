@@ -85,7 +85,7 @@ Required variables:
 
 | Variable | Purpose | Example |
 |---|---|---|
-| `GDRIVE_MOUNT` | Local path to the rclone/Google Drive mount | `/data` or `~/gdrive` |
+| `REPOSITORY_DIR` | Local path to the rclone/Google Drive mount | `/data` or `~/gdrive` |
 | `WORKSPACE_DIR` | Path to this repo on the host | `/Users/you/.openclaw/workspace-ops/SICTIC-AI` |
 | `DEFAULT_LLM`, `DEFAULT_VLM`, `DEFAULT_EMBEDDINGS` | litellm-style model names | `ollama/qwen3:8b` |
 | `OLLAMA_MAX_CONTEXT`, `OLLAMA_CONTEXT_LENGTH` | Context window sizing | `32768` / `16384` |
@@ -179,7 +179,7 @@ The set above totals ~55 GB. Trim it to whatever subset you actually need (at mi
 rclone config        # follow the interactive flow; name the remote "gdrive"
 ```
 
-Set `GDRIVE_MOUNT` in `.env` to the absolute path you want the Drive mounted at (e.g. `/Users/you/gdrive`). The launcher creates the directory if missing and starts rclone with `--rc --rc-addr 0.0.0.0:5572`.
+Set `REPOSITORY_DIR` in `.env` to the absolute path you want the Drive mounted at (e.g. `/Users/you/gdrive`). The launcher creates the directory if missing and starts rclone with `--rc --rc-addr 0.0.0.0:5572`.
 
 ### Launcher
 
@@ -196,7 +196,7 @@ All skills read/write Drive through `lib.storage.get_storage()`, which returns o
 
 | Mode | Backend | Required setup |
 |---|---|---|
-| **Mount** *(default, `GDRIVE_USE_API` unset)* | `LocalStorage($GDRIVE_MOUNT)` reading the FUSE mount | rclone configured + running (see rclone setup above) |
+| **Mount** *(default, `GDRIVE_USE_API` unset)* | `LocalStorage($REPOSITORY_DIR)` reading the FUSE mount | rclone configured + running (see rclone setup above) |
 | **API** *(`GDRIVE_USE_API=1`)* | `GoogleDriveStorage` — native Drive API via `google-api-python-client` | OAuth credentials (below); no rclone needed |
 
 In both modes, cache-only paths (`datasets_parsed/…`) are automatically routed to the local `CACHE_DIR` (`~/.cache/sictic` by default), so re-derivable artifacts never round-trip through Drive.

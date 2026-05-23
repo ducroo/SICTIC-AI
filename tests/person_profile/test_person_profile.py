@@ -47,8 +47,8 @@ async def test_person_profile_generation(mock_env, mocker):
     assert output == "This is a mocked profile for Jane Doe."
 
     # 4. Assert File System
-    gdrive_mount = mock_env["gdrive_mount"]
-    expected_dir = os.path.join(gdrive_mount, "insights", dataset, "person_profile")
+    repository_dir = mock_env["repository_dir"]
+    expected_dir = os.path.join(repository_dir, "insights", dataset, "person_profile")
     expected_file = os.path.join(expected_dir, "jane-doe-test-model-1b.md")
 
     assert os.path.exists(expected_file), f"Expected file {expected_file} was not created."
