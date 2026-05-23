@@ -62,6 +62,11 @@ start_ollama() {
         return
     fi
 
+    if ! command -v ollama >/dev/null 2>&1; then
+        echo "WARNING: ollama is not installed or not in PATH. Skipping ollama start."
+        return
+    fi
+
     if [ -f "$PID_DIR/ollama.pid" ] && ps -p "$(cat "$PID_DIR/ollama.pid")" > /dev/null 2>&1; then
         echo "ollama already running (pid $(cat "$PID_DIR/ollama.pid"))"
         return
