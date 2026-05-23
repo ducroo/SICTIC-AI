@@ -39,5 +39,5 @@ description: Collate a comprehensive profile on a specific person by searching a
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.person_profile "<NAME>" "<DATASET_NAME>"
+conda run -n sictic-env python -m skills.person_profile "<NAME>" "<DATASET_NAME>"
 ```

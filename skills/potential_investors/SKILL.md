@@ -58,7 +58,7 @@ description: This skill aims to find potential investors in the target startup. 
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.potential_investors --startup-name "<STARTUP_NAME>" [--max-investors <N>]
+conda run -n sictic-env python -m skills.potential_investors --startup-name "<STARTUP_NAME>" [--max-investors <N>]
 ```
 
 ---

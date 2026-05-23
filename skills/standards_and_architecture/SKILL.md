@@ -16,7 +16,7 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
   * **Only** after the user explicitly agrees to the proposed approach are you allowed to execute the refactor and edit the code.
 * **Testing Protocol:**
   * If you write or use temporary Python scripts to test or verify functionality in the codebase, you must always ask the user afterwards if that script should be converted into a formal `pytest` unit/integration test.
-* **Environment:** All code is executed via the project venv at `{{REPO_ROOT}}/venv/`, bootstrapped by `{{REPO_ROOT}}/install_skills.sh` (`pip install -e .` against `pyproject.toml`).
+* **Environment:** All code is executed via the project venv at `the Conda environment `, bootstrapped by `{{REPO_ROOT}}/install_skills.sh` (`pip install -e .` against `pyproject.toml`).
 * **Python Path:** The `skills` and `lib` packages are installed editable, so `import skills.<SKILL_NAME>.<SCRIPT_NAME>` and `import lib.<MODULE>` resolve from any CWD without setting `PYTHONPATH`.
 * **Imports:** User-facing skill code lives under `skills.<SKILL_NAME>.<SCRIPT_NAME>`. Shared infrastructure lives under `lib.<MODULE>` (logger, env, adapters, slugify, etc.). Internal library skills (e.g., `batch_audit`) live under `lib.<SKILL_NAME>`.
 * **Naming Conventions:** 

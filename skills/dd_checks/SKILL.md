@@ -27,5 +27,5 @@ The skill executes a python script in the background that manages the process:
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.dd_checks --startup "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.dd_checks --startup "<STARTUP_NAME>"
 ```

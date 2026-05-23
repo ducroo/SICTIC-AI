@@ -34,7 +34,7 @@ set -eu
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 TARGET=""
 ENV_FILE="$REPO_ROOT/environment.yml"
-MODE="copy"
+MODE="symlink"
 PRUNE=0
 REBUILD_ENV=0
 SKIP_ENV=0

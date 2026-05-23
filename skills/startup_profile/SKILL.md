@@ -18,5 +18,5 @@ This skill generates a neutral, objective 5-point diagnostic of a startup using 
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.startup_profile --startup "<STARTUP_NAME>" [--files <file1> <file2> ...]
+conda run -n sictic-env python -m skills.startup_profile --startup "<STARTUP_NAME>" [--files <file1> <file2> ...]
 ```

@@ -48,5 +48,5 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.startup_traction "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.startup_traction "<STARTUP_NAME>"
 ```

@@ -44,5 +44,5 @@ description: Determines the ideal startup profile for one or more investors base
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.investor_appetite [investor_name ...]
+conda run -n sictic-env python -m skills.investor_appetite [investor_name ...]
 ```

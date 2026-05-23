@@ -6,5 +6,5 @@ description: Shortlists 10 members that can represent SICTIC at an event; rangin
 ## Usage
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.advocates [args]
+conda run -n sictic-env python -m skills.advocates [args]
 ```

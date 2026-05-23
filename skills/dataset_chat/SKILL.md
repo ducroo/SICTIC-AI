@@ -19,7 +19,7 @@ The following environment variables must be present in the repo's `.env` file (`
 - `DEFAULT_VLM`: Used by Docling-Serve/Ollama for image-to-text generation.
 - `DEFAULT_EMBEDDINGS`: Model used for vector embeddings via Ollama.
 
-Required python packages (installed into `{{REPO_ROOT}}/venv/` by `install_skills.sh`): `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
+Required python packages (installed into `the Conda environment ` by `install_skills.sh`): `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
 
 ## Usage
 
@@ -28,13 +28,13 @@ You can use the commands through OpenClaw or run the script directly.
 ### Chat with a Dataset
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.dataset_chat chat <DATASET_NAME> "Your question here"
+conda run -n sictic-env python -m skills.dataset_chat chat <DATASET_NAME> "Your question here"
 ```
 
 ### Delete a Dataset
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.dataset_chat delete <DATASET_NAME>
+conda run -n sictic-env python -m skills.dataset_chat delete <DATASET_NAME>
 ```
 
 *(Note: Deleting a dataset drops the entire Qdrant collection, which will be rebuilt upon the next chat request).*

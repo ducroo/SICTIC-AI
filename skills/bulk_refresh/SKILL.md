@@ -19,7 +19,7 @@ The command accepts optional arguments to narrow down the refresh scope. This is
 - `--dataset <dataset_name>`
 
 ```bash
-{{REPO_ROOT}}/venv/bin/python -m skills.bulk_refresh [--skill <skill_name>] [--dataset <dataset_name>]
+conda run -n sictic-env python -m skills.bulk_refresh [--skill <skill_name>] [--dataset <dataset_name>]
 ```
 
 ---
