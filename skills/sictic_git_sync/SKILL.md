@@ -26,11 +26,13 @@ Before committing ANY code, you MUST review modified files against these rules. 
    * If the working tree is clean, run `git pull`.
 4. Summarize what new tools or updates were downloaded.
 
-### Scenario B: Contributing Changes ("Push")
-*Note: Because the workspace is symlinked to the repo, changes are already in `~/SICTIC-AI/skills/`.*
-1. Navigate to `~/SICTIC-AI/`.
-2. Check `git status` to see what the user modified.
-3. **Gatekeeper Review:** Read the modified files. Run them against the *Architecture & Simplicity Framework*.
-4. **Refactor:** If the user hardcoded an absolute path or broke a rule, automatically rewrite the code to be universal.
-5. **Commit & Push:** Stage the files, write a professional commit message, and push to the current branch (`SIMPLIFY` or `main`).
-6. **Celebrate:** Inform the user their changes are live for the community.
+### Scenario B: Contributing Changes & New Skills ("Push")
+1. **Detect New Skills:** Scan `~/.openclaw/workspace-ops/skills/` for any folders that are *not* symlinks. If a user created a brand new skill via the OpenClaw UI, it will appear here as a standard directory, meaning Git cannot see it yet.
+2. **Ingest New Skills:** For any new skill folder found:
+   * **Gatekeeper Review:** Run its files against the *Architecture & Simplicity Framework*. Refactor if rules are broken.
+   * **Move:** Move the entire folder into `~/SICTIC-AI/skills/`.
+   * **Symlink:** Create a symlink in the OpenClaw workspace pointing to its new location in the repo.
+3. **Identify Edits:** Navigate to `~/SICTIC-AI/` and check `git status` to see what else the user modified in existing symlinked skills.
+4. **Gatekeeper Review (Edits):** Read any newly modified files in the repo. Run them against the framework and refactor if necessary.
+5. **Commit & Push:** Stage all changes (`git add`), write a professional commit message, and push to the current branch (`SIMPLIFY` or `main`).
+6. **Celebrate:** Inform the user their changes (and any new skills) are live for the community.
