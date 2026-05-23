@@ -39,15 +39,14 @@ exec $SHELL           # reload your terminal
 ```
 
 *(Optional but Recommended)*
-You can optionally install **Ollama** if you want to run local AI models. Local models are highly 
-recommended, as cloud models can become expensive during heavy document parsing.
+You can optionally install **Ollama** if you want to run local AI models. Local models are recommended, as cloud models can become expensive during heavy document parsing.
 * **macOS:** `brew install ollama`
 * **Linux/WSL2:** `curl -fsSL https://ollama.com/install.sh | sh`
 
 ### Step 2: Install the Environment
 
 Run the provided installer. This safely creates a self-contained Python environment (`sictic-env`) 
-and strictly synchronizes the AI skills with your workspace using symlinks.
+and strictly synchronizes the AI skills with your workspace using **symlinks**.
 
 ```bash
 ./install_skills_conda.sh --target /path/to/your/harness/workspace/skills
@@ -68,18 +67,17 @@ Open `.env` in a text editor. You only need to configure the following core vari
 | `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
 | `STORAGE_PATH` | If `local`: absolute path. If `google`: Folder ID or `root` | `/Users/you/sictic_data` or `root` |
 | `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
-| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` |
-| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` |
-| `RANKED_LLMS` | Fallback models if the default fails (CSV list) | see `.env-template` |
+| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
+| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
+| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
 
 *(Note: The `.env-template` contains several other advanced variables for concurrency limits and caching. These are all explained inline and can be left at their defaults).*
 
-### Step 4: Start Backing Services
+### Step 4: Start Background Services
 
-SICTIC-AI relies on a local vector database (Qdrant) to remember documents. The universal launcher script 
-automatically downloads and manages the correct binary for your OS in the background. 
+SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. preselection of documents before handing over to the LLM). If needed, the universal launcher script will also automatically download and install the binary for your OS.
 
-*(Note: If you installed Ollama in Step 1, the launcher will also automatically pin it up so you can run local models!)*
+*(Note: If you installed Ollama in Step 1, the launcher will also automatically spin it up so you can run local models!)*
 
 ```bash
 ./launch.sh start
