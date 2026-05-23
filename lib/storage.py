@@ -151,7 +151,7 @@ class MockStorage(LocalStorage):
 
 # Paths whose first segment matches these always go to the local cache,
 # even when the main storage is remote. Caches are re-derivable.
-_CACHE_PREFIXES = ("dataset2md",)
+_CACHE_PREFIXES = ("datasets2md",)
 
 
 class RoutedStorage:

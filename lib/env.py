@@ -17,7 +17,7 @@ if os.path.exists(dotenv_path):
 
 def get_env_var(name: str) -> str:
     value = os.environ.get(name)
-    if not value:
+    if value is None:
         raise ValueError(f"CRITICAL ERROR: Missing required environment variable '{name}'.")
     return value
 

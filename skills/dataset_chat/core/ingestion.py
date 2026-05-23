@@ -48,7 +48,7 @@ async def _sync_single_dataset(dataset_name: str):
     dataset_name = dataset_name.lower()
     storage = get_storage()
     raw_dataset_rel = f"datasets/{dataset_name}"
-    parsed_dataset_rel = f"dataset2md/{dataset_name}"
+    parsed_dataset_rel = f"datasets2md/{dataset_name}"
 
     # Refresh storage caches (no-op for LocalStorage; invalidates Drive path cache).
     storage.refresh(raw_dataset_rel)
