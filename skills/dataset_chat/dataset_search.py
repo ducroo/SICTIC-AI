@@ -26,7 +26,7 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
     if return_full_docs:
         unique_docs = {}
         storage = get_storage()
-        parsed_base_path = f"parsed/{dataset_name}"
+        parsed_base_path = f"dataset2md/{dataset_name}"
 
         for chunk in sorted_chunks:
             doc_name = chunk.document_name

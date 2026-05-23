@@ -17,7 +17,7 @@ To keep the codebase brutally simple, **there is no architectural distinction be
 *   `datasets/` — The root directory for all raw data inputs.
     *   `<dataset_name>/` — The raw data room (PDFs, Excel, JSONs, etc.) for a specific domain.
         *   `__active_dataset__` — A blank marker file. If present, it signals to batch jobs (like `bulk_refresh`) that this dataset should be actively processed.
-*   `parsed/` — (Formerly `datasets_parsed` or `ocr2md`). A strict mirror of the `datasets/` folder hierarchy. Contains the Docling-extracted Markdown. 
+*   `dataset2md/` — A strict mirror of the `datasets/` folder hierarchy. Contains the Docling-extracted Markdown. 
     *   `<dataset_name>/`
         *   Filenames here are exactly `<original_filename+extension>.md`.
 *   `insights/` — The root output directory for all generated AI reports and profiles.
