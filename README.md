@@ -1,5 +1,9 @@
 # SICTIC-AI
 
+![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
+![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
 Welcome to the SICTIC-AI toolkit! This is an open-source collection of AI-powered analysis routines (skills)
 designed to supercharge the startup ecosystem. It is completely free to use and easy to contribute to! 
 
@@ -56,7 +60,7 @@ Run the provided installer. This creates a self-contained Python environment (`s
 and synchronizes the AI skills with your workspace using **symlinks**.
 
 ```bash
-./install_skills_conda.sh --target /path/to/your/agent/workspace/skills
+./install_skills_conda.sh --target /Users/you/.openclaw/workspace-ops/skills
 ```
 
 ### Step 3: Configuration
@@ -86,6 +90,8 @@ SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. p
 
 ```bash
 ./launch.sh start
+./launch.sh status  # check running services
+./launch.sh stop    # shut down local background services
 ```
 
 ### Step 5: Run a Skill
@@ -94,10 +100,32 @@ You are ready to go! Execution of skills is straightforward. Either you ask your
 
 ```bash
 conda run -n sictic-env python -m skills.llm_chat "What is startup due diligence?"
-conda run -n sictic-env python -m skills.startup_profile --startup "DAAV"
+conda run -n sictic-env python -m skills.startup_profile --startup "SpaceX"
 ```
 
+<details>
+<summary>▶ Click to see a sample Startup Profile output for SpaceX</summary>
+
+```markdown
+# Startup Profile: SpaceX
+
+1. **Oneliner:** Design, manufacture, and launch of advanced rockets and spacecraft.
+2. **Core industry:** Aerospace Manufacturing and Space Transportation Services.
+3. **Technology:** Highly verticalized manufacturing of reusable launch vehicles (Falcon 9, Starship); significant reliance on complex materials science, extreme-environment engineering, and proprietary autonomous landing software. Technical single point of failure lies in the unproven orbital refueling and heat shield viability of the Starship platform.
+4. **Business model:** B2B/B2G payload launch services (commercial satellites, NASA/DoD contracts) and B2C direct-to-consumer satellite internet (Starlink). Structural risks include astronomical capital expenditure requirements, reliance on favorable government regulatory environments, and the inherent binary risk of catastrophic mission failures destroying hardware and client payloads.
+5. **Current challenges:** Scaling Starship production to achieve promised launch cadence and cost-reduction; navigating intense FAA environmental and launch licensing scrutiny; proving the economic viability of the Starlink constellation against hardware degradation timelines. Expert due diligence required on Starship payload capacities and orbital refueling logistics.
+```
+</details>
+
 ---
+
+## Where is my data?
+
+Once configured, the system uses two main folders under your `STORAGE_PATH`:
+* **`datasets/<dataset_name>/`**: This is where you (or the startup) drop raw files (Pitch Decks, Excel sheets, PDFs).
+* **`insights/<dataset_name>/`**: This is where the AI outputs its finished Markdown reports. 
+
+If you put a pitch deck into `datasets/spacex/`, running the `startup_profile` skill will automatically parse it, read it, and drop the final analysis into `insights/spacex/`.
 
 ## Google Drive Integration (Production Mode)
 
