@@ -38,6 +38,10 @@ async def test_person_profile_generation(mock_env, mocker):
     mock_linkedin_instance.get_profiles.return_value = [{"fullName": "Jane Doe", "headline": "CEO at Test"}]
     mock_linkedin_instance.get_filename_for_profile.return_value = "jane-doe.json"
 
+    # Clear the storage cache before executing to ensure we aren't picking up files from a previous run
+    from lib.storage import get_storage
+    get_storage().rmtree("insights/sictic-members/person-profile")
+    
     # 2. Execute
     name = "Jane Doe"
     dataset = "sictic_members"
@@ -47,14 +51,13 @@ async def test_person_profile_generation(mock_env, mocker):
     assert output == "This is a mocked profile for Jane Doe."
 
     # 4. Assert File System
-    repository_dir = mock_env["repository_dir"]
-    expected_dir = os.path.join(repository_dir, "insights", dataset, "person_profile")
-    expected_file = os.path.join(expected_dir, "jane-doe-test-model-1b.md")
+    expected_file = "insights/sictic-members/person-profile/jane-doe-test-model-1b.md"
 
-    assert os.path.exists(expected_file), f"Expected file {expected_file} was not created."
-    with open(expected_file, "r", encoding="utf-8") as f:
-        content = f.read()
-        assert content == "This is a mocked profile for Jane Doe."
+    from lib.storage import get_storage
+    storage = get_storage()
+    assert storage.exists(expected_file), f"Expected file {expected_file} was not created."
+    content = storage.read_text(expected_file)
+    assert content == "This is a mocked profile for Jane Doe."
 
     # 5. Assert Cache Bypass
     # If we call it again, it should use the cache (llm_chat shouldn't be called twice)

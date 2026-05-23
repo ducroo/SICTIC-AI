@@ -31,7 +31,7 @@ async def test_dataset_chat_basic(mocker):
 
     # Assert
     assert output == "This is the LLM response."
-    mock_search.assert_called_once_with("test_dataset", ["What is testing?"], max_chunks=25, return_full_docs=False)
+    mock_search.assert_called_once_with("test_dataset", "What is testing?", max_chunks=25, return_full_docs=False)
     mock_llm.assert_called_once()
 
 @pytest.mark.asyncio
