@@ -18,7 +18,7 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
     # Scenario A: Delete specific dataset completely (all embeddings)
     if dataset and not embeddings:
         dataset = dataset.lower()
-        parsed_base_path = f"datasets_parsed/{dataset}"
+        parsed_base_path = f"parsed/{dataset}"
 
         prefix = f"{dataset}_"
         to_delete = [c for c in all_collections if c.startswith(prefix)]

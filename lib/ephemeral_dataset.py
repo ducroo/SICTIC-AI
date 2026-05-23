@@ -18,7 +18,7 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     """
     storage = get_storage()
     raw_dataset_rel = f"datasets/{temp_name}"
-    parsed_dataset_rel = f"datasets_parsed/{temp_name}"
+    parsed_dataset_rel = f"parsed/{temp_name}"
 
     # 1. Cleanup previous run
     logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")
