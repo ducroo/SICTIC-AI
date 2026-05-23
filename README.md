@@ -9,11 +9,18 @@ This toolbox serves four distinct audiences:
 * **BA Clubs (like SICTIC):** Automate member engagement, startup selection, DD, and monitor past transactions.
 * **AI Wizards:** Co-develop and refine the future of AI-first funding rounds with us.
 
+## Contributing
+
+We deliberately kept everything simple so all our audience can join and co-develop:
+* You can safely create new skills or edit existing ones directly inside your UI. 
+* To synchronize your changes with GitHub without using the terminal, simply ask your harness to help; it has a  `sictic_git_sync` skill. This skill will act as an architectural gatekeeper—reviewing your code, enforcing our simplicity standards, and automatically committing and pushing your updates to GitHub.
+
+
 ## Runtime Context
 
 This toolbox requires a Unix environment (**macOS, Linux, or WSL2**) and an AI harness 
 (like **OpenClaw, Claude Code, or Gemini Spark**) to converse with the skills. 
-We primarily develop using macOS and OpenClaw, but the architecture is strictly OS-agnostic!
+We primarily develop using macOS and OpenClaw, but the architecture is OS-agnostic!
 
 ## Quickstart Setup
 
@@ -21,7 +28,7 @@ Just a few simple steps to get the AI working on your machine:
 
 ### Step 1: Install Prerequisites
 
-You need a package manager and Conda to handle the Python environment. We strongly recommend Miniforge.
+You need a package manager and Conda to handle the Python environment.
 
 **macOS (using Homebrew):**
 ```bash
@@ -39,7 +46,7 @@ exec $SHELL           # reload your terminal
 ```
 
 *(Optional but Recommended)*
-You can optionally install **Ollama** if you want to run local AI models. Local models are recommended, as cloud models can become expensive during heavy document parsing.
+You can optionally install **Ollama** if you want to run local AI models. Local models are a good alternative, as cloud models can become expensive during heavy document parsing.
 * **macOS:** `brew install ollama`
 * **Linux/WSL2:** `curl -fsSL https://ollama.com/install.sh | sh`
 
@@ -59,7 +66,7 @@ Create your configuration file:
 cp .env-template .env
 ```
 
-Open `.env` in a text editor. You only need to configure the following core variables:
+Open `.env` in a text editor. You only need to configure the following few variables:
 
 | Variable | Purpose | Example |
 |---|---|---|
@@ -71,13 +78,13 @@ Open `.env` in a text editor. You only need to configure the following core vari
 | `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
 | `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
 
-*(Note: The `.env-template` contains several other advanced variables for concurrency limits and caching. These are all explained inline and can be left at their defaults).*
+*(Note: The `.env-template` contains several other variables that can be left at their defaults. Still, they are explained inline).*
 
 ### Step 4: Start Background Services
 
-SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. preselection of documents before handing over to the LLM). If needed, the universal launcher script will also automatically download and install the binary for your OS.
+SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. pre-selection of documents before handing over to the LLM). The universal launcher script will also install the binary for your OS if required
 
-*(Note: If you installed Ollama in Step 1, the launcher will also automatically spin it up so you can run local models!)*
+*(Note: If you installed Ollama in Step 1, the launcher will also spin it up so you can run local models!)*
 
 ```bash
 ./launch.sh start
@@ -98,13 +105,7 @@ conda run -n sictic-env python -m skills.startup_profile --startup "DAAV"
 
 By default (`STORAGE_PROVIDER="local"`), all datasets and generated insights are written to the local file system path provided in `STORAGE_PATH`.
 
-In production at SICTIC, we use Google Drive to seamlessly share datasets and insights with Deal Leads. When `STORAGE_PROVIDER="google"`, the skills read and write directly to Google Drive via the native API.
+In production at SICTIC, we use Google Drive to share datasets and insights with Deal Leads. When `STORAGE_PROVIDER="google"`, the skills read and write directly to Google Drive via the native API.
 
 **Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to address that directly with your chosen AI harness (e.g., OpenClaw). Just ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you!
-
-## Contributing
-
-Because the workspace is symlinked directly to the repository, you can safely create new skills or edit existing ones directly inside your UI.
-
-To synchronize your changes with GitHub without using the terminal, simply trigger the `sictic_git_sync` skill. The AI will act as an architectural gatekeeper—reviewing your code, enforcing our simplicity standards, and automatically committing and pushing your updates to GitHub.
 
