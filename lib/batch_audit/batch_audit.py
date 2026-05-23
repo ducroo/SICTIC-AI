@@ -43,9 +43,9 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     if not chapter:
         raise ValueError("No chapter title found in the provided checklist.")
         
-    raw_filename_prefix = f"batch-audit/{slugify(chapter)}"
+    raw_filename_prefix = f"{slugify(chapter)}"
     file_name = f"{slugify(raw_filename_prefix)}-{slugify(model_suffix)}.md"
-    file_path = f"insights/{dataset_name.lower()}/{file_name}"
+    file_path = f"insights/batch-audit/{dataset_name.lower()}/{file_name}"
 
     needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name], file_path, model_suffix)
     if not needs_refresh:
@@ -88,6 +88,6 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
             table_lines += f"\n| {idx_string} | {safe_display} | {author} | {status} | {summary} | {concerns} |"
 
     result_md = table_lines
-    get_storage().write_text(file_path, result_md)
+    get_storage(get_env_var("REPOSITORY_DIR")).write_text(file_path, result_md)
 
     return result_md

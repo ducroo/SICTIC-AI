@@ -1,9 +1,11 @@
 from typing import Optional
+from lib.env import get_env_var
 
 from lib.logger import get_logger
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.core.ingestion import sync_datasets
+from lib.env import get_env_var
 
 from skills.person_profile.person_profile import person_profile
 from skills.investor_appetite.investor_appetite import investor_appetite
@@ -14,6 +16,7 @@ from skills.dd_checks.dd_checks import dd_checks
 from skills.expert_search.expert_search import expert_search
 from skills.potential_investors.potential_investors import potential_investors
 from skills.suggest_startups.suggest_startups import suggest_startups
+from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
@@ -55,7 +58,7 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     ignore_datasets = [s.strip().lower() for s in ignore_raw.replace(',', '\n').split('\n') if s.strip()]
     ignore_datasets.extend(SKILL_MAP.keys())
 
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
 
     # Discover Datasets — every direct child of `datasets/` is treated as a dataset folder.
     all_datasets = []

@@ -15,7 +15,7 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     """
     Provides a ranked list of potential experts for a given startup based on quickselect ranking and LLM refinement.
     """
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     startup_name_lower = startup_name.lower()
     safe_llm_name = get_env_var("DEFAULT_LLM").split("/")[-1]
 

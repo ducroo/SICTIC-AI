@@ -13,7 +13,7 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
 
     client = QdrantClient(url=get_env_var("QDRANT_HOST"), timeout=60.0)
     all_collections = [col.name for col in client.get_collections().collections]
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
 
     # Scenario A: Delete specific dataset completely (all embeddings)
     if dataset and not embeddings:

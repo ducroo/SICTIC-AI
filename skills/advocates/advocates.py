@@ -14,7 +14,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     """
     Provides a ranked list of potential advocates for a given event based on quickselect ranking and LLM refinement.
     """
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     event_name_slug = slugify(event_name)
     safe_llm_name = get_env_var("DEFAULT_LLM").split("/")[-1]
 

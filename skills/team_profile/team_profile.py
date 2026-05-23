@@ -22,7 +22,7 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
 
     logger.info(f"[{dataset_name}] Starting Team Profiling")
 
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     model_name = get_env_var("DEFAULT_LLM")
     clean_model_name = model_name.split("/")[-1]
 

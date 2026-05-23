@@ -5,11 +5,12 @@ from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
 from lib.json_parser import repair_json_payload
+from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
 def _get_person_profile_content(inv_name: str) -> str | None:
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     sanitized_name = re.sub(r'[^\w]+', '_', inv_name.strip()).strip('_').lower()
     pp_dir = "insights/sictic_members/person_profile"
     if storage.exists(pp_dir):

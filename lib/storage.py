@@ -1,7 +1,7 @@
 """
 Storage abstraction for skills that read/write data under $REPOSITORY_DIR.
 
-Skills should call `get_storage().write_text("insights/foo/bar.md", content)`
+Skills should call `get_storage(get_env_var("REPOSITORY_DIR")).write_text("insights/foo/bar.md", content)`
 instead of `open(os.path.join(repository_dir, "insights", "foo", "bar.md"), "w")`.
 
 Two backends:
@@ -38,22 +38,22 @@ class Storage(Protocol):
     def refresh(self, rel: str = "") -> None: ...
 
 
-def _validate_rel(rel: str) -> str:
+def _validate_rel(rel: str, base_dir: Optional[str] = None) -> str:
     """Return a clean relative storage path.
 
-    Accepts a relative path as-is, or an absolute path under REPOSITORY_DIR —
-    the prefix is stripped to yield the equivalent relative path. This lets
-    legacy skill code that builds full filesystem paths (e.g.
-    `os.path.join(REPOSITORY_DIR, "insights", ...)`) work transparently under
-    both mount and API storage modes.
+    Accepts a relative path as-is. If an absolute path is provided that begins 
+    with `base_dir` (e.g. legacy code), the prefix is stripped to yield the 
+    equivalent relative path, and a warning is logged.
 
-    Raises ValueError for absolute paths outside REPOSITORY_DIR, or any path
+    Raises ValueError for absolute paths outside base_dir, or any path
     containing '..'.
     """
     if rel.startswith("/"):
-        mount = os.environ.get("REPOSITORY_DIR", "").rstrip("/")
-        if mount and (rel == mount or rel.startswith(mount + "/")):
-            rel = rel[len(mount):].lstrip("/")
+        import logging
+        base = base_dir.rstrip("/") if base_dir else ""
+        if base and (rel == base or rel.startswith(base + "/")):
+            logging.warning(f"Absolute path used: {rel!r}. Stripping base_dir to make it relative.")
+            rel = rel[len(base):].lstrip("/")
         else:
             raise ValueError(f"Storage paths must be relative, got: {rel!r}")
     parts = Path(rel).parts
@@ -69,7 +69,7 @@ class LocalStorage:
         self.base = Path(base_path)
 
     def _full(self, rel: str) -> Path:
-        rel = _validate_rel(rel)
+        rel = _validate_rel(rel, base_dir=str(self.base))
         return self.base / rel
 
     def read_text(self, rel: str, *, encoding: str = "utf-8") -> str:
@@ -169,13 +169,14 @@ _CACHE_PREFIXES = ("datasets_parsed",)
 class RoutedStorage:
     """Dispatches Storage operations to drive vs cache based on the path prefix."""
 
-    def __init__(self, drive: Storage, cache: Storage):
+    def __init__(self, drive: Storage, cache: Storage, base_dir: Optional[str] = None):
         self.drive = drive
         self.cache = cache
+        self.base_dir = base_dir
 
     def _pick(self, rel: str) -> Tuple[str, Storage]:
         """Normalize rel and select the backing storage. Returns (clean_rel, store)."""
-        rel = _validate_rel(rel)
+        rel = _validate_rel(rel, base_dir=self.base_dir)
         head = rel.split("/", 1)[0]
         store = self.cache if head in _CACHE_PREFIXES else self.drive
         return rel, store
@@ -250,11 +251,11 @@ class RoutedStorage:
 _storage_singleton: Optional[Storage] = None
 
 
-def get_storage() -> Storage:
+def get_storage(base_dir: str) -> Storage:
     """
     Returns the process-wide Storage instance.
 
-    Mount mode (default):  LocalStorage($REPOSITORY_DIR) — reads/writes the
+    Mount mode (default):  LocalStorage(base_dir) — reads/writes the
                            local disk directory.
 
     API mode (GDRIVE_USE_API=1):  RoutedStorage with GoogleDriveStorage for
@@ -270,28 +271,23 @@ def get_storage() -> Storage:
     if _storage_singleton is not None:
         return _storage_singleton
 
-    if os.getenv("GDRIVE_USE_API") == "1":
+    from lib.env import get_env_var
+    if get_env_var("GDRIVE_USE_API") == "1":
         from lib.storage_gdrive import GoogleDriveStorage
 
-        credentials_path = os.getenv(
-            "GDRIVE_CREDENTIALS",
-            os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json"),
-        )
-        token_path = os.getenv(
-            "GDRIVE_TOKEN",
-            os.path.expanduser("~/.openclaw/gdrive-ops-token.json"),
-        )
+        credentials_path = get_env_var("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
+        token_path = get_env_var("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
         drive: Storage = GoogleDriveStorage(
             credentials_path=credentials_path,
             token_path=token_path,
-            root_folder_id=os.getenv("GDRIVE_ROOT_FOLDER_ID", "root"),
+            root_folder_id=get_env_var("GDRIVE_ROOT_FOLDER_ID") or "root",
+            base_dir=base_dir
         )
-        cache_dir = os.getenv("CACHE_DIR") or os.path.expanduser("~/.cache/sictic")
+        cache_dir = get_env_var("CACHE_DIR") or os.path.expanduser("~/.cache/sictic")
         os.makedirs(cache_dir, exist_ok=True)
-        _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir))
+        _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir), base_dir=base_dir)
     else:
-        mount = os.environ["REPOSITORY_DIR"]
-        _storage_singleton = LocalStorage(mount)
+        _storage_singleton = LocalStorage(base_dir)
 
     return _storage_singleton
 

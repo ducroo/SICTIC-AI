@@ -20,7 +20,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
     Generates a neutral, objective 5-point diagnostic of a startup. It bypasses marketing narratives to expose the structural reality of the business, prioritizing external risks and identifying specific tasks for an investment analyst. Use this skill when the user asks "Profile this startup", "Run startup diagnostic", or "What does this startup do?". Note that if no context/document is provided via the GUI, the <STARTUP_NAME> must be clearly specified in the query.
     """
     startup_name_lower = startup.lower()
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     default_llm = get_env_var("DEFAULT_LLM")
     safe_llm_name = default_llm.split('/')[-1]
 

@@ -40,7 +40,7 @@ def check_insight_refresh(
 
     `file_path` is a storage-relative path like "insights/widgetco/foo-qwen3-8b.md".
     """
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
 
     models = get_acceptable_models(model_name)
     current_model_slug = slugify(model_name)

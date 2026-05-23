@@ -56,7 +56,7 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
         raise ValueError(f"Missing configuration for suggest_startups: {e}")
 
     from lib.storage import get_storage
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
 
     out_dir = f"insights/{dataset_name.lower()}/suggest_startups"

@@ -35,7 +35,7 @@ if pytest is not None:
     @pytest.fixture(scope="module")
     def s():
         reset_storage_singleton()
-        inst = get_storage()
+        inst = get_storage("repository_dir_mock")
         print(f"\n[storage backend: {type(inst).__name__}, GDRIVE_USE_API={os.environ.get('GDRIVE_USE_API')!r}]")
         yield inst
         # cleanup
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     # Allow running as a plain script (without pytest) for quick checks.
     import sys
     reset_storage_singleton()
-    inst = get_storage()
+    inst = get_storage("repository_dir_mock")
     print(f"backend: {type(inst).__name__}, GDRIVE_USE_API={os.environ.get('GDRIVE_USE_API')!r}")
     tests = [(n, fn) for n, fn in globals().items() if n.startswith("test_") and callable(fn)]
     fails = 0

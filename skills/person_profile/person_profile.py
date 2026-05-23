@@ -119,6 +119,6 @@ async def person_profile(dataset_name: str, name: str = None) -> str | dict:
         raise ValueError(f"LLM returned empty response for the person profile output of '{name}'.")
 
     # 7. Save and Return
-    get_storage().write_text(output_file, profile_output)
+    get_storage(get_env_var("REPOSITORY_DIR")).write_text(output_file, profile_output)
     logger.info(f"[{dataset_name}] Successfully saved person profile for '{name}' to {output_file}")
     return profile_output

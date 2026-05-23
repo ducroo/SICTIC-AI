@@ -10,7 +10,7 @@ from skills.investor_appetite.investor_appetite import investor_appetite
 logger = get_logger(__name__)
 
 async def fetch_data(startup_name: str, safe_llm_name: str, target_investors: list = None, exclude_investors: list = None) -> Tuple[str, List[str]]:
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     startup_name_lower = startup_name.lower()
 
     # Fetch startup profile

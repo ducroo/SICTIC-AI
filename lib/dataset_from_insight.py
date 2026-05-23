@@ -25,7 +25,7 @@ def _get_model_priority(filename: str, ranked_models: List[str]) -> int:
 
 def _wipe_target_directory(target_rel: str) -> None:
     """Wipes the target dataset directory by moving it to a central trash folder."""
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     if storage.exists(target_rel):
         logger.info(f"Wiping existing target directory: {target_rel}")
         name = PurePosixPath(target_rel).name
@@ -42,7 +42,7 @@ def _wipe_target_directory(target_rel: str) -> None:
 
 def _gather_insight_files(insight_lower: str, source_dataset: Optional[str]) -> List[str]:
     """Finds all relevant markdown files for the given insight recursively. Returns storage-relative paths."""
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     scan_root = f"insights/{source_dataset.lower()}" if source_dataset else "insights"
 
     if not storage.exists(scan_root):
@@ -81,7 +81,7 @@ def _group_files_by_entity(files: List[str], insight_lower: str) -> Dict[str, Li
 
 def _sync_best_candidates(grouped_files: Dict[str, List[str]], target_rel: str, ranked_models: List[str]) -> int:
     """Selects the best model file per entity and copies it to the target."""
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     sync_count = 0
     for entity_name, candidate_files in grouped_files.items():
         best_file = min(candidate_files, key=lambda f: _get_model_priority(PurePosixPath(f).name, ranked_models))

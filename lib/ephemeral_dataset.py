@@ -1,10 +1,12 @@
 import os
 from typing import List
+from lib.env import get_env_var
 
 from skills.dataset_chat.core.ingestion import sync_datasets
 from lib.adapters.qdrant import QdrantAdapter
 from lib.logger import get_logger
 from lib.storage import get_storage
+from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
@@ -16,7 +18,7 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     4. Runs the ingestion pipeline to parse and embed them.
     5. Returns the dataset name (e.g., 'temp') for the skill to use.
     """
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     raw_dataset_rel = f"datasets/{temp_name}"
     parsed_dataset_rel = f"datasets_parsed/{temp_name}"
 

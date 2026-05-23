@@ -42,7 +42,7 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
         logger.error(f"[{dataset_name}] Missing configuration: {e}")
         raise ValueError(f"Missing configuration for investor_appetite or startup_profile: {e}")
 
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
     output_dir = f"insights/{dataset_name_lower}/investor_appetite"
 

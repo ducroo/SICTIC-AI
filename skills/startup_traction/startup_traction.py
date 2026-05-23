@@ -13,7 +13,7 @@ async def startup_traction(startup_name: str) -> str:
     Extracts, analyzes, and summarizes all commercial traction and agreements (LoIs, MoUs, Pilot agreements) from a startup's data room into a structured overview table and synthesis.
     """
     startup_name_lower = startup_name.lower()
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     model_suffix = get_env_var("DEFAULT_LLM").split('/')[-1]
 
     raw_filename_prefix = f"{startup_name_lower}-startup-traction"

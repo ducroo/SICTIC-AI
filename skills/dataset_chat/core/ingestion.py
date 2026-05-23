@@ -46,7 +46,7 @@ async def sync_datasets(dataset_names: List[str]):
 async def _sync_single_dataset(dataset_name: str):
     """Main orchestrator: Syncs drive to disk (OCR), then disk to DB (Embed) for a single dataset."""
     dataset_name = dataset_name.lower()
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     raw_dataset_rel = f"datasets/{dataset_name}"
     parsed_dataset_rel = f"datasets_parsed/{dataset_name}"
 
@@ -71,7 +71,7 @@ def _list_source_files(storage, raw_rel: str):
 
 async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
     """Compare source mtimes against parsed mtimes; run Docling on the diff and write markdown back."""
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
     source_files = _list_source_files(storage, raw_rel)
 
     files_to_ocr = []
@@ -84,8 +84,8 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
                 "mod_time": drive_mtime,
                 "is_new": parsed_mtime == 0.0,
             })
-        else:
-            logger.debug(f"[{dataset_name}] Parsed file up to date for: {filename}")
+        #else:
+        #    logger.debug(f"[{dataset_name}] Parsed file up to date for: {filename}")
 
     if not files_to_ocr:
         logger.info(f"[{dataset_name}] No new files to OCR.")
@@ -115,7 +115,7 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
 async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str):
     """Embed parsed markdown into Qdrant; remove orphans whose source is gone."""
     qdrant = QdrantAdapter(dataset_name)
-    storage = get_storage()
+    storage = get_storage(get_env_var("REPOSITORY_DIR"))
 
     source_files = _list_source_files(storage, raw_rel)
     current_drive_files = {name for name, _ in source_files}
