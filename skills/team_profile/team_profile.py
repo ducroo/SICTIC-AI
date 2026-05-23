@@ -22,15 +22,18 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
 
     logger.info(f"[{dataset_name}] Starting Team Profiling")
 
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
-    model_name = get_env_var("DEFAULT_LLM")
-    clean_model_name = model_name.split("/")[-1]
-
-    raw_filename_prefix = f"{startup_name.lower()}-team-profile"
-    output_filename = f"{slugify(raw_filename_prefix)}-{slugify(clean_model_name)}.md"
-    output_filepath = f"insights/{startup_name.lower()}/{output_filename}"
+    storage = get_storage()
+    default_llm = get_env_var("DEFAULT_LLM")
     
-    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name], output_filepath, clean_model_name)
+    from lib.insight_filepath import get_insight_filepath
+    output_filepath = get_insight_filepath(
+        dataset_name=startup_name.lower(),
+        skill_name="team_profile",
+        model=default_llm,
+        subdir=False
+    )
+    
+    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name], output_filepath, default_llm)
     if not needs_refresh:
         logger.info(f"[{dataset_name}] Using cached team profile from {matched_file}")
         return cached_content, matched_file

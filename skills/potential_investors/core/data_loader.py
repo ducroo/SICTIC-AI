@@ -1,7 +1,6 @@
 import os
 from typing import List, Tuple
 from lib.logger import get_logger
-from lib.env import get_env_var
 from lib.storage import get_storage
 from lib.adapters.linkedin import LinkedInAdapter
 from lib.slugify import slugify
@@ -10,12 +9,17 @@ from skills.investor_appetite.investor_appetite import investor_appetite
 logger = get_logger(__name__)
 
 async def fetch_data(startup_name: str, safe_llm_name: str, target_investors: list = None, exclude_investors: list = None) -> Tuple[str, List[str]]:
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
     startup_name_lower = startup_name.lower()
 
     # Fetch startup profile
-    raw_startup_filename = f"{startup_name_lower}-profile-{safe_llm_name}"
-    startup_profile_path = f"insights/{startup_name_lower}/{slugify(raw_startup_filename)}.md"
+    from lib.insight_filepath import get_insight_filepath
+    startup_profile_path = get_insight_filepath(
+        dataset_name=startup_name_lower,
+        skill_name="startup_profile",
+        model=safe_llm_name,
+        subdir=False
+    )
     profile_content = None
 
     if storage.exists(startup_profile_path):

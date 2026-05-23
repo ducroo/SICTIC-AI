@@ -4,7 +4,6 @@ from skills.dataset_chat.core.ingestion import sync_datasets
 from lib.adapters.qdrant import QdrantAdapter
 from lib.storage import get_storage
 from lib.logger import get_logger
-from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
@@ -47,7 +46,7 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
 
     if return_full_docs:
         unique_docs = {}
-        storage = get_storage(get_env_var("REPOSITORY_DIR"))
+        storage = get_storage()
         parsed_base_path = f"datasets_parsed/{dataset_name}"
 
         for chunk in sorted_chunks:

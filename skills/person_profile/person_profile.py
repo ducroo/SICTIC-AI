@@ -15,11 +15,18 @@ logger = get_logger(__name__)
 
 def _get_output_paths(dataset_name: str, name: str) -> tuple[str, str, str, str]:
     """Helper to generate consistent file paths and names. Returns relative storage paths."""
-    safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
-    raw_filename_prefix = f"{name}-person-profile"
-    output_filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-    output_file = f"insights/{dataset_name}/person_profile/{output_filename}"
-    return raw_filename_prefix, safe_llm_name, output_filename, output_file
+    default_llm = get_env_var("DEFAULT_LLM")
+    from lib.insight_filepath import get_insight_filepath
+    output_file = get_insight_filepath(
+        dataset_name=dataset_name,
+        skill_name="person_profile",
+        model=default_llm,
+        identifier=name,
+        subdir=True
+    )
+    # the function signature requires 4 returns to satisfy callers (legacy unpacks)
+    # we return None for the unused parts to avoid refactoring the caller logic right now
+    return None, default_llm, None, output_file
 
 async def person_profile(dataset_name: str, name: str = None) -> str | dict:
     """
@@ -119,6 +126,6 @@ async def person_profile(dataset_name: str, name: str = None) -> str | dict:
         raise ValueError(f"LLM returned empty response for the person profile output of '{name}'.")
 
     # 7. Save and Return
-    get_storage(get_env_var("REPOSITORY_DIR")).write_text(output_file, profile_output)
+    get_storage().write_text(output_file, profile_output)
     logger.info(f"[{dataset_name}] Successfully saved person profile for '{name}' to {output_file}")
     return profile_output

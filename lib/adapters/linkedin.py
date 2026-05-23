@@ -2,14 +2,12 @@ import json
 import re
 import unicodedata
 from rapidfuzz import process, fuzz
-from lib.env import get_env_var
 
 from lib.logger import get_logger
 from lib.storage import get_storage
 from lib.adapters.apify import ApifyAdapter
 from lib.adapters.web_search import WebSearchAdapter
 from lib.slugify import slugify
-from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
@@ -22,7 +20,7 @@ class LinkedInAdapter:
         LocalStorage (rclone-mount mode) and GoogleDriveStorage (API mode).
         """
         self.cache_rel = cache_rel.strip("/")
-        self.storage = get_storage(get_env_var("REPOSITORY_DIR"))
+        self.storage = get_storage()
         self.apify = ApifyAdapter()
         self.google = WebSearchAdapter()
         self._cache_index = None

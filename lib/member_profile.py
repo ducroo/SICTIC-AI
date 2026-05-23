@@ -1,6 +1,5 @@
 import asyncio
 from typing import List, Optional, Union
-from lib.env import get_env_var
 
 from lib.logger import get_logger
 from lib.slugify import slugify
@@ -8,13 +7,12 @@ from lib.storage import get_storage
 from skills.person_profile.person_profile import person_profile
 from skills.investor_appetite.investor_appetite import investor_appetite
 from lib.adapters.linkedin import LinkedInAdapter
-from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
 
 async def _process_single_member(type_of_profile: str, full_name: str, target_dir_rel: str) -> Optional[str]:
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
     try:
         if type_of_profile == "person_profile":
             profile_content = await person_profile(dataset_name="sictic_members", name=full_name)
@@ -61,7 +59,7 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
     If names is a string, returns the profile string.
     If names is a list or None, returns a dict mapping names to their profiles.
     """
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
 
     if type_of_profile not in ["person_profile", "investor_appetite"]:
         logger.error(f"Unknown type_of_profile: {type_of_profile}")

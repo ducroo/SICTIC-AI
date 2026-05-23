@@ -13,14 +13,18 @@ async def startup_traction(startup_name: str) -> str:
     Extracts, analyzes, and summarizes all commercial traction and agreements (LoIs, MoUs, Pilot agreements) from a startup's data room into a structured overview table and synthesis.
     """
     startup_name_lower = startup_name.lower()
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
-    model_suffix = get_env_var("DEFAULT_LLM").split('/')[-1]
+    storage = get_storage()
+    default_llm = get_env_var("DEFAULT_LLM")
+    
+    from lib.insight_filepath import get_insight_filepath
+    output_path = get_insight_filepath(
+        dataset_name=startup_name_lower,
+        skill_name="startup_traction",
+        model=default_llm,
+        subdir=False
+    )
 
-    raw_filename_prefix = f"{startup_name_lower}-startup-traction"
-    file_name = f"{slugify(raw_filename_prefix)}-{slugify(model_suffix)}.md"
-    output_path = f"insights/{startup_name_lower}/{file_name}"
-
-    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name_lower], output_path, model_suffix)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name_lower], output_path, default_llm)
     if not needs_refresh:
         logger.info(f"[{startup_name_lower}] Using cached startup_traction from {matched_file}")
         return cached_content

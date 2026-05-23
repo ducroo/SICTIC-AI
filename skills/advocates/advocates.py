@@ -14,16 +14,21 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     """
     Provides a ranked list of potential advocates for a given event based on quickselect ranking and LLM refinement.
     """
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
     event_name_slug = slugify(event_name)
-    safe_llm_name = get_env_var("DEFAULT_LLM").split("/")[-1]
-
-    raw_filename_prefix = f"{event_name_slug}-advocates"
-    output_filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-    out_path = f"insights/sictic_members/advocates/{output_filename}"
+    default_llm = get_env_var("DEFAULT_LLM")
+    
+    from lib.insight_filepath import get_insight_filepath
+    out_path = get_insight_filepath(
+        dataset_name="sictic_members",
+        skill_name="advocates",
+        model=default_llm,
+        identifier=event_name,
+        subdir=True
+    )
 
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", "advocates", event_name_slug], out_path, safe_llm_name)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", "advocates", event_name_slug], out_path, default_llm)
     if not needs_refresh:
         logger.info(f"[{event_name_slug}] Using cached advocates from {matched_file}")
         return cached_content

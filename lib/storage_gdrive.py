@@ -52,13 +52,11 @@ class GoogleDriveStorage:
         credentials_path: str,
         token_path: str,
         root_folder_id: str = "root",
-        base_dir: Optional[str] = None,
         local_cache_dir: Optional[str] = None,
     ):
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.root_folder_id = root_folder_id
-        self.base_dir = base_dir
         self._local_cache_dir = Path(
             local_cache_dir
             or os.path.expanduser("~/.cache/sictic/gdrive-materialized")
@@ -106,9 +104,9 @@ class GoogleDriveStorage:
 
     def _resolve(self, rel: str) -> Optional[str]:
         """Return the Drive file ID for rel, or None if it doesn't exist."""
-        # Use the common path validator to strip any absolute base_dir prefixes
+        # Use the common path validator to ensure strict relative paths
         from lib.storage import _validate_rel
-        rel = _validate_rel(rel, base_dir=self.base_dir)
+        rel = _validate_rel(rel)
         rel = rel.strip("/")
         if rel in self._path_to_id:
             return self._path_to_id[rel]

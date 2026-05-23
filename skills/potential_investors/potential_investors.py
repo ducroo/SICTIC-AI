@@ -15,16 +15,20 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     """
     Provides a ranked list of potential investors for a given startup based on quickselect ranking and LLM refinement.
     """
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
     startup_name_lower = startup_name.lower()
-    safe_llm_name = get_env_var("DEFAULT_LLM").split("/")[-1]
+    default_llm = get_env_var("DEFAULT_LLM")
 
-    raw_filename_prefix = f"{startup_name_lower}-potential-investors"
-    output_filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-    out_path = f"insights/{startup_name_lower}/{output_filename}"
+    from lib.insight_filepath import get_insight_filepath
+    out_path = get_insight_filepath(
+        dataset_name=startup_name_lower,
+        skill_name="potential_investors",
+        model=default_llm,
+        subdir=False
+    )
 
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", startup_name_lower], out_path, safe_llm_name)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", startup_name_lower], out_path, default_llm)
     if not needs_refresh:
         logger.info(f"[{startup_name_lower}] Using cached potential investors from {matched_file}")
         return cached_content

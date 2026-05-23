@@ -12,10 +12,15 @@ logger = get_logger(__name__)
 
 
 def initialize_report_file(startup_name_lower: str, startup: str) -> str:
-    safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
-    raw_filename = f"{startup_name_lower}-dd-checks-{safe_llm_name}"
-    output_file = f"insights/{startup_name_lower}/{slugify(raw_filename)}.md"
-    get_storage(get_env_var("REPOSITORY_DIR")).write_text(output_file, f"# M&A Due Diligence Checks for {startup}\n\n")
+    from lib.insight_filepath import get_insight_filepath
+    default_llm = get_env_var("DEFAULT_LLM")
+    output_file = get_insight_filepath(
+        dataset_name=startup_name_lower,
+        skill_name="dd_checks",
+        model=default_llm,
+        subdir=False
+    )
+    get_storage().write_text(output_file, f"# M&A Due Diligence Checks for {startup}\n\n")
     return output_file
 
 async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_industry_types: set) -> str:
@@ -41,7 +46,7 @@ async def chapter_by_chapter(startup_name_lower: str, sorted_chapters: list, ind
             continue
             
         checklist_string = checklists[checklist_key]
-        storage = get_storage(get_env_var("REPOSITORY_DIR"))
+        storage = get_storage()
         try:
             chapter_output = await batch_audit(dataset_name=startup_name_lower, checklist_string=checklist_string)
             existing = storage.read_text(output_file)

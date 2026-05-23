@@ -1,13 +1,12 @@
 """
-Storage abstraction for skills that read/write data under $REPOSITORY_DIR.
+Storage abstraction for skills that read/write data.
 
-Skills should call `get_storage(get_env_var("REPOSITORY_DIR")).write_text("insights/foo/bar.md", content)`
-instead of `open(os.path.join(repository_dir, "insights", "foo", "bar.md"), "w")`.
+Skills should call `get_storage().write_text("insights/foo/bar.md", content)`
+instead of passing absolute paths.
 
 Two backends:
-  - LocalStorage(base_path):     today's behavior — reads/writes a local directory.
-  - GoogleDriveStorage(...):     Google Drive via the native Drive API
-                                 (see storage_gdrive.py).
+  - LocalStorage: reads/writes a local directory.
+  - GoogleDriveStorage: Google Drive via the native Drive API.
 
 RoutedStorage dispatches by path prefix so caches always stay local even
 when the source/output backend is remote.
@@ -38,24 +37,13 @@ class Storage(Protocol):
     def refresh(self, rel: str = "") -> None: ...
 
 
-def _validate_rel(rel: str, base_dir: Optional[str] = None) -> str:
+def _validate_rel(rel: str) -> str:
     """Return a clean relative storage path.
 
-    Accepts a relative path as-is. If an absolute path is provided that begins 
-    with `base_dir` (e.g. legacy code), the prefix is stripped to yield the 
-    equivalent relative path, and a warning is logged.
-
-    Raises ValueError for absolute paths outside base_dir, or any path
-    containing '..'.
+    Raises ValueError if an absolute path or a path containing '..' is passed.
     """
     if rel.startswith("/"):
-        import logging
-        base = base_dir.rstrip("/") if base_dir else ""
-        if base and (rel == base or rel.startswith(base + "/")):
-            logging.warning(f"Absolute path used: {rel!r}. Stripping base_dir to make it relative.")
-            rel = rel[len(base):].lstrip("/")
-        else:
-            raise ValueError(f"Storage paths must be relative, got: {rel!r}")
+        raise ValueError(f"Storage paths must be strictly relative, got: {rel!r}")
     parts = Path(rel).parts
     if ".." in parts:
         raise ValueError(f"Storage paths must not contain '..': {rel!r}")
@@ -69,7 +57,7 @@ class LocalStorage:
         self.base = Path(base_path)
 
     def _full(self, rel: str) -> Path:
-        rel = _validate_rel(rel, base_dir=str(self.base))
+        rel = _validate_rel(rel)
         return self.base / rel
 
     def read_text(self, rel: str, *, encoding: str = "utf-8") -> str:
@@ -169,14 +157,13 @@ _CACHE_PREFIXES = ("datasets_parsed",)
 class RoutedStorage:
     """Dispatches Storage operations to drive vs cache based on the path prefix."""
 
-    def __init__(self, drive: Storage, cache: Storage, base_dir: Optional[str] = None):
+    def __init__(self, drive: Storage, cache: Storage):
         self.drive = drive
         self.cache = cache
-        self.base_dir = base_dir
 
     def _pick(self, rel: str) -> Tuple[str, Storage]:
         """Normalize rel and select the backing storage. Returns (clean_rel, store)."""
-        rel = _validate_rel(rel, base_dir=self.base_dir)
+        rel = _validate_rel(rel)
         head = rel.split("/", 1)[0]
         store = self.cache if head in _CACHE_PREFIXES else self.drive
         return rel, store
@@ -251,42 +238,43 @@ class RoutedStorage:
 _storage_singleton: Optional[Storage] = None
 
 
-def get_storage(base_dir: str) -> Storage:
+def get_storage() -> Storage:
     """
-    Returns the process-wide Storage instance.
+    Returns the process-wide Storage instance based on .env configuration.
 
-    Mount mode (default):  LocalStorage(base_dir) — reads/writes the
-                           local disk directory.
-
-    API mode (GDRIVE_USE_API=1):  RoutedStorage with GoogleDriveStorage for
-                           drive paths and LocalStorage($CACHE_DIR) for caches.
-                           No rclone process required.
-
-    Credentials for API mode default to:
-        ~/.openclaw/gdrive-ops-credentials.json   (Desktop-app OAuth client)
-        ~/.openclaw/gdrive-ops-token.json         (refresh token cache)
-    Override with GDRIVE_CREDENTIALS / GDRIVE_TOKEN env vars.
+    STORAGE_PROVIDER="local":  LocalStorage(STORAGE_PATH)
+    STORAGE_PROVIDER="google": RoutedStorage with GoogleDriveStorage(STORAGE_PATH)
+                               for drive paths and LocalStorage($CACHE_DIR) for caches.
     """
     global _storage_singleton
     if _storage_singleton is not None:
         return _storage_singleton
 
     from lib.env import get_env_var
-    if os.environ.get("GDRIVE_USE_API") == "1":
+    provider = os.environ.get("STORAGE_PROVIDER", "local").lower()
+    
+    if provider == "google":
         from lib.storage_gdrive import GoogleDriveStorage
 
         credentials_path = os.environ.get("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
         token_path = os.environ.get("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
+        
+        # In Google mode, STORAGE_PATH acts as the root folder ID (defaults to "root")
+        root_folder_id = get_env_var("STORAGE_PATH") or "root"
+
         drive: Storage = GoogleDriveStorage(
             credentials_path=credentials_path,
             token_path=token_path,
-            root_folder_id=os.environ.get("GDRIVE_ROOT_FOLDER_ID") or "root",
-            base_dir=base_dir
+            root_folder_id=root_folder_id
         )
         cache_dir = os.environ.get("CACHE_DIR") or os.path.expanduser("~/.cache/sictic")
         os.makedirs(cache_dir, exist_ok=True)
-        _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir), base_dir=base_dir)
+        _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir))
     else:
+        # Local mode requires an absolute path
+        base_dir = get_env_var("STORAGE_PATH")
+        if not base_dir.startswith("/"):
+            raise ValueError(f"STORAGE_PATH must be an absolute path when provider is 'local', got: {base_dir}")
         _storage_singleton = LocalStorage(base_dir)
 
     return _storage_singleton

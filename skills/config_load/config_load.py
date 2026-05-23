@@ -24,7 +24,7 @@ def _build_tree_from_flat_files(files: list[tuple[str, float]]) -> Dict[str, Any
     """Given (relpath, mtime) pairs for every .md under SOURCE_REL, build the nested config dict.
     Directory entries are inferred from path segments; file contents are read on demand.
     """
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
     tree: Dict[str, Any] = {}
     for relpath, _mt in files:
         parts = relpath.split("/")
@@ -47,7 +47,7 @@ def _build_tree_from_flat_files(files: list[tuple[str, float]]) -> Dict[str, Any
 
 def config_load() -> Dict[str, Any]:
     cache_dir, cache_file = _local_cache_paths()
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
 
     # Find every .md under SOURCE_REL (recursive) along with its mtime.
     try:

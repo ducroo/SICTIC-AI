@@ -1,5 +1,4 @@
 from typing import List, Optional
-from lib.env import get_env_var
 
 from lib.logger import get_logger
 from lib.storage import get_storage
@@ -8,10 +7,8 @@ from skills.dataset_chat.dataset_search import dataset_search
 from lib.ranking_writeup import ranking_writeup
 from lib.find_top_k import find_top_k
 from skills.llm_chat.llm_chat import llm_chat
-from lib.env import get_env_var
 
 from rapidfuzz import process, fuzz
-from lib.env import get_env_var
 
 logger = get_logger(__name__)
 
@@ -22,7 +19,7 @@ logger = get_logger(__name__)
 def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], optout: Optional[List[str]]) -> List[str]:
     """Determines the final list of candidates to rank by fuzzy-matching against available profiles."""
     dataset_dir_rel = f"datasets/{dataset_name}"
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
+    storage = get_storage()
     available_profiles = []
     for filename in storage.list(dataset_dir_rel, suffix=".md"):
         # storage.list returns names directly. Strip the .md and known suffix.

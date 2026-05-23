@@ -43,11 +43,17 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     if not chapter:
         raise ValueError("No chapter title found in the provided checklist.")
         
-    raw_filename_prefix = f"{slugify(chapter)}"
-    file_name = f"{slugify(raw_filename_prefix)}-{slugify(model_suffix)}.md"
-    file_path = f"insights/batch-audit/{dataset_name.lower()}/{file_name}"
+    default_llm = get_env_var("DEFAULT_LLM")
+    from lib.insight_filepath import get_insight_filepath
+    file_path = get_insight_filepath(
+        dataset_name=dataset_name.lower(),
+        skill_name="batch_audit",
+        model=default_llm,
+        identifier=chapter,
+        subdir=True
+    )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name], file_path, model_suffix)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name], file_path, default_llm)
     if not needs_refresh:
         logger.info(f"[{dataset_name}] Using cached batch audit results from {matched_file}")
         return cached_content
@@ -88,6 +94,6 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
             table_lines += f"\n| {idx_string} | {safe_display} | {author} | {status} | {summary} | {concerns} |"
 
     result_md = table_lines
-    get_storage(get_env_var("REPOSITORY_DIR")).write_text(file_path, result_md)
+    get_storage().write_text(file_path, result_md)
 
     return result_md

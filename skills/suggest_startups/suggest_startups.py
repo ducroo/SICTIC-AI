@@ -56,21 +56,24 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
         raise ValueError(f"Missing configuration for suggest_startups: {e}")
 
     from lib.storage import get_storage
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
-    safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
-
-    out_dir = f"insights/{dataset_name.lower()}/suggest_startups"
+    storage = get_storage()
+    default_llm = get_env_var("DEFAULT_LLM")
+    from lib.insight_filepath import get_insight_filepath
 
     # Filter investors whose cache is already up-to-date
     investors_to_process = []
     datasets_to_check = [dataset_name.lower()] + [s.lower() for s in startups]
 
     for investor in investors:
-        raw_filename_prefix = f"{investor}-suggest-startups"
-        filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-        output_file = f"{out_dir}/{filename}"
+        output_file = get_insight_filepath(
+            dataset_name=dataset_name.lower(),
+            skill_name="suggest_startups",
+            model=default_llm,
+            identifier=investor,
+            subdir=True
+        )
         
-        needs_refresh, cached_content, matched_file = check_insight_refresh(datasets_to_check, output_file, safe_llm_name)
+        needs_refresh, cached_content, matched_file = check_insight_refresh(datasets_to_check, output_file, default_llm)
         if not needs_refresh:
             logger.info(f"[{dataset_name}] Skipping {investor}: Cache up to date.")
             continue

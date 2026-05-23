@@ -17,7 +17,8 @@ def mock_env(monkeypatch, tmp_path):
     workspace_mock.mkdir()
     
     # Override environment variables
-    monkeypatch.setenv("REPOSITORY_DIR", str(repository_dir_mock))
+    monkeypatch.setenv("STORAGE_PROVIDER", "local")
+    monkeypatch.setenv("STORAGE_PATH", str(repository_dir_mock))
     monkeypatch.setenv("WORKSPACE_DIR", str(workspace_mock))
     monkeypatch.setenv("DEFAULT_LLM", "ollama/test_model:1b")
     

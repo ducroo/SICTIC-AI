@@ -42,9 +42,10 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
         logger.error(f"[{dataset_name}] Missing configuration: {e}")
         raise ValueError(f"Missing configuration for investor_appetite or startup_profile: {e}")
 
-    storage = get_storage(get_env_var("REPOSITORY_DIR"))
-    safe_llm_name = get_env_var("DEFAULT_LLM").split('/')[-1]
-    output_dir = f"insights/{dataset_name_lower}/investor_appetite"
+    storage = get_storage()
+    default_llm = get_env_var("DEFAULT_LLM")
+    
+    from lib.insight_filepath import get_insight_filepath
 
     results = {}
 
@@ -54,12 +55,17 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
     
     async def process_investor(investor_name):
         logger.info(f"[{dataset_name}] Processing investor appetite for: {investor_name}")
-        raw_filename_prefix = f"{investor_name}-investor-appetite"
-        output_filename = f"{slugify(raw_filename_prefix)}-{slugify(safe_llm_name)}.md"
-        output_file = f"{output_dir}/{output_filename}"
+        
+        output_file = get_insight_filepath(
+            dataset_name=dataset_name_lower,
+            skill_name="investor_appetite",
+            model=default_llm,
+            identifier=investor_name,
+            subdir=True
+        )
 
         # Caching
-        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_lower], output_file, safe_llm_name)
+        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_lower], output_file, default_llm)
         if not needs_refresh:
             results[investor_name] = cached_content
             return
