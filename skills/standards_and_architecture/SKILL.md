@@ -71,41 +71,58 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 ### `lib/` — shared infrastructure
 
 * `api_client.py`: Shared API client helper logic.
-* `env.py`: Exposes the `get_env_var` script to fetch environment variables with built-in error handling. Auto-loads `{{REPO_ROOT}}/.env`.
+* `dataset_from_insight.py`: Utility to generate synthetic datasets from insights.
+* `env.py`: Exposes the `get_env_var` script to fetch environment variables with built-in error handling. Auto-loads `.env`.
+* `ephemeral_dataset.py`: Utility to prepare temporary datasets in Qdrant.
+* `find_top_k.py`: Core algorithms for ranking profiles.
+* `insight_filepath.py`: Centralized factory function `get_insight_filepath` for generating OS-safe, uniform insight paths.
 * `insight_refresh.py`: Caching mechanism utility.
 * `json_parser.py`: JSON parsing helper utility.
-* `logger.py`: Centralized logger configuration. Writes to `{{REPO_ROOT}}/logs/sictic-ai.log`.
+* `logger.py`: Centralized logger configuration. Writes to `logs/sictic-ai.log`.
+* `member_profile.py`: Centralized profile builder for SICTIC members.
+* `ranking_writeup.py`: Utility to generate Markdown tables for ranked LLM results.
 * `slugify.py`: Filename slugification utility.
 * `services_gateway.py`: IPC gateway for concurrency control across LLM/embed/docling calls.
-* `storage.py` / `storage_gdrive.py`: Storage abstraction (rclone-mount or native Drive API).
+* `storage.py` / `storage_gdrive.py`: Storage abstraction (local directory or native Drive API).
 * **lib.adapters/** - Centralized integration modules.
   * `apify.py`: Apify platform integration adapter.
   * `docling.py`: Exposes the `Docling` class for document ingestion.
   * `linkedin.py`: Adapter for LinkedIn profile fetching/parsing.
-  * `web_search.py`: Adapter utilizing Apify google-search-scraper.
   * `qdrant.py`: Exposes the Qdrant vector DB connection class.
-  * `rclone.py`: Exposes the rclone file transfer class.
+  * `web_search.py`: Adapter utilizing Apify google-search-scraper.
 * **lib.batch_audit/**
   * `batch_audit.py`: Support module providing core batch-processing logic for due diligence checks and other external scripts.
 
 ### `skills/` — user-facing CLI skills
 
+* **advocates**
+  * `advocates.py`: Logic entry point to find and rank potential advocates for a given event.
+* **bulk_refresh**
+  * `bulk_refresh.py`: Logic entry point to batch-run a skill across multiple datasets.
 * **config_load**
-  * `config_load.py`: Entry point to read and load `config.json` configuration trees dynamically from Google Drive mounts.
+  * `config_load.py`: Entry point to read and load `config.json` configuration trees dynamically.
 * **dataset_chat**
   * `dataset_chat.py`: API facade/Logic entry point for dataset chatting.
   * `dataset_delete.py`: Logic entry point for dataset deletion.
   * `dataset_search.py`: Logic entry point for dataset searching.
-* **expert_search**
-  * `expert_search.py`: Logic entry point for the specialized matchmaker designed to connect startups with SICTIC community members.
 * **dd_checks**
   * `dd_checks.py`: Core logic entry point to perform a comprehensive M&A-style due diligence review of a startup's data room.
+* **expert_search**
+  * `expert_search.py`: Logic entry point for the specialized matchmaker designed to connect startups with SICTIC community members.
 * **investor_appetite**
   * `investor_appetite.py`: Logic entry point to determine the ideal startup profile for an investor.
 * **llm_chat**
   * `llm_chat.py`: Core logic entry point for standard LLM generation and contextual chat routing.
+* **people_ranking**
+  * `people_ranking.py`: Core logic entry point for standardizing the ranking of people/investors against specific profiles.
+* **person_profile**
+  * `person_profile.py`: Logic entry point to collate a comprehensive profile on a specific person.
 * **potential_investors**
   * `potential_investors.py`: Logic entry point to provide a ranked list of potential investors for a given startup.
+* **sictic_git_sync**
+  * Gatekeeper skill to synchronize OpenClaw workspace modifications with the Git repository.
+* **standards_and_architecture**
+  * The definitive source of truth for architectural standards.
 * **startup_profile**
   * `startup_profile.py`: Core logic entry point to generate a neutral, objective 5-point diagnostic of a startup.
 * **startup_traction**
