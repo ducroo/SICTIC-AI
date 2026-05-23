@@ -1,30 +1,30 @@
 # SICTIC-AI
 
-Welcome to the SICTIC-AI toolbox! This is an open-source collection of AI-powered analysis routines (skills)
+Welcome to the SICTIC-AI toolkit! This is an open-source collection of AI-powered analysis routines (skills)
 designed to supercharge the startup ecosystem. It is completely free to use and easy to contribute to! 
 
-This toolbox serves four distinct audiences:
+This toolbox serves four audiences:
 * **Startups:** Prepare for your first funding round by running our AI over your data room for a dry run.
 * **Business Angels:** Automate the heavy lifting and boilerplate checks of your Due Diligence process.
 * **BA Clubs (like SICTIC):** Automate member engagement, startup selection, DD, and monitor past transactions.
-* **AI Wizards:** Co-develop and refine the future of AI-first funding rounds with us.
+* **AI Wizards:** Co-develop and refine the future of AI-first funding rounds with us!
 
 ## Contributing
 
-We deliberately kept everything simple so all our audience can join and co-develop:
+The setup is deliberately simple so everyone can join and co-develop:
+* We invite you to contribute investing expertise and insight, not IT know-how.
 * You can safely create new skills or edit existing ones directly inside your UI. 
-* To synchronize your changes with GitHub without using the terminal, simply ask your harness to help; it has a  `sictic_git_sync` skill. This skill will act as an architectural gatekeeper—reviewing your code, enforcing our simplicity standards, and automatically committing and pushing your updates to GitHub.
-
+* To synchronize your changes with GitHub, just ask your AI agent to help; it has a  `sictic_git_sync` skill. This skill will also act as an architectural gatekeeper—reviewing your code, enforcing our simplicity standards, and automatically committing and pushing your updates to GitHub.
 
 ## Runtime Context
 
-This toolbox requires a Unix environment (**macOS, Linux, or WSL2**) and an AI harness 
+This toolbox requires a Unix environment (**macOS, Linux, or WSL2**) and an AI Agent 
 (like **OpenClaw, Claude Code, or Gemini Spark**) to converse with the skills. 
-We primarily develop using macOS and OpenClaw, but the architecture is OS-agnostic!
+We primarily develop using macOS and OpenClaw, but the architecture has to become OS-agnostic.
 
 ## Quickstart Setup
 
-Just a few simple steps to get the AI working on your machine:
+Five steps to get the AI working on your machine:
 
 ### Step 1: Install Prerequisites
 
@@ -46,17 +46,17 @@ exec $SHELL           # reload your terminal
 ```
 
 *(Optional but Recommended)*
-You can optionally install **Ollama** if you want to run local AI models. Local models are a good alternative, as cloud models can become expensive during heavy document parsing.
+You can install **Ollama** if you want to run local AI models; Local models are a good alternative, as cloud models can become expensive during heavy document parsing.
 * **macOS:** `brew install ollama`
 * **Linux/WSL2:** `curl -fsSL https://ollama.com/install.sh | sh`
 
 ### Step 2: Install the Environment
 
-Run the provided installer. This safely creates a self-contained Python environment (`sictic-env`) 
-and strictly synchronizes the AI skills with your workspace using **symlinks**.
+Run the provided installer. This creates a self-contained Python environment (`sictic-env`) 
+and synchronizes the AI skills with your workspace using **symlinks**.
 
 ```bash
-./install_skills_conda.sh --target /path/to/your/harness/workspace/skills
+./install_skills_conda.sh --target /path/to/your/agent/workspace/skills
 ```
 
 ### Step 3: Configuration
@@ -66,7 +66,7 @@ Create your configuration file:
 cp .env-template .env
 ```
 
-Open `.env` in a text editor. You only need to configure the following few variables:
+Open `.env` in a text editor. You need to configure a few variables:
 
 | Variable | Purpose | Example |
 |---|---|---|
@@ -82,9 +82,7 @@ Open `.env` in a text editor. You only need to configure the following few varia
 
 ### Step 4: Start Background Services
 
-SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. pre-selection of documents before handing over to the LLM). The universal launcher script will also install the binary for your OS if required
-
-*(Note: If you installed Ollama in Step 1, the launcher will also spin it up so you can run local models!)*
+SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. pre-selection of documents before handing over to the LLM). The launcher script will also install the right binary if needed. If you installed Ollama in Step 1, the launcher will also spin it up so you can run local models.
 
 ```bash
 ./launch.sh start
@@ -92,7 +90,7 @@ SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. p
 
 ### Step 5: Run a Skill
 
-You are ready to go! Skills can be executed universally without needing to manually activate virtual environments.
+You are ready to go! Execution of skills is straightforward. Either you ask your AI Agent to do so, or us the CLI: 
 
 ```bash
 conda run -n sictic-env python -m skills.llm_chat "What is startup due diligence?"
@@ -107,5 +105,5 @@ By default (`STORAGE_PROVIDER="local"`), all datasets and generated insights are
 
 In production at SICTIC, we use Google Drive to share datasets and insights with Deal Leads. When `STORAGE_PROVIDER="google"`, the skills read and write directly to Google Drive via the native API.
 
-**Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to address that directly with your chosen AI harness (e.g., OpenClaw). Just ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you!
+**Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you (We did it with Openclaw)
 
