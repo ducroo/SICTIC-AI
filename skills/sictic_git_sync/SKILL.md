@@ -27,12 +27,13 @@ Before committing ANY code, you MUST review modified files against these rules. 
 4. Summarize what new tools or updates were downloaded.
 
 ### Scenario B: Contributing Changes & New Skills ("Push")
-1. **Detect New Skills:** Scan `~/.openclaw/workspace-ops/skills/` for any folders that are *not* symlinks. If a user created a brand new skill via the OpenClaw UI, it will appear here as a standard directory, meaning Git cannot see it yet.
-2. **Ingest New Skills:** For any new skill folder found:
+1. **Detect New Skills:** Scan `~/.openclaw/workspace-ops/skills/` for any folders that are *not* symlinks. 
+2. **Confirm Ingestion:** If a new real folder is found, **you must ask the user** before touching it: "I see you've created a new skill called `[name]`. Is this for SICTIC-AI, and should I share it with the community?" (It might be a private or unrelated skill).
+3. **Ingest New Skills (If Approved):**
    * **Gatekeeper Review:** Run its files against the *Architecture & Simplicity Framework*. Refactor if rules are broken.
    * **Move:** Move the entire folder into `~/SICTIC-AI/skills/`.
    * **Symlink:** Create a symlink in the OpenClaw workspace pointing to its new location in the repo.
-3. **Identify Edits:** Navigate to `~/SICTIC-AI/` and check `git status` to see what else the user modified in existing symlinked skills.
-4. **Gatekeeper Review (Edits):** Read any newly modified files in the repo. Run them against the framework and refactor if necessary.
-5. **Commit & Push:** Stage all changes (`git add`), write a professional commit message, and push to the current branch (`SIMPLIFY` or `main`).
-6. **Celebrate:** Inform the user their changes (and any new skills) are live for the community.
+4. **Identify Edits:** Navigate to `~/SICTIC-AI/` and check `git status` to see what else the user modified in existing symlinked skills.
+5. **Gatekeeper Review (Edits):** Read any newly modified files in the repo. Run them against the framework and refactor if necessary.
+6. **Commit & Push:** Stage all approved changes (`git add`), write a professional commit message, and push to the current branch (`SIMPLIFY` or `main`).
+7. **Celebrate:** Inform the user their changes (and any approved new skills) are live for the community.
