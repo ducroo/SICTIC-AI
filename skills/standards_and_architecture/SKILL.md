@@ -9,27 +9,23 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
 
 ## Data Storage Layout (`STORAGE_PATH`)
 
-The AI and all skills must strictly adhere to the following directory layout for all data reading and writing. The root of this structure is defined dynamically by the user's `STORAGE_PATH` environment variable (either a local directory or a Google Drive Folder ID). 
+The AI and all skills must strictly adhere to the following unified directory layout for all data reading and writing. The root of this structure is defined dynamically by the user's `STORAGE_PATH` environment variable (either a local directory or a Google Drive Folder ID). 
+
+To keep the codebase brutally simple, **there is no architectural distinction between a "startup" and a "community" dataset.** Every domain is simply a `dataset_name` string (e.g., `daav`, `community`, `dealum_export`) and follows the exact same pathing rules.
 
 *   `config/` — A folder structure filled with `.md` files containing prompts and settings. The `config_load` skill compiles these into a single JSON dictionary at runtime.
-*   `community/` — The root directory for all investor/member data.
-    *   `datasets/` — Raw data inputs for the community.
-        *   `resumes/` — CVs and bios of investors.
-        *   `linkedin/` — Scraped LinkedIn profile JSONs.
-        *   `__active_dataset__` — Marker file indicating the community dataset is active.
-    *   `parsed/` — Docling-extracted Markdown mirror of `datasets/`.
-    *   `insights/` — Output directory for member-centric AI generated reports.
-        *   `person_profile/` — Output from the `person_profile` skill (one file per person).
-        *   `investor_appetite/` — Output from the `investor_appetite` skill (one file per person).
-        *   `suggested_startups/` — Output from the `suggest_startups` skill (e.g., `urs_gubser_<MODEL>.md`).
-*   `startups/` — The root directory for all startup-specific data. To facilitate clear Google Drive sharing with Deal Leads, startup directories use a prefix-flat structure.
-    *   `<startup_name>-dataset/` — The raw data room (PDFs, Excel, etc.) provided by the startup.
-        *   `__active_dataset__` — A blank marker file. If present, it signals to batch jobs that this startup should be actively processed.
-    *   `<startup_name>-parsed/` — A strict mirror of the `-dataset` folder hierarchy. Contains the Docling-extracted Markdown. Filenames are `<original_filename+extension>.md`.
-    *   `<startup_name>-insights/` — The output directory for all generated AI reports and profiles. Single-file skill outputs (like `startup_profile`) exist at this root level. Multi-file skill outputs exist in subdirectories.
-        *   `dd_checks/` — (Subdirectory) Output from the `dd_checks` batch audit.
-        *   `team_profile/` — (Subdirectory) Background reconciliation files.
-        *   `snippets/` — (Subdirectory) Human-written notes by Deal Leads or others.
+*   `datasets/` — The root directory for all raw data inputs.
+    *   `<dataset_name>/` — The raw data room (PDFs, Excel, JSONs, etc.) for a specific domain.
+        *   `__active_dataset__` — A blank marker file. If present, it signals to batch jobs (like `bulk_refresh`) that this dataset should be actively processed.
+*   `parsed/` — (Formerly `datasets_parsed` or `ocr2md`). A strict mirror of the `datasets/` folder hierarchy. Contains the Docling-extracted Markdown. 
+    *   `<dataset_name>/`
+        *   Filenames here are exactly `<original_filename+extension>.md`.
+*   `insights/` — The root output directory for all generated AI reports and profiles.
+    *   `<dataset_name>/`
+        *   Single-file skill outputs (e.g., `startup_profile_<MODEL>.md`) are saved directly at this root level.
+        *   Multi-file skill outputs (e.g., `dd_checks/`, `person_profile/`) are saved in subdirectories under the dataset name.
+
+*(Note on Data Sharing: If a Deal Lead needs access to a specific startup's data, do not break this structure. Instead, use Google Drive "Shortcuts" to create a custom, safely-named viewing folder for the human, while preserving this rigid hierarchy for the AI.)*
 
 ## Coding Standards
 
@@ -40,7 +36,7 @@ The AI and all skills must strictly adhere to the following directory layout for
   * **Only** after the user explicitly agrees to the proposed approach are you allowed to execute the refactor and edit the code.
 * **Testing Protocol:**
   * If you write or use temporary Python scripts to test or verify functionality in the codebase, you must always ask the user afterwards if that script should be converted into a formal `pytest` unit/integration test.
-* **Environment:** All code is executed via the project venv at `the Conda environment `, bootstrapped by `{{REPO_ROOT}}/install_skills.sh` (`pip install -e .` against `pyproject.toml`).
+* **Environment:** All code is executed via the `sictic-env` Conda environment, bootstrapped by `install_skills_conda.sh` (`pip install -e .` against `pyproject.toml`).
 * **Python Path:** The `skills` and `lib` packages are installed editable, so `import skills.<SKILL_NAME>.<SCRIPT_NAME>` and `import lib.<MODULE>` resolve from any CWD without setting `PYTHONPATH`.
 * **Imports:** User-facing skill code lives under `skills.<SKILL_NAME>.<SCRIPT_NAME>`. Shared infrastructure lives under `lib.<MODULE>` (logger, env, adapters, slugify, etc.). Internal library skills (e.g., `batch_audit`) live under `lib.<SKILL_NAME>`.
 * **Naming Conventions:** 
@@ -141,7 +137,7 @@ Every skill must strictly adhere to the following Python package structure. Cust
 └── tests/                      # GLOBAL: pytest suite
 ```
 
-* **`SKILL.md`:** This file is mandatory and must always be present in the root of the skill directory. It contains the prompt instructions and metadata that OpenClaw uses to understand and trigger the skill. The `## Usage` section should provide a copy-pastable bash command using the `{{REPO_ROOT}}` placeholder, which `install_skills.sh` substitutes at install time.
+* **`SKILL.md`:** This file is mandatory and must always be present in the root of the skill directory. It contains the prompt instructions and metadata that OpenClaw uses to understand and trigger the skill. The `## Usage` section should provide a universal, copy-pastable bash command strictly formatted as: `conda run -n sictic-env python -m skills.<SKILL_NAME> [args]`.
 * **`__main__.py`:** Contains zero business logic. Handles Typer CLI routing, argument parsing, and top-level exception catching. Allows execution via `python -m skills.<SKILL_NAME>`. This is the *only* allowed Typer CLI entry point for a skill.
 * **`<skill_name>.py`:** The primary programmatic entry point (orchestrator/facade) for the skill. 
   * **Function Naming Rule:** The main API function inside this file must be named identically to the skill itself (e.g., `def startup_profile(...):` inside `startup_profile.py`). External modules must call this specific function.
