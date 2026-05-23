@@ -252,41 +252,67 @@ class QdrantAdapter:
                 # The Qdrant insert itself is lightning fast, so synchronous is fine here
                 self.client.upsert(collection_name=self.collection_name, points=points)
 
-    async def search(self, query: str, limit: int = 25, threshold_factor: Optional[float] = 0.8) -> List[Chunk]:
-        query_vector = await self.get_embedding(query)
-        res_obj = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_vector,
-            limit=limit,
-            with_payload=True
-        )
-        res = res_obj.points
+    async def search(self, query: str | List[str], limit: int = 25, threshold_factor: Optional[float] = 0.8) -> List[Chunk]:
+        """
+        Executes a vector search. If a list of queries is provided, runs them concurrently,
+        deduplicates the chunks by ID (keeping the highest score), and sorts the final list.
+        """
+        import asyncio
+
+        if isinstance(query, str):
+            queries = [query.strip()] if query.strip() else []
+        else:
+            queries = [q.strip() for q in query if q.strip()]
+
+        if not queries:
+            return []
+
+        # Embed all queries concurrently
+        from lib.services_gateway import Priority
+        tasks = [self.get_embedding(q, priority=Priority.STANDARD) for q in queries]
+        query_vectors = await asyncio.gather(*tasks)
+
+        unique_chunks = {}
         
-        if not res:
+        # Execute searches sequentially to avoid overwhelming Qdrant 
+        # (the inserts are fast, but multiple huge searches can spike memory)
+        for q_vec in query_vectors:
+            res_obj = self.client.query_points(
+                collection_name=self.collection_name,
+                query=q_vec,
+                limit=limit,
+                with_payload=True
+            )
+            for p in res_obj.points:
+                if p.payload.get("is_metadata"):
+                    continue
+                    
+                chunk_id = str(p.id)
+                if chunk_id not in unique_chunks or p.score > unique_chunks[chunk_id].score:
+                    unique_chunks[chunk_id] = Chunk(
+                        chunk_id=chunk_id,
+                        document_name=p.payload.get("document_name", "Unknown"),
+                        page_number=p.payload.get("page_number", 1),
+                        last_modified=p.payload.get("last_modified", 0.0),
+                        text=p.payload.get("text", ""),
+                        score=p.score
+                    )
+
+        valid_chunks = list(unique_chunks.values())
+        valid_chunks.sort(key=lambda x: x.score, reverse=True)
+
+        if not valid_chunks:
             return []
 
         if threshold_factor is not None:
-            max_score = res[0].score
+            max_score = valid_chunks[0].score
             threshold = max_score * threshold_factor
+            filtered_chunks = [c for c in valid_chunks if c.score >= threshold]
             
-            valid_chunks = [p for p in res if p.score >= threshold]
-            
-            if len(valid_chunks) < 5:
-                valid_chunks = res[:5]
-        else:
-            valid_chunks = res
-        
-        valid_chunks = [p for p in valid_chunks if not p.payload.get("is_metadata")]
-        valid_chunks.sort(key=lambda x: x.score, reverse=True)
-        
-        return [
-            Chunk(
-                chunk_id=str(p.id),
-                document_name=p.payload.get("document_name", "Unknown"),
-                page_number=p.payload.get("page_number", 1),
-                last_modified=p.payload.get("last_modified", 0.0),
-                text=p.payload.get("text", ""),
-                score=p.score
-            )
-            for p in valid_chunks
-        ]
+            # Fallback to ensure we return something useful if the threshold is too brutal
+            if len(filtered_chunks) < 5:
+                filtered_chunks = valid_chunks[:5]
+            valid_chunks = filtered_chunks
+
+        # Apply final global limit across the deduplicated set
+        return valid_chunks[:limit]

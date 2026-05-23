@@ -8,7 +8,7 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", max_chunks: int = None, threshold_factor: float = None, return_full_docs: bool = False) -> list:
-    """Unified API to run search, merge, and deduplicate chunks."""
+    """Unified API to run search and retrieve chunks or full documents."""
     dataset_name = dataset_name.lower()
     await sync_datasets([dataset_name])
     qdrant = QdrantAdapter(dataset_name)
@@ -17,37 +17,16 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
         max_chunks = 25
         threshold_factor = 0.8
 
-    if isinstance(query, str):
-        q = query.strip()
-        queries = [q] if q else []
-    else:
-        queries = query
-
-    if not queries:
-        return []
-
+    # When returning full documents, we need to fetch more chunks internally 
+    # to guarantee we hit enough unique source documents.
     fetch_limit = max_chunks * 10 if (return_full_docs and max_chunks) else (max_chunks if max_chunks else 1000)
     
-    unique_chunks = {}
-    for q in queries:
-        # Pass threshold_factor=None to qdrant so we handle it globally here
-        chunks = await qdrant.search(q, limit=fetch_limit, threshold_factor=None)
-        for chunk in chunks:
-            key = chunk.chunk_id
-            if key not in unique_chunks or chunk.score > unique_chunks[key].score:
-                unique_chunks[key] = chunk
-                
-    sorted_chunks = sorted(unique_chunks.values(), key=lambda x: x.score, reverse=True)
-    
-    if threshold_factor is not None and sorted_chunks:
-        max_score = sorted_chunks[0].score
-        threshold = max_score * threshold_factor
-        sorted_chunks = [c for c in sorted_chunks if c.score >= threshold]
+    sorted_chunks = await qdrant.search(query, limit=fetch_limit, threshold_factor=threshold_factor)
 
     if return_full_docs:
         unique_docs = {}
         storage = get_storage()
-        parsed_base_path = f"datasets_parsed/{dataset_name}"
+        parsed_base_path = f"parsed/{dataset_name}"
 
         for chunk in sorted_chunks:
             doc_name = chunk.document_name
@@ -74,6 +53,4 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
 
         return list(unique_docs.values())
 
-    if max_chunks is not None:
-        return sorted_chunks[:max_chunks]
     return sorted_chunks
