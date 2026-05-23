@@ -7,6 +7,30 @@ description: The definitive source of truth for all coding conventions, environm
 
 This skill acts as a mandatory pre-flight checklist. Review these standards before writing or modifying any Python code.
 
+## Data Storage Layout (`STORAGE_PATH`)
+
+The AI and all skills must strictly adhere to the following directory layout for all data reading and writing. The root of this structure is defined dynamically by the user's `STORAGE_PATH` environment variable (either a local directory or a Google Drive Folder ID). 
+
+*   `config/` — A folder structure filled with `.md` files containing prompts and settings. The `config_load` skill compiles these into a single JSON dictionary at runtime.
+*   `community/` — The root directory for all investor/member data.
+    *   `datasets/` — Raw data inputs for the community.
+        *   `resumes/` — CVs and bios of investors.
+        *   `linkedin/` — Scraped LinkedIn profile JSONs.
+        *   `__active_dataset__` — Marker file indicating the community dataset is active.
+    *   `parsed/` — Docling-extracted Markdown mirror of `datasets/`.
+    *   `insights/` — Output directory for member-centric AI generated reports.
+        *   `person_profile/` — Output from the `person_profile` skill (one file per person).
+        *   `investor_appetite/` — Output from the `investor_appetite` skill (one file per person).
+        *   `suggested_startups/` — Output from the `suggest_startups` skill (e.g., `urs_gubser_<MODEL>.md`).
+*   `startups/` — The root directory for all startup-specific data. To facilitate clear Google Drive sharing with Deal Leads, startup directories use a prefix-flat structure.
+    *   `<startup_name>-dataset/` — The raw data room (PDFs, Excel, etc.) provided by the startup.
+        *   `__active_dataset__` — A blank marker file. If present, it signals to batch jobs that this startup should be actively processed.
+    *   `<startup_name>-parsed/` — A strict mirror of the `-dataset` folder hierarchy. Contains the Docling-extracted Markdown. Filenames are `<original_filename+extension>.md`.
+    *   `<startup_name>-insights/` — The output directory for all generated AI reports and profiles. Single-file skill outputs (like `startup_profile`) exist at this root level. Multi-file skill outputs exist in subdirectories.
+        *   `dd_checks/` — (Subdirectory) Output from the `dd_checks` batch audit.
+        *   `team_profile/` — (Subdirectory) Background reconciliation files.
+        *   `snippets/` — (Subdirectory) Human-written notes by Deal Leads or others.
+
 ## Coding Standards
 
 * **Parameter Order:** If `dataset` (or `dataset_name`) is a parameter for a routine, function, or skill API, it must **always** be the first parameter.
