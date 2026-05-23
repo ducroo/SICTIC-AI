@@ -272,18 +272,18 @@ def get_storage(base_dir: str) -> Storage:
         return _storage_singleton
 
     from lib.env import get_env_var
-    if get_env_var("GDRIVE_USE_API") == "1":
+    if os.environ.get("GDRIVE_USE_API") == "1":
         from lib.storage_gdrive import GoogleDriveStorage
 
-        credentials_path = get_env_var("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
-        token_path = get_env_var("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
+        credentials_path = os.environ.get("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
+        token_path = os.environ.get("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
         drive: Storage = GoogleDriveStorage(
             credentials_path=credentials_path,
             token_path=token_path,
-            root_folder_id=get_env_var("GDRIVE_ROOT_FOLDER_ID") or "root",
+            root_folder_id=os.environ.get("GDRIVE_ROOT_FOLDER_ID") or "root",
             base_dir=base_dir
         )
-        cache_dir = get_env_var("CACHE_DIR") or os.path.expanduser("~/.cache/sictic")
+        cache_dir = os.environ.get("CACHE_DIR") or os.path.expanduser("~/.cache/sictic")
         os.makedirs(cache_dir, exist_ok=True)
         _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir), base_dir=base_dir)
     else:
