@@ -12,12 +12,16 @@ from lib.insight_refresh import check_insight_refresh
 
 logger = get_logger(__name__)
 
-class DecimalOutliner:
+class ChecklistParser:
     def __init__(self):
         self.idx = []
         self.header_level = 0
 
-    def parse(self, item: str) -> Tuple[bool, str, str]:
+    def parse(self, item: str) -> Tuple[str, str, str, str]:
+        """
+        Returns (type, idx_string, display_text, query_text).
+        type is either 'header' or 'question'.
+        """
         clean_item = item.strip()
         is_header = clean_item.startswith('#')
         
@@ -36,14 +40,16 @@ class DecimalOutliner:
             self.idx[-1] += 1
             
         idx_string = '.'.join(map(str, self.idx))
-        return is_header, clean_item.lstrip('#').strip(), idx_string
-
-def clean_line_item(line: str) -> str:
-    """Removes leading bullets and trailing hints/keywords."""
-    line = re.sub(r'^[\*\-\+]\s+', '', line.strip())
-    line = re.sub(r'^\d+\.\s+', '', line)
-    line = re.split(r'(?i)(Keywords:|Hint:)', line)[0]
-    return line.strip()
+        
+        if is_header:
+            title = clean_item.lstrip('#').strip()
+            return "header", idx_string, title, clean_item
+        else:
+            # Clean display text: Remove leading bullets and trailing hints/keywords.
+            line = re.sub(r'^[\*\-\+]\s+', '', clean_item)
+            line = re.sub(r'^\d+\.\s+', '', line)
+            display = re.split(r'(?i)(Keywords:|Hint:)', line)[0].strip()
+            return "question", idx_string, display, clean_item
 
 async def run_audit_query(dataset_name: str, query_text: str, idx_string: str, llm_instructions: str) -> Dict[str, str]:
     """Runs a single question against dataset_chat and robustly parses the JSON."""
@@ -66,7 +72,7 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     and returns a formatted Markdown table.
     """
     author = get_env_var("DEFAULT_LLM")
-    outliner = DecimalOutliner()
+    parser = ChecklistParser()
     
     # 1. Find the first chapter title for filename generation
     chapter = None
@@ -74,9 +80,9 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     for line in lines:
         if not line.strip():
             continue
-        is_header, title_text, _ = outliner.parse(line)
-        if is_header:
-            chapter = title_text
+        item_type, idx_string, display_text, query = parser.parse(line)
+        if item_type == "header":
+            chapter = display_text
             break
             
     if not chapter:
@@ -102,28 +108,27 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     llm_instructions = config["batch_audit"]["llm_instructions"]
 
     # Phase A: Parse Checklist
-    outliner = DecimalOutliner() # Reset outliner after chapter search
+    parser = ChecklistParser() # Reset parser after chapter search
     parsed_items = []
     
     for line in lines:
         if not line.strip():
             continue
             
-        is_header, title_text, idx_string = outliner.parse(line)
+        item_type, idx_string, display_text, query = parser.parse(line)
         
-        if is_header:
+        if item_type == "header":
             parsed_items.append({
                 "type": "header",
                 "idx_string": idx_string,
-                "title": title_text
+                "title": display_text
             })
         else:
-            display_text = clean_line_item(line)
             parsed_items.append({
                 "type": "question",
                 "idx_string": idx_string,
                 "display": display_text,
-                "query": line.strip()
+                "query": query
             })
 
     # Phase B: Execute Concurrently
