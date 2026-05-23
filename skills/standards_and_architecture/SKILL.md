@@ -90,8 +90,7 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
   * `linkedin.py`: Adapter for LinkedIn profile fetching/parsing.
   * `qdrant.py`: Exposes the Qdrant vector DB connection class.
   * `web_search.py`: Adapter utilizing Apify google-search-scraper.
-* **lib.batch_audit/**
-  * `batch_audit.py`: Support module providing core batch-processing logic for due diligence checks and other external scripts.
+* `batch_audit.py`: Support module providing core batch-processing logic for due diligence checks and other external scripts.
 
 ### `skills/` — user-facing CLI skills
 
