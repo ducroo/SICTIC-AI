@@ -1,19 +1,11 @@
 #!/bin/bash
-# /Users/openclaw/.openclaw/workspace-ops/SICTIC-AI/macos_launch.sh
+# launch.sh
 
 PID_DIR="./.pids"
 LOG_DIR="./logs"
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
-SERVICES=(qdrant ollama rclone)
-
-# Pull GDRIVE_MOUNT out of .env so rclone knows where to mount.
-# Targeted extraction (not `source .env`) because the file has python-dotenv-style
-# entries with spaces around `=` that aren't valid shell.
-if [ -z "${GDRIVE_MOUNT:-}" ] && [ -f .env ]; then
-    GDRIVE_MOUNT=$(awk -F= '/^[[:space:]]*GDRIVE_MOUNT[[:space:]]*=/ { sub(/^[^=]*=[[:space:]]*/, ""); gsub(/^"|"$/, ""); print; exit }' .env)
-    export GDRIVE_MOUNT
-fi
+SERVICES=(qdrant ollama)
 
 # ---------- start ----------
 start_qdrant() {
@@ -21,38 +13,69 @@ start_qdrant() {
         echo "qdrant already running (pid $(cat "$PID_DIR/qdrant.pid"))"
         return
     fi
-    if [ ! -x ./qdrant/qdrant ]; then
-        echo "ERROR: ./qdrant/qdrant not found. Download from https://github.com/qdrant/qdrant/releases (qdrant-aarch64-apple-darwin.tar.gz)"
-        return 1
+
+    QDRANT_DIR="./qdrant"
+    QDRANT_BIN="$QDRANT_DIR/qdrant"
+
+    if [ ! -x "$QDRANT_BIN" ]; then
+        echo "qdrant binary not found. Attempting to download..."
+        mkdir -p "$QDRANT_DIR"
+        
+        OS=$(uname -s)
+        ARCH=$(uname -m)
+        
+        if [ "$OS" = "Darwin" ]; then
+            if [ "$ARCH" = "arm64" ]; then
+                URL="https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz"
+            else
+                URL="https://github.com/qdrant/qdrant/releases/latest/download/qdrant-x86_64-apple-darwin.tar.gz"
+            fi
+        elif [ "$OS" = "Linux" ]; then
+            if [ "$ARCH" = "aarch64" ]; then
+                URL="https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-unknown-linux-gnu.tar.gz"
+            else
+                URL="https://github.com/qdrant/qdrant/releases/latest/download/qdrant-x86_64-unknown-linux-gnu.tar.gz"
+            fi
+        else
+            echo "ERROR: Unsupported OS for auto-download: $OS"
+            return 1
+        fi
+        
+        echo "Downloading Qdrant from $URL ..."
+        curl -L "$URL" | tar -xz -C "$QDRANT_DIR"
+        if [ ! -x "$QDRANT_BIN" ]; then
+            echo "ERROR: Failed to download or extract Qdrant."
+            return 1
+        fi
     fi
+
     echo "Starting qdrant..."
     mkdir -p qdrant_data
     QDRANT__STORAGE__STORAGE_PATH="./qdrant_data" \
-        ./qdrant/qdrant > "$LOG_DIR/qdrant.log" 2>&1 &
+        "$QDRANT_BIN" > "$LOG_DIR/qdrant.log" 2>&1 &
     echo $! > "$PID_DIR/qdrant.pid"
 }
 
 start_ollama() {
+    if curl -s http://localhost:11434 > /dev/null 2>&1; then
+        echo "ollama is already responding on localhost:11434 (system service or already running externally)"
+        return
+    fi
+
     if [ -f "$PID_DIR/ollama.pid" ] && ps -p "$(cat "$PID_DIR/ollama.pid")" > /dev/null 2>&1; then
         echo "ollama already running (pid $(cat "$PID_DIR/ollama.pid"))"
         return
     fi
 
-    # Export every OLLAMA_* key from .env into our env so `ollama serve` reads
-    # them at startup (NUM_PARALLEL, KV_CACHE_TYPE, FLASH_ATTENTION, HOST, …).
-    # Skill code reads .env separately via lib/env.py; this block is only for
-    # the daemon. Existing shell env wins over .env values.
     if [ -f .env ]; then
         while IFS= read -r line; do
             case "$line" in
                 OLLAMA_*=*)
                     key="${line%%=*}"
                     val="${line#*=}"
-                    # strip optional surrounding double-quotes
                     case "$val" in
                         \"*\") val="${val#\"}"; val="${val%\"}" ;;
                     esac
-                    # don't override if already set in the shell environment
                     if [ -z "$(eval "printf '%s' \"\${$key:-}\"")" ]; then
                         export "$key=$val"
                         echo "  ollama env: $key=$val"
@@ -65,24 +88,6 @@ start_ollama() {
     echo "Starting ollama..."
     ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
     echo $! > "$PID_DIR/ollama.pid"
-}
-
-start_rclone() {
-    if [ -f "$PID_DIR/rclone.pid" ] && ps -p "$(cat "$PID_DIR/rclone.pid")" > /dev/null 2>&1; then
-        echo "rclone already running (pid $(cat "$PID_DIR/rclone.pid"))"
-        return
-    fi
-    if [ -z "${GDRIVE_MOUNT:-}" ]; then
-        echo "ERROR: GDRIVE_MOUNT is not set (check .env)"
-        return 1
-    fi
-    mkdir -p "$GDRIVE_MOUNT"
-    echo "Starting rclone (mount=$GDRIVE_MOUNT, rc=5572)..."
-    rclone mount gdrive: "$GDRIVE_MOUNT" \
-        --vfs-cache-mode full \
-        --rc --rc-addr 0.0.0.0:5572 --rc-no-auth \
-        > "$LOG_DIR/rclone.log" 2>&1 &
-    echo $! > "$PID_DIR/rclone.pid"
 }
 
 # ---------- stop ----------
@@ -106,7 +111,6 @@ stop_pidfile() {
 
 stop_qdrant()  { stop_pidfile qdrant; }
 stop_ollama()  { stop_pidfile ollama; }
-stop_rclone()  { stop_pidfile rclone; }
 
 # ---------- status ----------
 status_pidfile() {
@@ -120,8 +124,13 @@ status_pidfile() {
 }
 
 status_qdrant()  { status_pidfile qdrant; }
-status_ollama()  { status_pidfile ollama; }
-status_rclone()  { status_pidfile rclone; }
+status_ollama()  {
+    if curl -s http://localhost:11434 > /dev/null 2>&1; then
+        echo "ollama is running (responding on port 11434)"
+    else
+        status_pidfile ollama
+    fi
+}
 
 # ---------- dispatch ----------
 is_valid_service() {
