@@ -9,7 +9,6 @@ This directory is part of an **openclaw** runtime system — the skills are norm
 ## Prerequisites
 
 - **Homebrew** — https://brew.sh
-- **Ollama** — `brew install ollama`
 - **Conda (Miniforge)** — recommended for Apple Silicon Python management
 
 ```bash
@@ -18,6 +17,9 @@ conda init zsh        # or `conda init bash`, depending on $SHELL
 exec $SHELL           # reload shell so `conda` is on PATH
 conda --version       # verify
 ```
+
+*(Optional but Recommended)*
+- **Ollama** — `brew install ollama` (Local models are highly recommended; cloud models can become expensive during batch document processing).
 
 ## Environment setup
 
@@ -72,11 +74,14 @@ conda run -n sictic-env python -m skills.dataset_chat chat <dataset_name> "your 
 
 ## Backing services
 
-Two services need to be running before most skills will work: **qdrant** and **ollama**. `launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
+One service **must** be running before skills will work: **qdrant**. 
+**ollama** is strictly optional if you rely on cloud models, but running it locally is recommended for cost control.
+
+`launch.sh` manages them as background processes with pidfiles under `./.pids/` and logs under `./logs/`.
 
 **Qdrant** — the launcher script will automatically download the correct native binary for your OS (macOS or Linux) and architecture into the `./qdrant/` directory.
 
-**Ollama** — runs as a regular process or system service. The launcher intelligently checks if Ollama is already responding on port 11434 before attempting to start a local daemon instance.
+**Ollama (Optional)** — runs as a regular process or system service. The launcher intelligently checks if Ollama is already responding on port 11434 before attempting to start a local daemon instance.
 
 To pre-pull the models referenced in `.env`:
 
@@ -94,9 +99,11 @@ ollama pull qwen3-embedding:8b
 ./launch.sh status             # show status of all
 ```
 
-## Google Drive access
+## Google Drive access (Optional)
 
-If `STORAGE_PROVIDER="google"`, skills read/write Drive through the native Google Drive API via `google-api-python-client`.
+Using Google Drive is strictly optional. By default (`STORAGE_PROVIDER="local"`), all data is written to and read from the local file system path provided in `STORAGE_PATH`. Local files work perfectly fine.
+
+However, in production we use Google Drive to seamlessly share datasets and insights with Deal Leads. If `STORAGE_PROVIDER="google"`, skills read/write directly to Drive through the native Google Drive API via `google-api-python-client`.
 
 In Google Drive mode, `STORAGE_PATH` **must** be a unique Google Drive Folder ID (e.g., `1A2B3C...`), or explicitly set to `root`. It cannot be a folder path string like `/repository/`.
 
@@ -140,8 +147,15 @@ On the first run, your browser opens for the OAuth grant. After you approve, a r
 
 Expected output: `backend: RoutedStorage`, followed by up to 5 dataset names.
 
+## Contributing via Git
+
+Because the OpenClaw workspace is symlinked directly to the repository, you can safely create new skills or edit existing ones directly inside the UI.
+
+To synchronize your changes with GitHub without using the terminal, simply trigger the `sictic_git_sync` skill. The AI will act as an architectural gatekeeper—reviewing your code, refactoring any OS-specific or hardcoded paths, ingesting new skills, and automatically committing and pushing the updates for you.
+
 ## Tests
 
 ```bash
 conda run -n sictic-env --no-capture-output pytest tests/
 ```
+
