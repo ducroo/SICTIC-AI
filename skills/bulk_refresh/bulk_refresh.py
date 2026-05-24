@@ -13,7 +13,7 @@ from skills.startup_traction.startup_traction import startup_traction
 from skills.dd_checks.dd_checks import dd_checks
 from skills.expert_search.expert_search import expert_search
 from skills.potential_investors.potential_investors import potential_investors
-from skills.suggest_startups.suggest_startups import suggest_startups
+from skills.suggested_startups.suggested_startups import suggested_startups
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,7 @@ SKILL_MAP = {
     "expert_search": {"func": expert_search, "domains": ["startups"], "depends_on": ["startup_profile", "person_profile"]},
     "potential_investors": {"func": potential_investors, "domains": ["startups"], "depends_on": ["startup_profile", "investor_appetite"]},
 
-    "suggest_startups": {"func": suggest_startups, "domains": ["community"], "depends_on": ["startup_profile", "person_profile"]}
+    "suggested_startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup_profile", "person_profile"]}
 }
 
 async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optional[str] = None):

@@ -1,9 +1,9 @@
 ---
-name: suggest_startups
+name: suggested_startups
 description: Rank a provided list of startups against a list of investors by matching startup value propositions with investor professional backgrounds and interests.
 ---
 
-## Skill Prompt: `suggest_startups`
+## Skill Prompt: `suggested_startups`
 
 **Objective:** Rank a provided list of startups against a list of investors by matching startup value propositions with investor professional backgrounds and interests.
 
@@ -31,7 +31,7 @@ description: Rank a provided list of startups against a list of investors by mat
 3. **Ranking Logic:** 
  
  * For each investor, call the `llm_chat()` utility. 
- * **Context Provided:** Inject the prompt found dynamically via `config_load()` at `conf['suggest_startups']['suggest_startups_prompt']`. Pass the investor’s retrieved LinkedIn profile (or fallback string) and the full compiled list of startup profiles with the startup\_name added on top of each. All profiles should be clearly separated 
+ * **Context Provided:** Inject the prompt found dynamically via `config_load()` at `conf['suggested_startups']['suggested_startups_prompt']`. Pass the investor’s retrieved LinkedIn profile (or fallback string) and the full compiled list of startup profiles with the startup\_name added on top of each. All profiles should be clearly separated 
  * **Output Format:** Instruct the LLM to return a strict **JSON object** containing: 
  * `startup_name` 
  * `rank` (1 to N) 
@@ -50,5 +50,5 @@ description: Rank a provided list of startups against a list of investors by mat
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.suggest_startups --startups "<startup1>,<startup2>" --investors "<name1>,<name2>"
+conda run -n sictic-env python -m skills.suggested_startups --startups "<startup1>,<startup2>" --investors "<name1>,<name2>"
 ```

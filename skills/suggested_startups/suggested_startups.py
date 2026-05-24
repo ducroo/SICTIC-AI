@@ -7,16 +7,16 @@ from lib.logger import get_logger
 from lib.adapters.linkedin import LinkedInAdapter
 from lib.insight_refresh import check_insight_refresh
 from lib.slugify import slugify
-from skills.suggest_startups.core.llm_processor import compile_startup_profiles, process_single_investor
+from skills.suggested_startups.core.llm_processor import compile_startup_profiles, process_single_investor
 from lib.member_profile import member_profile
 
 logger = get_logger(__name__)
 
-async def suggest_startups(dataset_name: str = "sictic_members", startups: Optional[List[str]] = None, investors: Optional[List[str]] = None, max_startups: int = 5) -> str:
+async def suggested_startups(dataset_name: str = "sictic_members", startups: Optional[List[str]] = None, investors: Optional[List[str]] = None, max_startups: int = 5) -> str:
     """
     Rank a provided list of startups against a list of investors by matching 
     startup value propositions with investor professional backgrounds and interests.
-    Outputs a distinct file per investor in the suggest_startups folder.
+    Outputs a distinct file per investor in the suggested_startups folder.
     """
     from lib.env import get_env_var
     import os
@@ -50,10 +50,10 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
 
     try:
         conf = config_load()
-        prompt_template = conf['suggest_startups']['suggest_startups_prompt']
+        prompt_template = conf['suggested_startups']['suggested_startups_prompt']
     except KeyError as e:
         logger.error(f"[{dataset_name}] Missing configuration: {e}")
-        raise ValueError(f"Missing configuration for suggest_startups: {e}")
+        raise ValueError(f"Missing configuration for suggested_startups: {e}")
 
     from lib.storage import get_storage
     storage = get_storage()
@@ -67,7 +67,7 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
     for investor in investors:
         output_file = get_insight_filepath(
             dataset_name=dataset_name.lower(),
-            skill_name="suggest_startups",
+            skill_name="suggested_startups",
             model=default_llm,
             identifier=investor,
             subdir=True
@@ -113,6 +113,6 @@ async def suggest_startups(dataset_name: str = "sictic_members", startups: Optio
     tasks = [process_inv(inv, out_file) for inv, out_file in investors_to_process]
     results = await asyncio.gather(*tasks)
 
-    logger.info(f"[{dataset_name}] Successfully finished suggest_startups.")
+    logger.info(f"[{dataset_name}] Successfully finished suggested_startups.")
     
     return "\n".join(results)

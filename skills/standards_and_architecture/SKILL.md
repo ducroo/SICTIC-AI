@@ -126,8 +126,8 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
   * `startup_profile.py`: Core logic entry point to generate a neutral, objective 5-point diagnostic of a startup.
 * **startup_traction**
   * `startup_traction.py`: Logic entry point to analyze and report on a startup's traction.
-* **suggest_startups**
-  * `suggest_startups.py`: Logic entry point to rank a provided list of startups against investors.
+* **suggested_startups**
+  * `suggested_startups.py`: Logic entry point to rank a provided list of startups against investors.
 * **team_profile**
   * `team_profile.py`: Core logic entry point for team due diligence and background reconciliation.
 

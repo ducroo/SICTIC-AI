@@ -1,11 +1,11 @@
 import typer
 from typing import List, Optional
-from skills.suggest_startups.suggest_startups import suggest_startups
+from skills.suggested_startups.suggested_startups import suggested_startups
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-app = typer.Typer(help="CLI for suggest_startups skill")
+app = typer.Typer(help="CLI for suggested_startups skill")
 
 @app.command()
 def main(
@@ -14,8 +14,8 @@ def main(
     max_startups: int = typer.Option(5, "--max-startups", "-m", help="Maximum number of startups to suggest per investor.")
 ):
     try:
-        # We pass startups and investors directly; suggest_startups will resolve defaults
-        result = suggest_startups(startups, investors, max_startups)
+        # We pass startups and investors directly; suggested_startups will resolve defaults
+        result = suggested_startups(startups, investors, max_startups)
         print(result)
     except ValueError as e:
         logger.error(str(e))
