@@ -16,6 +16,11 @@ This toolkit serves four audiences:
 
 | Category | Skill | Status | Description |
 |---|---|---|---|
+| **Community** | `expert_search` | ✅ | Identifies club members with relevant domain expertise to assist with due diligence or operational support |
+| | `potential_investors` | ✅ | Identifies potential investors for a startup |
+| | `advocates` | ✅ | Identifies inspiring members to represent the organization at external events |
+| | `investment_appetite` | ✅ | Articulates and maps the specific investment sweet spot and thesis for each member |
+| | `suggested_startups` | ✅ |  Proposes 5–7 attractive startups in active fundraising to each members |
 | **Startup Selection & Jury** | `submission_ready` | | Basic check to verify if a startup's application and submitted materials are complete |
 | | `pitch_ready` | | Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
 | **Due Diligence** | `startup_profile` | ✅ | Generates a succinct overview of the startup. Serves as input for many other skills |
@@ -28,11 +33,7 @@ This toolkit serves four audiences:
 | **Ongoing Monitoring** | `alerts&news` | | Monitors and interprets relevant news and updates concerning portfolio startups |
 | | `startup_support` | | Coordinates and schedules operational support provided to the startup by investors |
 | | `portfolio_mgmt` | | Generates risk-return overviews and performance metrics for a portfolio of startups |
-| **Community** | `expert_search` | ✅ | Identifies club members with relevant domain expertise to assist with due diligence or operational support |
-| | `potential_investors` | ✅ | Identifies potential investors for a startup |
-| | `advocates` | ✅ | Identifies inspiring members to represent the organization at external events |
-| | `investment_appetite` | ✅ | Articulates and maps the specific investment sweet spot and thesis for each member |
-| | `suggested_startups` | ✅ |  Proposes 5–7 attractive startups in active fundraising to each members |
+
 
 ## Contributing
 
