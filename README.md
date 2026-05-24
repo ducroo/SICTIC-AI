@@ -4,31 +4,52 @@
 ![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-Welcome to the SICTIC-AI toolkit! This is an open-source collection of AI-powered analysis routines (skills)
-designed to supercharge the startup ecosystem. It is completely free to use and easy to contribute to! 
+Welcome to the SICTIC-AI toolkit! This is an open-source collection of AI-powered analysis routines (AKA skills) designed to supercharge the startup ecosystem. It is completely free to use and easy to contribute to! 
 
-This toolbox serves four audiences:
+This toolkit serves four audiences:
 * **Startups:** Prepare for your first funding round by running our AI over your data room for a dry run.
-* **Business Angels:** Automate the heavy lifting and boilerplate checks of your Due Diligence process.
-* **BA Clubs (like SICTIC):** Automate member engagement, startup selection, DD, and monitor past transactions.
-* **AI Wizards:** Co-develop and refine the future of AI-first funding rounds with us!
+* **Business Angels:** Automate common assessments in your Due Diligence process.
+* **BA Clubs (like SICTIC):** Automate member engagement, startup selection, DD, and monitoring past transactions.
+* **AI Wizards:** Co-develop and refine the future of early stage funding rounds with us!
+
+## Available Skills
+
+| Category | Skill | Description |
+|---|---|---|
+| **Startup Selection & Jury** | `completeness_submission` | *(Planned)* Basic check to verify if a startup's application and submitted materials are complete |
+| | `pitch_readiness` | *(Planned)* Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
+| **Due Diligence** | `startup_profile` | Generates a succinct overview of the startup. Serves as input for many other skills |
+| | `team_profile` | Provides a balanced assessment of individual founders and the complete team dynamics |
+| | `person_profile` | Generates a comprehensive profile for any person in a dataset (either a founder or a club member) |
+| | `startup_traction` | Summarizes and provides a quantified overview of the startup's market traction |
+| | `dd_checks` | Executes a comprehensive suite of 100+ due diligence checks on a startup |
+| | `market_review` | *(Planned)* Analyzes the target market, customer needs, competitive landscape, and potential substitutes |
+| | `t&c_review` | *(Planned)* Reviews and assesses the terms and conditions of the proposed funding round |
+| **Ongoing Monitoring** | `alerts&news` | *(Planned)* Monitors and interprets relevant news and updates concerning portfolio startups |
+| | `startup_support` | *(Planned)* Coordinates and schedules operational support provided to the startup by investors |
+| | `portfolio_mgmt` | *(Planned)* Generates risk-return overviews and performance metrics for a portfolio of startups |
+| **Community** | `expert_search` | Identifies club members with relevant domain expertise to assist with due diligence or operational support |
+| | `potential_investors` | Identifies potential investors for a startup |
+| | `advocates` | Identifies inspiring members to represent the organization at external events |
+| | `investment_appetite` | Articulates and maps the specific investment sweet spot and thesis for each member |
+| | `suggest_startups` |  Proposes 5–7 attractive startups in active fundraising to each members |
 
 ## Contributing
 
 The setup is deliberately simple so everyone can join and co-develop:
-* We invite you to contribute investing expertise and insight, not IT know-how.
+* This is about investing expertise and insight, not IT know-how.
 * You can safely create new skills or edit existing ones directly inside your UI. 
-* To synchronize your changes with GitHub, just ask your AI agent to help; it has a  `sictic_git_sync` skill. This skill will also act as an architectural gatekeeper—reviewing your code, enforcing our simplicity standards, and automatically committing and pushing your updates to GitHub.
+* Then your AI agent will do the syncing to github for you; it has a  `sictic_git_sync` skill. This skill also acts as an architectural gatekeeper—reviewing your code, enforcing the simplicity standards
 
 ## Runtime Context
 
-This toolbox requires a Unix environment (**macOS, Linux, or WSL2**) and an AI Agent 
+The toolkit requires a Unix environment (**macOS, Linux, or WSL2**) and an AI Agent 
 (like **OpenClaw, Claude Code, or Gemini Spark**) to converse with the skills. 
-We primarily develop using macOS and OpenClaw, but the architecture has to become OS-agnostic.
+We primarily develop using macOS and OpenClaw, but the architecture is OS-agnostic.
 
 ## Quickstart Setup
 
-Five steps to get the AI working on your machine:
+Five steps to get the toolkit working on your machine:
 
 ### Step 1: Install Prerequisites
 
@@ -50,14 +71,14 @@ exec $SHELL           # reload your terminal
 ```
 
 *(Optional but Recommended)*
-You can install **Ollama** if you want to run local AI models; Local models are a good alternative, as cloud models can become expensive during heavy document parsing.
+You can install **Ollama** to run local AI models, as cloud models can become expensive during heavy document parsing.
 * **macOS:** `brew install ollama`
 * **Linux/WSL2:** `curl -fsSL https://ollama.com/install.sh | sh`
 
 ### Step 2: Install the Environment
 
 Run the provided installer. This creates a self-contained Python environment (`sictic-env`) 
-and synchronizes the AI skills with your workspace using **symlinks**.
+and inserts the toolkit in your workspace using **symlinks**.
 
 ```bash
 ./install_skills_conda.sh --target /Users/you/.openclaw/workspace-ops/skills
@@ -70,23 +91,23 @@ Create your configuration file:
 cp .env-template .env
 ```
 
-Open `.env` in a text editor. You need to configure a few variables:
+Open `.env` in a text editor. You need to configure seven variables:
 
-| Variable | Purpose | Example |
-|---|---|---|
-| `WORKSPACE_DIR` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
-| `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
-| `STORAGE_PATH` | If `local`: absolute path. If `google`: Folder ID or `root` | `/Users/you/sictic_data` or `root` |
-| `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
-| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
-| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
-| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
+| \# | Variable | Purpose | Example |
+|---|---|---|---|
+|1| `WORKSPACE_DIR` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
+|2| `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
+|3| `STORAGE_PATH` | If `local`: absolute path. If `google`: Folder ID or `root` | `/Users/you/sictic_data` or `root` |
+|4| `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
+|5| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
+|6| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
+|7| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
 
-*(Note: The `.env-template` contains several other variables that can be left at their defaults. Still, they are explained inline).*
+*(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
 
 ### Step 4: Start Background Services
 
-SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. pre-selection of documents before handing over to the LLM). The launcher script will also install the right binary if needed. If you installed Ollama in Step 1, the launcher will also spin it up so you can run local models.
+SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. pre-selection of documents before handing over to the LLM). The launcher script will install the right binary if needed. If you installed Ollama in Step 1, the launcher will spin it up so you can run local models.
 
 ```bash
 ./launch.sh start
