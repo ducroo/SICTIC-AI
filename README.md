@@ -16,8 +16,8 @@ This toolkit serves four audiences:
 
 | Category | Skill | Status | Description |
 |---|---|---|---|
-| **Startup Selection & Jury** | `completeness_submission` | | Basic check to verify if a startup's application and submitted materials are complete |
-| | `pitch_readiness` | | Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
+| **Startup Selection & Jury** | `submission_ready` | | Basic check to verify if a startup's application and submitted materials are complete |
+| | `pitch_ready` | | Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
 | **Due Diligence** | `startup_profile` | ✅ | Generates a succinct overview of the startup. Serves as input for many other skills |
 | | `team_profile` | ✅ | Provides a balanced assessment of individual founders and the complete team dynamics |
 | | `person_profile` | ✅ | Generates a comprehensive profile for any person in a dataset (either a founder or a club member) |
@@ -32,7 +32,7 @@ This toolkit serves four audiences:
 | | `potential_investors` | ✅ | Identifies potential investors for a startup |
 | | `advocates` | ✅ | Identifies inspiring members to represent the organization at external events |
 | | `investment_appetite` | ✅ | Articulates and maps the specific investment sweet spot and thesis for each member |
-| | `suggest_startups` | ✅ |  Proposes 5–7 attractive startups in active fundraising to each members |
+| | `suggested_startups` | ✅ |  Proposes 5–7 attractive startups in active fundraising to each members |
 
 ## Contributing
 
