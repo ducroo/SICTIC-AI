@@ -14,25 +14,25 @@ This toolkit serves four audiences:
 
 ## Available Skills
 
-| Category | Skill | Description |
-|---|---|---|
-| **Startup Selection & Jury** | `completeness_submission` | *(Planned)* Basic check to verify if a startup's application and submitted materials are complete |
-| | `pitch_readiness` | *(Planned)* Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
-| **Due Diligence** | `startup_profile` | Generates a succinct overview of the startup. Serves as input for many other skills |
-| | `team_profile` | Provides a balanced assessment of individual founders and the complete team dynamics |
-| | `person_profile` | Generates a comprehensive profile for any person in a dataset (either a founder or a club member) |
-| | `startup_traction` | Summarizes and provides a quantified overview of the startup's market traction |
-| | `dd_checks` | Executes a comprehensive suite of 100+ due diligence checks on a startup |
-| | `market_review` | *(Planned)* Analyzes the target market, customer needs, competitive landscape, and potential substitutes |
-| | `t&c_review` | *(Planned)* Reviews and assesses the terms and conditions of the proposed funding round |
-| **Ongoing Monitoring** | `alerts&news` | *(Planned)* Monitors and interprets relevant news and updates concerning portfolio startups |
-| | `startup_support` | *(Planned)* Coordinates and schedules operational support provided to the startup by investors |
-| | `portfolio_mgmt` | *(Planned)* Generates risk-return overviews and performance metrics for a portfolio of startups |
-| **Community** | `expert_search` | Identifies club members with relevant domain expertise to assist with due diligence or operational support |
-| | `potential_investors` | Identifies potential investors for a startup |
-| | `advocates` | Identifies inspiring members to represent the organization at external events |
-| | `investment_appetite` | Articulates and maps the specific investment sweet spot and thesis for each member |
-| | `suggest_startups` |  Proposes 5–7 attractive startups in active fundraising to each members |
+| Category | Skill | Status | Description |
+|---|---|---|---|
+| **Startup Selection & Jury** | `completeness_submission` | | Basic check to verify if a startup's application and submitted materials are complete |
+| | `pitch_readiness` | | Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
+| **Due Diligence** | `startup_profile` | ✅ | Generates a succinct overview of the startup. Serves as input for many other skills |
+| | `team_profile` | ✅ | Provides a balanced assessment of individual founders and the complete team dynamics |
+| | `person_profile` | ✅ | Generates a comprehensive profile for any person in a dataset (either a founder or a club member) |
+| | `startup_traction` | ✅ | Summarizes and provides a quantified overview of the startup's market traction |
+| | `dd_checks` | ✅ | Executes a comprehensive suite of 100+ due diligence checks on a startup |
+| | `market_review` | | Analyzes the target market, customer needs, competitive landscape, and potential substitutes |
+| | `t&c_review` | | Reviews and assesses the terms and conditions of the proposed funding round |
+| **Ongoing Monitoring** | `alerts&news` | | Monitors and interprets relevant news and updates concerning portfolio startups |
+| | `startup_support` | | Coordinates and schedules operational support provided to the startup by investors |
+| | `portfolio_mgmt` | | Generates risk-return overviews and performance metrics for a portfolio of startups |
+| **Community** | `expert_search` | ✅ | Identifies club members with relevant domain expertise to assist with due diligence or operational support |
+| | `potential_investors` | ✅ | Identifies potential investors for a startup |
+| | `advocates` | ✅ | Identifies inspiring members to represent the organization at external events |
+| | `investment_appetite` | ✅ | Articulates and maps the specific investment sweet spot and thesis for each member |
+| | `suggest_startups` | ✅ |  Proposes 5–7 attractive startups in active fundraising to each members |
 
 ## Contributing
 
