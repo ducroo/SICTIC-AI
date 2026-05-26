@@ -135,30 +135,6 @@ async def _generate_single_profile(dataset_slug: str, person: Person) -> None:
             context_parts.append(m.to_md())
 
     if person.linkedin_profile:
-        target_company = dataset_slug.replace('-', ' ').lower()
-        companies = []
-        for pos in person.linkedin_profile.get('positions', []):
-            comp = pos.get('company', {})
-            if isinstance(comp, dict) and comp.get('name'):
-                companies.append(comp.get('name'))
-                
-        headline = (person.linkedin_profile.get('headline') or '').lower()
-        summary = (person.linkedin_profile.get('summary') or person.linkedin_profile.get('about') or '').lower()
-        
-        is_valid = False
-        if target_company in headline or target_company in summary:
-            is_valid = True
-            
-        if not is_valid and companies:
-            best_match = process.extractOne(target_company, companies, scorer=fuzz.token_set_ratio)
-            if best_match and best_match[1] >= 80:
-                is_valid = True
-                
-        if not is_valid:
-            logger.warning(f"[{dataset_slug}] Discarding LinkedIn profile for '{display_name}': No mention of '{target_company}' found.")
-            person.linkedin_profile = None
-
-    if person.linkedin_profile:
         linkedin_str = json.dumps(person.linkedin_profile, indent=2)
         context_parts.append("### LINKEDIN PROFILE\n\n" + linkedin_str)
 

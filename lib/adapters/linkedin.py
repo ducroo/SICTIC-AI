@@ -411,11 +411,13 @@ def linkedin_missing_profiles() -> List[Dict[str, Any]]:
     return needs_scraping
 
 
-def linkedin_bulk_import(file_path: str) -> int:
+def linkedin_bulk_import(file_path: str, dataset: str = None) -> int:
     """
     Accepts a path to a bulk JSON export from the manual web scraper.
-    Looks up the profile in the global registry to determine the target dataset,
-    saves the profile, and purges the pending entry.
+    Looks up the profile in the global registry to determine the target dataset.
+    If 'dataset' is provided, all profiles are saved to that dataset. 
+    If a profile is also in the global registry mapped to a different dataset, 
+    it is saved to both. Finally, it purges the pending entry.
     """
     import os
     try:
@@ -468,29 +470,37 @@ def linkedin_bulk_import(file_path: str) -> int:
                     ident = key # Real key to pop later
                     break
                     
-        dataset_name = registry_entry.get("dataset") if registry_entry else None
-        
-        if not dataset_name:
-            logger.warning(f"Cannot import profile '{ident}': No matching dataset found in pending registry.")
+        target_datasets = []
+        if dataset:
+            target_datasets.append(dataset)
+            
+        registry_dataset = registry_entry.get("dataset") if registry_entry else None
+        if registry_dataset and registry_dataset not in target_datasets:
+            target_datasets.append(registry_dataset)
+            
+        if not target_datasets:
+            logger.warning(f"Cannot import profile '{ident}': No matching dataset found in pending registry and no default dataset provided.")
             continue
             
-        # 4. Save to Target Dataset
-        adapter = LinkedInAdapter(dataset_name)
-        cleaned = adapter._clean_linkedin_data(profile)
-        adapter._write_cached_json(f"{ident}.json", cleaned)
-        
+        # 4. Save to Target Dataset(s)
+        for target_ds in target_datasets:
+            adapter = LinkedInAdapter(target_ds)
+            cleaned = adapter._clean_linkedin_data(profile)
+            adapter._write_cached_json(f"{ident}.json", cleaned)
+            
+            # Clean up the adapter's isolated view to avoid overwrites
+            if ident in adapter.registry:
+                del adapter.registry[ident]
+                adapter._save_registry()
+                
+            logger.info(f"Successfully imported manual profile '{ident}' into dataset '{target_ds}'.")
+            
         # 5. Purge from Registry
         if ident in full_registry:
             del full_registry[ident]
             registry_changed = True
             
-        # Also clean up the adapter's isolated view to avoid overwrites
-        if ident in adapter.registry:
-            del adapter.registry[ident]
-            adapter._save_registry()
-            
         success_count += 1
-        logger.info(f"Successfully imported manual profile '{ident}' into dataset '{dataset_name}'.")
         
     if registry_changed:
         try:
