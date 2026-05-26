@@ -13,8 +13,9 @@ def main(
 ):
     import asyncio
     try:
-        result = asyncio.run(person_profile(dataset_name=dataset_name, name=name))
-        print(result)
+        persons = asyncio.run(person_profile(dataset_name=dataset_name, names=name))
+        for p in persons:
+            print(p.person_profile)
     except typer.Exit:
         raise
     except Exception as e:

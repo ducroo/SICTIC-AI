@@ -14,8 +14,7 @@ SOURCE_REL = "config"
 
 def _local_cache_paths() -> tuple[Path, Path]:
     """Local cache lives outside the storage abstraction — it's a derivative."""
-    workspace_dir = Path(get_env_var("WORKSPACE_DIR"))
-    cache_dir = workspace_dir / "cache"
+    cache_dir = Path(get_env_var("CACHE_DIR"))
     cache_file = cache_dir / "config.json"
     return cache_dir, cache_file
 

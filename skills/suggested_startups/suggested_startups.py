@@ -46,7 +46,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         startups = discovered
     
     if not startups or not investors:
-        raise ValueError("Startups and investors lists must not be empty after default resolution.")
+        raise ValueError("Startups and investors lists cannot be empty after default resolution.")
 
     try:
         conf = config_load()

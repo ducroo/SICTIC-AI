@@ -12,3 +12,7 @@ class Chunk(BaseModel):
     last_modified: float
     text: str
     score: Optional[float] = None
+
+    def to_md(self) -> str:
+        """Renders the chunk as a standalone Markdown block."""
+        return f"### Source: {self.document_name} | Page: {self.page_number}\n\n{self.text.strip()}"

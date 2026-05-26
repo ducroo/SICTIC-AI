@@ -29,22 +29,13 @@ def get_insight_filepath(
     # 2. Fallback identifier
     ident = identifier if identifier else dataset_name
     
-    # 3. Construct the filename
-    if subdir:
-        # If placed in a subdirectory named after the skill, omit the skill name from the file
-        raw_filename = f"{ident}-{clean_model}.md"
-    else:
-        # If placed in the root of the dataset, include the skill name in the file
-        raw_filename = f"{skill_name}-{ident}-{clean_model}.md"
-    
-    # 4. Slugify the filename to ensure it is kebab-case and safe
-    safe_filename = f"{slugify(raw_filename[:-3])}.md"
-    
-    # 5. Construct the full path
+    # 3. Construct the building blocks for the filename
     safe_dataset = slugify(dataset_name)
-    
+    safe_skill = slugify(skill_name)
+    safe_core = slugify(f"{ident}-{clean_model}")
+
+    # 4. Construct the final path
     if subdir:
-        safe_skill = slugify(skill_name)
-        return f"insights/{safe_dataset}/{safe_skill}/{safe_filename}"
+        return f"insights/{safe_dataset}/{safe_skill}/{safe_core}.md"
     else:
-        return f"insights/{safe_dataset}/{safe_filename}"
+        return f"insights/{safe_dataset}/{safe_skill}-{safe_core}.md"

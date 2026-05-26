@@ -2,11 +2,13 @@ import asyncio
 import re
 from typing import Dict, Tuple
 
+from skills.dataset_chat.dataset_chat import dataset_chat
+from skills.config_load.config_load import config_load
+
+from lib.insight_filepath import get_insight_filepath
 from lib.env import get_env_var
 from lib.storage import get_storage
-from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.json_parser import repair_json_payload
-from skills.config_load.config_load import config_load
 from lib.logger import get_logger
 from lib.insight_refresh import check_insight_refresh
 
@@ -88,7 +90,6 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     if not chapter:
         raise ValueError("No chapter title found in the provided checklist.")
         
-    from lib.insight_filepath import get_insight_filepath
     file_path = get_insight_filepath(
         dataset_name=dataset_name.lower(),
         skill_name="batch_audit",

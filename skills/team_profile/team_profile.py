@@ -1,33 +1,31 @@
 import json
-from typing import Tuple, List, Optional
+from typing import Tuple
 from skills.config_load.config_load import config_load
-from skills.team_profile.core.discovery import discover_team
+from skills.person_profile.person_profile import person_profile
 from skills.llm_chat.llm_chat import llm_chat
 from lib.env import get_env_var
 from lib.storage import get_storage
 from lib.insight_refresh import check_insight_refresh
-from lib.ephemeral_dataset import prepare_ephemeral_dataset
 from lib.slugify import slugify
 from lib.logger import get_logger
+from lib.insight_filepath import get_insight_filepath
 
 logger = get_logger(__name__)
 
-async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> Tuple[str, str]:
+async def team_profile(startup_name: str) -> Tuple[str, str]:
     """
-    Performs deep-dive due diligence on a startup's leadership. Identifies founders, reconciles resumes with LinkedIn, and flags legal/background documents.
+    Performs deep-dive due diligence on a startup's leadership. Identifies founders,
+    synthesizes person profiles, and evaluates the team composition.
     """
-    dataset_name = startup_name.lower()
-    if files:
-        dataset_name = "temp_team_profile"
+    dataset_name = slugify(startup_name)
 
     logger.info(f"[{dataset_name}] Starting Team Profiling")
 
     storage = get_storage()
     default_llm = get_env_var("DEFAULT_LLM")
     
-    from lib.insight_filepath import get_insight_filepath
     output_filepath = get_insight_filepath(
-        dataset_name=startup_name.lower(),
+        dataset_name=dataset_name,
         skill_name="team_profile",
         model=default_llm,
         subdir=False
@@ -40,26 +38,45 @@ async def team_profile(startup_name: str, files: Optional[List[str]] = None) -> 
             
     config = config_load()
     
-    # 1. Discovery (Web + Data Room)
-    logger.info(f"[{dataset_name}] Executing Discovery phase...")
-        
-    linkedin_data, dataroom_context = await discover_team(dataset_name)
+    # 1. Discovery (via person_profile)
+    logger.info(f"[{dataset_name}] Fetching person profiles for the team...")
+    persons = await person_profile(startup_name, names=None)
     
+    if not persons:
+        logger.warning(f"[{dataset_name}] No persons discovered. Proceeding with empty context.")
+        
     # 2. Team Assessment Generation
-    logger.info(f"[{dataset_name}] Generating final team profile report via LLM {model_name}...")
+    logger.info(f"[{dataset_name}] Generating final team profile report via LLM {default_llm}...")
     
     assessment_prompt = config["team_profile"]["team_assessment_prompt"]
     assessment_prompt = assessment_prompt.replace("{{startupname}}", startup_name)
     
-    classification_instructions = config["team_profile"]["linkedin_classification_prompt"]
+    classification_instructions = config.get("team_profile", {}).get("linkedin_classification_prompt", "")
      
     full_prompt = "### CONTEXT START ###\n\n"
-    full_prompt += "#### LinkedIn Profiles (Source of Truth for dates/titles):\n"
-    full_prompt += json.dumps(linkedin_data, indent=2)
-    full_prompt += "\n\n#### Data Room Extracts (Resumes, Background Checks, etc.):\n"
-    full_prompt += dataroom_context
-    full_prompt += "\n### CONTEXT END ###\n\n"
-    full_prompt += f"### INSTRUCTIONS ###\n\n"
+    
+    # Extract and deduplicate all mentions across the entire team
+    unique_mentions = {}
+    for p in persons:
+        if p.mentions:
+            for m in p.mentions:
+                unique_mentions[m.chunk_id] = m
+                
+    if unique_mentions:
+        full_prompt += "#### AGGREGATED TEAM DATA ROOM MENTIONS ####\n\n"
+        for chunk in unique_mentions.values():
+            full_prompt += f"{chunk.to_md()}\n\n"
+            
+    full_prompt += "#### DISCOVERED PERSONS (Synthesized Profiles) ####\n\n"
+    for p in persons:
+        full_prompt += f"**Name:** {p.full_name}\n"
+        full_prompt += f"**LinkedIn ID:** {p.linkedinID}\n\n"
+        if p.person_profile:
+            full_prompt += f"**Profile Summary:**\n{p.person_profile}\n\n"
+        full_prompt += "---\n\n"
+        
+    full_prompt += "### CONTEXT END ###\n\n"
+    full_prompt += "### INSTRUCTIONS ###\n\n"
     if classification_instructions:
         full_prompt += f"{classification_instructions}\n\n"
     full_prompt += f"{assessment_prompt}\n"

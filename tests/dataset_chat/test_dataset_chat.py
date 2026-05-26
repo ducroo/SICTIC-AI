@@ -4,20 +4,17 @@ from skills.dataset_chat.dataset_chat import dataset_chat
 @pytest.mark.asyncio
 async def test_dataset_chat_basic(mocker):
     """
-    Tests that dataset_chat correctly parses queries, retrieves chunks, 
+    Tests that dataset_chat correctly parses queries, retrieves chunks,
     and returns a response from llm_chat.
     """
     # Mock dataset_search
+    from skills.dataset_chat.core.models import Chunk
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
-    class MockChunk:
-        def __init__(self):
-            self.document_name = "test_doc.pdf"
-            self.page_number = 1
-            self.text = "This is a dummy chunk."
     
     # Since dataset_search is an async function, we must mock it to return a coroutine
     async def mock_search_coro(*args, **kwargs):
-        return [MockChunk()]
+        c = Chunk(chunk_id="1", document_name="test_doc.pdf", page_number=1, last_modified=0.0, text="This is a dummy chunk.", score=1.0)
+        return [c]
     mock_search.side_effect = mock_search_coro
 
     # Mock llm_chat
@@ -31,7 +28,7 @@ async def test_dataset_chat_basic(mocker):
 
     # Assert
     assert output == "This is the LLM response."
-    mock_search.assert_called_once_with("test_dataset", "What is testing?", max_chunks=25, return_full_docs=False)
+    mock_search.assert_called_once_with("test_dataset", "What is testing?", max_chunks=25)
     mock_llm.assert_called_once()
 
 @pytest.mark.asyncio

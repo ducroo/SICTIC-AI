@@ -9,12 +9,12 @@ app = typer.Typer(help="Performs deep-dive due diligence on a startup's leadersh
 
 @app.command()
 def profile_team(
-    startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup"),
-    files: Optional[List[str]] = typer.Option(None, "--files", "-f", help="Optional list of PDF/document files")
+    startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup")
 ):
     try:
+        import asyncio
         logger.info(f"Starting team profile generation for startup: {startup}")
-        profile_output, output_file = team_profile(startup, files)
+        profile_output, output_file = asyncio.run(team_profile(startup))
         
         print("\n--- Team Profile Output ---\n")
         print(profile_output)

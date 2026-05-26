@@ -13,8 +13,7 @@ async def generate_dataset_insight(
     dataset_name: str,
     skill_name: str,
     config_key: str,
-    max_chunks: int = 25,
-    return_full_docs: bool = False
+    max_chunks: int = 25
 ) -> str:
     """
     Generic pipeline to generate an insight by chatting with a dataset.
@@ -52,8 +51,7 @@ async def generate_dataset_insight(
         dataset_name=dataset_name_lower,
         questions=query,
         llm_instructions=llm_instructions,
-        max_chunks=max_chunks,
-        return_full_docs=return_full_docs
+        max_chunks=max_chunks
     )
 
     result_md = raw_response if raw_response else "No relevant information found."

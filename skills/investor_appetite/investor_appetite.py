@@ -17,12 +17,12 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
     Determines the ideal startup profile for one or more investors based on their personal profiles.
     Returns a dictionary mapping investor names to their appetite profile markdown strings.
     """
-    dataset_name_lower = dataset_name.lower()
+    dataset_name_slug = slugify(dataset_name)
 
     # 1. Input Normalization & Fallback
     if not investors:
         logger.info(f"[{dataset_name}] No investors provided. Fetching all persons from dataset.")
-        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name_lower}/linkedin")
+        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name_slug}/linkedin")
         investors_list = linkedin_adapter.get_all_persons()
     elif isinstance(investors, str):
         investors_list = [investors]
@@ -72,7 +72,11 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
 
         # Retrieve Person Profile
         try:
-            profile_context = await person_profile(name=investor_name, dataset_name=dataset_name)
+            persons = await person_profile(dataset_name=dataset_name, names=investor_name)
+            if persons and persons[0].person_profile:
+                profile_context = persons[0].person_profile
+            else:
+                profile_context = "No relevant information found."
         except Exception as e:
             logger.error(f"[{dataset_name}] Failed to fetch person profile for {investor_name}: {e}")
             results[investor_name] = f"Error: Could not retrieve person profile. ({e})"

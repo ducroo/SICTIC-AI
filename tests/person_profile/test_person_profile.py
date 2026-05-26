@@ -14,16 +14,13 @@ async def test_person_profile_generation(mock_env, mocker):
         return "This is a mocked profile for Jane Doe."
     mock_llm.side_effect = mock_llm_coro
 
-    mock_chunks = mocker.patch("skills.person_profile.person_profile.get_filtered_chunks")
-    # Return a mock chunk object with required attributes
-    class MockChunk:
-        def __init__(self):
-            self.document_name = "jane_resume.pdf"
-            self.page_number = 1
-            self.text = "Jane has 10 years of experience."
-    async def mock_chunks_coro(*args, **kwargs):
-        return [MockChunk()]
-    mock_chunks.side_effect = mock_chunks_coro
+    from skills.dataset_chat.core.models import Chunk
+    mock_dossier = mocker.patch("skills.person_profile.person_profile.build_person_dossier")
+    async def mock_dossier_coro(*args, **kwargs):
+        d_chunk = Chunk(chunk_id="1", document_name="jane_resume.pdf", page_number="all", last_modified=0.0, text="Jane has 10 years of experience.", score=1.0)
+        m_chunk = Chunk(chunk_id="2", document_name="some_file.md", page_number=1, last_modified=0.0, text="Jane is mentioned here.", score=1.0)
+        return [d_chunk], [m_chunk]
+    mock_dossier.side_effect = mock_dossier_coro
 
     mock_config = mocker.patch("skills.person_profile.person_profile.config_load")
     mock_config.return_value = {
@@ -33,9 +30,10 @@ async def test_person_profile_generation(mock_env, mocker):
         }
     }
 
+    from lib.models.person import Person
     mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInAdapter")
     mock_linkedin_instance = mock_linkedin.return_value
-    mock_linkedin_instance.get_profiles.return_value = [{"fullName": "Jane Doe", "headline": "CEO at Test"}]
+    mock_linkedin_instance.get_profiles.return_value = [Person(full_name="Jane Doe", linkedinID="jane-doe", linkedin_profile={"headline": "CEO at Test"})]
     mock_linkedin_instance.get_filename_for_profile.return_value = "jane-doe.json"
 
     # Clear the storage cache before executing to ensure we aren't picking up files from a previous run
@@ -45,10 +43,10 @@ async def test_person_profile_generation(mock_env, mocker):
     # 2. Execute
     name = "Jane Doe"
     dataset = "sictic_members"
-    output = await person_profile(dataset_name=dataset, name=name)
+    output = await person_profile(dataset_name=dataset, names=name)
 
     # 3. Assert Output
-    assert output == "This is a mocked profile for Jane Doe."
+    assert len(output) == 1 and output[0].person_profile == "This is a mocked profile for Jane Doe."
 
     # 4. Assert File System
     expected_file = "insights/sictic-members/person-profile/jane-doe-test-model-1b.md"
@@ -61,6 +59,6 @@ async def test_person_profile_generation(mock_env, mocker):
 
     # 5. Assert Cache Bypass
     # If we call it again, it should use the cache (llm_chat shouldn't be called twice)
-    output_cached = await person_profile(dataset_name=dataset, name=name)
-    assert output_cached == "This is a mocked profile for Jane Doe."
+    output_cached = await person_profile(dataset_name=dataset, names=name)
+    assert len(output_cached) == 1 and output_cached[0].person_profile == "This is a mocked profile for Jane Doe."
     mock_llm.assert_called_once()  # Asserts it was only called during the FIRST execution

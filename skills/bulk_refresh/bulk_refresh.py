@@ -15,21 +15,24 @@ from skills.expert_search.expert_search import expert_search
 from skills.potential_investors.potential_investors import potential_investors
 from skills.suggested_startups.suggested_startups import suggested_startups
 
+from lib.slugify import slugify
+from lib.active_dataset import is_active_dataset
+
 logger = get_logger(__name__)
 
 SKILL_MAP = {
-    "person_profile": {"func": person_profile, "domains": ["startups", "community"], "depends_on": []},
-    "startup_profile": {"func": startup_profile, "domains": ["startups"], "depends_on": []},
+    "person-profile": {"func": person_profile, "domains": ["startups", "community"], "depends_on": []},
+    "startup-profile": {"func": startup_profile, "domains": ["startups"], "depends_on": []},
 
-    "investor_appetite": {"func": investor_appetite, "domains": ["community"], "depends_on": ["person_profile"]},
-    "team_profile": {"func": team_profile, "domains": ["startups"], "depends_on": ["startup_profile"]},
-    "startup_traction": {"func": startup_traction, "domains": ["startups"], "depends_on": ["startup_profile"]},
-    "dd_checks": {"func": dd_checks, "domains": ["startups"], "depends_on": ["startup_profile"]},
+    "investor-appetite": {"func": investor_appetite, "domains": ["community"], "depends_on": ["person-profile"]},
+    "team-profile": {"func": team_profile, "domains": ["startups"], "depends_on": ["startup-profile"]},
+    "startup-traction": {"func": startup_traction, "domains": ["startups"], "depends_on": ["startup-profile"]},
+    "dd-checks": {"func": dd_checks, "domains": ["startups"], "depends_on": ["startup-profile"]},
 
-    "expert_search": {"func": expert_search, "domains": ["startups"], "depends_on": ["startup_profile", "person_profile"]},
-    "potential_investors": {"func": potential_investors, "domains": ["startups"], "depends_on": ["startup_profile", "investor_appetite"]},
+    "expert-search": {"func": expert_search, "domains": ["startups"], "depends_on": ["startup-profile", "person-profile"]},
+    "potential-investors": {"func": potential_investors, "domains": ["startups"], "depends_on": ["startup-profile", "investor-appetite"]},
 
-    "suggested_startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup_profile", "person_profile"]}
+    "suggested-startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup-profile", "person-profile"]}
 }
 
 async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optional[str] = None):
@@ -39,21 +42,21 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     """
     import asyncio
 
-    target_skills = [s.strip().lower() for s in target_skill.split(",")] if target_skill else []
-    target_datasets = [d.strip().lower() for d in target_dataset.split(",")] if target_dataset else []
+    target_skills = [slugify(s) for s in target_skill.split(",")] if target_skill else []
+    target_datasets = [slugify(d) for d in target_dataset.split(",")] if target_dataset else []
 
     logger.info(f"Starting bulk refresh routine (skills={target_skills}, datasets={target_datasets})...")
 
     config = config_load()
-    bulk_config = config.get("bulk_refresh", {})
+    bulk_config = config["bulk_refresh"]
 
     # Extract string values from .md files and split by comma or newline
-    community_raw = bulk_config.get("community_datasets", "sictic_members")
-    ignore_raw = bulk_config.get("ignore_datasets", "investor_appetite\nperson_profile")
+    community_raw = bulk_config["community_datasets"]
+    ignore_raw = bulk_config["ignore_datasets"]
 
-    community_datasets = [s.strip().lower() for s in community_raw.replace(',', '\n').split('\n') if s.strip()]
-    ignore_datasets = [s.strip().lower() for s in ignore_raw.replace(',', '\n').split('\n') if s.strip()]
-    ignore_datasets.extend(SKILL_MAP.keys())
+    community_datasets = [slugify(s) for s in community_raw.replace(',', '\n').split('\n') if slugify(s)]
+    ignore_datasets = [slugify(s) for s in ignore_raw.replace(',', '\n').split('\n') if slugify(s)]
+    ignore_datasets.extend(slugify(k) for k in SKILL_MAP.keys())
 
     storage = get_storage()
 
@@ -61,13 +64,24 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     all_datasets = []
     if storage.exists("datasets"):
         for item in storage.list("datasets"):
-            item_lower = item.lower()
+            item_slug = slugify(item)
             if not storage.is_dir(f"datasets/{item}"):
                 continue
-            if item_lower in ignore_datasets:
+            if item_slug in ignore_datasets:
                 continue
-            if target_datasets and item_lower not in target_datasets:
+            
+            # Active dataset logic
+            is_explicit = item_slug in target_datasets
+            is_active = is_active_dataset(item_slug)
+            
+            # Skip if target_datasets is provided but this dataset is not in it
+            if target_datasets and not is_explicit:
                 continue
+                
+            # Skip if it wasn't explicitly requested AND doesn't have the active marker
+            if not target_datasets and not is_active:
+                continue
+                
             all_datasets.append(item)
 
     if not all_datasets:
@@ -112,8 +126,8 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
             
             tasks = []
             for dataset_name in all_datasets:
-                dataset_name_lower = dataset_name.lower()
-                domain = "community" if dataset_name_lower in community_datasets else "startups"
+                dataset_slug = slugify(dataset_name)
+                domain = "community" if dataset_slug in community_datasets else "startups"
                 
                 if domain in allowed_domains:
                     logger.info(f"[{dataset_name}] Queueing {skill_name}...")

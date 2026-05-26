@@ -11,8 +11,7 @@ async def dataset_chat(
     dataset_name: str,
     questions: str,
     llm_instructions: Optional[str] = None,
-    max_chunks: int = 25,
-    return_full_docs: bool = False
+    max_chunks: int = 25
 ) -> Optional[str]:
     """Chat with a dataset via RAG and return the string response."""
 
@@ -23,7 +22,7 @@ async def dataset_chat(
     is_explicit_multi = False
 
     # 2. Retrieve context & Pass 1
-    chunks = await dataset_search(dataset_name, questions, max_chunks=max_chunks, return_full_docs=return_full_docs)
+    chunks = await dataset_search(dataset_name, questions, max_chunks=max_chunks)
     
     pass1_instructions = llm_instructions
     if not pass1_instructions:
@@ -36,10 +35,8 @@ async def dataset_chat(
     def build_prompt(current_chunks, inst):
         current_chunks_copy = current_chunks.copy()
         current_chunks_copy.reverse()
-        context_str = "\n\n".join(
-            f"[Source: {c.document_name}, Page: {c.page_number}]\n{c.text}"
-            for c in current_chunks_copy
-        )
+        context_str = "\n\n---\n\n".join(c.to_md() for c in current_chunks_copy)
+        
         prompt_parts = [f"Context from {dataset_name}:\n{context_str}", f"Query: {questions}"]
         if inst:
             prompt_parts.append(f"Instructions: {inst}")
@@ -60,7 +57,7 @@ async def dataset_chat(
         new_queries = generate_multi_queries(questions)
         
         combined_queries = [questions] + new_queries
-        merged_chunks = await dataset_search(dataset_name, combined_queries, max_chunks=max_chunks, return_full_docs=return_full_docs)
+        merged_chunks = await dataset_search(dataset_name, combined_queries, max_chunks=max_chunks)
         
         logger.info(f"[{dataset_name}] Handing off to llm_chat (Pass 2).")
         return await llm_chat(prompt=build_prompt(merged_chunks, None))

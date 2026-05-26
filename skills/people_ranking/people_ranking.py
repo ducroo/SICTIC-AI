@@ -10,6 +10,8 @@ from skills.llm_chat.llm_chat import llm_chat
 
 from rapidfuzz import process, fuzz
 
+from lib.slugify import slugify
+
 logger = get_logger(__name__)
 
 # ==========================================
@@ -21,12 +23,10 @@ def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], opto
     dataset_dir_rel = f"datasets/{dataset_name}"
     storage = get_storage()
     available_profiles = []
+    
+    # Files look like "urs-gubser-gemma4-31b-nvfp4.md"
     for filename in storage.list(dataset_dir_rel, suffix=".md"):
-        # storage.list returns names directly. Strip the .md and known suffix.
-        name = filename[:-3] if filename.endswith(".md") else filename
-        if '-person-profile' in name:
-            name = name.split('-person-profile')[0]
-        available_profiles.append(name)
+        available_profiles.append(filename)
 
     if not available_profiles:
         raise RuntimeError(f"No profile files found in {dataset_dir_rel}. Cannot rank candidates.")
@@ -36,8 +36,10 @@ def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], opto
     if candidates:
         missing_candidates = []
         for c in candidates:
-            match = process.extractOne(c, available_profiles, scorer=fuzz.WRatio)
-            if match and match[1] >= 80:
+            c_slug = slugify(c)
+            # Use partial_ratio because c_slug ("urs-gubser") is a substring of the filename ("urs-gubser-gemma4.md")
+            match = process.extractOne(c_slug, available_profiles, scorer=fuzz.partial_ratio)
+            if match and match[1] >= 90:
                 final_candidates.append(match[0])
             else:
                 missing_candidates.append(c)
@@ -53,16 +55,15 @@ def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], opto
         missing_optouts = []
         optout_matches = set()
         for o in optout:
-            match = process.extractOne(o, available_profiles, scorer=fuzz.WRatio)
-            if match and match[1] >= 80:
+            o_slug = slugify(o)
+            match = process.extractOne(o_slug, available_profiles, scorer=fuzz.partial_ratio)
+            if match and match[1] >= 90:
                 optout_matches.add(match[0])
             else:
                 missing_optouts.append(o)
                 
         if missing_optouts:
-            err_msg = f"The following optout candidates could not be found in the dataset: {', '.join(missing_optouts)}"
-            logger.error(err_msg)
-            raise ValueError(err_msg)
+            logger.warning(f"The following optout candidates could not be found in the dataset: {', '.join(missing_optouts)}")
             
         final_candidates = [c for c in final_candidates if c not in optout_matches]
         
@@ -95,8 +96,7 @@ async def people_ranking(
     chunks = await dataset_search(
         dataset_name=dataset_name, 
         query=query, 
-        max_chunks=cutoff_m * 10, 
-        return_full_docs=True
+        max_chunks=cutoff_m * 10
     )
     
     if not chunks:
@@ -108,14 +108,13 @@ async def people_ranking(
     
     # Filter chunks based on the resolved candidates list
     for c in chunks:
-        clean_name = c.document_name
-        if '-person-profile' in clean_name:
-            clean_name = clean_name.split('-person-profile')[0]
-        elif clean_name.endswith('.md'):
-            clean_name = clean_name[:-3]
+        doc_name = c.document_name
             
-        if clean_name in final_candidates and clean_name not in id_to_text:
-            id_to_text[clean_name] = c.text
+        if doc_name in final_candidates:
+            if doc_name not in id_to_text:
+                id_to_text[doc_name] = ""
+            # Aggregate the chunks cleanly into the person's text block
+            id_to_text[doc_name] += c.to_md() + "\n\n"
             if len(id_to_text) >= cutoff_m:
                 break
                 

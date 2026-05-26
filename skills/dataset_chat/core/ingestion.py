@@ -8,13 +8,16 @@ from lib.env import get_env_var
 from lib.storage import get_storage
 from lib.logger import get_logger
 
+from lib.slugify import slugify
+
 logger = get_logger(__name__)
 
 IGNORED_EXTENSIONS = (
     '.mp4', '.avi', '.mov', '.mkv', '.wmv',
     '.mp3', '.wav', '.aac', '.flac', '.m4a',
     '.zip', '.rar', '.7z', '.tar', '.gz',
-    '.exe', '.bin', '.dll', '.so', '.dmg'
+    '.exe', '.bin', '.dll', '.so', '.dmg',
+    '.gdoc', '.gsheet', '.gslide', '.gdraw'
 )
 
 _sync_locks = {}
@@ -45,16 +48,16 @@ async def sync_datasets(dataset_names: List[str]):
 
 async def _sync_single_dataset(dataset_name: str):
     """Main orchestrator: Syncs drive to disk (OCR), then disk to DB (Embed) for a single dataset."""
-    dataset_name = dataset_name.lower()
+    dataset_slug = slugify(dataset_name)
     storage = get_storage()
-    raw_dataset_rel = f"datasets/{dataset_name}"
-    parsed_dataset_rel = f"datasets2md/{dataset_name}"
+    raw_dataset_rel = f"datasets/{dataset_slug}"
+    parsed_dataset_rel = f"datasets2md/{dataset_slug}"
 
     # Refresh storage caches (no-op for LocalStorage; invalidates Drive path cache).
     storage.refresh(raw_dataset_rel)
 
     if not storage.exists(raw_dataset_rel):
-        raise ValueError(f"Dataset '{dataset_name}' does not exist on drive.")
+        raise ValueError(f"Dataset '{dataset_slug}' does not exist on drive.")
 
     # 1. OCR Phase: Sync original files to parsed markdown on disk
     await _sync_ocr_to_disk(dataset_name, raw_dataset_rel, parsed_dataset_rel)
@@ -114,7 +117,8 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
 
 async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str):
     """Embed parsed markdown into Qdrant; remove orphans whose source is gone."""
-    qdrant = QdrantAdapter(dataset_name)
+    dataset_slug = slugify(dataset_name)
+    qdrant = QdrantAdapter(dataset_slug)
     storage = get_storage()
 
     source_files = _list_source_files(storage, raw_rel)

@@ -48,7 +48,8 @@ def check_insight_refresh(
     # Pre-compute the max source mtime across all datasets once
     max_source_mtime = 0.0
     for name in datasets:
-        dataset_rel = f"datasets/{name.lower()}"
+        dataset_slug = slugify(name)
+        dataset_rel = f"datasets/{dataset_slug}"
         for _, mtime in storage.list_with_mtime(dataset_rel, recursive=True):
             if mtime > max_source_mtime:
                 max_source_mtime = mtime

@@ -7,6 +7,7 @@ from lib.slugify import slugify
 from lib.insight_refresh import check_insight_refresh
 from skills.config_load.config_load import config_load
 from skills.people_ranking.people_ranking import people_ranking
+from lib.dataset_from_insight import dataset_from_insight
 
 logger = get_logger(__name__)
 
@@ -20,10 +21,10 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     
     from lib.insight_filepath import get_insight_filepath
     out_path = get_insight_filepath(
-        dataset_name="sictic_members",
+        dataset_name="sictic-members",
         skill_name="advocates",
         model=default_llm,
-        identifier=event_name,
+        identifier=event_name_slug,
         subdir=True
     )
 
@@ -43,15 +44,22 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
 
     objective = objective_template.replace("{{overview_event}}", event_description)
 
+    # 1.5 Hydrate Target Dataset
+    logger.info(f"[{event_name_slug}] Hydrating 'person_profile' dataset from 'sictic-members'...")
+    await dataset_from_insight(target_dataset="person_profile", source_dataset="sictic-members")
+
     # 2. Call people_ranking Engine
     logger.info(f"[{event_name_slug}] Invoking people_ranking engine for advocates...")
+    
+    clean_targets = [slugify(c) for c in target_members] if target_members else None
+    clean_excludes = [slugify(c) for c in exclude_members] if exclude_members else None
     
     result = await people_ranking(
         dataset_name="person_profile",
         objective=objective,
         query=event_description,
-        candidates=target_members,
-        optout=exclude_members,
+        candidates=clean_targets,
+        optout=clean_excludes,
         top_k=top_k
     )
     
