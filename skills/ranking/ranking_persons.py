@@ -86,6 +86,9 @@ async def ranking_persons(
     Returns the generated markdown report as a string.
     """
     logger.info("Starting ranking_persons")
+    
+    # Ensure dataset name is safely slugified before traversing storage
+    dataset_name = slugify(dataset_name)
 
     # 1. Resolve Candidates
     final_candidates = _resolve_candidates(dataset_name, candidates, optout)
