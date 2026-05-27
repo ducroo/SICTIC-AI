@@ -12,16 +12,8 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
     default_model = get_env_var("DEFAULT_LLM")
     is_ollama = default_model.startswith("ollama/")
 
-    try:
-        min_ctx = int(get_env_var("OLLAMA_NUM_CTX"))
-    except Exception:
-        min_ctx = 32768
-        
-    try:
-        max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
-    except Exception:
-        max_ctx = 262144
-
+    min_ctx = int(get_env_var("OLLAMA_NUM_CTX"))
+    max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
     estimated_tokens = int(len(prompt) / 3)
 
     if estimated_tokens > max_ctx:
