@@ -54,6 +54,22 @@ class QdrantAdapter:
         collections = self.client.get_collections().collections
         if not any(c.name == self.collection_name for c in collections):
             logger.info(f"Creating new Qdrant collection: {self.collection_name}")
+            
+            # Dynamically determine vector size by generating a test embedding
+            import litellm
+            dummy_kwargs = {"model": model, "input": ["test"]}
+            if model.startswith("ollama/"):
+                dummy_kwargs["api_base"] = get_env_var("OLLAMA_HOST")
+                
+            try:
+                # Use synchronous call for initialization
+                dummy_response = litellm.embedding(**dummy_kwargs)
+                vector_size = len(dummy_response.data[0]["embedding"])
+                logger.info(f"Dynamically determined vector size: {vector_size} for model {model}")
+            except Exception as e:
+                logger.error(f"Failed to determine vector size dynamically: {e}")
+                vector_size = 3072  # Fallback
+                
             try:
                 # Suppress Qdrant warning by using check_compatibility=False implicitly via client context if possible, 
                 # but we will just let it init normally since the warning is mostly harmless and happens on instantiation.
@@ -62,7 +78,7 @@ class QdrantAdapter:
                 pass
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
             )
 
     async def _get_embedding(self, text: str) -> List[float]:
