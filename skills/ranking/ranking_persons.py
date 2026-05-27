@@ -94,12 +94,12 @@ async def ranking_persons(
     final_candidates = _resolve_candidates(dataset_name, candidates, optout)
 
     # 2. Semantic Search & Filtering
-    cutoff_m = top_k * 4
+    cutoff_m = top_k * 8
     logger.info(f"Starting semantic search on dataset '{dataset_name}' with query: '{query[:50]}...'")
     chunks = await dataset_search(
         dataset_name=dataset_name, 
         query=query, 
-        max_chunks=cutoff_m * 10
+        max_chunks=cutoff_m * 20
     )
     
     if not chunks:
