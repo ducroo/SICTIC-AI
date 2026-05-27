@@ -1,3 +1,4 @@
+import math
 from typing import Dict, Any, Optional
 import litellm
 from litellm.exceptions import APIConnectionError
@@ -7,20 +8,34 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-
-
 async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Optional[str]:
     default_model = get_env_var("DEFAULT_LLM")
     is_ollama = default_model.startswith("ollama/")
 
-    min_ctx=int(get_env_var("OLLAMA_CONTEXT_LENGTH"))
-    max_ctx= int(get_env_var("OLLAMA_MAX_CONTEXT"))
-    ctx =int(len(prompt)/3)
+    try:
+        min_ctx = int(get_env_var("OLLAMA_NUM_CTX"))
+    except Exception:
+        min_ctx = 32768
+        
+    try:
+        max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
+    except Exception:
+        max_ctx = 262144
 
-    if ctx > max_ctx:
-        logger.warning(f"Prompt is too long ({ctx*3} characters > 100'000). Truncating the first part.")
-        prompt = prompt[(3*max_ctx):]
-        ctx=max_ctx
+    estimated_tokens = int(len(prompt) / 3)
+
+    if estimated_tokens > max_ctx:
+        logger.warning(f"Prompt is too long ({estimated_tokens} tokens > {max_ctx}). Truncating the first part.")
+        # Fix truncation logic: keep the END of the prompt (where the instructions usually are)
+        prompt = prompt[-(3 * max_ctx):]
+        estimated_tokens = max_ctx
+
+    if estimated_tokens <= min_ctx:
+        ctx = min_ctx
+    else:
+        # Snap to the next power of 2 (Buddy Memory Allocation)
+        power_of_2 = int(2 ** math.ceil(math.log2(estimated_tokens)))
+        ctx = max(min_ctx, min(max_ctx, power_of_2))
 
     messages = [{"role": "user", "content": prompt}]
     kwargs: Dict[str, Any] = {"model": default_model, "messages": messages, "timeout": 3600.0}
@@ -31,10 +46,11 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
 
     if is_ollama:
         kwargs["api_base"] = get_env_var("OLLAMA_HOST")
-        if ctx>min_ctx:
+        # Only pass num_ctx if it's larger than the baseline daemon config
+        if ctx > min_ctx:
             kwargs["num_ctx"] = ctx
     
-    logger.info(f"Sending request to {default_model}...")
+    logger.info(f"Sending request to {default_model} with context {ctx} (estimated tokens: {estimated_tokens})...")
     try:
         response = await gateway.request_completion(kwargs, priority=Priority.STANDARD)
         content = response.choices[0].message.content
