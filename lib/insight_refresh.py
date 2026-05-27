@@ -1,4 +1,6 @@
-from typing import List, Optional, Tuple
+import re
+from pathlib import PurePosixPath
+from typing import List, Optional, Tuple, Iterator
 
 from lib.env import get_env_var
 from lib.logger import get_logger
@@ -7,27 +9,52 @@ from lib.storage import get_storage
 
 logger = get_logger(__name__)
 
-def get_acceptable_models(current_model_suffix: str) -> List[str]:
-    raw_acceptable = ""
+KNOWN_MODELS_REGEX = re.compile(
+    r'-(gpt|claude|gemini|gemma|qwen|deepseek|llama|mixtral|phi|mistral)[\w.-]*$', 
+    re.IGNORECASE
+)
+
+def get_base_name(filename: str) -> str:
+    """Strips the model suffix and .md extension to return pure entity name."""
+    stem = PurePosixPath(filename).stem
+    return KNOWN_MODELS_REGEX.sub('', stem)
+
+def best_alternative(filename: str, directory_files: List[str]) -> Iterator[str]:
+    """
+    Yields filenames from directory_files that match the base_name of the provided filename,
+    strictly ordered by RANKED_LLMS priority.
+    Fallback: Yields remaining matches sorted by the largest number in the suffix.
+    """
+    base_name = get_base_name(filename)
+    
+    raw_ranked = ""
     try:
-        raw_acceptable = get_env_var("RANKED_LLMS")
+        raw_ranked = get_env_var("RANKED_LLMS")
     except Exception:
         pass
-
-    acceptable_list = [s.strip() for s in raw_acceptable.split(",") if s.strip()]
-
-    slugified_acceptable = [slugify(m) for m in acceptable_list]
-    slugified_current = slugify(current_model_suffix)
-
-    models = []
-    for m in slugified_acceptable:
-        if m not in models:
-            models.append(m)
-
-    if slugified_current not in models:
-        models.append(slugified_current)
-
-    return models
+    ranked_models = [slugify(m.split('/')[-1]) for m in raw_ranked.split(",") if m.strip()]
+    
+    # 1. Yield exact matches from RANKED_LLMS in strict order
+    available_files = set(directory_files)
+    for model in ranked_models:
+        expected_name = f"{base_name}-{model}.md"
+        if expected_name in available_files:
+            yield expected_name
+            available_files.remove(expected_name)
+            
+    # 2. Fallback: Any remaining files that share the exact base_name
+    remaining_matches = []
+    for f in list(available_files):
+        if get_base_name(f) == base_name:
+            suffix = PurePosixPath(f).stem[len(base_name):]
+            numbers = [int(n) for n in re.findall(r'\d+', suffix)]
+            max_num = max(numbers) if numbers else 0
+            remaining_matches.append((max_num, f))
+            
+    # Sort descending by max_num, yield the files
+    remaining_matches.sort(key=lambda x: x[0], reverse=True)
+    for _, f in remaining_matches:
+        yield f
 
 
 def check_insight_refresh(
@@ -35,15 +62,9 @@ def check_insight_refresh(
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Returns (needs_refresh, content, matched_file_path).
-    Iterates through acceptable LLM outputs by swapping the model_name part of the file_path
-    and checks if one is up to date against ALL provided datasets.
-
-    `file_path` is a storage-relative path like "insights/widgetco/foo-qwen3-8b.md".
+    Checks if there is an up-to-date insight file using best_alternative generator.
     """
     storage = get_storage()
-
-    models = get_acceptable_models(model_name)
-    current_model_slug = slugify(model_name)
 
     # Pre-compute the max source mtime across all datasets once
     max_source_mtime = 0.0
@@ -54,9 +75,18 @@ def check_insight_refresh(
             if mtime > max_source_mtime:
                 max_source_mtime = mtime
 
-    for m in models:
-        candidate_rel = file_path.replace(f"-{current_model_slug}.md", f"-{m}.md")
+    # Find the directory and target filename
+    parts = file_path.split("/")
+    dir_path = "/".join(parts[:-1]) if len(parts) > 1 else ""
+    target_filename = parts[-1]
+    
+    # Get all files in that directory
+    available_files = [PurePosixPath(f).name for f, _ in storage.list_with_mtime(dir_path)] if storage.exists(dir_path) else []
 
+    # Let the generator yield the best alternatives
+    for candidate_name in best_alternative(target_filename, available_files):
+        candidate_rel = f"{dir_path}/{candidate_name}" if dir_path else candidate_name
+        
         if storage.exists(candidate_rel):
             candidate_mtime = storage.mtime(candidate_rel) or 0.0
 
