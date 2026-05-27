@@ -26,7 +26,7 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
         return profile_ids
         
     config = config_load()
-    prompt = config["find_top_k"]["pivot_instructions"]
+    prompt = config["ranking_top_k"]["ranking_instructions"]
         
     profiles_text = "\n\n".join([f"ID: {i}\n{profiles[i]}" for i in profile_ids])
     prompt = prompt.replace("{{profiles_text}}", profiles_text)
@@ -53,14 +53,14 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
         logger.error(f"Error in rank_chunk: {e}")
         return profile_ids # fallback
 
-async def find_top_k(objective: str, all_profiles: Dict[str, str], top_k: int = 8) -> Tuple[List[Dict[str, Any]], int]:
+async def ranking_top_k(objective: str, all_profiles: Dict[str, str], top_k: int = 8) -> Tuple[List[Dict[str, Any]], int]:
     """
     Finds the top_k profiles from all_profiles using a 4-bucket Swiss tournament.
     Returns a tuple containing:
     - A sorted list of dictionaries with keys: 'id', 'text', 'rank'.
     - The actual_top_k.
     """
-    logger.info(f"Starting 4-bucket Swiss tournament find_top_k with {len(all_profiles)} candidates for top_k={top_k}.")
+    logger.info(f"Starting 4-bucket Swiss tournament ranking_top_k with {len(all_profiles)} candidates for top_k={top_k}.")
     
     # 1. Initialize 4 random buckets
     active_profiles = list(all_profiles.keys())

@@ -5,7 +5,7 @@ from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.dataset_search import dataset_search
 from lib.ranking_writeup import ranking_writeup
-from lib.find_top_k import find_top_k
+from lib.ranking_top_k import ranking_top_k
 from skills.llm_chat.llm_chat import llm_chat
 
 from rapidfuzz import process, fuzz
@@ -124,8 +124,8 @@ async def people_ranking(
         raise RuntimeError(err_msg)
 
     # 3. Execute Find Top K
-    logger.info(f"Starting find_top_k with {len(id_to_text)} candidates (target top_k: {top_k}).")
-    ranked_items, actual_top_k = await find_top_k(
+    logger.info(f"Starting ranking_top_k with {len(id_to_text)} candidates (target top_k: {top_k}).")
+    ranked_items, actual_top_k = await ranking_top_k(
         objective=objective,
         all_profiles=id_to_text,
         top_k=top_k

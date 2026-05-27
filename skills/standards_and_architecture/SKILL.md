@@ -84,7 +84,7 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 * `dataset_from_insight.py`: Utility to generate synthetic datasets from insights.
 * `env.py`: Exposes the `get_env_var` script to fetch environment variables with built-in error handling. Auto-loads `.env`.
 * `ephemeral_dataset.py`: Utility to prepare temporary datasets in Qdrant.
-* `find_top_k.py`: Core algorithms for ranking profiles.
+* `ranking_top_k.py`: Core algorithms for ranking profiles.
 * `insight_filepath.py`: Centralized factory function `get_insight_filepath` for generating OS-safe, uniform insight paths.
 * `insight_refresh.py`: Caching mechanism utility.
 * `json_parser.py`: JSON parsing helper utility.
