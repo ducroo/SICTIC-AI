@@ -7,8 +7,8 @@ app = typer.Typer(help="CLI for person_profile skill")
 
 @app.command()
 def main(
-    person: str = typer.Option(..., "--person", "-p", help="The person's name (e.g. 'John Doe')."),
-    dataset: str = typer.Option(..., "--dataset", "-d", help="The target dataset to search.")
+    dataset: str = typer.Option(..., "--dataset", "-d", help="The target dataset to search."),
+    person: str = typer.Option(None, "--person", "-p", help="The person's name (e.g. 'John Doe'). Leave empty to profile all persons in the dataset.")
 ):
     import asyncio
     try:

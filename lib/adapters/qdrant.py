@@ -1,14 +1,22 @@
 import sys
 import os
 import uuid
+import hashlib
 from typing import List, Optional
+
+# Suppress annoying grpc/absl console warnings
+os.environ["GRPC_VERBOSITY"] = "ERROR"
+os.environ["GRPC_TRACE"] = ""
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from skills.dataset_chat.core.models import Chunk
-
-import hashlib
-import uuid
 from langchain_text_splitters import MarkdownTextSplitter
+from lib.slugify import slugify
+from lib.env import get_env_var
+from lib.logger import get_logger
+
+logger = get_logger(__name__)
 
 class Chunker:
     @staticmethod
@@ -31,288 +39,134 @@ class Chunker:
             ))
         return chunks
 
-from lib.env import get_env_var
-from lib.logger import get_logger
-
-logger = get_logger(__name__)
-
 class QdrantAdapter:
+    """Manages the connection and semantic operations with Qdrant."""
     def __init__(self, collection_name: str):
-        from lib.slugify import slugify
-        self.client = QdrantClient(url=get_env_var("QDRANT_HOST"), timeout=60.0)
-        self.default_embeddings = get_env_var("DEFAULT_EMBEDDINGS")
-        clean_model = self.default_embeddings.split("/")[-1]
-        self.collection_name = slugify(f"{collection_name}-{clean_model}")
-        self.ollama_url = get_env_var("OLLAMA_HOST").rstrip("/")
-        self._cached_dimension = None
-        self.ensure_collection()
-
-    async def get_embedding(self, text: str, priority=None) -> List[float]:
-        from lib.services_gateway import gateway, Priority
-        if priority is None:
-            priority = Priority.STANDARD
-            
-        if not text.strip():
-            return [0.0] * self.get_dimension()
-            
-        try:
-            kwargs = {
-                "model": self.default_embeddings,
-                "input": [text]
-            }
-            if self.default_embeddings.startswith("ollama/"):
-                kwargs["api_base"] = self.ollama_url
-                
-            response = await gateway.request_embedding(kwargs, priority=priority)
-            return response.data[0]["embedding"]
-        except Exception as e:
-            logger.error(f"Critical failure: Could not get embedding: {e}")
-            return [0.0] * self.get_dimension()
-
-    def get_dimension(self) -> int:
-        if self._cached_dimension is not None:
-            return self._cached_dimension
-            
+        # Suppress litellm boot warnings
         import litellm
-        import time
-        retries = 3
-        for attempt in range(retries):
-            try:
-                kwargs = {
-                    "model": self.default_embeddings,
-                    "input": ["the lazy fox jumped over the low fence"]
-                }
-                if self.default_embeddings.startswith("ollama/"):
-                    kwargs["api_base"] = self.ollama_url
-                    
-                response = litellm.embedding(**kwargs)
-                self._cached_dimension = len(response.data[0]["embedding"])
-                return self._cached_dimension
-            except Exception as e:
-                logger.warning(f"Failed to get dimension (attempt {attempt+1}/{retries}): {e}")
-                time.sleep(2)
-                
-        logger.error("Critial failure: Could not get embedding dimension from model.")
-        raise RuntimeError(f"Could not determine dimension for model {self.default_embeddings}.")
+        litellm.suppress_debug_info = True
 
-    def ensure_collection(self):
-        if not self.client.collection_exists(self.collection_name):
-            dim = self.get_dimension()
+        self.client = QdrantClient(url="http://localhost:6333")
+        model = get_env_var("DEFAULT_EMBEDDINGS")
+        clean_model = model.split("/")[-1]
+        self.collection_name = slugify(f"{collection_name}-{clean_model}")
+
+        collections = self.client.get_collections().collections
+        if not any(c.name == self.collection_name for c in collections):
+            logger.info(f"Creating new Qdrant collection: {self.collection_name}")
+            try:
+                # Suppress Qdrant warning by using check_compatibility=False implicitly via client context if possible, 
+                # but we will just let it init normally since the warning is mostly harmless and happens on instantiation.
+                pass
+            except Exception:
+                pass
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=dim, distance=Distance.COSINE)
+                vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
             )
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=[
-                    PointStruct(
-                        id="00000000-0000-0000-0000-000000000000",
-                        vector=[0.0] * dim,
-                        payload={
-                            "is_metadata": True,
-                            "PROVIDER_EMBEDDINGS": self.default_embeddings,
-                            "DATASET_NAME": self.collection_name
-                        }
-                    )
-                ]
-            )
-        else:
-            res = self.client.retrieve(self.collection_name, ids=["00000000-0000-0000-0000-000000000000"])
-            if res and res[0].payload:
-                stored_emb = res[0].payload.get("PROVIDER_EMBEDDINGS")
-                if stored_emb and stored_emb != self.default_embeddings:
-                    raise ValueError(f"Embedding model mismatch! Stored: {stored_emb}, Current: {self.default_embeddings}. Aborting to prevent vector contamination.")
 
-    def dataset_available(self) -> bool:
-        """Checks if the dataset collection exists and contains at least one vector."""
-        from qdrant_client.http.exceptions import UnexpectedResponse
+    async def _get_embedding(self, text: str) -> List[float]:
+        import litellm
+        model = get_env_var("DEFAULT_EMBEDDINGS")
+        kwargs = {"model": model, "input": [text]}
+        if model.startswith("ollama/"):
+            kwargs["api_base"] = get_env_var("OLLAMA_HOST")
+            
         try:
-            collection_info = self.client.get_collection(collection_name=self.collection_name)
-            # The metadata point counts as 1, so we need more than 1 point to consider it populated with actual data
-            # Actually, let's just check if points_count > 1 since we always inject a metadata point
-            return collection_info.points_count > 1
-        except UnexpectedResponse as e:
-            if e.status_code == 404:
-                return False
-            raise
+            response = await litellm.aembedding(**kwargs)
+            return response.data[0]["embedding"]
         except Exception as e:
-            raise RuntimeError(f"Failed to check dataset availability: {e}")
+            logger.error(f"Failed to generate embedding: {e}")
+            raise RuntimeError(f"Embedding failed: {e}")
 
-    def point_exists(self, filename: str) -> Optional[float]:
-        res = self.client.scroll(
-            collection_name=self.collection_name,
-            scroll_filter=Filter(
-                must=[FieldCondition(key="document_name", match=MatchValue(value=filename))]
-            ),
-            limit=1,
-            with_payload=True
-        )
-        if res and res[0]:
-            return res[0][0].payload.get("last_modified")
-        return None
-
-    def get_all_document_mtimes(self) -> dict:
-        """Fetch the last_modified time for all documents in the collection efficiently."""
-        mtimes = {}
-        offset = None
-        while True:
-            records, next_offset = self.client.scroll(
+    def get_document_mtimes(self) -> dict[str, float]:
+        """Returns a dict of document_name -> newest last_modified timestamp in Qdrant."""
+        try:
+            scroll_result = self.client.scroll(
                 collection_name=self.collection_name,
                 limit=10000,
                 with_payload=["document_name", "last_modified"],
-                with_vectors=False,
-                offset=offset
-            )
-            for rec in records:
-                if rec.payload:
-                    doc_name = rec.payload.get("document_name")
-                    mtime = rec.payload.get("last_modified")
-                    if doc_name and mtime is not None:
-                        if doc_name not in mtimes or mtime > mtimes[doc_name]:
-                            mtimes[doc_name] = mtime
-            if next_offset is None:
-                break
-            offset = next_offset
-        return mtimes
-
-    def delete_document_points(self, filename: str):
-        self.client.delete(
-            collection_name=self.collection_name,
-            points_selector=Filter(
-                must=[FieldCondition(key="document_name", match=MatchValue(value=filename))]
-            )
-        )
-
-    def delete_collection(self):
-        if self.client.collection_exists(self.collection_name):
-            self.client.delete_collection(self.collection_name)
-            logger.info(f"Collection {self.collection_name} deleted.")
-        else:
-            logger.info(f"Collection {self.collection_name} does not exist.")
-
-    def upsert_chunks(self, chunks: List[Chunk]):
-        batch_size = 50
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
-            points = []
-            for chunk in batch:
-                vector = self.get_embedding(chunk.text)
-                points.append(
-                    PointStruct(
-                        id=chunk.chunk_id,
-                        vector=vector,
-                        payload={
-                            "document_name": chunk.document_name,
-                            "page_number": chunk.page_number,
-                            "last_modified": chunk.last_modified,
-                            "text": chunk.text
-                        }
-                    )
-                )
-            if points:
-                self.client.upsert(collection_name=self.collection_name, points=points)
-
-    async def ingest_documents_batch(self, parsed_documents: dict, mtimes: dict):
-        import asyncio
-        chunks = []
-        for filename, text in parsed_documents.items():
-            if not text:
-                continue
-            mod_time = mtimes.get(filename, 0.0)
-            chunks.extend(Chunker.split_markdown(text, filename, mod_time))
+                with_vectors=False
+            )[0]
             
-        await self.upsert_chunks_async(chunks)
+            mtimes = {}
+            for point in scroll_result:
+                doc_name = point.payload["document_name"]
+                mtime = point.payload["last_modified"]
+                if doc_name not in mtimes or mtime > mtimes[doc_name]:
+                    mtimes[doc_name] = mtime
+            return mtimes
+        except Exception as e:
+            logger.warning(f"Failed to fetch document mtimes: {e}")
+            return {}
 
-    async def upsert_chunks_async(self, chunks: List[Chunk]):
-        import asyncio
-        from lib.services_gateway import Priority
-        batch_size = 50
-        
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
-            
-            tasks = [self.get_embedding(chunk.text, priority=Priority.BULK) for chunk in batch]
-            vectors = await asyncio.gather(*tasks)
-            
-            points = []
-            for chunk, vector in zip(batch, vectors):
-                points.append(
-                    PointStruct(
-                        id=chunk.chunk_id,
-                        vector=vector,
-                        payload={
-                            "document_name": chunk.document_name,
-                            "page_number": chunk.page_number,
-                            "last_modified": chunk.last_modified,
-                            "text": chunk.text
-                        }
-                    )
-                )
-            if points:
-                # The Qdrant insert itself is lightning fast, so synchronous is fine here
-                self.client.upsert(collection_name=self.collection_name, points=points)
-
-    async def search(self, query: str | List[str], limit: int = 25, threshold_factor: Optional[float] = 0.8) -> List[Chunk]:
-        """
-        Executes a vector search. If a list of queries is provided, runs them concurrently,
-        deduplicates the chunks by ID (keeping the highest score), and sorts the final list.
-        """
-        import asyncio
-
-        if isinstance(query, str):
-            queries = [query.strip()] if query.strip() else []
-        else:
-            queries = [q.strip() for q in query if q.strip()]
-
-        if not queries:
-            return []
-
-        # Embed all queries concurrently
-        from lib.services_gateway import Priority
-        tasks = [self.get_embedding(q, priority=Priority.STANDARD) for q in queries]
-        query_vectors = await asyncio.gather(*tasks)
-
-        unique_chunks = {}
-        
-        # Execute searches sequentially to avoid overwhelming Qdrant 
-        # (the inserts are fast, but multiple huge searches can spike memory)
-        for q_vec in query_vectors:
-            res_obj = self.client.query_points(
+    def delete_document(self, document_name: str) -> None:
+        """Deletes all chunks belonging to a specific document."""
+        try:
+            self.client.delete(
                 collection_name=self.collection_name,
-                query=q_vec,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_name",
+                            match=MatchValue(value=document_name)
+                        )
+                    ]
+                )
+            )
+            logger.debug(f"Deleted old chunks for {document_name} from Qdrant.")
+        except Exception as e:
+            logger.error(f"Failed to delete {document_name} from Qdrant: {e}")
+
+    async def upsert(self, chunks: List[Chunk]) -> None:
+        if not chunks:
+            return
+            
+        points = []
+        for c in chunks:
+            vector = await self._get_embedding(c.text)
+            points.append(PointStruct(
+                id=c.chunk_id,
+                vector=vector,
+                payload=c.model_dump()
+            ))
+            
+        try:
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=points
+            )
+        except Exception as e:
+            logger.error(f"Failed to upsert points: {e}")
+            raise RuntimeError(f"Upsert failed: {e}")
+
+    async def search(self, query: str | list[str], limit: int = 5, threshold_factor: float = 0.8) -> List[Chunk]:
+        if not query:
+            logger.warning("Empty query provided to search.")
+            return []
+            
+        if isinstance(query, list):
+            query = " ".join(query)
+            
+        vector = await self._get_embedding(query)
+        
+        try:
+            results = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=vector,
                 limit=limit,
                 with_payload=True
             )
-            for p in res_obj.points:
-                if p.payload.get("is_metadata"):
-                    continue
-                    
-                chunk_id = str(p.id)
-                if chunk_id not in unique_chunks or p.score > unique_chunks[chunk_id].score:
-                    unique_chunks[chunk_id] = Chunk(
-                        chunk_id=chunk_id,
-                        document_name=p.payload.get("document_name", "Unknown"),
-                        page_number=p.payload.get("page_number", 1),
-                        last_modified=p.payload.get("last_modified", 0.0),
-                        text=p.payload.get("text", ""),
-                        score=p.score
-                    )
-
-        valid_chunks = list(unique_chunks.values())
-        valid_chunks.sort(key=lambda x: x.score, reverse=True)
-
-        if not valid_chunks:
-            return []
-
-        if threshold_factor is not None:
-            max_score = valid_chunks[0].score
-            threshold = max_score * threshold_factor
-            filtered_chunks = [c for c in valid_chunks if c.score >= threshold]
             
-            # Fallback to ensure we return something useful if the threshold is too brutal
-            if len(filtered_chunks) < 5:
-                filtered_chunks = valid_chunks[:5]
-            valid_chunks = filtered_chunks
-
-        # Apply final global limit across the deduplicated set
-        return valid_chunks[:limit]
+            if not results:
+                return []
+                
+            top_score = results[0].score
+            threshold = top_score * threshold_factor
+            
+            filtered_results = [r for r in results if r.score >= threshold]
+            
+            return [Chunk(**r.payload) for r in filtered_results]
+        except Exception as e:
+            logger.error(f"Semantic search failed: {e}")
+            return []
