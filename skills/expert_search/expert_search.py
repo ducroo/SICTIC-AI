@@ -7,7 +7,7 @@ from lib.slugify import slugify
 from lib.insight_refresh import check_insight_refresh
 from skills.config_load.config_load import config_load
 from skills.startup_profile.startup_profile import startup_profile
-from skills.people_ranking.people_ranking import people_ranking
+from skills.ranking.ranking_persons import ranking_persons
 from lib.dataset_from_insight import dataset_from_insight
 
 logger = get_logger(__name__)
@@ -56,14 +56,14 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     logger.info(f"[{startup_slug}] Hydrating 'person_profile' dataset from 'sictic-members'...")
     await dataset_from_insight(target_dataset="person_profile", source_dataset="sictic-members")
 
-    # 3. Call people_ranking Engine
-    logger.info(f"[{startup_slug}] Invoking people_ranking engine for expert search...")
+    # 3. Call ranking_persons Engine
+    logger.info(f"[{startup_slug}] Invoking ranking_persons engine for expert search...")
     
     # Ensure candidates and optouts are strictly slugified before passing down
     clean_targets = [slugify(c) for c in target_experts] if target_experts else None
     clean_excludes = [slugify(c) for c in exclude_experts] if exclude_experts else None
     
-    result = await people_ranking(
+    result = await ranking_persons(
         dataset_name="person_profile",
         objective=objective,
         query=profile_content,

@@ -3,7 +3,7 @@ import asyncio
 from skills.expert_search.expert_search import expert_search
 
 def main():
-    parser = argparse.ArgumentParser(description="Find expert individuals for a startup using people_ranking.")
+    parser = argparse.ArgumentParser(description="Find expert individuals for a startup using ranking_persons.")
     parser.add_argument("startup_name", type=str, help="Name of the startup")
     parser.add_argument("--target-experts", type=str, nargs="+", default=None, help="Optional list of expert IDs to restrict the search to")
     parser.add_argument("--exclude-experts", type=str, nargs="+", default=None, help="Optional list of expert IDs to exclude from the search")

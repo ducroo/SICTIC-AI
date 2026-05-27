@@ -22,8 +22,8 @@ async def test_potential_investors_generation(mock_env, mocker):
         }
     }
 
-    # Mock people_ranking
-    mock_ranking = mocker.patch("skills.potential_investors.potential_investors.people_ranking")
+    # Mock ranking_persons
+    mock_ranking = mocker.patch("skills.potential_investors.potential_investors.ranking_persons")
     async def mock_ranking_coro(*args, **kwargs):
         return "| Investor A | 90 | Good match |\n| Investor B | 80 | Okay match |"
     mock_ranking.side_effect = mock_ranking_coro

@@ -4,8 +4,8 @@ from lib.logger import get_logger
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.dataset_search import dataset_search
-from lib.ranking_writeup import ranking_writeup
-from lib.ranking_top_k import ranking_top_k
+from skills.ranking.ranking_writeup import ranking_writeup
+from skills.ranking.ranking_top_k import ranking_top_k
 from skills.llm_chat.llm_chat import llm_chat
 
 from rapidfuzz import process, fuzz
@@ -73,7 +73,7 @@ def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], opto
 # MAIN ORCHESTRATOR
 # ==========================================
 
-async def people_ranking(
+async def ranking_persons(
     dataset_name: str = "person_profile",
     objective: str = "", 
     query: str = "",
@@ -85,7 +85,7 @@ async def people_ranking(
     Core engine to rank SICTIC members using pairwise comparisons.
     Returns the generated markdown report as a string.
     """
-    logger.info("Starting people_ranking")
+    logger.info("Starting ranking_persons")
 
     # 1. Resolve Candidates
     final_candidates = _resolve_candidates(dataset_name, candidates, optout)
@@ -155,5 +155,5 @@ async def people_ranking(
 
     result = "\n".join(lines) + "\n"
 
-    logger.info(f"[{dataset_name}] people_ranking complete.")
+    logger.info(f"[{dataset_name}] ranking_persons complete.")
     return result

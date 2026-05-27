@@ -1,0 +1,1 @@
+from .ranking_persons import ranking_persons

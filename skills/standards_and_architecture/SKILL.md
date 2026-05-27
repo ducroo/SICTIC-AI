@@ -122,8 +122,8 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
   * `investor_appetite.py`: Logic entry point to determine the ideal startup profile for an investor.
 * **llm_chat**
   * `llm_chat.py`: Core logic entry point for standard LLM generation and contextual chat routing.
-* **people_ranking**
-  * `people_ranking.py`: Core logic entry point for standardizing the ranking of people/investors against specific profiles.
+* **ranking**
+  * `ranking.py`: Core logic entry point for standardizing the ranking of people/investors against specific profiles.
 * **person_profile**
   * `person_profile.py`: Logic entry point to collate a comprehensive profile on a specific person.
 * **potential_investors**

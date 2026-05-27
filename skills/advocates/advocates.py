@@ -6,7 +6,7 @@ from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.insight_refresh import check_insight_refresh
 from skills.config_load.config_load import config_load
-from skills.people_ranking.people_ranking import people_ranking
+from skills.ranking.ranking_persons import ranking_persons
 from lib.dataset_from_insight import dataset_from_insight
 
 logger = get_logger(__name__)
@@ -48,13 +48,13 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     logger.info(f"[{event_name_slug}] Hydrating 'person_profile' dataset from 'sictic-members'...")
     await dataset_from_insight(target_dataset="person_profile", source_dataset="sictic-members")
 
-    # 2. Call people_ranking Engine
-    logger.info(f"[{event_name_slug}] Invoking people_ranking engine for advocates...")
+    # 2. Call ranking_persons Engine
+    logger.info(f"[{event_name_slug}] Invoking ranking_persons engine for advocates...")
     
     clean_targets = [slugify(c) for c in target_members] if target_members else None
     clean_excludes = [slugify(c) for c in exclude_members] if exclude_members else None
     
-    result = await people_ranking(
+    result = await ranking_persons(
         dataset_name="person_profile",
         objective=objective,
         query=event_description,
