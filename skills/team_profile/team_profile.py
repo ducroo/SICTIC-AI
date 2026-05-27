@@ -3,6 +3,7 @@ from typing import Tuple
 from skills.config_load.config_load import config_load
 from skills.person_profile.person_profile import person_profile
 from skills.llm_chat.llm_chat import llm_chat
+from skills.dataset_chat.dataset_search import dataset_search
 from lib.env import get_env_var
 from lib.storage import get_storage
 from lib.insight_refresh import check_insight_refresh
@@ -45,6 +46,16 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     if not persons:
         logger.warning(f"[{dataset_name}] No persons discovered. Proceeding with empty context.")
         
+    # 1.5 Resume / CV Semantic Search
+    resume_queries = config["team_profile"]["resume_queries"]
+    resume_chunks = []
+    if resume_queries:
+        logger.info(f"[{dataset_name}] Fetching collective set of resume/CV chunks via semantic search...")
+        try:
+            resume_chunks = await dataset_search(dataset_name=dataset_name, query=resume_queries)
+        except Exception as e:
+            logger.error(f"[{dataset_name}] Collective resume semantic search failed: {e}")
+
     # 2. Team Assessment Generation
     logger.info(f"[{dataset_name}] Generating final team profile report via LLM {default_llm}...")
     
@@ -55,12 +66,15 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
      
     full_prompt = "### CONTEXT START ###\n\n"
     
-    # Extract and deduplicate all mentions across the entire team
+    # Extract and deduplicate all mentions across the entire team and resume chunks
     unique_mentions = {}
     for p in persons:
         if p.mentions:
             for m in p.mentions:
                 unique_mentions[m.chunk_id] = m
+                
+    for chunk in resume_chunks:
+        unique_mentions[chunk.chunk_id] = chunk
                 
     if unique_mentions:
         full_prompt += "#### AGGREGATED TEAM DATA ROOM MENTIONS ####\n\n"
