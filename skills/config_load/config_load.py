@@ -3,60 +3,71 @@ from pathlib import Path
 from typing import Any, Dict
 
 from lib.env import get_env_var
-from lib.storage import get_storage
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-
-SOURCE_REL = "config"
-
+# The single source of truth is now the local Git repository's config folder.
+REPO_ROOT = Path("/Users/claw-agent/SICTIC-AI")
+SOURCE_DIR = REPO_ROOT / "config"
 
 def _local_cache_paths() -> tuple[Path, Path]:
-    """Local cache lives outside the storage abstraction — it's a derivative."""
+    """Local cache lives in the configured CACHE_DIR."""
     cache_dir = Path(get_env_var("CACHE_DIR"))
     cache_file = cache_dir / "config.json"
     return cache_dir, cache_file
 
-
-def _build_tree_from_flat_files(files: list[tuple[str, float]]) -> Dict[str, Any]:
-    """Given (relpath, mtime) pairs for every .md under SOURCE_REL, build the nested config dict.
-    Directory entries are inferred from path segments; file contents are read on demand.
+def _build_tree_from_local_files(md_files: list[Path]) -> Dict[str, Any]:
+    """Given a list of local .md file Paths, build the nested config dict.
+    Directory entries are inferred from path segments relative to SOURCE_DIR.
     """
-    storage = get_storage()
     tree: Dict[str, Any] = {}
-    for relpath, _mt in files:
-        parts = relpath.split("/")
-        stem = parts[-1][:-3] if parts[-1].lower().endswith(".md") else parts[-1]
+    for filepath in md_files:
+        # Get the path relative to the config/ root
+        try:
+            relpath = filepath.relative_to(SOURCE_DIR)
+        except ValueError:
+            logger.warning(f"File {filepath} is not relative to {SOURCE_DIR}. Skipping.")
+            continue
+            
+        parts = relpath.parts
+        stem = filepath.stem
+        
         cur = tree
+        # Traverse/create the nested dictionary structure using directory names
         for segment in parts[:-1]:
             existing = cur.get(segment)
             if not isinstance(existing, dict):
                 existing = {}
                 cur[segment] = existing
             cur = existing
+            
         try:
-            content = storage.read_text(f"{SOURCE_REL}/{relpath}").strip()
+            content = filepath.read_text(encoding="utf-8").strip()
         except Exception as e:
-            logger.warning(f"Failed to read config file {relpath}: {e}")
+            logger.warning(f"Failed to read local config file {filepath}: {e}")
             content = ""
+            
         cur[stem] = content
+        
     return tree
-
 
 def config_load() -> Dict[str, Any]:
     cache_dir, cache_file = _local_cache_paths()
-    storage = get_storage()
 
-    # Find every .md under SOURCE_REL (recursive) along with its mtime.
-    try:
-        all_items = storage.list_with_mtime(SOURCE_REL, recursive=True)
-        md_files = [(name, mt) for name, mt in all_items if name.lower().endswith(".md")]
-    except Exception as e:
-        logger.warning(f"Cannot enumerate {SOURCE_REL!r} on storage ({e}); falling back to cache if present.")
-        md_files = []
+    if not SOURCE_DIR.exists() or not SOURCE_DIR.is_dir():
+        logger.error(f"Cannot find local config directory at {SOURCE_DIR}.")
+        return {}
 
-    latest_source_mtime = max((mt for _, mt in md_files), default=0.0)
+    # Find every .md file recursively in the local config directory
+    md_files = list(SOURCE_DIR.rglob("*.md"))
+    
+    if not md_files:
+        logger.error(f"Cannot rebuild cache: no .md files found in {SOURCE_DIR}.")
+        return {}
+
+    # Find the most recently modified file to check against the cache
+    latest_source_mtime = max((f.stat().st_mtime for f in md_files), default=0.0)
 
     # Fresh cache hit?
     if cache_file.exists():
@@ -67,16 +78,14 @@ def config_load() -> Dict[str, Any]:
             except Exception as e:
                 logger.error(f"Failed to load existing cache file: {e}. Rebuilding...")
 
-    if not md_files:
-        logger.error(f"Cannot rebuild cache: no .md files found at storage path {SOURCE_REL!r}.")
-        return {}
+    # Rebuild from local Git files
+    config_data = _build_tree_from_local_files(md_files)
 
-    config_data = _build_tree_from_flat_files(md_files)
-
-    # Persist to local cache (derivative artifact — stays on disk, not on Drive).
+    # Persist to local cache
     cache_dir.mkdir(parents=True, exist_ok=True)
     try:
         cache_file.write_text(json.dumps(config_data, indent=4), encoding="utf-8")
+        logger.info(f"Rebuilt config cache successfully from {len(md_files)} local files.")
     except OSError as e:
         logger.error(f"Error writing cache file: {e}")
 
