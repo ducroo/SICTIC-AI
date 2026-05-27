@@ -1,5 +1,4 @@
 -------------------- PROFILES WITH HIGHEST RANK -------------------------------------
-
 {{profiles_text}}
 
 -------------------- INSTRUCTIONS -----------------------------
@@ -7,13 +6,19 @@
 {{objective}}
 
 **Execution**
-Above is the final ranking of the profiles. Your explicit task is to add a fit score with a balanced rationale; both the strengths and weaknesses.
+Above is the final ranking of the profiles. Your explicit task is to evaluate each profile against the Objective and provide a balanced rationale covering both their strengths and weaknesses.
 
-Write it up in a single, clean Markdown table summarizing the strength of match in each profile to the Objective. The table should have the following columns
-
-* Rank (as is)
-* Name (derived from the profile ID)
-* Fit Score (from 1 to 100)
-* Rationale (A concise 2-3 sentence explanation to what extent they match the Objective)
-
-Do not include any introductory or concluding text outside of the table.
+Instructions:
+1. Derive a human-readable profile_name from the Profile ID.
+2. Write a balanced_rationale_for_ranking (a concise 2-3 sentence explanation to what extent they match the Objective).
+3. Return ONLY valid JSON matching this exact structure:
+{
+  "results": [
+    {
+      "profile_id": "id_from_above",
+      "profile_name": "Extracted Name",
+      "balanced_rationale_for_ranking": "Rationale text..."
+    }
+  ]
+}
+Do not provide any explanations or text outside of the JSON block.
