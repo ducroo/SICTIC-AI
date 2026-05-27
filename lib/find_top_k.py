@@ -127,15 +127,18 @@ async def find_top_k(objective: str, all_profiles: Dict[str, str], top_k: int = 
             # Shuffle slightly within the bucket to prevent fixed pairings in the next round
             random.shuffle(buckets[i])
             
-    logger.info(f"Swiss tournament completed. Extracting top {top_k} from {len(final_active_profiles)} survivors.")
+    logger.info(f"Swiss tournament completed. Executing final ranking on {len(final_active_profiles)} survivors.")
+    
+    # Do one final definitive ranking on the remaining pool
+    final_profiles_dict = {pid: all_profiles[pid] for pid in final_active_profiles}
+    final_sorted_ids = await rank_chunk(objective, final_profiles_dict)
     
     ranked_results = []
-    # final_active_profiles is already coarsely ranked from 1st-place buckets down to 8th-place buckets
-    for rank_idx, pid in enumerate(final_active_profiles):
+    for rank_idx, pid in enumerate(final_sorted_ids[:top_k]):
         ranked_results.append({
             "id": pid,
             "text": all_profiles[pid],
-            "rank": rank_idx + 1 # The write-up will finalize the explicit 1 to K ranking.
+            "rank": rank_idx + 1
         })
         
-    return ranked_results[:top_k], len(ranked_results[:top_k])
+    return ranked_results, len(ranked_results)
