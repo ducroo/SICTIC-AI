@@ -160,11 +160,13 @@ async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str)
 
     # Mini-batch / Sequential upsert for crash resilience
     for filename, mod_time, parsed_filepath in files_to_embed:
-        logger.info(f"[{dataset_name}] Embedding {filename}...")
+        logger.info(f"[{dataset_slug}] Embedding {filename}...")
         try:
             text = storage.read_text(parsed_filepath)
             if text.strip():
-                await qdrant.ingest_documents_batch({filename: text}, {filename: mod_time})
-                logger.info(f"[{dataset_name}] Successfully upserted {filename}.")
+                from lib.adapters.qdrant import Chunker
+                chunks = Chunker.split_markdown(text, filename, mod_time)
+                await qdrant.upsert(chunks)
+                logger.info(f"[{dataset_slug}] Successfully upserted {filename}.")
         except Exception as e:
-            logger.error(f"[{dataset_name}] Failed to embed and upsert {filename}: {e}")
+            logger.error(f"[{dataset_slug}] Failed to embed and upsert {filename}: {e}")

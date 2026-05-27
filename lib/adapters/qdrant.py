@@ -151,12 +151,13 @@ class QdrantAdapter:
         vector = await self._get_embedding(query)
         
         try:
-            results = self.client.search(
+            # Qdrant client 1.18.0 deprecates .search() in favor of .query_points()
+            results = self.client.query_points(
                 collection_name=self.collection_name,
-                query_vector=vector,
+                query=vector,
                 limit=limit,
                 with_payload=True
-            )
+            ).points
             
             if not results:
                 return []
