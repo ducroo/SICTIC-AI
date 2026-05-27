@@ -244,7 +244,7 @@ def get_storage() -> Storage:
 
     STORAGE_PROVIDER="local":  LocalStorage(STORAGE_PATH)
     STORAGE_PROVIDER="google": RoutedStorage with GoogleDriveStorage(STORAGE_PATH)
-                               for drive paths and LocalStorage($CACHE_DIR) for caches.
+                               for drive paths and LocalStorage($REPO_DIR/cache) for caches.
     """
     global _storage_singleton
     if _storage_singleton is not None:
@@ -267,7 +267,8 @@ def get_storage() -> Storage:
             token_path=token_path,
             root_folder_id=root_folder_id
         )
-        cache_dir = os.environ.get("CACHE_DIR") or os.path.expanduser("~/.cache/sictic")
+        repo_dir = os.environ.get("REPO_DIR")
+        cache_dir = os.path.join(repo_dir, "cache") if repo_dir else os.path.expanduser("~/.cache/sictic")
         os.makedirs(cache_dir, exist_ok=True)
         _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir))
     else:

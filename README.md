@@ -97,12 +97,13 @@ Open `.env` in a text editor. You need to configure seven variables:
 | \# | Variable | Purpose | Example |
 |---|---|---|---|
 |1| `WORKSPACE_DIR` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
-|2| `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
-|3| `STORAGE_PATH` | If `local`: absolute path. If `google`: Folder ID or `root` | `/Users/you/sictic_data` or `root` |
-|4| `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
-|5| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
-|6| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
-|7| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
+|2| `REPO_DIR` | Absolute path to the root of this SICTIC-AI git repository | `/Users/you/SICTIC-AI` |
+|3| `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
+|4| `STORAGE_PATH` | If `local`: absolute path. If `google`: Folder ID or `root` | `/Users/you/sictic_data` or `root` |
+|5| `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
+|6| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
+|7| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
+|8| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
 
 *(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
 

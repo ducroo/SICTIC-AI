@@ -349,13 +349,13 @@ def _get_global_registry_path() -> str:
     import os
     from lib.env import get_env_var
     try:
-        cache_dir = get_env_var("CACHE_DIR")
-        if not cache_dir:
-            raise ValueError("CACHE_DIR environment variable is empty.")
-        return os.path.join(cache_dir, "linkedin_missing_profiles.json")
+        repo_dir = get_env_var("REPO_DIR")
+        if not repo_dir:
+            raise ValueError("REPO_DIR environment variable is empty.")
+        return os.path.join(repo_dir, "cache", "linkedin_missing_profiles.json")
     except Exception as e:
         logger.error(f"Failed to resolve global registry path: {e}")
-        raise RuntimeError("Missing required environment variable CACHE_DIR. Aborting.")
+        raise RuntimeError("Missing required environment variable REPO_DIR. Aborting.")
 
 
 def linkedin_missing_profiles() -> List[Dict[str, Any]]:
