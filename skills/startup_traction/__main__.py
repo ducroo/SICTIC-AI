@@ -3,13 +3,14 @@ from skills.startup_traction.startup_traction import startup_traction
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
-
 app = typer.Typer(help="CLI for startup_traction skill")
 
 @app.command()
-def main(startup_name: str = typer.Argument(..., help="The name of the startup to analyze. This directly corresponds to the dataset name.")):
+def main(
+    startup: str = typer.Option(..., "--startup", "-s", help="The name of the startup to analyze.")
+):
     try:
-        result = startup_traction(startup_name)
+        result = startup_traction(startup)
         print(result)
     except ValueError as e:
         logger.error(str(e))

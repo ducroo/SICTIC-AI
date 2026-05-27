@@ -1,30 +1,25 @@
 import typer
-from typing import Optional, List
+import asyncio
 from lib.logger import get_logger
 from skills.potential_investors.potential_investors import potential_investors
 
 logger = get_logger(__name__)
-app = typer.Typer(add_completion=False)
+app = typer.Typer(add_completion=False, help="Provides a ranked list of potential investors for a given startup.")
 
 @app.command()
 def main(
-    startup_name: str = typer.Argument(..., help="The name of the startup to match."),
-    target_investors: str = typer.Option(None, help="Comma-separated list of investor names. Leave empty for all members."),
-    exclude_investors: str = typer.Option(None, help="Comma-separated list of investor names to exclude."),
-    top_k: int = typer.Option(8, help="Number of top investors to return.")
+    startup: str = typer.Option(..., "--startup", "-s", help="The name of the startup to match."),
+    include: str = typer.Option(None, "--include", "-i", help="Comma-separated list of investor names to include."),
+    exclude: str = typer.Option(None, "--exclude", "-x", help="Comma-separated list of investor names to exclude."),
+    top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top investors to return.")
 ):
-    """
-    Provides a ranked list of potential investors for a given startup based on semantic matching and LLM refinement.
-    """
-    import asyncio
-    
-    parsed_targets = [name.strip() for name in target_investors.split(",")] if target_investors else None
-    parsed_excludes = [name.strip() for name in exclude_investors.split(",")] if exclude_investors else None
+    parsed_includes = [name.strip() for name in include.split(",")] if include else None
+    parsed_excludes = [name.strip() for name in exclude.split(",")] if exclude else None
     
     try:
         result = asyncio.run(potential_investors(
-            startup_name=startup_name,
-            target_investors=parsed_targets,
+            startup_name=startup,
+            target_investors=parsed_includes,
             exclude_investors=parsed_excludes,
             top_k=top_k
         ))

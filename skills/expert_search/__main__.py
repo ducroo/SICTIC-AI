@@ -1,27 +1,33 @@
-import argparse
+import typer
 import asyncio
 from skills.expert_search.expert_search import expert_search
+from lib.logger import get_logger
 
-def main():
-    parser = argparse.ArgumentParser(description="Find expert individuals for a startup using ranking_persons.")
-    parser.add_argument("startup_name", type=str, help="Name of the startup")
-    parser.add_argument("--target-experts", type=str, nargs="+", default=None, help="Optional list of expert IDs to restrict the search to")
-    parser.add_argument("--exclude-experts", type=str, nargs="+", default=None, help="Optional list of expert IDs to exclude from the search")
-    parser.add_argument("--top-k", type=int, default=8, help="Number of top experts to return")
-    
-    args = parser.parse_args()
-    
+logger = get_logger(__name__)
+app = typer.Typer(help="Find expert individuals for a startup.")
+
+@app.command()
+def main(
+    startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup"),
+    include: str = typer.Option(None, "--include", "-i", help="Comma-separated list of expert IDs to restrict the search to"),
+    exclude: str = typer.Option(None, "--exclude", "-x", help="Comma-separated list of expert IDs to exclude"),
+    top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top experts to return")
+):
+    parsed_includes = [x.strip() for x in include.split(",")] if include else None
+    parsed_excludes = [x.strip() for x in exclude.split(",")] if exclude else None
+
     try:
         result = asyncio.run(expert_search(
-            startup_name=args.startup_name,
-            target_experts=args.target_experts,
-            exclude_experts=args.exclude_experts,
-            top_k=args.top_k
+            startup_name=startup,
+            target_experts=parsed_includes,
+            exclude_experts=parsed_excludes,
+            top_k=top_k
         ))
         print("\n--- Expert Search Result ---\n")
         print(result)
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
+        raise typer.Exit(code=1)
 
 if __name__ == "__main__":
-    main()
+    app()
