@@ -96,7 +96,7 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
             
         is_dossier = is_dossier_document(doc_name, person_name)
         # Qdrant stores the original document name. The Markdown parser appends .md
-        full_md_path = f"datasets2md/{dataset_name.lower()}/{doc_name}.md"
+        full_md_path = f"datasets2md/{dataset_slug}/{doc_name}.md"
         
         if is_dossier and storage.exists(full_md_path):
             full_text = storage.read_text(full_md_path)

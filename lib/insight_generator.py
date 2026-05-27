@@ -9,6 +9,8 @@ from skills.dataset_chat.dataset_chat import dataset_chat
 
 logger = get_logger(__name__)
 
+from lib.slugify import slugify
+
 async def generate_dataset_insight(
     dataset_name: str,
     skill_name: str,
@@ -19,23 +21,23 @@ async def generate_dataset_insight(
     Generic pipeline to generate an insight by chatting with a dataset.
     Handles cache checking, config loading, executing dataset_chat, and saving output.
     """
-    dataset_name_lower = dataset_name.lower()
+    dataset_slug = slugify(dataset_name)
     default_llm = get_env_var("DEFAULT_LLM")
     storage = get_storage()
     
     output_path = get_insight_filepath(
-        dataset_name=dataset_name_lower,
+        dataset_name=dataset_slug,
         skill_name=skill_name,
         model=default_llm,
         subdir=False
     )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_lower], output_path, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_path, default_llm)
     if not needs_refresh:
-        logger.info(f"[{dataset_name_lower}] Using cached {skill_name} from {matched_file}")
+        logger.info(f"[{dataset_slug}] Using cached {skill_name} from {matched_file}")
         return cached_content
 
-    logger.info(f"[{dataset_name_lower}] Generating new {skill_name}...")
+    logger.info(f"[{dataset_slug}] Generating new {skill_name}...")
 
     try:
         conf = config_load()
@@ -44,11 +46,11 @@ async def generate_dataset_insight(
         query = conf[config_key]['query']
         llm_instructions = conf[config_key]['llm_instructions']
     except KeyError as e:
-        logger.error(f"[{dataset_name_lower}] Missing configuration: {e}")
+        logger.error(f"[{dataset_slug}] Missing configuration: {e}")
         raise ValueError(f"Missing configuration for {skill_name}: {e}")
 
     raw_response = await dataset_chat(
-        dataset_name=dataset_name_lower,
+        dataset_name=dataset_slug,
         questions=query,
         llm_instructions=llm_instructions,
         max_chunks=max_chunks
@@ -56,6 +58,6 @@ async def generate_dataset_insight(
 
     result_md = raw_response if raw_response else "No relevant information found."
     storage.write_text(output_path, result_md)
-    logger.info(f"[{dataset_name_lower}] Successfully saved {skill_name} to {output_path}")
+    logger.info(f"[{dataset_slug}] Successfully saved {skill_name} to {output_path}")
 
     return result_md

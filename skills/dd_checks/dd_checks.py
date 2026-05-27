@@ -59,12 +59,13 @@ async def dd_checks(startup: str) -> str:
     """
     Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, industry-aware checklists. It automatically identifies the startup's industry, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
     """
-    startup_name_lower = startup.lower()
-    qdrant = QdrantAdapter(collection_name=startup_name_lower)
+    from lib.slugify import slugify
+    startup_slug = slugify(startup)
+    qdrant = QdrantAdapter(collection_name=startup_slug)
     if not qdrant.dataset_available():
-        raise ValueError(f"Dataset for {startup_name_lower} not found or is empty.")
+        raise ValueError(f"Dataset for {startup_slug} not found or is empty.")
         
-    output_file = initialize_report_file(startup_name_lower, startup)
+    output_file = initialize_report_file(startup_slug, startup)
     config = config_load()
     dd_config = config['dd_checks']
     checklists = dd_config['checklists']
@@ -80,6 +81,6 @@ async def dd_checks(startup: str) -> str:
     if not sorted_chapters:
         raise ValueError("No valid chapters found in the configuration.")
 
-    industry_type = await find_industry_type(startup_name_lower, dd_config, allowed_industry_types)
-    await chapter_by_chapter(startup_name_lower, sorted_chapters, industry_type, dd_config, output_file)
+    industry_type = await find_industry_type(startup_slug, dd_config, allowed_industry_types)
+    await chapter_by_chapter(startup_slug, sorted_chapters, industry_type, dd_config, output_file)
     return output_file

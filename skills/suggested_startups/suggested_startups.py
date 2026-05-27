@@ -21,27 +21,29 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     from lib.env import get_env_var
     import os
     
+    dataset_slug = slugify(dataset_name)
+    
     # Resolve default investors using LinkedInAdapter for the community dataset
     if not investors:
-        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name.lower()}/linkedin")
+        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_slug}/linkedin")
         investors = linkedin_adapter.get_all_persons()
         
     # Resolve default startups dynamically using config
     if not startups:
         config = config_load()
         bulk_config = config.get("bulk_refresh", {})
-        community_datasets = [s.lower() for s in bulk_config.get("community_datasets", ["sictic_members"])]
-        ignore_datasets = [s.lower() for s in bulk_config.get("ignore_datasets", ["investor_appetite", "person_profile"])]
+        community_datasets = [slugify(s) for s in bulk_config.get("community_datasets", ["sictic-members"])]
+        ignore_datasets = [slugify(s) for s in bulk_config.get("ignore_datasets", ["investor-appetite", "person-profile"])]
 
         from lib.storage import get_storage as _gs
         _s = _gs()
         discovered = []
         if _s.exists("datasets"):
             for item in _s.list("datasets"):
-                item_lower = item.lower()
+                item_slug = slugify(item)
                 if not _s.is_dir(f"datasets/{item}"):
                     continue
-                if item_lower not in community_datasets and item_lower not in ignore_datasets:
+                if item_slug not in community_datasets and item_slug not in ignore_datasets:
                     discovered.append(item)
         startups = discovered
     
@@ -62,11 +64,11 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
 
     # Filter investors whose cache is already up-to-date
     investors_to_process = []
-    datasets_to_check = [dataset_name.lower()] + [s.lower() for s in startups]
+    datasets_to_check = [dataset_slug] + [slugify(s) for s in startups]
 
     for investor in investors:
         output_file = get_insight_filepath(
-            dataset_name=dataset_name.lower(),
+            dataset_name=dataset_slug,
             skill_name="suggested_startups",
             model=default_llm,
             identifier=investor,

@@ -22,10 +22,11 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     Returns a deduplicated list of Person objects.
     """
     storage = get_storage()
-    dataset_lower = dataset_name.lower()
+    from lib.slugify import slugify
+    dataset_slug = slugify(dataset_name)
     
     insight_path = get_insight_filepath(
-        dataset_name=dataset_lower,
+        dataset_name=dataset_slug,
         skill_name="persons_in_dataset",
         model="manual",
         subdir=False
@@ -60,13 +61,13 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     logger.info(f"[{dataset_name}] Starting people discovery...")
     
     # 2. Local Cache
-    linkedin_adapter = LinkedInAdapter(dataset_lower)
+    linkedin_adapter = LinkedInAdapter(dataset_slug)
     cached = linkedin_adapter.get_cached_persons()
     for p in cached:
         _add_person(p)
             
     # Skip web discovery for community members (too broad/already provided directly)
-    if dataset_lower != "sictic_members":
+    if dataset_slug != "sictic-members":
         # 3. Web Search
         try:
             google = WebSearchAdapter()
@@ -82,7 +83,7 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
             logger.warning(f"[{dataset_name}] Web search discovery failed: {e}")
             
         # 4. Regex across datasets2md
-        md_dir = f"datasets2md/{dataset_lower}"
+        md_dir = f"datasets2md/{dataset_slug}"
         if storage.exists(md_dir):
             logger.info(f"[{dataset_name}] Scanning {md_dir} for explicit LinkedIn URLs...")
             files = storage.list(md_dir, suffix=".md")

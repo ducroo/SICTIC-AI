@@ -11,6 +11,7 @@ from lib.storage import get_storage
 from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.insight_refresh import check_insight_refresh
+from lib.slugify import slugify
 
 logger = get_logger(__name__)
 
@@ -90,15 +91,16 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     if not chapter:
         raise ValueError("No chapter title found in the provided checklist.")
         
+    dataset_slug = slugify(dataset_name)
     file_path = get_insight_filepath(
-        dataset_name=dataset_name.lower(),
+        dataset_name=dataset_slug,
         skill_name="batch_audit",
         model=author,
         identifier=chapter,
         subdir=True
     )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name], file_path, author)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], file_path, author)
     if not needs_refresh:
         logger.info(f"[{dataset_name}] Using cached batch audit results from {matched_file}")
         return cached_content

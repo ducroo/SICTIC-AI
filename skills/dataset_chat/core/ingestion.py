@@ -27,21 +27,21 @@ SYNC_CACHE_TTL = 60  # seconds
 async def sync_datasets(dataset_names: List[str]):
     """Iterates over multiple datasets to sync them overnight."""
     for name in dataset_names:
-        dataset_key = name.lower()
+        dataset_slug = slugify(name)
         
-        if dataset_key not in _sync_locks:
-            _sync_locks[dataset_key] = asyncio.Lock()
+        if dataset_slug not in _sync_locks:
+            _sync_locks[dataset_slug] = asyncio.Lock()
             
-        async with _sync_locks[dataset_key]:
-            last_sync = _last_sync_times.get(dataset_key, 0)
+        async with _sync_locks[dataset_slug]:
+            last_sync = _last_sync_times.get(dataset_slug, 0)
             if time.time() - last_sync < SYNC_CACHE_TTL:
-                logger.debug(f"[{name}] Skipping sync for dataset (synced recently).")
+                logger.debug(f"[{dataset_slug}] Skipping sync for dataset (synced recently).")
                 continue
 
-            logger.info(f"[{name}] === Starting sync for dataset ===")
+            logger.info(f"[{dataset_slug}] === Starting sync for dataset ===")
             try:
-                await _sync_single_dataset(name)
-                _last_sync_times[dataset_key] = time.time()
+                await _sync_single_dataset(dataset_slug)
+                _last_sync_times[dataset_slug] = time.time()
             except Exception as e:
                 logger.error(f"[{name}] Failed to sync dataset: {e}")
             logger.info(f"[{name}] === Completed sync for dataset ===")
@@ -60,10 +60,10 @@ async def _sync_single_dataset(dataset_name: str):
         raise ValueError(f"Dataset '{dataset_slug}' does not exist on drive.")
 
     # 1. OCR Phase: Sync original files to parsed markdown on disk
-    await _sync_ocr_to_disk(dataset_name, raw_dataset_rel, parsed_dataset_rel)
+    await _sync_ocr_to_disk(dataset_slug, raw_dataset_rel, parsed_dataset_rel)
 
     # 2. Ingest Phase: Sync parsed markdown from disk to Qdrant
-    await _sync_disk_to_qdrant(dataset_name, raw_dataset_rel, parsed_dataset_rel)
+    await _sync_disk_to_qdrant(dataset_slug, raw_dataset_rel, parsed_dataset_rel)
 
 
 def _list_source_files(storage, raw_rel: str):
@@ -125,13 +125,13 @@ async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str)
     current_drive_files = {name for name, _ in source_files}
     drive_mtimes = dict(source_files)
 
-    db_mtimes = qdrant.get_all_document_mtimes()
+    db_mtimes = qdrant.get_document_mtimes()
 
     # Handle orphans
     orphans = set(db_mtimes.keys()) - current_drive_files
     for orphan in orphans:
-        logger.info(f"[{dataset_name}] File deleted from drive: {orphan}. Removing from Qdrant.")
-        qdrant.delete_document_points(orphan)
+        logger.info(f"[{dataset_slug}] File deleted from drive: {orphan}. Removing from Qdrant.")
+        qdrant.delete_document(orphan)
         parsed_filepath = f"{parsed_rel}/{orphan}.md"
         if storage.exists(parsed_filepath):
             try:

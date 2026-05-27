@@ -19,19 +19,19 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
     """
     Generates a neutral, objective 5-point diagnostic of a startup. It bypasses marketing narratives to expose the structural reality of the business, prioritizing external risks and identifying specific tasks for an investment analyst. Use this skill when the user asks "Profile this startup", "Run startup diagnostic", or "What does this startup do?". Note that if no context/document is provided via the GUI, the <STARTUP_NAME> must be clearly specified in the query.
     """
-    startup_name_lower = startup.lower()
+    startup_slug = slugify(startup)
     storage = get_storage()
     default_llm = get_env_var("DEFAULT_LLM")
     
     from lib.insight_filepath import get_insight_filepath
     output_file = get_insight_filepath(
-        dataset_name=startup_name_lower,
+        dataset_name=startup_slug,
         skill_name="startup_profile",
         model=default_llm,
         subdir=False
     )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name_lower], output_file, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_slug], output_file, default_llm)
     if not needs_refresh:
         return cached_content, matched_file
 
@@ -41,7 +41,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
     query = config['startup_profile']['query']
     llm_instructions = config['startup_profile']['llm_instructions']
 
-    dataset_name = startup_name_lower
+    dataset_name = startup_slug
     if files:
         dataset_name = await prepare_ephemeral_dataset(files, temp_name="temp_startup_profile")
 

@@ -9,9 +9,10 @@ logger = get_logger(__name__)
 
 async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", max_chunks: int = None, threshold_factor: float = None) -> list[Chunk]:
     """Unified API to run semantic search and retrieve dataset chunks."""
-    dataset_name = dataset_name.lower()
-    await sync_datasets([dataset_name])
-    qdrant = QdrantAdapter(dataset_name)
+    from lib.slugify import slugify
+    dataset_slug = slugify(dataset_name)
+    await sync_datasets([dataset_slug])
+    qdrant = QdrantAdapter(dataset_slug)
     
     if max_chunks is None and threshold_factor is None:
         max_chunks = 25
