@@ -99,9 +99,10 @@ def _sync_best_candidates(grouped_files: Dict[str, List[str]], source_mtimes: Di
             target_mtime = existing_files[best_file_name]
             del existing_files[best_file_name]
             
-            # Check timestamp (allowing a small jitter margin for Google Drive)
-            if abs(target_mtime - source_mtime) < 1.0:
-                logger.debug(f"Skipped {best_file_name} (unchanged)")
+            # Check timestamp (allowing a small jitter margin for Google Drive).
+            # If the target is newer than or identical to the source, it's already synced.
+            if target_mtime >= (source_mtime - 1.0):
+                logger.debug(f"Skipped {best_file_name} (unchanged/up-to-date)")
                 continue
 
         try:
