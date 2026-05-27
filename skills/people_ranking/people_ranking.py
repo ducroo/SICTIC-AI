@@ -142,14 +142,16 @@ async def people_ranking(
     lines = [
         "## Top Candidates",
         "",
-        "| Rank | Name | Fit Rationale |",
-        "| :--- | :--- | :--- |"
+        "| Rank | Name | LinkedIn ID | Fit Rationale |",
+        "| :--- | :--- | :--- | :--- |"
     ]
     
     for item in augmented_items:
         # Replace newlines in rationale so it doesn't break the markdown table
         clean_rationale = item.get('rationale', '').replace('\n', ' ')
-        lines.append(f"| {item.get('rank', '-')} | {item.get('profile_name', item['id'])} | {clean_rationale} |")
+        profile_name = item.get('profile_name', item['id'])
+        linkedin_id = item['id']
+        lines.append(f"| {item.get('rank', '-')} | {profile_name} | {linkedin_id} | {clean_rationale} |")
 
     result = "\n".join(lines) + "\n"
 
