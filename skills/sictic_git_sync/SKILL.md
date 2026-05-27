@@ -3,37 +3,33 @@
 ## Description
 This skill empowers non-technical users to keep their SICTIC-AI toolbox updated and safely push contributions. It relies on a symlinked architecture where OpenClaw workspace skills point directly to the local Git repository, ensuring immediate synchronization.
 
+## Automated Symlink Parity
+This skill features an automated reconciliation engine that runs *before* any Git operation:
+1. **Prunes dead links** in the OpenClaw workspace.
+2. **Ingests raw folders** (new user-created skills) from the workspace, moves them to the Git repo, and replaces them with symlinks.
+3. **Exposes new repo content** by generating missing symlinks in the workspace.
+
 ## The Architecture & Simplicity Framework
-Before committing ANY code, you MUST review modified files against these rules. If a rule is violated, you must fix it before proceeding.
+Before executing a `push` action, you (the AI Agent) MUST review modified files against these rules. If a rule is violated, you must fix it before proceeding with the push.
 
 1. **OS Agnosticism (Universal Unix):** 
    * Code must run on any Unix-like system (macOS, Linux, WSL2).
    * **Banned:** macOS-specific commands (e.g., `pbcopy`, `open`, `osascript`) and Windows-specific logic. 
 2. **Absolute Path & Environment Ban:** 
    * NEVER allow hardcoded absolute paths (e.g., `/Users/...`, `~/...`).
-   * **Important:** Rely on standard Conda environment activation or universal relative paths. Avoid hardcoding specific local Conda binaries (e.g., `miniconda3/envs/...`).
    * Internal file operations must use Python's `pathlib`.
 3. **LLM Agnosticism:** 
-   * All LLM calls MUST be routed through `litellm`. Reject direct API calls to OpenAI/Anthropic/Google.
+   * All LLM calls MUST be routed through `litellm` (via `skills.llm_chat`). Reject direct API calls to OpenAI/Anthropic/Google.
 
 ## Standard Operating Procedures
 
-### Scenario A: Safely Updating the Toolbox ("Pull")
-1. Navigate to `~/SICTIC-AI/`.
-2. Check `git branch`. Respect the current branch (currently `SIMPLIFY`, transitioning to `main` around June 2026).
-3. Check `git status`. 
-   * If there are uncommitted local edits, inform the user: "You have unsaved changes in your skills. Should I save them first, or try to merge the updates around them?"
-   * If the working tree is clean, run `git pull`.
-4. Summarize what new tools or updates were downloaded.
+### Scenario A: Safely Updating the Toolbox
+1. Run `conda run -n sictic-env python -m skills.sictic_git_sync --action pull`.
+2. This automatically reconciles symlinks, executes the `git pull`, and reconciles again.
+3. Summarize the changes for the user.
 
-### Scenario B: Contributing Changes & New Skills ("Push")
-1. **Detect New Skills:** Scan `~/.openclaw/workspace-ops/skills/` for any folders that are *not* symlinks. 
-2. **Confirm Ingestion:** If a new real folder is found, **you must ask the user** before touching it: "I see you've created a new skill called `[name]`. Is this for SICTIC-AI, and should I share it with the community?" (It might be a private or unrelated skill).
-3. **Ingest New Skills (If Approved):**
-   * **Gatekeeper Review:** Run its files against the *Architecture & Simplicity Framework*. Refactor if rules are broken.
-   * **Move:** Move the entire folder into `~/SICTIC-AI/skills/`.
-   * **Symlink:** Create a symlink in the OpenClaw workspace pointing to its new location in the repo.
-4. **Identify Edits:** Navigate to `~/SICTIC-AI/` and check `git status` to see what else the user modified in existing symlinked skills.
-5. **Gatekeeper Review (Edits):** Read any newly modified files in the repo. Run them against the framework and refactor if necessary.
-6. **Commit & Push:** Stage all approved changes (`git add`), write a professional commit message, and push to the current branch (`SIMPLIFY` or `main`).
-7. **Celebrate:** Inform the user their changes (and any approved new skills) are live for the community.
+### Scenario B: Contributing Changes & New Skills
+1. **Status Check:** Run `conda run -n sictic-env python -m skills.sictic_git_sync --action status`.
+2. **Gatekeeper Review:** If the status shows modified or new Python files, read them and ensure they adhere to the *Architecture & Simplicity Framework*. Refactor if necessary.
+3. **Push:** Run `conda run -n sictic-env python -m skills.sictic_git_sync --action push --message "<professional commit message>"`.
+4. Celebrate: Inform the user their changes are live for the community.
