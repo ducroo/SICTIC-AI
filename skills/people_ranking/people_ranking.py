@@ -133,11 +133,25 @@ async def people_ranking(
 
     # 4. Synthesize Final Report
     logger.info(f"Starting ranking_writeup with top {actual_top_k} out of {len(ranked_items)} ranked candidates.")
-    result = await ranking_writeup(
+    augmented_items = await ranking_writeup(
         ranked_items=ranked_items,
-        objective=objective,
-        top_k=actual_top_k
+        objective=objective
     )
+
+    # 5. Build Markdown Table
+    lines = [
+        "## Top Candidates",
+        "",
+        "| Rank | Name | Fit Rationale |",
+        "| :--- | :--- | :--- |"
+    ]
+    
+    for item in augmented_items:
+        # Replace newlines in rationale so it doesn't break the markdown table
+        clean_rationale = item.get('rationale', '').replace('\n', ' ')
+        lines.append(f"| {item.get('rank', '-')} | {item.get('profile_name', item['id'])} | {clean_rationale} |")
+
+    result = "\n".join(lines) + "\n"
 
     logger.info(f"[{dataset_name}] people_ranking complete.")
     return result
