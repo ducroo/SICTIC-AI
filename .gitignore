@@ -39,3 +39,6 @@ claude_resume.txt
 # Google Drive OAuth secrets (also expected under ~/.openclaw/ by default)
 gdrive-ops-credentials.json
 gdrive-ops-token.json
+
+# Live sync config (per-user folder IDs). Commit only sync.yaml.example.
+config/sync.yaml

@@ -245,6 +245,11 @@ def get_storage() -> Storage:
     STORAGE_PROVIDER="local":  LocalStorage(STORAGE_PATH)
     STORAGE_PROVIDER="google": RoutedStorage with GoogleDriveStorage(STORAGE_PATH)
                                for drive paths and LocalStorage($REPO_DIR/cache) for caches.
+    STORAGE_PROVIDER="hybrid": MirrorStorage — local mirror at STORAGE_MIRROR_DIR,
+                               Drive as read-fallback and explicit sync target.
+                               Writes go local-only; use scripts/gdrive_sync.py
+                               to push changes back. STORAGE_PATH is the Drive
+                               root folder ID used for read-fallback.
     """
     global _storage_singleton
     if _storage_singleton is not None:
@@ -252,13 +257,13 @@ def get_storage() -> Storage:
 
     from lib.env import get_env_var
     provider = os.environ.get("STORAGE_PROVIDER", "local").lower()
-    
+
     if provider == "google":
         from lib.storage_gdrive import GoogleDriveStorage
 
         credentials_path = os.environ.get("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
         token_path = os.environ.get("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
-        
+
         # In Google mode, STORAGE_PATH acts as the root folder ID (defaults to "root")
         root_folder_id = get_env_var("STORAGE_PATH") or "root"
 
@@ -271,6 +276,27 @@ def get_storage() -> Storage:
         cache_dir = os.path.join(repo_dir, "cache") if repo_dir else os.path.expanduser("~/.cache/sictic")
         os.makedirs(cache_dir, exist_ok=True)
         _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir))
+    elif provider == "hybrid":
+        from lib.storage_gdrive import GoogleDriveStorage
+        from lib.storage_mirror import MirrorStorage
+
+        mirror_dir = get_env_var("STORAGE_MIRROR_DIR")
+        if not mirror_dir.startswith("/"):
+            raise ValueError(
+                f"STORAGE_MIRROR_DIR must be an absolute path, got: {mirror_dir}"
+            )
+        os.makedirs(mirror_dir, exist_ok=True)
+
+        credentials_path = os.environ.get("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
+        token_path = os.environ.get("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
+        root_folder_id = os.environ.get("STORAGE_PATH") or "root"
+
+        drive = GoogleDriveStorage(
+            credentials_path=credentials_path,
+            token_path=token_path,
+            root_folder_id=root_folder_id,
+        )
+        _storage_singleton = MirrorStorage(local=LocalStorage(mirror_dir), drive=drive)
     else:
         # Local mode requires an absolute path
         base_dir = get_env_var("STORAGE_PATH")

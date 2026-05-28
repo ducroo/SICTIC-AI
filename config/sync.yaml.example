@@ -1,0 +1,19 @@
+# Sync configuration for scripts/gdrive_sync.py
+#
+# Copy to config/sync.yaml and edit folder IDs. The file lists which subtrees
+# of the local mirror (STORAGE_MIRROR_DIR) correspond to which Google Drive
+# folders for pull and push.
+#
+# pull_from and push_to may differ — useful for read-from-production /
+# write-to-review patterns. If push_to is omitted, pull_from is used.
+
+targets:
+  - name: insights
+    local_subdir: insights
+    pull_from: REPLACE_WITH_DRIVE_FOLDER_ID
+    push_to:   REPLACE_WITH_DRIVE_FOLDER_ID
+
+  - name: datasets
+    local_subdir: datasets
+    pull_from: REPLACE_WITH_DRIVE_FOLDER_ID
+    push_to:   REPLACE_WITH_DRIVE_FOLDER_ID
