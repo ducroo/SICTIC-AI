@@ -51,6 +51,18 @@ def test_write_then_read_text(s):
     assert s.read_text(rel) == "héllo wörld"
 
 
+def test_write_then_read_md_gdoc_roundtrip(s):
+    # .md paths are stored as native Google Docs on the gdrive backend; this
+    # round-trip exercises the export/import path. Whitespace normalisation
+    # tolerates gdoc's lossy reformatting (it strips trailing whitespace and
+    # may add a final newline on export).
+    rel = f"{PREFIX}/roundtrip.md"
+    content = "# Title\n\nA short paragraph with **bold** and _italic_.\n"
+    s.write_text(rel, content)
+    got = s.read_text(rel)
+    assert got.strip() == content.strip(), f"round-trip mismatch:\n--- wrote:\n{content!r}\n--- read:\n{got!r}"
+
+
 def test_write_then_read_bytes(s):
     rel = f"{PREFIX}/blob.bin"
     payload = bytes(range(256))

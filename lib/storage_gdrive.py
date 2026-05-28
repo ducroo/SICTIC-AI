@@ -29,7 +29,13 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 _SCOPES = ["https://www.googleapis.com/auth/drive"]
 _FOLDER_MIME = "application/vnd.google-apps.folder"
+_GDOC_MIME = "application/vnd.google-apps.document"
+_MD_MIME = "text/markdown"
 _FIELDS = "id,name,mimeType,modifiedTime,size"
+
+
+def _is_md_path(rel: str) -> bool:
+    return rel.lower().endswith(".md")
 
 
 def _parse_modtime(s: Optional[str]) -> float:
@@ -68,6 +74,8 @@ class GoogleDriveStorage:
 
         # rel-path -> Drive file ID (None means known-nonexistent)
         self._path_to_id: Dict[str, Optional[str]] = {"": root_folder_id}
+        # rel-path -> Drive mimeType (populated alongside _path_to_id)
+        self._path_to_mime: Dict[str, str] = {"": _FOLDER_MIME}
         # dir rel-path -> list of child metadata dicts
         self._dir_children: Dict[str, List[dict]] = {}
 
@@ -137,6 +145,7 @@ class GoogleDriveStorage:
         # Drive permits same-name siblings; take the first deterministically.
         files.sort(key=lambda f: f["id"])
         self._path_to_id[rel] = files[0]["id"]
+        self._path_to_mime[rel] = files[0].get("mimeType", "")
         return files[0]["id"]
 
     def _resolve_or_raise(self, rel: str) -> str:
@@ -174,12 +183,15 @@ class GoogleDriveStorage:
         # Populate path cache for children too.
         prefix = f"{rel}/" if rel else ""
         for item in items:
-            self._path_to_id[f"{prefix}{item['name']}"] = item["id"]
+            child_rel = f"{prefix}{item['name']}"
+            self._path_to_id[child_rel] = item["id"]
+            self._path_to_mime[child_rel] = item.get("mimeType", "")
         return items
 
     def _invalidate(self, rel: str) -> None:
         rel = rel.strip("/")
         self._path_to_id.pop(rel, None)
+        self._path_to_mime.pop(rel, None)
         parent = str(PurePosixPath(rel).parent) if rel else ""
         if parent == ".":
             parent = ""
@@ -188,21 +200,58 @@ class GoogleDriveStorage:
         prefix = f"{rel}/" if rel else ""
         for k in [k for k in self._path_to_id if k.startswith(prefix)]:
             self._path_to_id.pop(k, None)
+        for k in [k for k in self._path_to_mime if k.startswith(prefix)]:
+            self._path_to_mime.pop(k, None)
         for k in [k for k in self._dir_children if k == rel or k.startswith(prefix)]:
             self._dir_children.pop(k, None)
 
     # ---------- Storage API ----------
 
+    def _get_mime(self, rel: str, fid: str) -> str:
+        """Return the cached Drive mimeType for rel, fetching with files().get if absent."""
+        rel = rel.strip("/")
+        mime = self._path_to_mime.get(rel)
+        if mime:
+            return mime
+        service = self._ensure_service()
+        with self._service_lock:
+            meta = service.files().get(
+                fileId=fid, fields="mimeType", supportsAllDrives=True
+            ).execute()
+        mime = meta.get("mimeType", "")
+        self._path_to_mime[rel] = mime
+        return mime
+
     def read_bytes(self, rel: str) -> bytes:
         fid = self._resolve_or_raise(rel)
         service = self._ensure_service()
+
+        # num_retries triggers googleapiclient's built-in exponential backoff on
+        # transient 5xx errors. Necessary on the gdoc-export path because Drive
+        # sometimes returns 500 briefly after a re-import of new markdown content.
+        if _is_md_path(rel):
+            mime = self._get_mime(rel, fid)
+            if mime != _GDOC_MIME:
+                raise RuntimeError(
+                    f"{rel}: expected a Google Doc (mimeType={_GDOC_MIME}) but found "
+                    f"mimeType={mime!r}. Run scripts/convert_md_to_gdoc.py to migrate."
+                )
+            with self._service_lock:
+                request = service.files().export_media(fileId=fid, mimeType=_MD_MIME)
+                buf = io.BytesIO()
+                downloader = MediaIoBaseDownload(buf, request)
+                done = False
+                while not done:
+                    _, done = downloader.next_chunk(num_retries=5)
+            return buf.getvalue()
+
         with self._service_lock:
             request = service.files().get_media(fileId=fid, supportsAllDrives=True)
             buf = io.BytesIO()
             downloader = MediaIoBaseDownload(buf, request)
             done = False
             while not done:
-                _, done = downloader.next_chunk()
+                _, done = downloader.next_chunk(num_retries=5)
         return buf.getvalue()
 
     def read_text(self, rel: str, *, encoding: str = "utf-8") -> str:
@@ -219,6 +268,41 @@ class GoogleDriveStorage:
 
         name = PurePosixPath(rel).name
         service = self._ensure_service()
+
+        if _is_md_path(rel):
+            # Upload as markdown and let Drive convert to a Google Doc on import.
+            # On update, the file ID is preserved so subsequent edits land in the
+            # same gdoc — no duplicate-file problem.
+            media = MediaIoBaseUpload(io.BytesIO(content), mimetype=_MD_MIME, resumable=False)
+            existing_id = self._resolve(rel)
+            with self._service_lock:
+                if existing_id:
+                    existing_mime = self._get_mime(rel, existing_id)
+                    if existing_mime != _GDOC_MIME:
+                        raise RuntimeError(
+                            f"{rel}: cannot overwrite — existing file has mimeType="
+                            f"{existing_mime!r}, expected {_GDOC_MIME}. "
+                            f"Run scripts/convert_md_to_gdoc.py first."
+                        )
+                    service.files().update(
+                        fileId=existing_id,
+                        media_body=media,
+                        supportsAllDrives=True,
+                    ).execute()
+                else:
+                    service.files().create(
+                        body={
+                            "name": name,
+                            "parents": [parent_id],
+                            "mimeType": _GDOC_MIME,
+                        },
+                        media_body=media,
+                        fields="id",
+                        supportsAllDrives=True,
+                    ).execute()
+            self._invalidate(rel)
+            return
+
         media = MediaIoBaseUpload(io.BytesIO(content), mimetype="application/octet-stream", resumable=False)
         existing_id = self._resolve(rel)
         with self._service_lock:
@@ -340,6 +424,7 @@ class GoogleDriveStorage:
             ).execute()
         self._invalidate(rel)
         self._path_to_id[rel] = created["id"]
+        self._path_to_mime[rel] = _FOLDER_MIME
 
     # ---------- escape hatches ----------
 
@@ -347,6 +432,7 @@ class GoogleDriveStorage:
         """Drop cached path/listing entries under rel. Forces fresh API calls."""
         if not rel:
             self._path_to_id = {"": self.root_folder_id}
+            self._path_to_mime = {"": _FOLDER_MIME}
             self._dir_children = {}
         else:
             self._invalidate(rel)

@@ -35,3 +35,7 @@ condaenv.*.requirements.txt
 
 # personal scratch files
 claude_resume.txt
+
+# Google Drive OAuth secrets (also expected under ~/.openclaw/ by default)
+gdrive-ops-credentials.json
+gdrive-ops-token.json
