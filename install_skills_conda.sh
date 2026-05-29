@@ -314,13 +314,7 @@ ask_env() {
     fi
 
     while :; do
-        if [ "$ENV_CREATED" -eq 1 ] && [ "$required" -eq 1 ]; then
-            if [ -n "$shown_default" ]; then
-                printf '%s (suggested: %s): ' "$prompt" "$shown_default"
-            else
-                printf '%s: ' "$prompt"
-            fi
-        elif [ "$secret" -eq 1 ] && [ -n "$shown_default" ]; then
+        if [ "$secret" -eq 1 ] && [ -n "$shown_default" ]; then
             printf '%s [%s]: ' "$prompt" "configured"
         elif [ -n "$shown_default" ]; then
             printf '%s [%s]: ' "$prompt" "$shown_default"
@@ -328,7 +322,7 @@ ask_env() {
             printf '%s: ' "$prompt"
         fi
         IFS= read -r answer || answer=""
-        if [ -z "$answer" ] && ! { [ "$ENV_CREATED" -eq 1 ] && [ "$required" -eq 1 ]; }; then
+        if [ -z "$answer" ] && [ -n "$shown_default" ]; then
             answer="$shown_default"
         fi
         if [ -n "$answer" ] || [ "$required" -eq 0 ]; then
@@ -369,14 +363,14 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     done
 
     if [ "$storage_provider" = "local" ]; then
-        ask_env "STORAGE_PATH" "Local storage path" "" 1 0
+        ask_env "STORAGE_PATH" "Local storage path" "$REPO_ROOT/.storage" 1 0
         ask_env "STORAGE_MIRROR_DIR" "Storage mirror dir (blank for local mode)" "" 0 0
     elif [ "$storage_provider" = "google" ]; then
         ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
         ask_env "STORAGE_MIRROR_DIR" "Storage mirror dir (blank for google mode)" "" 0 0
     else
         ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-        ask_env "STORAGE_MIRROR_DIR" "Local mirror directory" "" 1 0
+        ask_env "STORAGE_MIRROR_DIR" "Local mirror directory" "$REPO_ROOT/.storage-mirror" 1 0
     fi
 
     ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0

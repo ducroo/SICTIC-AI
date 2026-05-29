@@ -17,6 +17,8 @@ __pycache__/
 *$py.class
 .pytest_cache/
 .pytest-storage/
+.storage/
+.storage-mirror/
 
 venv/
 logs/

@@ -71,10 +71,14 @@ bash Miniforge3-*.sh  # Follow the prompts, say 'yes' to init
 exec $SHELL           # reload your terminal
 ```
 
-*(Optional but Recommended)*
-You can install **Ollama** to run local AI models, as cloud models can become expensive during heavy document parsing.
+Install **Ollama** when using local `ollama/...` models. Local models are the
+default in `.env-template` and are useful for heavy document parsing.
 * **macOS:** `brew install ollama`
 * **Linux/WSL2:** `curl -fsSL https://ollama.com/install.sh | sh`
+
+Qdrant is required for semantic search. You do not need to install it manually:
+`./launch.sh start` downloads the matching Qdrant binary for macOS or Linux into
+`./qdrant/` and starts it with local storage in `./qdrant_data/`.
 
 ### Step 2: Install the Environment
 
@@ -95,12 +99,9 @@ the same `skills.dataset_chat` ingestion code.
 
 ### Step 3: Configuration
 
-Create your configuration file:
-```bash
-cp .env-template .env
-```
-
-Open `.env` in a text editor. You need to configure seven variables:
+The installer creates `.env` from `.env-template` if needed and prompts for the
+runtime values. Press Enter to accept the value shown in brackets. You need to
+configure these variables:
 
 | \# | Variable | Purpose | Example |
 |---|---|---|---|
@@ -117,7 +118,10 @@ Open `.env` in a text editor. You need to configure seven variables:
 
 ### Step 4: Start Background Services
 
-SICTIC-AI relies on a local vector database (Qdrant) for semantic search (i.e. pre-selection of documents before handing over to the LLM). The launcher script will install the right binary if needed. If you installed Ollama in Step 1, the launcher will spin it up so you can run local models.
+SICTIC-AI relies on Qdrant for semantic search and on Ollama when any configured
+model starts with `ollama/`. The launcher downloads Qdrant when needed, starts
+Qdrant and Ollama, and pulls the Ollama models listed in `.env` if they are not
+already available.
 
 ```bash
 ./launch.sh start
