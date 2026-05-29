@@ -18,7 +18,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     startup value propositions with investor professional backgrounds and interests.
     Outputs a distinct file per investor in the suggested_startups folder.
     """
-    from lib.env import get_env_var
+    from lib.model_config import llm_model
     
     dataset_slug = slugify(dataset_name)
     
@@ -53,7 +53,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
 
     from lib.storage import get_storage
     storage = get_storage()
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     from lib.insight_filepath import get_insight_filepath
 
     # Filter investors whose cache is already up-to-date

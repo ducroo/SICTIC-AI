@@ -301,6 +301,16 @@ env_set() {
     mv "$tmp" "$ENV_PATH"
 }
 
+env_first() {
+    for key in "$@"; do
+        value=$(env_get "$key" || true)
+        if [ -n "$value" ]; then
+            printf '%s\n' "$value"
+            return
+        fi
+    done
+}
+
 ask_env() {
     key="$1"
     prompt="$2"
@@ -374,10 +384,17 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     fi
 
     ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
-    ask_env "OLLAMA_HOST" "Ollama host" "$(env_get OLLAMA_HOST || true)" 1 0
-    ask_env "DEFAULT_LLM" "Default LLM model" "$(env_get DEFAULT_LLM || true)" 1 0
+    ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_get OLLAMA_HOST || true)" 1 0
+    ask_env "LLM_MODEL" "LLM model" "$(env_first LLM_MODEL DEFAULT_LLM)" 1 0
+    ask_env "LLM_BASE_URL" "LLM base URL (blank for provider default)" "$(env_get LLM_BASE_URL || true)" 0 0
+    ask_env "LLM_API_KEY" "LLM API key (blank if unused)" "$(env_get LLM_API_KEY || true)" 0 1
     ask_env "DEFAULT_VLM" "Default VLM model" "$(env_get DEFAULT_VLM || true)" 1 0
-    ask_env "DEFAULT_EMBEDDINGS" "Default embeddings model" "$(env_get DEFAULT_EMBEDDINGS || true)" 1 0
+    ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_first EMBEDDING_MODEL DEFAULT_EMBEDDINGS)" 1 0
+    ask_env "EMBEDDING_BASE_URL" "Embedding base URL (blank for provider default)" "$(env_get EMBEDDING_BASE_URL || true)" 0 0
+    ask_env "EMBEDDING_API_KEY" "Embedding API key (blank if unused)" "$(env_get EMBEDDING_API_KEY || true)" 0 1
+    # Keep compatibility aliases populated for older scripts and cached filenames.
+    env_set "DEFAULT_LLM" "$(env_get LLM_MODEL || true)"
+    env_set "DEFAULT_EMBEDDINGS" "$(env_get EMBEDDING_MODEL || true)"
     ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
     ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1

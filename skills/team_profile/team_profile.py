@@ -4,7 +4,7 @@ from skills.config_load.config_load import config_load
 from skills.person_profile.person_profile import person_profile
 from skills.llm_chat.llm_chat import llm_chat
 from skills.dataset_chat.dataset_search import dataset_search
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from lib.insight_refresh import check_insight_refresh
 from lib.slugify import slugify
@@ -23,7 +23,7 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     logger.info(f"[{dataset_name}] Starting Team Profiling")
 
     storage = get_storage()
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     
     output_filepath = get_insight_filepath(
         dataset_name=dataset_name,

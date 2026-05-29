@@ -6,7 +6,7 @@ from skills.dataset_chat.dataset_chat import dataset_chat
 from skills.config_load.config_load import config_load
 
 from lib.insight_filepath import get_insight_filepath
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
@@ -74,7 +74,7 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     Concurrently processes a markdown checklist against a Qdrant dataset
     and returns a formatted Markdown table.
     """
-    author = get_env_var("DEFAULT_LLM")
+    author = llm_model()
     parser = ChecklistParser()
     
     # 1. Find the first chapter title for filename generation

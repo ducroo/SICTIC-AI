@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple
 
 
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
@@ -23,7 +23,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
     """
     startup_slug = slugify(startup)
     storage = get_storage()
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     
     from lib.insight_filepath import get_insight_filepath
     output_file = get_insight_filepath(

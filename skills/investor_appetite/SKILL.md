@@ -22,7 +22,7 @@ description: Determines the ideal startup profile for one or more investors base
    * For each `investor_name` in the list:
      * **Filename Generation & Caching:**
        * Sanitize `investor_name` into a safe string.
-       * Determine the model suffix dynamically via the `DEFAULT_LLM` environment variable.
+       * Determine the model suffix dynamically via the configured `LLM_MODEL`.
        * Construct the output file path: `<REPOSITORY_DIR>/insights/sictic_members/investor_appetite/<sanitized_name>_<model_name>.md`.
        * Use the `check_insight_refresh` utility (dataset: `"sictic_members"`, file: `"investor_appetite/<sanitized_name>_<model_name>.md"`). 
        * If a refresh is not needed and the file exists, read its contents, append to the result dictionary, and skip to the next investor.

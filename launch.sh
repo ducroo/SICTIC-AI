@@ -41,7 +41,7 @@ ollama_model_name() {
 
 ollama_has_model() {
     local model="$1"
-    local host="${OLLAMA_HOST:-http://localhost:11434}"
+    local host="${2:-${OLLAMA_HOST:-http://localhost:11434}}"
     if curl -fsS "$host/api/tags" 2>/dev/null | grep -Eq "\"(name|model)\":\"$model\""; then
         return 0
     fi
@@ -55,17 +55,21 @@ ollama_has_model() {
 ensure_ollama_model() {
     local configured="$1"
     local label="$2"
+    local host="${3:-${OLLAMA_HOST:-http://localhost:11434}}"
     local model
     model="$(ollama_model_name "$configured")"
     if [ -z "$model" ]; then
         return
     fi
-    if ollama_has_model "$model"; then
+    if ! curl -s "$host" >/dev/null 2>&1; then
+        echo "WARNING: ollama endpoint for $label is not responding at $host; cannot check/pull $model."
+        return
+    fi
+    if ollama_has_model "$model" "$host"; then
         echo "ollama model present ($label): $model"
         return
     fi
     echo "Pulling missing ollama model ($label): $model"
-    local host="${OLLAMA_HOST:-http://localhost:11434}"
     if curl -fsS "$host/api/pull" \
         -H "Content-Type: application/json" \
         -d "{\"name\":\"$model\",\"stream\":false}" >/dev/null; then
@@ -81,13 +85,15 @@ ensure_ollama_model() {
 }
 
 ensure_ollama_models() {
-    if ! curl -s "${OLLAMA_HOST:-http://localhost:11434}" >/dev/null 2>&1; then
-        echo "WARNING: ollama is not responding; cannot check/pull models."
-        return
-    fi
-    ensure_ollama_model "${DEFAULT_LLM:-}" "DEFAULT_LLM"
-    ensure_ollama_model "${DEFAULT_VLM:-}" "DEFAULT_VLM"
-    ensure_ollama_model "${DEFAULT_EMBEDDINGS:-}" "DEFAULT_EMBEDDINGS"
+    local ollama_host="${OLLAMA_HOST:-http://localhost:11434}"
+    local llm_host="${LLM_BASE_URL:-$ollama_host}"
+    local embedding_host="${EMBEDDING_BASE_URL:-$ollama_host}"
+    local llm_model="${LLM_MODEL:-${DEFAULT_LLM:-}}"
+    local embedding_model="${EMBEDDING_MODEL:-${DEFAULT_EMBEDDINGS:-}}"
+
+    ensure_ollama_model "$llm_model" "LLM_MODEL" "$llm_host"
+    ensure_ollama_model "${DEFAULT_VLM:-}" "DEFAULT_VLM" "$ollama_host"
+    ensure_ollama_model "$embedding_model" "EMBEDDING_MODEL" "$embedding_host"
 }
 
 # ---------- start ----------

@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
@@ -17,7 +17,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     """
     storage = get_storage()
     event_name_slug = slugify(event_name)
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     
     from lib.insight_filepath import get_insight_filepath
     out_path = get_insight_filepath(

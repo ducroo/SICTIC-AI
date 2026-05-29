@@ -1,5 +1,5 @@
 from typing import Optional
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.insight_filepath import get_insight_filepath
@@ -24,7 +24,7 @@ async def generate_dataset_insight(
     Handles cache checking, config loading, executing dataset_chat, and saving output.
     """
     dataset_slug = slugify(dataset_name)
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     storage = get_storage()
     
     output_path = get_insight_filepath(

@@ -4,7 +4,7 @@ import asyncio
 from typing import List
 from rapidfuzz import process, fuzz
 
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
@@ -88,7 +88,7 @@ async def _generate_single_profile(dataset_slug: str, person: Person) -> None:
     display_name = person.display_name
 
     # Paths & Refresh Check
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     output_file = get_insight_filepath(
         dataset_name=dataset_slug,
         skill_name="person_profile",

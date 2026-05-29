@@ -1,4 +1,4 @@
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.insight_refresh import check_insight_refresh
@@ -41,7 +41,7 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
         raise ValueError(f"Missing configuration for investor_appetite or startup_profile: {e}")
 
     storage = get_storage()
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     
     from lib.insight_filepath import get_insight_filepath
 

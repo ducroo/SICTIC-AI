@@ -13,6 +13,12 @@ os.environ["REPO_DIR"] = str(REPO_ROOT)
 os.environ["WORKSPACE_DIR"] = str(REPO_ROOT / "skills")
 os.environ["STORAGE_PROVIDER"] = "local"
 os.environ["STORAGE_PATH"] = str(REPO_ROOT / ".pytest-storage")
+os.environ["LLM_MODEL"] = "ollama/test_model:1b"
+os.environ["LLM_BASE_URL"] = "http://localhost:11434"
+os.environ["LLM_API_KEY"] = ""
+os.environ["EMBEDDING_MODEL"] = "ollama/test-embedding:8b"
+os.environ["EMBEDDING_BASE_URL"] = "http://localhost:11434"
+os.environ["EMBEDDING_API_KEY"] = ""
 os.environ["DEFAULT_LLM"] = "ollama/test_model:1b"
 os.environ["DEFAULT_VLM"] = "ollama/test-vlm:1b"
 os.environ["DEFAULT_EMBEDDINGS"] = "ollama/test-embedding:8b"
@@ -70,6 +76,12 @@ def mock_env(monkeypatch, tmp_path):
     monkeypatch.setenv("STORAGE_PATH", str(repository_dir_mock))
     monkeypatch.setenv("REPO_DIR", str(Path(__file__).resolve().parents[1]))
     monkeypatch.setenv("WORKSPACE_DIR", str(workspace_mock))
+    monkeypatch.setenv("LLM_MODEL", "ollama/test_model:1b")
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("EMBEDDING_MODEL", "ollama/test-embedding:8b")
+    monkeypatch.setenv("EMBEDDING_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("EMBEDDING_API_KEY", "")
     monkeypatch.setenv("DEFAULT_LLM", "ollama/test_model:1b")
     monkeypatch.setenv("DEFAULT_VLM", "ollama/test-vlm:1b")
     monkeypatch.setenv("DEFAULT_EMBEDDINGS", "ollama/test-embedding:8b")

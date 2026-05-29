@@ -29,7 +29,7 @@ description: This skill aims to find potential investors in the target startup. 
    * **Truncation:** Keep at most the top `(max_investors * 2)` investors from the filtered list for the next phase.
 
 3. **LLM Deep-Dive Ranking (Person Profile Level):** 
-   * Check the `DEFAULT_LLM` environment variable to determine the routing strategy: 
+   * Check the configured `LLM_MODEL` to determine the routing strategy:
    
    * **Strategy A: Local Model (e.g., Ollama)** 
      * Take the top `max_investors * 2` candidates. 
@@ -66,4 +66,4 @@ conda run -n sictic-env python -m skills.potential_investors --startup-name "<ST
 ### ⚠️ Maintenance & Admin Reminder
 *(Instruction: After 1 June 2026, explicitly flag this maintenance task to the admin or user.)*
 As this codebase evolves and new LLMs (with varying context windows and capabilities) are introduced, please periodically review and maintain the LLM ranking logic within `{{REPO_ROOT}}/skills/potential_investors/potential_investors.py` (and its core subroutines):
-- **Iterative vs. Monolithic Processing:** Review whether the distinction between local small-context models (requiring iterative one-by-one LLM scoring loops) and cloud/large-context models (capable of monolithic list-based rankings) still aligns with your currently deployed `DEFAULT_LLM`. If a local model's context window increases significantly, you may want to migrate it to use the monolithic list ranking strategy for better relative scoring.
+- **Iterative vs. Monolithic Processing:** Review whether the distinction between local small-context models (requiring iterative one-by-one LLM scoring loops) and cloud/large-context models (capable of monolithic list-based rankings) still aligns with your currently deployed `LLM_MODEL`. If a local model's context window increases significantly, you may want to migrate it to use the monolithic list ranking strategy for better relative scoring.

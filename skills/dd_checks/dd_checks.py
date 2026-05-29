@@ -1,4 +1,4 @@
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from lib.batch_audit import batch_audit
@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 
 def initialize_report_file(startup_name_lower: str, startup: str) -> str:
     from lib.insight_filepath import get_insight_filepath
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
     output_file = get_insight_filepath(
         dataset_name=startup_name_lower,
         skill_name="dd_checks",

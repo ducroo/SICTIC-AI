@@ -9,11 +9,13 @@ from litellm.exceptions import APIConnectionError
 from lib.services_gateway import gateway, Priority
 from lib.env import get_env_var
 from lib.logger import get_logger
+from lib.model_config import llm_endpoint
 
 logger = get_logger(__name__)
 
 async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Optional[str]:
-    default_model = get_env_var("DEFAULT_LLM")
+    endpoint = llm_endpoint()
+    default_model = endpoint.model
     is_ollama = default_model.startswith("ollama/")
 
     min_ctx = int(get_env_var("OLLAMA_NUM_CTX"))
@@ -34,14 +36,14 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
         ctx = max(min_ctx, min(max_ctx, power_of_2))
 
     messages = [{"role": "user", "content": prompt}]
-    kwargs: Dict[str, Any] = {"model": default_model, "messages": messages, "timeout": 3600.0}
+    kwargs: Dict[str, Any] = endpoint.litellm_kwargs()
+    kwargs.update({"messages": messages, "timeout": 3600.0})
     
     if response_format:
         if not is_ollama:
             kwargs["response_format"] = response_format
 
     if is_ollama:
-        kwargs["api_base"] = get_env_var("OLLAMA_HOST")
         # Only pass num_ctx if it's larger than the baseline daemon config
         if ctx > min_ctx:
             kwargs["num_ctx"] = ctx

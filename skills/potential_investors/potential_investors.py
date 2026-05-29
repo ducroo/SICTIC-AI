@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from lib.env import get_env_var
+from lib.model_config import llm_model
 from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
@@ -18,7 +18,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     """
     storage = get_storage()
     startup_slug = slugify(startup_name)
-    default_llm = get_env_var("DEFAULT_LLM")
+    default_llm = llm_model()
 
     from lib.insight_filepath import get_insight_filepath
     out_path = get_insight_filepath(

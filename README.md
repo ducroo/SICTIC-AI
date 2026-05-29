@@ -109,19 +109,24 @@ configure these variables:
 |2| `REPO_DIR` | Absolute path to the root of this SICTIC-AI git repository | `/Users/you/SICTIC-AI` |
 |3| `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
 |4| `STORAGE_PATH` | If `local`: absolute path. If `google`/`hybrid`: Drive folder ID, `root`, or folder path/name | `/Users/you/sictic_data`, `SICTIC-AI`, or `root` |
-|5| `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
-|6| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
-|7| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
-|8| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
+|5| `LLM_MODEL` | The primary text-generation model used for analysis | `google/gemini-flash-latest` or `ollama/qwen3:8b` |
+|6| `LLM_BASE_URL` | Base URL for the text-generation endpoint; blank uses the provider default | `http://localhost:11434` |
+|7| `LLM_API_KEY` | API key for the text-generation endpoint when needed | blank for local Ollama |
+|8| `EMBEDDING_MODEL` | The model used for semantic search embeddings | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
+|9| `EMBEDDING_BASE_URL` | Base URL for the embedding endpoint; blank uses the provider default | `http://localhost:11434` |
+|10| `EMBEDDING_API_KEY` | API key for the embedding endpoint when needed | blank for local Ollama |
+|11| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
+|12| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
 
 *(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
+`DEFAULT_LLM` and `DEFAULT_EMBEDDINGS` are still accepted as compatibility aliases, but new installs should configure `LLM_*` and `EMBEDDING_*`.
 
 ### Step 4: Start Background Services
 
 SICTIC-AI relies on Qdrant for semantic search and on Ollama when any configured
 model starts with `ollama/`. The launcher downloads Qdrant when needed, starts
-Qdrant and Ollama, and pulls the Ollama models listed in `.env` if they are not
-already available.
+Qdrant and Ollama, and pulls the Ollama models referenced by `LLM_MODEL`,
+`EMBEDDING_MODEL`, and `DEFAULT_VLM` if they are not already available.
 
 ```bash
 ./launch.sh start
@@ -206,9 +211,13 @@ GDRIVE_CREDENTIALS=/absolute/path/to/credentials.json
 GDRIVE_TOKEN=/absolute/path/to/token.json
 QDRANT_HOST=http://localhost:6333
 OLLAMA_HOST=http://localhost:11434
-DEFAULT_LLM=...
+LLM_MODEL=...
+LLM_BASE_URL=...
+LLM_API_KEY=...
 DEFAULT_VLM=...
-DEFAULT_EMBEDDINGS=...
+EMBEDDING_MODEL=...
+EMBEDDING_BASE_URL=...
+EMBEDDING_API_KEY=...
 ```
 
 The default test suite is mocked/local and safe to run with:

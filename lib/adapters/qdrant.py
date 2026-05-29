@@ -15,6 +15,7 @@ from langchain_text_splitters import MarkdownTextSplitter
 from lib.slugify import slugify
 from lib.env import get_env_var
 from lib.logger import get_logger
+from lib.model_config import embedding_endpoint, embedding_model
 
 logger = get_logger(__name__)
 
@@ -43,7 +44,7 @@ class QdrantAdapter:
     """Manages the connection and semantic operations with Qdrant."""
     @staticmethod
     def collection_for(collection_name: str, embeddings_model: Optional[str] = None) -> str:
-        model = embeddings_model or get_env_var("DEFAULT_EMBEDDINGS")
+        model = embeddings_model or embedding_model()
         clean_model = model.split("/")[-1]
         return slugify(f"{collection_name}-{clean_model}")
 
@@ -53,8 +54,8 @@ class QdrantAdapter:
         litellm.suppress_debug_info = True
         litellm.disable_aiohttp_transport = True
 
-        self.client = QdrantClient(url="http://localhost:6333")
-        model = get_env_var("DEFAULT_EMBEDDINGS")
+        self.client = QdrantClient(url=get_env_var("QDRANT_HOST"))
+        model = embedding_model()
         self.collection_name = self.collection_for(collection_name, model)
 
         collections = self.client.get_collections().collections
@@ -89,9 +90,9 @@ class QdrantAdapter:
         """Returns the embedding dimension for the configured model."""
         import litellm
 
-        dummy_kwargs = {"model": model, "input": ["test"]}
-        if model.startswith("ollama/"):
-            dummy_kwargs["api_base"] = get_env_var("OLLAMA_HOST")
+        dummy_kwargs = embedding_endpoint().litellm_kwargs()
+        dummy_kwargs["model"] = model
+        dummy_kwargs["input"] = ["test"]
 
         try:
             dummy_response = litellm.embedding(**dummy_kwargs)
@@ -135,10 +136,9 @@ class QdrantAdapter:
 
     async def _get_embedding(self, text: str) -> List[float]:
         import litellm
-        model = get_env_var("DEFAULT_EMBEDDINGS")
-        kwargs = {"model": model, "input": [text]}
-        if model.startswith("ollama/"):
-            kwargs["api_base"] = get_env_var("OLLAMA_HOST")
+        endpoint = embedding_endpoint()
+        kwargs = endpoint.litellm_kwargs()
+        kwargs["input"] = [text]
             
         try:
             response = await litellm.aembedding(**kwargs)
