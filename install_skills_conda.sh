@@ -88,6 +88,30 @@ if [ -z "$ENV_NAME" ]; then
 fi
 DESIRED_PYTHON=$(awk -F= '/^[[:space:]]*-[[:space:]]*python=/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' "$ENV_FILE")
 
+active_conda_env() {
+    if [ -n "${CONDA_DEFAULT_ENV:-}" ]; then
+        printf '%s\n' "$CONDA_DEFAULT_ENV"
+        return
+    fi
+    if [ -n "${CONDA_PREFIX:-}" ]; then
+        basename "$CONDA_PREFIX"
+    fi
+}
+
+require_env_not_active_for_rebuild() {
+    active_env=$(active_conda_env)
+    if [ "$REBUILD_ENV" -eq 1 ] && [ "$active_env" = "$ENV_NAME" ]; then
+        echo "install_skills_conda: cannot rebuild '$ENV_NAME' while it is the active conda environment." >&2
+        echo >&2
+        echo "Run this first:" >&2
+        echo "    conda deactivate" >&2
+        echo >&2
+        echo "Then rerun the installer:" >&2
+        echo "    $0 --target \"$TARGET\" --rebuild-env" >&2
+        exit 1
+    fi
+}
+
 echo "Installing SICTIC-AI (conda variant)"
 echo "  source:   $REPO_ROOT"
 echo "  target:   $TARGET"
@@ -104,6 +128,8 @@ if [ "$SKIP_ENV" -eq 0 ]; then
         env_exists=1
     fi
 
+    require_env_not_active_for_rebuild
+
     if [ "$env_exists" -eq 1 ] && [ "$REBUILD_ENV" -eq 1 ]; then
         echo "[1/3] conda env: --rebuild-env — removing existing '$ENV_NAME'..."
         conda env remove -n "$ENV_NAME" --yes >/dev/null
@@ -119,6 +145,8 @@ if [ "$SKIP_ENV" -eq 0 ]; then
                 IFS= read -r rebuild_answer || rebuild_answer=""
                 case "$rebuild_answer" in
                     y|Y|yes|YES)
+                        REBUILD_ENV=1
+                        require_env_not_active_for_rebuild
                         conda env remove -n "$ENV_NAME" --yes >/dev/null
                         env_exists=0
                         ;;
