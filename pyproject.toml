@@ -10,12 +10,12 @@ requires-python = ">=3.10"
 dependencies = [
     "aiohttp",
     "apify-client",
-    "docling[ocrmac]",
+    "docling[ocrmac]==2.72.0",
     "google-api-python-client",
     "google-auth-oauthlib",
     "langchain-text-splitters",
     "litellm",
-    "ocrmac",
+    "ocrmac==1.0.1",
     "ollama",
     "polars",
     "pydantic",
@@ -25,6 +25,8 @@ dependencies = [
     "requests",
     "rich",
     "typer",
+    "torch==2.10.0",
+    "torchvision==0.25.0",
 ]
 
 [project.optional-dependencies]

@@ -86,6 +86,7 @@ if [ -z "$ENV_NAME" ]; then
     echo "install_skills_conda: could not read 'name:' from $ENV_FILE." >&2
     exit 1
 fi
+DESIRED_PYTHON=$(awk -F= '/^[[:space:]]*-[[:space:]]*python=/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' "$ENV_FILE")
 
 echo "Installing SICTIC-AI (conda variant)"
 echo "  source:   $REPO_ROOT"
@@ -107,6 +108,30 @@ if [ "$SKIP_ENV" -eq 0 ]; then
         echo "[1/3] conda env: --rebuild-env — removing existing '$ENV_NAME'..."
         conda env remove -n "$ENV_NAME" --yes >/dev/null
         env_exists=0
+    fi
+
+    if [ "$env_exists" -eq 1 ] && [ -n "$DESIRED_PYTHON" ]; then
+        CURRENT_PYTHON=$(conda run -n "$ENV_NAME" python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null | tail -1 | tr -d '\r' || true)
+        if [ -n "$CURRENT_PYTHON" ] && [ "$CURRENT_PYTHON" != "$DESIRED_PYTHON" ]; then
+            echo "[1/3] conda env: '$ENV_NAME' uses Python $CURRENT_PYTHON, but $ENV_FILE requires Python $DESIRED_PYTHON."
+            if [ "$INTERACTIVE" -eq 1 ]; then
+                printf "Rebuild conda env '$ENV_NAME' now? This replaces the env but keeps project files and .env. [y/N]: "
+                IFS= read -r rebuild_answer || rebuild_answer=""
+                case "$rebuild_answer" in
+                    y|Y|yes|YES)
+                        conda env remove -n "$ENV_NAME" --yes >/dev/null
+                        env_exists=0
+                        ;;
+                    *)
+                        echo "install_skills_conda: rebuild required for the pinned Docling/macOS runtime. Re-run with --rebuild-env when ready." >&2
+                        exit 1
+                        ;;
+                esac
+            else
+                echo "install_skills_conda: rebuild required for Python $DESIRED_PYTHON. Re-run with --rebuild-env." >&2
+                exit 1
+            fi
+        fi
     fi
 
     if [ "$env_exists" -eq 0 ]; then

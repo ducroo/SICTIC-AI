@@ -11,8 +11,8 @@ channels:
 # has an `extra` we need (e.g. docling[ocrmac]), or is the editable project.
 
 dependencies:
-  # Match the venv build (install_skills.sh uses python3.13).
-  - python=3.13
+  # Match the known-good macOS/Apple Silicon Docling runtime.
+  - python=3.12
   - pip
 
   # === Runtime deps available on conda-forge (mirrors pyproject.toml) ===
@@ -38,7 +38,9 @@ dependencies:
       - apify-client
       - langchain-text-splitters
       - ollama
-      - docling[ocrmac]
-      - ocrmac
+      - docling[ocrmac]==2.72.0
+      - torch==2.10.0
+      - torchvision==0.25.0
+      - ocrmac==1.0.1
       # Editable install of this repo — makes `skills.*` and `lib.*` importable.
       - --editable .
