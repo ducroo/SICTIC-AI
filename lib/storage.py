@@ -247,10 +247,11 @@ def get_storage() -> Storage:
                                for drive paths and LocalStorage($REPO_DIR/cache) for caches.
     STORAGE_PROVIDER="hybrid": MirrorStorage — local mirror at STORAGE_MIRROR_DIR,
                                Drive as read-fallback and explicit sync target.
-                               Writes go local-only; use scripts/gdrive_sync.py
-                               to push changes back. STORAGE_PATH is the Drive
-                               root folder ID, "root", or folder path/name used
-                               for read-fallback.
+                               Markdown writes go local first, then upload to
+                               Drive as Google Docs; cache/derived OCR paths
+                               stay local-only. STORAGE_PATH is the Drive root
+                               folder ID, "root", or folder path/name used for
+                               read-fallback and Markdown upload.
     """
     global _storage_singleton
     if _storage_singleton is not None:

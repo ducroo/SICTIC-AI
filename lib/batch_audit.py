@@ -3,6 +3,7 @@ import re
 from typing import Dict, Tuple
 
 from skills.dataset_chat.dataset_chat import dataset_chat
+from skills.dataset_chat.dataset_chat import _fallback_trigger
 from skills.config_load.config_load import config_load
 
 from lib.insight_filepath import get_insight_filepath
@@ -14,6 +15,11 @@ from lib.insight_refresh import check_insight_refresh
 from lib.slugify import slugify
 
 logger = get_logger(__name__)
+
+
+def _table_cell(value) -> str:
+    return str(value).replace('|', '\\|').replace('\n', ' ')
+
 
 class ChecklistParser:
     def __init__(self):
@@ -58,16 +64,31 @@ async def run_audit_query(dataset_name: str, query_text: str, idx_string: str, l
     """Runs a single question against dataset_chat and robustly parses the JSON."""
     logger.info(f"[{dataset_name}] Auditing item {idx_string}: {query_text[:50]}...")
     try:
-        raw_response = await dataset_chat(dataset_name, query_text, llm_instructions)
+        raw_response = await dataset_chat(
+            dataset_name,
+            query_text,
+            llm_instructions,
+            strict_insufficient_context=False,
+        )
+        if raw_response and raw_response.strip() == _fallback_trigger():
+            return {"status": "Not Found", "summary": "Not Found", "concerns": "None"}
+    except Exception as e:
+        logger.error(f"[{dataset_name}] LLM request failed for batch_audit item {idx_string}: {e}")
+        return {"status": "Error", "summary": _table_cell(f"LLM request failed: {e}"), "concerns": "N/A"}
+
+    try:
         json_result = repair_json_payload(raw_response if raw_response else "")
+        status = str(json_result.get("status", "Error"))
+        if status.strip() == _fallback_trigger():
+            status = "Not Found"
         return {
-            "status": str(json_result.get("status", "Error")).replace('|', '\\|').replace('\n', ' '),
-            "summary": str(json_result.get("summary", "Error")).replace('|', '\\|').replace('\n', ' '),
-            "concerns": str(json_result.get("concerns", "Error")).replace('|', '\\|').replace('\n', ' ')
+            "status": _table_cell(status),
+            "summary": _table_cell(json_result.get("summary", "Error")),
+            "concerns": _table_cell(json_result.get("concerns", "Error"))
         }
     except Exception as e:
         logger.error(f"[{dataset_name}] Failed to parse batch_audit JSON response for {idx_string}: {e}")
-        return {"status": "Error", "summary": "Failed to parse LLM response.", "concerns": "N/A"}
+        return {"status": "Error", "summary": _table_cell(f"Failed to parse LLM response: {e}"), "concerns": "N/A"}
 
 async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     """
@@ -102,8 +123,11 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
 
     needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], file_path, author)
     if not needs_refresh:
-        logger.info(f"[{dataset_name}] Using cached batch audit results from {matched_file}")
-        return cached_content
+        if _fallback_trigger() in cached_content:
+            logger.info(f"[{dataset_name}] Ignoring cached batch audit with fallback markers: {matched_file}")
+        else:
+            logger.info(f"[{dataset_name}] Using cached batch audit results from {matched_file}")
+            return cached_content
     
     # Strict dictionary lookup
     config = config_load()

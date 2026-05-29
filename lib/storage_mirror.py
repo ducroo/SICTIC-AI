@@ -4,12 +4,17 @@ backup/source-of-truth that gets explicitly pulled and pushed.
 
 Behavior:
   - read_*: try local; on miss, fetch from Drive, write to local mirror, return.
-  - write_*, mkdir, remove, rmtree: local only. Drive is never mutated at runtime.
+  - write_*: write local first; for non-cache Markdown files, also upload to Drive
+    as Google Docs. Existing Google Docs are updated in-place so Drive keeps
+    revision history.
+  - mkdir, remove, rmtree: local only. Drive structure is created lazily during
+    Markdown uploads; destructive Drive changes still require explicit sync.
   - exists/is_dir/list*/mtime: local only. After a pull the mirror is the truth.
   - Paths whose first segment is in _LOCAL_PREFIXES skip the Drive fallback entirely
     (used for caches that should never round-trip to Drive — datasets2md/ etc.).
 
-Drive mutations happen exclusively through scripts/gdrive_sync.py (push direction).
+Bulk Drive mutations still happen through scripts/gdrive_sync.py. Runtime hybrid
+uploads are intentionally narrow: Markdown output files only.
 """
 from __future__ import annotations
 
@@ -30,6 +35,10 @@ _LOCAL_PREFIXES = ("datasets2md", "cache")
 def _is_local_only(rel: str) -> bool:
     head = rel.split("/", 1)[0] if rel else ""
     return head in _LOCAL_PREFIXES
+
+
+def _should_upload_markdown(rel: str) -> bool:
+    return not _is_local_only(rel) and rel.lower().endswith(".md")
 
 
 class MirrorStorage:
@@ -75,10 +84,16 @@ class MirrorStorage:
         return self.read_bytes(rel).decode(encoding)
 
     def write_bytes(self, rel: str, content: bytes) -> None:
+        rel = _validate_rel(rel)
         self.local.write_bytes(rel, content)
+        if _should_upload_markdown(rel):
+            self.drive.write_bytes(rel, content)
 
     def write_text(self, rel: str, content: str, *, encoding: str = "utf-8") -> None:
+        rel = _validate_rel(rel)
         self.local.write_text(rel, content, encoding=encoding)
+        if _should_upload_markdown(rel):
+            self.drive.write_bytes(rel, content.encode(encoding))
 
     def exists(self, rel: str) -> bool:
         rel = _validate_rel(rel)

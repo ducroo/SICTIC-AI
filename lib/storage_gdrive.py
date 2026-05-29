@@ -238,6 +238,34 @@ class GoogleDriveStorage:
             raise FileNotFoundError(rel)
         return fid
 
+    def _children_named(self, parent_id: str, name: str) -> List[dict]:
+        service = self._ensure_service()
+        with self._service_lock:
+            res = service.files().list(
+                q=f"'{parent_id}' in parents and name='{_escape_q(name)}' and trashed=false",
+                fields=f"files({_FIELDS})",
+                pageSize=100,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            ).execute()
+        return sorted(res.get("files", []), key=lambda f: f["id"])
+
+    def _resolve_unique_child_for_write(self, parent_id: str, rel: str, name: str) -> Optional[dict]:
+        matches = self._children_named(parent_id, name)
+        if len(matches) > 1:
+            ids = ", ".join(item["id"] for item in matches)
+            raise RuntimeError(
+                f"{rel}: ambiguous Google Drive path. Found {len(matches)} non-trashed "
+                f"files named {name!r} in the target folder: {ids}."
+            )
+        if not matches:
+            self._path_to_id[rel] = None
+            self._path_to_mime.pop(rel, None)
+            return None
+        self._path_to_id[rel] = matches[0]["id"]
+        self._path_to_mime[rel] = matches[0].get("mimeType", "")
+        return matches[0]
+
     def _list_children(self, rel: str) -> List[dict]:
         self._resolve_root_folder()
         rel = rel.strip("/")
@@ -358,12 +386,14 @@ class GoogleDriveStorage:
         if _is_md_path(rel):
             # Upload as markdown and let Drive convert to a Google Doc on import.
             # On update, the file ID is preserved so subsequent edits land in the
-            # same gdoc — no duplicate-file problem.
+            # same gdoc and Drive records a new revision instead of creating a
+            # duplicate sibling.
             media = MediaIoBaseUpload(io.BytesIO(content), mimetype=_MD_MIME, resumable=False)
-            existing_id = self._resolve(rel)
+            existing = self._resolve_unique_child_for_write(parent_id, rel, name)
+            existing_id = existing["id"] if existing else None
             with self._service_lock:
                 if existing_id:
-                    existing_mime = self._get_mime(rel, existing_id)
+                    existing_mime = existing.get("mimeType") or self._get_mime(rel, existing_id)
                     if existing_mime != _GDOC_MIME:
                         raise RuntimeError(
                             f"{rel}: cannot overwrite — existing file has mimeType="
@@ -390,7 +420,8 @@ class GoogleDriveStorage:
             return
 
         media = MediaIoBaseUpload(io.BytesIO(content), mimetype="application/octet-stream", resumable=False)
-        existing_id = self._resolve(rel)
+        existing = self._resolve_unique_child_for_write(parent_id, rel, name)
+        existing_id = existing["id"] if existing else None
         with self._service_lock:
             if existing_id:
                 service.files().update(

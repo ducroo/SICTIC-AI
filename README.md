@@ -198,7 +198,7 @@ In production at SICTIC, we use Google Drive to share datasets and insights with
 
 ## Local Google-backed Testing
 
-For local testing with Google credentials, prefer `STORAGE_PROVIDER="hybrid"`. In hybrid mode, Google Drive is used as a read fallback while generated files are written to a local mirror, which avoids accidental production Drive writes during repeated tests.
+For local testing with Google credentials, prefer `STORAGE_PROVIDER="hybrid"`. In hybrid mode, Google Drive is used as a read fallback while generated files are written to a local mirror first. Markdown outputs outside local cache paths are then uploaded to Drive as Google Docs; updating an existing Google Doc preserves the file ID and creates a normal Drive revision.
 
 Required `.env` fields for hybrid testing:
 

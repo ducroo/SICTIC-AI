@@ -1,3 +1,5 @@
+import re
+
 from lib.model_config import llm_model
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
@@ -10,6 +12,22 @@ from lib.storage_domains import dataset_raw_path
 
 logger = get_logger(__name__)
 
+
+def parse_industry_type(response: str, allowed_industry_types: set[str]) -> str:
+    """Parse the explicit industry classification from the LLM response."""
+    allowed_by_lower = {item.lower(): item for item in allowed_industry_types}
+    match = re.search(r"(?im)^\s*industry\s+type\s*:\s*([A-Za-z][A-Za-z -]*)", response or "")
+    if match:
+        candidate = match.group(1).strip().split()[0].lower()
+        if candidate in allowed_by_lower:
+            return allowed_by_lower[candidate]
+
+    stripped = (response or "").strip().lower()
+    if stripped in allowed_by_lower:
+        return allowed_by_lower[stripped]
+
+    logger.warning(f"Could not parse industry type from response; defaulting to general: {response}")
+    return allowed_by_lower.get("general", "general")
 
 
 def initialize_report_file(startup_name_lower: str, startup: str) -> str:
@@ -30,12 +48,7 @@ async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_i
     industry_response = await dataset_chat(dataset_name=startup_name_lower, questions=industry_prompt, llm_instructions=industry_instructions, max_chunks=5)
     
     logger.info(f"[{startup_name_lower}] Raw Industry Type LLM Response: {industry_response}")
-    response_lower = industry_response.lower()
-    for allowed in allowed_industry_types:
-        if allowed.lower() in response_lower:
-            return allowed
-            
-    return "general"
+    return parse_industry_type(industry_response or "", allowed_industry_types)
 
 async def chapter_by_chapter(startup_name_lower: str, sorted_chapters: list, industry_type: str, dd_config: dict, output_file: str):
     checklists = dd_config['checklists']
