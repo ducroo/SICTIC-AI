@@ -51,6 +51,7 @@ class QdrantAdapter:
         # Suppress litellm boot warnings
         import litellm
         litellm.suppress_debug_info = True
+        litellm.disable_aiohttp_transport = True
 
         self.client = QdrantClient(url="http://localhost:6333")
         model = get_env_var("DEFAULT_EMBEDDINGS")

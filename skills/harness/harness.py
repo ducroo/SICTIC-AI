@@ -243,19 +243,24 @@ async def dispatch_command(line: str, registry: Dict[str, HarnessCommand] | None
 
 
 async def run_repl() -> None:
-    registry = build_registry()
-    print("SICTIC-AI harness. Type /help for commands, /exit to quit.")
-    while True:
-        try:
-            line = input("> ")
-        except (EOFError, KeyboardInterrupt):
-            print()
-            return
-        output = await dispatch_command(line, registry)
-        if output == "__EXIT__":
-            return
-        if output:
-            print(output)
+    try:
+        registry = build_registry()
+        print("SICTIC-AI harness. Type /help for commands, /exit to quit.")
+        while True:
+            try:
+                line = input("> ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return
+            output = await dispatch_command(line, registry)
+            if output == "__EXIT__":
+                return
+            if output:
+                print(output)
+    finally:
+        from lib.litellm_cleanup import close_litellm_sessions
+
+        await close_litellm_sessions()
 
 
 def run() -> None:

@@ -14,6 +14,11 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+# CLI commands are short-lived. LiteLLM's aiohttp transport can leave process-global
+# sessions open at interpreter shutdown, which prints noisy warnings after successful
+# one-shot harness commands. Use httpx transport instead so clients close cleanly.
+litellm.disable_aiohttp_transport = True
+
 class Priority(Enum):
     USER = 0      # Live user chats
     STANDARD = 1  # Normal background tasks

@@ -14,8 +14,9 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
     await sync_datasets([dataset_slug], raise_on_error=True)
     qdrant = QdrantAdapter(dataset_slug)
     
-    if max_chunks is None and threshold_factor is None:
+    if max_chunks is None:
         max_chunks = 25
+    if threshold_factor is None:
         threshold_factor = 0.8
         
     sorted_chunks = await qdrant.search(query, limit=max_chunks, threshold_factor=threshold_factor)

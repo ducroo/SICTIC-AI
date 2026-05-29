@@ -19,6 +19,9 @@ IGNORED_EXTENSIONS = (
     '.exe', '.bin', '.dll', '.so', '.dmg',
     '.gdoc', '.gsheet', '.gslide', '.gdraw'
 )
+IGNORED_FILENAMES = {
+    "__active_dataset__",
+}
 
 _sync_locks = {}
 _last_sync_times = {}
@@ -74,7 +77,12 @@ async def _sync_single_dataset(dataset_name: str):
 def _list_source_files(storage, raw_rel: str):
     """Returns [(filename_relative_to_raw_rel, mtime_epoch)] for all non-ignored files."""
     items = storage.list_with_mtime(raw_rel, recursive=True)
-    return [(name, mtime) for name, mtime in items if not name.lower().endswith(IGNORED_EXTENSIONS)]
+    return [
+        (name, mtime)
+        for name, mtime in items
+        if name.rsplit("/", 1)[-1] not in IGNORED_FILENAMES
+        and not name.lower().endswith(IGNORED_EXTENSIONS)
+    ]
 
 
 async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
