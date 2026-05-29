@@ -7,6 +7,15 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+def _fallback_trigger() -> str:
+    try:
+        config = config_load()
+        return config['dataset_chat']['fallback_trigger'].replace('\\_', '_')
+    except KeyError:
+        return 'INSUFFICIENT_CONTEXT'
+
+
 async def dataset_chat(
     dataset_name: str,
     questions: str,
@@ -23,6 +32,9 @@ async def dataset_chat(
 
     # 2. Retrieve context & Pass 1
     chunks = await dataset_search(dataset_name, questions, max_chunks=max_chunks)
+    if not chunks:
+        logger.warning(f"[{dataset_name}] No chunks retrieved; refusing empty-context LLM answer.")
+        return _fallback_trigger()
     
     pass1_instructions = llm_instructions
     if not pass1_instructions:
@@ -46,11 +58,7 @@ async def dataset_chat(
     response = await llm_chat(prompt=build_prompt(chunks, pass1_instructions))
     
     # 3. Fallback (Only if single query & failed)
-    try:
-        config = config_load()
-        fallback_trigger = config['dataset_chat']['fallback_trigger'].replace('\\_', '_')
-    except KeyError:
-        fallback_trigger = 'INSUFFICIENT_CONTEXT'
+    fallback_trigger = _fallback_trigger()
 
     if not is_explicit_multi and not llm_instructions and response and fallback_trigger in response.strip():
         logger.info(f"[{dataset_name}] Standard search failed. Generating multi-queries and retrying...")
@@ -58,6 +66,9 @@ async def dataset_chat(
         
         combined_queries = [questions] + new_queries
         merged_chunks = await dataset_search(dataset_name, combined_queries, max_chunks=max_chunks)
+        if not merged_chunks:
+            logger.warning(f"[{dataset_name}] Multi-query retry returned no chunks.")
+            return fallback_trigger
         
         logger.info(f"[{dataset_name}] Handing off to llm_chat (Pass 2).")
         return await llm_chat(prompt=build_prompt(merged_chunks, None))

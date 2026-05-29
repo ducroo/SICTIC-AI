@@ -24,8 +24,9 @@ _sync_locks = {}
 _last_sync_times = {}
 SYNC_CACHE_TTL = 60  # seconds
 
-async def sync_datasets(dataset_names: List[str]):
+async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False):
     """Iterates over multiple datasets to sync them overnight."""
+    errors = []
     for name in dataset_names:
         dataset_slug = slugify(name)
         
@@ -44,7 +45,11 @@ async def sync_datasets(dataset_names: List[str]):
                 _last_sync_times[dataset_slug] = time.time()
             except Exception as e:
                 logger.error(f"[{name}] Failed to sync dataset: {e}")
+                errors.append(f"{dataset_slug}: {e}")
             logger.info(f"[{name}] === Completed sync for dataset ===")
+
+    if errors and raise_on_error:
+        raise RuntimeError("Dataset sync failed: " + "; ".join(errors))
 
 async def _sync_single_dataset(dataset_name: str):
     """Main orchestrator: Syncs drive to disk (OCR), then disk to DB (Embed) for a single dataset."""

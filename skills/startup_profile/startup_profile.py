@@ -14,6 +14,8 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
+_INSUFFICIENT_CONTEXT = "INSUFFICIENT_CONTEXT"
+
 
 async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tuple[str, str]:
     """
@@ -49,6 +51,11 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
 
     if profile_output is None:
         raise ValueError("LLM returned None for the profile output.")
+    if _INSUFFICIENT_CONTEXT in profile_output.strip():
+        raise ValueError(
+            f"Insufficient indexed context for startup '{startup_slug}'. "
+            "Check dataset sync, parsed markdown, and Qdrant ingestion before generating a profile."
+        )
 
     storage.write_text(output_file, profile_output)
     return profile_output, output_file

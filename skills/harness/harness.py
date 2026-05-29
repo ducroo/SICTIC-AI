@@ -66,7 +66,7 @@ async def _sync(args: List[str]) -> str:
     ns = parser.parse_args(args)
     from skills.dataset_chat.core.ingestion import sync_datasets
 
-    await sync_datasets([ns.dataset])
+    await sync_datasets([ns.dataset], raise_on_error=True)
     return f"Synced dataset: {ns.dataset}"
 
 
@@ -260,4 +260,3 @@ async def run_repl() -> None:
 
 def run() -> None:
     asyncio.run(run_repl())
-

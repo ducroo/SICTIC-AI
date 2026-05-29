@@ -41,6 +41,6 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
 
     # 3. Ingest: Parse to markdown and embed in Qdrant
     logger.info(f"Ingesting ephemeral dataset '{temp_name}'...")
-    await sync_datasets([temp_name])
+    await sync_datasets([temp_name], raise_on_error=True)
 
     return temp_name

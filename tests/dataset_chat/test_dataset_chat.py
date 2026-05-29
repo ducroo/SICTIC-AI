@@ -38,9 +38,10 @@ async def test_dataset_chat_fallback(mocker):
     if the first pass triggers the fallback string.
     """
     # Mock dataset_search
+    from skills.dataset_chat.core.models import Chunk
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
     async def mock_search_coro(*args, **kwargs):
-        return []
+        return [Chunk(chunk_id="1", document_name="test_doc.pdf", page_number=1, last_modified=0.0, text="This is a dummy chunk.", score=1.0)]
     mock_search.side_effect = mock_search_coro
 
     # Mock llm_chat to trigger fallback on first call, success on second
@@ -67,3 +68,21 @@ async def test_dataset_chat_fallback(mocker):
     assert mock_search.call_count == 2
     assert mock_llm.call_count == 2
     mock_multi.assert_called_once_with("What is testing?")
+
+
+@pytest.mark.asyncio
+async def test_dataset_chat_refuses_empty_context(mocker):
+    mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
+    mock_search.return_value = []
+    mock_llm = mocker.patch("skills.dataset_chat.dataset_chat.llm_chat")
+    mock_config = mocker.patch("skills.dataset_chat.dataset_chat.config_load")
+    mock_config.return_value = {
+        "dataset_chat": {
+            "fallback_trigger": "INSUFFICIENT_CONTEXT"
+        }
+    }
+
+    output = await dataset_chat("test_dataset", "What is testing?")
+
+    assert output == "INSUFFICIENT_CONTEXT"
+    mock_llm.assert_not_called()

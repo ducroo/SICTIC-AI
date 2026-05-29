@@ -11,7 +11,7 @@ async def dataset_search(dataset_name: str, query: Union[str, List[str]] = "", m
     """Unified API to run semantic search and retrieve dataset chunks."""
     from lib.slugify import slugify
     dataset_slug = slugify(dataset_name)
-    await sync_datasets([dataset_slug])
+    await sync_datasets([dataset_slug], raise_on_error=True)
     qdrant = QdrantAdapter(dataset_slug)
     
     if max_chunks is None and threshold_factor is None:

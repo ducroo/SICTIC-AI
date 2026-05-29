@@ -50,7 +50,7 @@ def sync_cmd(
 ):
     try:
         import asyncio
-        asyncio.run(sync_datasets(dataset_names))
+        asyncio.run(sync_datasets(dataset_names, raise_on_error=True))
     except Exception as e:
         logger.error(str(e))
         raise typer.Exit(code=1)
