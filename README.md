@@ -151,6 +151,107 @@ conda run -n sictic-env python -m skills.harness
 
 Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and `/dd_checks <startup>`.
 
+### Member Profile Indexing Scripts
+
+Community matching skills such as `expert_search`, `potential_investors`, and
+`advocates` search the derived `person_profile` dataset. They do not scan every
+Google Drive insight on demand. Use the two maintenance scripts below to create
+member profile insights and then hydrate the searchable vector dataset from
+those insights.
+
+#### 1. Sync existing profile insights into Qdrant
+
+```bash
+conda run -n sictic-env python scripts/sync_person_profiles_from_insights.py --dry-run
+conda run -n sictic-env python scripts/sync_person_profiles_from_insights.py
+```
+
+This script expects existing profile insight Markdown under:
+
+```text
+insights/community/sictic-members/person-profile/
+```
+
+It then:
+* scans the existing `person_profile` insight files;
+* groups alternative files by person;
+* chooses the preferred profile for each person using `RANKED_LLMS`;
+* writes the selected files into `derived/person-profile/`;
+* removes stale derived files when a different LLM output is now preferred;
+* force-syncs the derived `person_profile` dataset into Qdrant.
+
+Use `--dry-run` first. A dry run showing zero candidates means there are no
+matching profile insight files at the configured storage path yet, or the local
+hybrid mirror has not hydrated them. Use `--reset-qdrant` only when you want a
+clean rebuild, for example after changing embedding models or recovering from a
+known stale vector index.
+
+```bash
+conda run -n sictic-env python scripts/sync_person_profiles_from_insights.py --reset-qdrant
+```
+
+Normal LLM preference changes do not require a reset: stale derived Markdown
+files are removed before sync, and Qdrant deletes chunks for source files that
+disappeared.
+
+#### 2. Generate member profiles from source member data
+
+```bash
+conda run -n sictic-env python scripts/generate_member_profiles.py --limit 10
+```
+
+This script reads members from the configured community dataset:
+
+```text
+datasets/community/sictic-members/
+```
+
+The default mode is intentionally lightweight. It uses cached LinkedIn member
+JSON files and generates `person_profile` insights without first indexing the
+entire member source dataset. This is the right mode for quick tests and for
+building the first batch of reusable member insights.
+
+Useful options:
+
+```bash
+# Generate only selected people
+conda run -n sictic-env python scripts/generate_member_profiles.py --names "Urs Gubser,Jane Doe"
+
+# Generate insight files but do not hydrate/index derived/person-profile yet
+conda run -n sictic-env python scripts/generate_member_profiles.py --limit 10 --skip-index
+
+# Remove existing selected outputs before regenerating
+conda run -n sictic-env python scripts/generate_member_profiles.py --limit 10 --force-refresh
+```
+
+For richer profiles that include semantic context from the broader member
+dataset, run the heavy mode explicitly:
+
+```bash
+conda run -n sictic-env python scripts/generate_member_profiles.py --limit 10 --with-dataset-context --sync-source
+```
+
+This can take a long time the first time because `--sync-source` parses and
+embeds the full `sictic-members` dataset into Qdrant before the ten profile
+generations begin. Subsequent runs are faster once Qdrant and the parsed
+Markdown cache are current.
+
+The generated profiles are written to:
+
+```text
+insights/community/sictic-members/person-profile/
+```
+
+Unless `--skip-index` is used, the script then calls
+`sync_person_profiles_from_insights.py` so the selected profiles end up in:
+
+```text
+derived/person-profile/
+```
+
+and are indexed into the `person_profile` Qdrant collection used by the
+community matching skills.
+
 <details>
 <summary>▶ Click to see a sample Startup Profile output for SpaceX</summary>
 

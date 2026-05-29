@@ -28,7 +28,13 @@ _sync_locks = {}
 _last_sync_times = {}
 SYNC_CACHE_TTL = 60  # seconds
 
-async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False, domain: str | None = None):
+async def sync_datasets(
+    dataset_names: List[str],
+    raise_on_error: bool = False,
+    domain: str | None = None,
+    *,
+    force: bool = False,
+):
     """Iterates over multiple datasets to sync them overnight."""
     errors = []
     for name in dataset_names:
@@ -39,7 +45,7 @@ async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False, 
             
         async with _sync_locks[dataset_slug]:
             last_sync = _last_sync_times.get(dataset_slug, 0)
-            if time.time() - last_sync < SYNC_CACHE_TTL:
+            if not force and time.time() - last_sync < SYNC_CACHE_TTL:
                 logger.debug(f"[{dataset_slug}] Skipping sync for dataset (synced recently).")
                 continue
 

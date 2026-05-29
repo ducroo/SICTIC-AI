@@ -1,4 +1,6 @@
 .env
+.DS_Store
+**/.DS_Store
 .openclaw/
 AGENTS.md
 DEVELOPER_GUIDE.md

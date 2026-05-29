@@ -46,11 +46,12 @@ def chat_cmd(
 
 @app.command("sync")
 def sync_cmd(
-    dataset_names: List[str] = typer.Argument(..., help="Names of the datasets/collections to sync. Can pass multiple separated by spaces.")
+    dataset_names: List[str] = typer.Argument(..., help="Names of the datasets/collections to sync. Can pass multiple separated by spaces."),
+    force: bool = typer.Option(False, "--force", help="Bypass the short in-process sync cache.")
 ):
     try:
         import asyncio
-        asyncio.run(sync_datasets(dataset_names, raise_on_error=True))
+        asyncio.run(sync_datasets(dataset_names, raise_on_error=True, force=force))
     except Exception as e:
         logger.error(str(e))
         raise typer.Exit(code=1)

@@ -19,7 +19,12 @@ from lib.models.person import Person
 
 logger = get_logger(__name__)
 
-async def person_profile(dataset_name: str, names: str | list[str] = None) -> List[Person]:
+async def person_profile(
+    dataset_name: str,
+    names: str | list[str] = None,
+    *,
+    include_dataset_context: bool = True,
+) -> List[Person]:
     """
     Collate a comprehensive profile on a specific person (or list of persons) by searching 
     a given dataset and LinkedIn, returning the full synthesized report.
@@ -74,13 +79,18 @@ async def person_profile(dataset_name: str, names: str | list[str] = None) -> Li
     # 4. Execute Loop
     for person in profiles_to_process:
         try:
-            await _generate_single_profile(dataset_slug, person)
+            await _generate_single_profile(dataset_slug, person, include_dataset_context=include_dataset_context)
         except Exception as e:
             logger.error(f"[{dataset_slug}] Failed to generate profile for {person.display_name}: {e}")
             
     return profiles_to_process
 
-async def _generate_single_profile(dataset_slug: str, person: Person) -> None:
+async def _generate_single_profile(
+    dataset_slug: str,
+    person: Person,
+    *,
+    include_dataset_context: bool = True,
+) -> None:
     """
     Worker function to generate a single profile from a fully populated Person Wrapper.
     """
@@ -118,21 +128,22 @@ async def _generate_single_profile(dataset_slug: str, person: Person) -> None:
     logger.info(f"[{dataset_slug}] Collating profile for '{display_name}'...")
 
     # Context Building (Qdrant & Resumes)
-    dossier, mentions = await build_person_dossier(dataset_slug, display_name, query)
-    
     context_parts = []
-    
-    if dossier:
-        person.dossier = dossier
-        context_parts.append("### DOSSIER DOCUMENTS\n")
-        for doc in dossier:
-            context_parts.append(doc.to_md())
-            
-    if mentions:
-        person.mentions = mentions
-        context_parts.append("### DOCUMENT MENTIONS\n")
-        for m in mentions:
-            context_parts.append(m.to_md())
+
+    if include_dataset_context:
+        dossier, mentions = await build_person_dossier(dataset_slug, display_name, query)
+
+        if dossier:
+            person.dossier = dossier
+            context_parts.append("### DOSSIER DOCUMENTS\n")
+            for doc in dossier:
+                context_parts.append(doc.to_md())
+
+        if mentions:
+            person.mentions = mentions
+            context_parts.append("### DOCUMENT MENTIONS\n")
+            for m in mentions:
+                context_parts.append(m.to_md())
 
     if person.linkedin_profile:
         linkedin_str = json.dumps(person.linkedin_profile, indent=2)

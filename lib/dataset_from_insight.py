@@ -1,4 +1,5 @@
 import time
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Dict, List, Optional
 
@@ -10,6 +11,22 @@ from lib.storage import get_storage
 from lib.storage_domains import dataset_insights_path, dataset_raw_path, storage_domain_config
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class DatasetFromInsightResult:
+    target_dataset: str
+    target_path: str
+    insight: str
+    source_dataset: Optional[str]
+    candidates: int = 0
+    entities: int = 0
+    selected: int = 0
+    synced: int = 0
+    removed: int = 0
+    unchanged: int = 0
+    dry_run: bool = False
+
 
 def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], target_slug: str) -> Dict[str, float]:
     """Finds all relevant markdown files for the given insight recursively. Returns dict of path -> mtime."""
@@ -38,7 +55,13 @@ def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], targ
     return out
 
 
-async def dataset_from_insight(target_dataset: str, insight: Optional[str] = None, source_dataset: Optional[str] = None):
+async def dataset_from_insight(
+    target_dataset: str,
+    insight: Optional[str] = None,
+    source_dataset: Optional[str] = None,
+    *,
+    dry_run: bool = False,
+) -> DatasetFromInsightResult:
     """
     Universally hydrates a Qdrant dataset directory from existing insights.
     Relies on lib.insight_refresh to determine base names and best alternatives.
@@ -63,7 +86,13 @@ async def dataset_from_insight(target_dataset: str, insight: Optional[str] = Non
     files_to_sync_dict = _gather_insight_files(insight_slug, source_dataset, target_slug)
     if not files_to_sync_dict:
         logger.warning(f"No files matching insight '{insight_slug}' found in specified sources.")
-        return
+        return DatasetFromInsightResult(
+            target_dataset=target_slug,
+            target_path=target_rel,
+            insight=insight_slug,
+            source_dataset=source_dataset,
+            dry_run=dry_run,
+        )
 
     logger.info(f"Found {len(files_to_sync_dict)} insight files to evaluate for syncing.")
 
@@ -82,7 +111,9 @@ async def dataset_from_insight(target_dataset: str, insight: Optional[str] = Non
             entity_to_files[base] = []
         entity_to_files[base].append(full_path)
 
+    selected_count = 0
     sync_count = 0
+    unchanged_count = 0
     # For each entity, ask best_alternative for the single best file
     for base_name, full_paths in entity_to_files.items():
         # Create a list of just the filenames for the generator
@@ -92,6 +123,7 @@ async def dataset_from_insight(target_dataset: str, insight: Optional[str] = Non
         best_name = next(best_alternative(filenames[0], filenames), None)
         if not best_name:
             continue
+        selected_count += 1
             
         # Recover the full path and mtime
         best_full_path = next(p for p in full_paths if PurePosixPath(p).name == best_name)
@@ -106,10 +138,14 @@ async def dataset_from_insight(target_dataset: str, insight: Optional[str] = Non
             # If target is newer than or identical to source, skip sync
             if target_mtime >= (source_mtime - 1.0):
                 logger.debug(f"Skipped {best_name} (unchanged/up-to-date)")
+                unchanged_count += 1
                 continue
 
         try:
-            storage.write_bytes(target_file_rel, storage.read_bytes(best_full_path))
+            if dry_run:
+                logger.info(f"[dry-run] Would sync {best_full_path} -> {target_file_rel}")
+            else:
+                storage.write_bytes(target_file_rel, storage.read_bytes(best_full_path))
             logger.debug(f"Synced {best_full_path} -> {target_file_rel}")
             sync_count += 1
         except Exception as e:
@@ -118,12 +154,32 @@ async def dataset_from_insight(target_dataset: str, insight: Optional[str] = Non
     orphan_count = 0
     for orphan in list(existing_files.keys()):
         try:
-            if hasattr(storage, 'delete'):
-                storage.delete(f"{target_rel}/{orphan}")
+            orphan_rel = f"{target_rel}/{orphan}"
+            if dry_run:
+                logger.info(f"[dry-run] Would remove orphaned file {orphan_rel}")
             else:
-                storage.rmtree(f"{target_rel}/{orphan}")
+                # Orphans are individual derived markdown files. Use remove(),
+                # not rmtree(), otherwise LocalStorage leaves stale files behind
+                # and the next Qdrant sync cannot delete their old chunks.
+                storage.remove(orphan_rel)
             orphan_count += 1
         except Exception as e:
             logger.warning(f"Failed to remove orphaned file {orphan}: {e}")
 
-    logger.info(f"Dataset hydration complete. {sync_count} files synced, {orphan_count} removed, {len(entity_to_files) - sync_count} unchanged.")
+    logger.info(
+        "Dataset hydration complete. "
+        f"{sync_count} files synced, {orphan_count} removed, {unchanged_count} unchanged."
+    )
+    return DatasetFromInsightResult(
+        target_dataset=target_slug,
+        target_path=target_rel,
+        insight=insight_slug,
+        source_dataset=source_dataset,
+        candidates=len(files_to_sync_dict),
+        entities=len(entity_to_files),
+        selected=selected_count,
+        synced=sync_count,
+        removed=orphan_count,
+        unchanged=unchanged_count,
+        dry_run=dry_run,
+    )
