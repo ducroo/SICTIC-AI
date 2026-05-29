@@ -86,3 +86,40 @@ async def test_dataset_chat_refuses_empty_context(mocker):
 
     assert output == "INSUFFICIENT_CONTEXT"
     mock_llm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dataset_chat_budgets_context_without_front_truncation(mocker, monkeypatch):
+    from skills.dataset_chat.core.models import Chunk
+
+    monkeypatch.setenv("OLLAMA_NUM_CTX_MAX", "2048")
+    chunks = [
+        Chunk(
+            chunk_id=str(i),
+            document_name=f"doc-{i}.md",
+            page_number=1,
+            last_modified=0.0,
+            text=("Relevant Avientus evidence. " * 80),
+            score=1.0,
+        )
+        for i in range(10)
+    ]
+    mocker.patch("skills.dataset_chat.dataset_chat.dataset_search", return_value=chunks)
+    mock_config = mocker.patch("skills.dataset_chat.dataset_chat.config_load")
+    mock_config.return_value = {
+        "dataset_chat": {
+            "fallback_trigger": "INSUFFICIENT_CONTEXT"
+        }
+    }
+    mock_llm = mocker.patch("skills.dataset_chat.dataset_chat.llm_chat", return_value="grounded")
+
+    output = await dataset_chat("avientus", "Profile Avientus", "Use only context.")
+
+    assert output == "grounded"
+    prompt = mock_llm.call_args.kwargs["prompt"]
+    assert prompt.startswith("Use ONLY the context below")
+    assert "Query: Profile Avientus" in prompt
+    assert "Context from avientus:" in prompt
+    assert len(prompt) < 2048 * 3
+    assert "doc-0.md" in prompt
+    assert "doc-9.md" not in prompt

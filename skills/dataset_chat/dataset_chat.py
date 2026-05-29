@@ -1,4 +1,5 @@
 from typing import Optional
+from lib.env import get_env_var
 from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.core.rag import generate_multi_queries
@@ -14,6 +15,14 @@ def _fallback_trigger() -> str:
         return config['dataset_chat']['fallback_trigger'].replace('\\_', '_')
     except KeyError:
         return 'INSUFFICIENT_CONTEXT'
+
+
+def _context_budget_chars() -> int:
+    try:
+        max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
+    except Exception:
+        max_ctx = 8192
+    return max(6_000, int(max_ctx * 3 * 0.72))
 
 
 async def dataset_chat(
@@ -45,13 +54,37 @@ async def dataset_chat(
             pass1_instructions = None
             
     def build_prompt(current_chunks, inst):
-        current_chunks_copy = current_chunks.copy()
-        current_chunks_copy.reverse()
-        context_str = "\n\n---\n\n".join(c.to_md() for c in current_chunks_copy)
-        
-        prompt_parts = [f"Context from {dataset_name}:\n{context_str}", f"Query: {questions}"]
+        grounding_rule = (
+            "Use ONLY the context below. If the context does not support the answer, "
+            f"output exactly: {_fallback_trigger()}"
+        )
+        prompt_parts = [grounding_rule, f"Query: {questions}"]
         if inst:
             prompt_parts.append(f"Instructions: {inst}")
+
+        header = "\n\n".join(prompt_parts) + f"\n\nContext from {dataset_name}:\n"
+        context_budget = max(1_000, _context_budget_chars() - len(header))
+
+        selected = []
+        used_chars = 0
+        for chunk in current_chunks:
+            chunk_md = chunk.to_md()
+            separator = "\n\n---\n\n" if selected else ""
+            next_size = len(separator) + len(chunk_md)
+            if selected and used_chars + next_size > context_budget:
+                break
+            if not selected and next_size > context_budget:
+                chunk_md = chunk_md[:context_budget].rstrip()
+                next_size = len(chunk_md)
+            selected.append(chunk_md)
+            used_chars += next_size
+
+        context_str = "\n\n---\n\n".join(selected)
+        logger.info(
+            f"[{dataset_name}] Using {len(selected)} of {len(current_chunks)} chunks "
+            f"({used_chars} chars) for RAG prompt."
+        )
+        prompt_parts.append(f"Context from {dataset_name}:\n{context_str}")
         return "\n\n".join(prompt_parts)
 
     logger.info(f"[{dataset_name}] Handing off to llm_chat (Pass 1).")
