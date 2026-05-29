@@ -20,6 +20,10 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 _PASSTHROUGH_EXTS = (".json", ".txt", ".md")
+_SPREADSHEET_EXTS = (".xlsx", ".xlsm")
+_EXCEL_MAX_COLUMNS = 16_384
+_WIDE_MERGE_FALLBACK_COLUMNS = 1_024
+_WIDE_SHEET_FALLBACK_CELLS = 250_000
 
 _converter = None
 _converter_init_lock = threading.Lock()
@@ -119,8 +123,22 @@ class DoclingAdapter:
                     return f.read()
 
             try:
+                if filename.lower().endswith(_SPREADSHEET_EXTS) and await asyncio.to_thread(
+                    self._spreadsheet_needs_compact_fallback, filepath
+                ):
+                    logger.warning(
+                        f"Using compact spreadsheet conversion for {filename}: "
+                        "workbook contains very wide merged/formatted ranges."
+                    )
+                    return await asyncio.to_thread(self._convert_spreadsheet_sync, filepath)
                 return await asyncio.to_thread(self._convert_sync, filepath)
             except Exception as e:
+                if filename.lower().endswith(_SPREADSHEET_EXTS):
+                    logger.warning(
+                        f"Docling conversion failed for {filename}: {e}. "
+                        "Retrying with compact spreadsheet conversion."
+                    )
+                    return await asyncio.to_thread(self._convert_spreadsheet_sync, filepath)
                 logger.error(f"Docling conversion failed for {filename}: {e}")
                 return ""
         finally:
@@ -132,3 +150,70 @@ class DoclingAdapter:
         with _convert_lock:
             result = converter.convert(filepath)
         return result.document.export_to_markdown()
+
+    @staticmethod
+    def _convert_spreadsheet_sync(filepath: str) -> str:
+        """Convert pathological spreadsheets without exporting formatted empty grid areas."""
+        from openpyxl import load_workbook
+
+        values_wb = load_workbook(filepath, read_only=False, data_only=True)
+        formulas_wb = load_workbook(filepath, read_only=False, data_only=False)
+        sections = []
+
+        for values_ws, formulas_ws in zip(values_wb.worksheets, formulas_wb.worksheets):
+            row_cells: dict[int, dict[int, str]] = {}
+            for row, col in set(values_ws._cells.keys()) | set(formulas_ws._cells.keys()):
+                value = values_ws.cell(row=row, column=col).value
+                if value in (None, ""):
+                    value = formulas_ws.cell(row=row, column=col).value
+                text = "" if value is None else str(value).replace("\n", " ").strip()
+                if text:
+                    row_cells.setdefault(row, {})[col] = text
+
+            if not row_cells:
+                continue
+
+            sections.append(f"## {values_ws.title}")
+            for row_idx in sorted(row_cells):
+                cols = row_cells[row_idx]
+                max_col = max(cols)
+                row = [cols.get(col_idx, "") for col_idx in range(1, max_col + 1)]
+                sections.append("| " + " | ".join(_escape_markdown_cell(c) for c in row) + " |")
+            sections.append("")
+
+        return "\n".join(sections).strip() + "\n"
+
+    @staticmethod
+    def _spreadsheet_needs_compact_fallback(filepath: str) -> bool:
+        """Detect Excel files that Docling expands to enormous mostly-empty tables.
+
+        Docling's Excel backend correctly ignores ordinary empty worksheet area, but it
+        treats merged ranges as real table bounds. Some financial models contain
+        cosmetic full-row merges such as A:XFD; exporting those through Docling can turn
+        a small workbook into tens of MB of markdown. Use the compact fallback only for
+        those pathological sheets so normal spreadsheets still use Docling.
+        """
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(filepath, read_only=False, data_only=True)
+        for sheet in workbook.worksheets:
+            for merged_range in sheet.merged_cells.ranges:
+                if merged_range.max_col >= _EXCEL_MAX_COLUMNS:
+                    return True
+                if merged_range.max_col - merged_range.min_col + 1 >= _WIDE_MERGE_FALLBACK_COLUMNS:
+                    return True
+
+            if sheet.max_row * sheet.max_column >= _WIDE_SHEET_FALLBACK_CELLS:
+                value_cols = {
+                    cell.column
+                    for cell in sheet._cells.values()
+                    if cell.value not in (None, "")
+                }
+                if value_cols and sheet.max_column > max(value_cols) * 10:
+                    return True
+
+        return False
+
+
+def _escape_markdown_cell(value: str) -> str:
+    return value.replace("|", "\\|")

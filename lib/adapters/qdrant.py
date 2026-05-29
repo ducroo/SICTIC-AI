@@ -185,27 +185,34 @@ class QdrantAdapter:
         except Exception as e:
             logger.error(f"Failed to delete {document_name} from Qdrant: {e}")
 
-    async def upsert(self, chunks: List[Chunk]) -> None:
+    async def upsert(self, chunks: List[Chunk], batch_size: int = 50) -> None:
         if not chunks:
             return
-            
-        points = []
-        for c in chunks:
-            vector = await self._get_embedding(c.text)
-            points.append(PointStruct(
-                id=c.chunk_id,
-                vector=vector,
-                payload=c.model_dump()
-            ))
-            
-        try:
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=points
-            )
-        except Exception as e:
-            logger.error(f"Failed to upsert points: {e}")
-            raise RuntimeError(f"Upsert failed: {e}")
+
+        total = len(chunks)
+        for start in range(0, total, batch_size):
+            batch = chunks[start:start + batch_size]
+            points = []
+            for c in batch:
+                vector = await self._get_embedding(c.text)
+                points.append(PointStruct(
+                    id=c.chunk_id,
+                    vector=vector,
+                    payload=c.model_dump()
+                ))
+
+            try:
+                self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=points
+                )
+                logger.info(
+                    f"Upserted chunk batch {start + 1}-{start + len(batch)} "
+                    f"of {total} into {self.collection_name}."
+                )
+            except Exception as e:
+                logger.error(f"Failed to upsert points: {e}")
+                raise RuntimeError(f"Upsert failed: {e}")
 
     async def search(self, query: str | list[str], limit: int = 5, threshold_factor: float = 0.8) -> List[Chunk]:
         if not query:

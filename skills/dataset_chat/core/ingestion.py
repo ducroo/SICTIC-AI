@@ -166,6 +166,7 @@ async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str)
             if text.strip():
                 from lib.adapters.qdrant import Chunker
                 chunks = Chunker.split_markdown(text, filename, mod_time)
+                logger.info(f"[{dataset_slug}] Split {filename} into {len(chunks)} chunks.")
                 await qdrant.upsert(chunks)
                 logger.info(f"[{dataset_slug}] Successfully upserted {filename}.")
         except Exception as e:
