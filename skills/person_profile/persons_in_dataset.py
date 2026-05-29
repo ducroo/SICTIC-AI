@@ -5,7 +5,7 @@ from lib.adapters.linkedin import LinkedInAdapter, extract_linkedin_id
 from lib.adapters.web_search import WebSearchAdapter
 from lib.logger import get_logger
 from lib.models.person import Person
-from lib.insight_filepath import get_insight_filepath
+from lib.storage_domains import dataset_parsed_path, persons_registry_path
 
 logger = get_logger(__name__)
 
@@ -25,17 +25,12 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     from lib.slugify import slugify
     dataset_slug = slugify(dataset_name)
     
-    insight_path = get_insight_filepath(
-        dataset_name=dataset_slug,
-        skill_name="persons_in_dataset",
-        model="manual",
-        subdir=False
-    )
+    registry_rel = persons_registry_path(dataset_slug)
     
     # 1. Manual Override File (Source of Truth)
-    if storage.exists(insight_path):
-        logger.info(f"[{dataset_name}] Found manual override file: {insight_path}")
-        content = storage.read_text(insight_path)
+    if storage.exists(registry_rel):
+        logger.info(f"[{dataset_name}] Found manual persons registry: {registry_rel}")
+        content = storage.read_text(registry_rel)
         
         discovered_persons = []
         seen = set()
@@ -83,7 +78,7 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
             logger.warning(f"[{dataset_name}] Web search discovery failed: {e}")
             
         # 4. Regex across datasets2md
-        md_dir = f"datasets2md/{dataset_slug}"
+        md_dir = dataset_parsed_path(dataset_slug)
         if storage.exists(md_dir):
             logger.info(f"[{dataset_name}] Scanning {md_dir} for explicit LinkedIn URLs...")
             files = storage.list(md_dir, suffix=".md")
@@ -113,7 +108,7 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
         if p.linkedinID:
             lines.append(f"https://www.linkedin.com/in/{p.linkedinID}/")
             
-    storage.write_text(insight_path, "\n".join(lines) + "\n")
-    logger.info(f"[{dataset_name}] Wrote discovered persons list to {insight_path}")
+    storage.write_text(registry_rel, "\n".join(lines) + "\n")
+    logger.info(f"[{dataset_name}] Wrote discovered persons list to {registry_rel}")
     
     return discovered_persons

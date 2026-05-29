@@ -8,6 +8,7 @@ from lib.insight_refresh import check_insight_refresh
 from lib.slugify import slugify
 from skills.suggested_startups.core.llm_processor import compile_startup_profiles, process_single_investor
 from lib.member_profile import member_profile
+from lib.storage_domains import list_dataset_names
 
 logger = get_logger(__name__)
 
@@ -33,16 +34,11 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         community_datasets = [slugify(s) for s in bulk_config.get("community_datasets", ["sictic-members"])]
         ignore_datasets = [slugify(s) for s in bulk_config.get("ignore_datasets", ["investor-appetite", "person-profile"])]
 
-        from lib.storage import get_storage as _gs
-        _s = _gs()
         discovered = []
-        if _s.exists("datasets"):
-            for item in _s.list("datasets"):
-                item_slug = slugify(item)
-                if not _s.is_dir(f"datasets/{item}"):
-                    continue
-                if item_slug not in community_datasets and item_slug not in ignore_datasets:
-                    discovered.append(item)
+        for item in list_dataset_names("startups"):
+            item_slug = slugify(item)
+            if item_slug not in community_datasets and item_slug not in ignore_datasets:
+                discovered.append(item)
         startups = discovered
     
     if not startups or not investors:

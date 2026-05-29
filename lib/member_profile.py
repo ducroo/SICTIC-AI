@@ -7,6 +7,7 @@ from lib.storage import get_storage
 from skills.person_profile.person_profile import person_profile
 from skills.investor_appetite.investor_appetite import investor_appetite
 from lib.adapters.linkedin import LinkedInAdapter
+from lib.storage_domains import dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -66,7 +67,7 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
         logger.error(f"Unknown type_of_profile: {type_of_profile}")
         return None
 
-    target_dir_rel = f"datasets/{type_of_profile}"
+    target_dir_rel = dataset_raw_path(type_of_profile)
     storage.mkdir(target_dir_rel)
 
     is_single = isinstance(names, str)

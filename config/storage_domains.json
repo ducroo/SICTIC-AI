@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "default_domain": "startups",
+  "domains": {
+    "startups": {
+      "dataset_root": "datasets/startups",
+      "parsed_root": "cache/datasets2md/startups",
+      "insights_root": "insights/startups",
+      "active_marker": "__active_dataset__"
+    },
+    "community": {
+      "dataset_root": "datasets/community",
+      "parsed_root": "cache/datasets2md/community",
+      "insights_root": "insights/community",
+      "active_marker": "__active_dataset__"
+    },
+    "derived": {
+      "dataset_root": "derived",
+      "parsed_root": "cache/datasets2md/derived",
+      "insights_root": "insights/derived",
+      "active_marker": "__active_dataset__"
+    },
+    "ephemeral": {
+      "dataset_root": "cache/datasets/ephemeral",
+      "parsed_root": "cache/datasets2md/ephemeral",
+      "insights_root": "cache/insights/ephemeral",
+      "active_marker": "__active_dataset__"
+    }
+  },
+  "datasets": {
+    "sictic-members": {
+      "domain": "community",
+      "path": "sictic-members",
+      "persons_registry": "persons/sictic-members.md"
+    }
+  },
+  "derived_datasets": {
+    "person-profile": {
+      "domain": "derived",
+      "path": "person-profile"
+    },
+    "investor-appetite": {
+      "domain": "derived",
+      "path": "investor-appetite"
+    }
+  },
+  "registry": {
+    "root": "registry"
+  }
+}

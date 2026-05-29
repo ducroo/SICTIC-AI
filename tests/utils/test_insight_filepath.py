@@ -7,17 +7,17 @@ def test_insight_filepath_root():
         model="ollama/gemma4:31b-nvfp4",
         subdir=False
     )
-    assert path == "insights/daav/startup-profile-daav-gemma4-31b-nvfp4.md"
+    assert path == "insights/startups/daav/startup-profile-daav-gemma4-31b-nvfp4.md"
 
 def test_insight_filepath_subdir():
     path = get_insight_filepath(
-        dataset_name="community",
+        dataset_name="sictic-members",
         skill_name="person_profile",
         model="ollama/gemma4:31b-nvfp4",
         identifier="Urs Gubser",
         subdir=True
     )
-    assert path == "insights/community/person-profile/urs-gubser-gemma4-31b-nvfp4.md"
+    assert path == "insights/community/sictic-members/person-profile/urs-gubser-gemma4-31b-nvfp4.md"
 
 def test_insight_filepath_batch_audit():
     path = get_insight_filepath(
@@ -27,4 +27,4 @@ def test_insight_filepath_batch_audit():
         identifier="1. Elevator",
         subdir=True
     )
-    assert path == "insights/daav/batch-audit/1-elevator-gemma4-31b-nvfp4.md"
+    assert path == "insights/startups/daav/batch-audit/1-elevator-gemma4-31b-nvfp4.md"

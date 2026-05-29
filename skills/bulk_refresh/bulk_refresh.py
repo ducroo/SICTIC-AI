@@ -1,7 +1,6 @@
 from typing import Optional
 
 from lib.logger import get_logger
-from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.core.ingestion import sync_datasets
 
@@ -17,6 +16,7 @@ from skills.suggested_startups.suggested_startups import suggested_startups
 
 from lib.slugify import slugify
 from lib.active_dataset import is_active_dataset
+from lib.storage_domains import list_dataset_names
 
 logger = get_logger(__name__)
 
@@ -51,22 +51,17 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     bulk_config = config["bulk_refresh"]
 
     # Extract string values from .md files and split by comma or newline
-    community_raw = bulk_config["community_datasets"]
     ignore_raw = bulk_config["ignore_datasets"]
 
-    community_datasets = [slugify(s) for s in community_raw.replace(',', '\n').split('\n') if slugify(s)]
     ignore_datasets = [slugify(s) for s in ignore_raw.replace(',', '\n').split('\n') if slugify(s)]
     ignore_datasets.extend(slugify(k) for k in SKILL_MAP.keys())
 
-    storage = get_storage()
-
-    # Discover Datasets — every direct child of `datasets/` is treated as a dataset folder.
+    # Discover datasets from configured storage domains.
     all_datasets = []
-    if storage.exists("datasets"):
-        for item in storage.list("datasets"):
+    dataset_domains = {}
+    for domain_name in ("startups", "community"):
+        for item in list_dataset_names(domain_name):
             item_slug = slugify(item)
-            if not storage.is_dir(f"datasets/{item}"):
-                continue
             if item_slug in ignore_datasets:
                 continue
             
@@ -83,6 +78,7 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
                 continue
                 
             all_datasets.append(item)
+            dataset_domains[item_slug] = domain_name
 
     if not all_datasets:
         logger.warning("No valid datasets found to process.")
@@ -127,7 +123,7 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
             tasks = []
             for dataset_name in all_datasets:
                 dataset_slug = slugify(dataset_name)
-                domain = "community" if dataset_slug in community_datasets else "startups"
+                domain = dataset_domains[dataset_slug]
                 
                 if domain in allowed_domains:
                     logger.info(f"[{dataset_name}] Queueing {skill_name}...")

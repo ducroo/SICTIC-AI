@@ -6,6 +6,7 @@ from lib.env import get_env_var
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
+from lib.storage_domains import dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -70,7 +71,7 @@ def check_insight_refresh(
     max_source_mtime = 0.0
     for name in datasets:
         dataset_slug = slugify(name)
-        dataset_rel = f"datasets/{dataset_slug}"
+        dataset_rel = dataset_raw_path(dataset_slug)
         for _, mtime in storage.list_with_mtime(dataset_rel, recursive=True):
             if mtime > max_source_mtime:
                 max_source_mtime = mtime

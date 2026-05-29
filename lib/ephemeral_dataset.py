@@ -5,6 +5,7 @@ from skills.dataset_chat.core.ingestion import sync_datasets
 from lib.adapters.qdrant import QdrantAdapter
 from lib.logger import get_logger
 from lib.storage import get_storage
+from lib.storage_domains import dataset_raw_path, dataset_parsed_path
 
 logger = get_logger(__name__)
 
@@ -17,8 +18,8 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     5. Returns the dataset name (e.g., 'temp') for the skill to use.
     """
     storage = get_storage()
-    raw_dataset_rel = f"datasets/{temp_name}"
-    parsed_dataset_rel = f"datasets2md/{temp_name}"
+    raw_dataset_rel = dataset_raw_path(temp_name)
+    parsed_dataset_rel = dataset_parsed_path(temp_name)
 
     # 1. Cleanup previous run
     logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")

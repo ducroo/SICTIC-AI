@@ -10,6 +10,7 @@ from lib.env import get_env_var
 from lib.adapters.apify import ApifyAdapter
 from lib.adapters.web_search import WebSearchAdapter
 from lib.models.person import Person
+from lib.storage_domains import dataset_raw_path, list_dataset_names
 
 logger = get_logger(__name__)
 
@@ -31,7 +32,7 @@ class LinkedInAdapter:
         and loads the missing_profiles state registry.
         """
         self.dataset_name = dataset_name
-        self.cache_rel = f"datasets/{dataset_name}/linkedin"
+        self.cache_rel = f"{dataset_raw_path(dataset_name)}/linkedin"
         
         # Load registry path
         self.registry_filepath = _get_global_registry_path()
@@ -378,16 +379,9 @@ def linkedin_missing_profiles() -> List[Dict[str, Any]]:
     from lib.slugify import slugify
     import os
     
-    storage = get_storage()
-    if not storage.exists("datasets"):
-        return []
-
     logger.info("Scanning for active datasets to identify missing LinkedIn profiles...")
     
-    for item in storage.list("datasets"):
-        if not storage.is_dir(f"datasets/{item}"):
-            continue
-            
+    for item in list_dataset_names("startups") + list_dataset_names("community"):
         slug = slugify(item)
         if not is_active_dataset(slug):
             continue

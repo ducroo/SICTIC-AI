@@ -3,18 +3,19 @@ from typing import Optional
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
+from lib.storage_domains import dataset_active_marker_path, list_dataset_names
 
 logger = get_logger(__name__)
 
 def is_active_dataset(dataset_name: str) -> bool:
     """Checks if a dataset has the __active_dataset__ marker file."""
     slug = slugify(dataset_name)
-    return get_storage().exists(f"datasets/{slug}/__active_dataset__")
+    return get_storage().exists(dataset_active_marker_path(slug))
 
 def activate_dataset(dataset_name: str) -> None:
     """Adds the __active_dataset__ marker file to a dataset."""
     slug = slugify(dataset_name)
-    marker_path = f"datasets/{slug}/__active_dataset__"
+    marker_path = dataset_active_marker_path(slug)
     storage = get_storage()
     if not storage.exists(marker_path):
         storage.write_text(marker_path, "")
@@ -33,7 +34,7 @@ def archive_dataset(dataset_name: Optional[str] = None, age_days: Optional[int] 
     
     if dataset_name:
         slug = slugify(dataset_name)
-        marker_path = f"datasets/{slug}/__active_dataset__"
+        marker_path = dataset_active_marker_path(slug)
         if storage.exists(marker_path):
             storage.remove(marker_path)
             logger.info(f"Archived dataset: {slug}")
@@ -42,15 +43,9 @@ def archive_dataset(dataset_name: Optional[str] = None, age_days: Optional[int] 
             
     if age_days is not None:
         age_seconds = age_days * 86400
-        if not storage.exists("datasets"):
-            return
-            
-        for item in storage.list("datasets"):
-            if not storage.is_dir(f"datasets/{item}"):
-                continue
-            
+        for item in list_dataset_names("startups") + list_dataset_names("community"):
             slug = slugify(item)
-            marker_path = f"datasets/{slug}/__active_dataset__"
+            marker_path = dataset_active_marker_path(slug)
             
             if storage.exists(marker_path):
                 mtime = storage.mtime(marker_path)

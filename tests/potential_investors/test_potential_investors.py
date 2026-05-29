@@ -30,7 +30,7 @@ async def test_potential_investors_generation(mock_env, mocker):
 
     # Clear the storage cache before executing
     from lib.storage import get_storage
-    get_storage().rmtree("insights/teststartup")
+    get_storage().rmtree("insights/startups/teststartup")
     
     # Execute
     startup = "TestStartup"
@@ -42,7 +42,7 @@ async def test_potential_investors_generation(mock_env, mocker):
     assert "90" in output
 
     # Assert File System
-    expected_file = "insights/teststartup/potential-investors-teststartup-test-model-1b.md"
+    expected_file = "insights/startups/teststartup/potential-investors-teststartup-test-model-1b.md"
     from lib.storage import get_storage
     assert get_storage().exists(expected_file)
 

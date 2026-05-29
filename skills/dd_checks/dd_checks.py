@@ -6,6 +6,7 @@ from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.adapters.qdrant import QdrantAdapter
 from lib.slugify import slugify
 from lib.logger import get_logger
+from lib.storage_domains import dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -62,8 +63,9 @@ async def dd_checks(startup: str) -> str:
     from lib.slugify import slugify
     startup_slug = slugify(startup)
     storage = get_storage()
-    if not storage.exists(f"datasets/{startup_slug}"):
-        raise ValueError(f"Dataset for {startup_slug} not found.")
+    raw_path = dataset_raw_path(startup_slug)
+    if not storage.exists(raw_path):
+        raise ValueError(f"Dataset for {startup_slug} not found at {raw_path}.")
         
     output_file = initialize_report_file(startup_slug, startup)
     config = config_load()

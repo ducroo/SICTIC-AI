@@ -2,6 +2,7 @@ from typing import Tuple, Dict, List
 from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
+from lib.storage_domains import dataset_parsed_path
 from skills.dataset_chat.dataset_search import dataset_search
 from skills.dataset_chat.core.models import Chunk
 
@@ -69,6 +70,7 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
     """
     logger.info(f"[{dataset_name}] Building dossier for '{person_name}'...")
     dataset_slug = slugify(dataset_name)
+    parsed_root = dataset_parsed_path(dataset_slug)
     
     dossier: List[Chunk] = []
     mentions: List[Chunk] = []
@@ -97,7 +99,7 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
             
         is_dossier = is_dossier_document(doc_name, person_name)
         # Qdrant stores the original document name. The Markdown parser appends .md
-        full_md_path = f"datasets2md/{dataset_slug}/{doc_name}.md"
+        full_md_path = f"{parsed_root}/{doc_name}.md"
         
         if is_dossier and storage.exists(full_md_path):
             full_text = storage.read_text(full_md_path)

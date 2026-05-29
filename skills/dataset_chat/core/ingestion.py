@@ -9,6 +9,7 @@ from lib.storage import get_storage
 from lib.logger import get_logger
 
 from lib.slugify import slugify
+from lib.storage_domains import dataset_raw_path, dataset_parsed_path
 
 logger = get_logger(__name__)
 
@@ -27,7 +28,7 @@ _sync_locks = {}
 _last_sync_times = {}
 SYNC_CACHE_TTL = 60  # seconds
 
-async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False):
+async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False, domain: str | None = None):
     """Iterates over multiple datasets to sync them overnight."""
     errors = []
     for name in dataset_names:
@@ -44,7 +45,7 @@ async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False):
 
             logger.info(f"[{dataset_slug}] === Starting sync for dataset ===")
             try:
-                await _sync_single_dataset(dataset_slug)
+                await _sync_single_dataset(dataset_slug, domain=domain)
                 _last_sync_times[dataset_slug] = time.time()
             except Exception as e:
                 logger.error(f"[{name}] Failed to sync dataset: {e}")
@@ -54,12 +55,12 @@ async def sync_datasets(dataset_names: List[str], raise_on_error: bool = False):
     if errors and raise_on_error:
         raise RuntimeError("Dataset sync failed: " + "; ".join(errors))
 
-async def _sync_single_dataset(dataset_name: str):
+async def _sync_single_dataset(dataset_name: str, *, domain: str | None = None):
     """Main orchestrator: Syncs drive to disk (OCR), then disk to DB (Embed) for a single dataset."""
     dataset_slug = slugify(dataset_name)
     storage = get_storage()
-    raw_dataset_rel = f"datasets/{dataset_slug}"
-    parsed_dataset_rel = f"datasets2md/{dataset_slug}"
+    raw_dataset_rel = dataset_raw_path(dataset_slug, domain=domain)
+    parsed_dataset_rel = dataset_parsed_path(dataset_slug, domain=domain)
 
     # Refresh storage caches (no-op for LocalStorage; invalidates Drive path cache).
     storage.refresh(raw_dataset_rel)

@@ -1,6 +1,6 @@
 from typing import Optional
-from lib.env import get_env_var
 from lib.slugify import slugify
+from lib.storage_domains import dataset_insights_path
 
 def get_insight_filepath(
     dataset_name: str,
@@ -30,12 +30,12 @@ def get_insight_filepath(
     ident = identifier if identifier else dataset_name
     
     # 3. Construct the building blocks for the filename
-    safe_dataset = slugify(dataset_name)
+    safe_dataset_root = dataset_insights_path(dataset_name)
     safe_skill = slugify(skill_name)
     safe_core = slugify(f"{ident}-{clean_model}")
 
     # 4. Construct the final path
     if subdir:
-        return f"insights/{safe_dataset}/{safe_skill}/{safe_core}.md"
+        return f"{safe_dataset_root}/{safe_skill}/{safe_core}.md"
     else:
-        return f"insights/{safe_dataset}/{safe_skill}-{safe_core}.md"
+        return f"{safe_dataset_root}/{safe_skill}-{safe_core}.md"

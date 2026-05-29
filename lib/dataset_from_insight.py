@@ -7,6 +7,7 @@ from lib.insight_refresh import get_base_name, best_alternative
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
+from lib.storage_domains import dataset_insights_path, dataset_raw_path, storage_domain_config
 
 logger = get_logger(__name__)
 
@@ -14,23 +15,26 @@ def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], targ
     """Finds all relevant markdown files for the given insight recursively. Returns dict of path -> mtime."""
     storage = get_storage()
     source_slug = slugify(source_dataset) if source_dataset else None
-    scan_root = f"insights/{source_slug}" if source_slug else "insights"
-
-    if not storage.exists(scan_root):
-        return {}
+    scan_roots = [dataset_insights_path(source_slug)] if source_slug else [
+        domain["insights_root"].strip("/")
+        for domain in storage_domain_config()["domains"].values()
+    ]
 
     out = {}
-    for name, mtime in storage.list_with_mtime(scan_root, recursive=True):
-        if name.endswith(".md") and insight_slug in name:
-            parent_dir = name.split("/")[0] if "/" in name else ""
-            
-            if not source_slug and parent_dir == target_slug:
-                continue
-
-            if not source_slug and parent_dir and not is_active_dataset(parent_dir):
-                continue
+    for scan_root in dict.fromkeys(scan_roots):
+        if not storage.exists(scan_root):
+            continue
+        for name, mtime in storage.list_with_mtime(scan_root, recursive=True):
+            if name.endswith(".md") and insight_slug in name:
+                parent_dir = name.split("/")[0] if "/" in name else ""
                 
-            out[f"{scan_root}/{name}"] = mtime
+                if not source_slug and parent_dir == target_slug:
+                    continue
+
+                if not source_slug and parent_dir and not is_active_dataset(parent_dir):
+                    continue
+                    
+                out[f"{scan_root}/{name}"] = mtime
     return out
 
 
@@ -40,7 +44,7 @@ async def dataset_from_insight(target_dataset: str, insight: Optional[str] = Non
     Relies on lib.insight_refresh to determine base names and best alternatives.
     """
     target_slug = slugify(target_dataset)
-    target_rel = f"datasets/{target_slug}"
+    target_rel = dataset_raw_path(target_slug)
 
     insight_slug = slugify(insight or target_dataset)
 

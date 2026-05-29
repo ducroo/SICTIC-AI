@@ -5,6 +5,7 @@ from lib.logger import get_logger
 from lib.slugify import slugify
 from qdrant_client import QdrantClient
 from lib.adapters.qdrant import QdrantAdapter
+from lib.storage_domains import dataset_parsed_path
 
 logger = get_logger(__name__)
 
@@ -19,7 +20,7 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
     # Scenario A: Delete specific dataset completely (all embeddings)
     if dataset and not embeddings:
         dataset_slug = slugify(dataset)
-        parsed_base_path = f"datasets2md/{dataset_slug}"
+        parsed_base_path = dataset_parsed_path(dataset_slug)
 
         prefix = f"{dataset_slug}-"
         to_delete = [c for c in all_collections if c.startswith(prefix)]

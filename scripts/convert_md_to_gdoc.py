@@ -11,10 +11,11 @@ Usage:
     python scripts/convert_md_to_gdoc.py
 
     # dry-run against a specific test folder
+    python scripts/convert_md_to_gdoc.py --root-folder AI-root --summary-only
     python scripts/convert_md_to_gdoc.py --root-folder-id 1A2B3C...
 
     # apply for real
-    python scripts/convert_md_to_gdoc.py --root-folder-id 1A2B3C... --apply
+    python scripts/convert_md_to_gdoc.py --root-folder AI-root --apply
 
 Idempotent: files already of type application/vnd.google-apps.document are
 skipped, and anything inside the archive folder is skipped.
@@ -82,11 +83,87 @@ def _build_service(credentials_path: str, token_path: str):
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
-def _walk(service, root_id: str, archive_name: str) -> List[FileNode]:
+def _escape_q(value: str) -> str:
+    """Escape a string for use inside a Drive query single-quoted value."""
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _resolve_root_folder(service, root_spec: str) -> str:
+    """Resolve a root spec as a Drive ID, "root", or a folder path/name.
+
+    This mirrors lib.storage_gdrive.GoogleDriveStorage so migration commands can
+    use the same human-friendly STORAGE_PATH values as the runtime.
+    """
+    spec = (root_spec or "root").strip().strip("/")
+    if not spec or spec == "root":
+        return "root"
+
+    # First try the value as a real Drive folder ID. This preserves existing
+    # behavior and avoids ambiguity when an ID happens to look path-like.
+    if "/" not in spec:
+        try:
+            meta = service.files().get(
+                fileId=spec,
+                fields="id,mimeType",
+                supportsAllDrives=True,
+            ).execute()
+            if meta.get("mimeType") == _FOLDER_MIME:
+                return meta["id"]
+        except HttpError:
+            pass
+
+    current_id = "root"
+    parts = [p for p in spec.split("/") if p and p != "root"]
+    for index, part in enumerate(parts):
+        res = service.files().list(
+            q=(
+                f"'{current_id}' in parents and "
+                f"name='{_escape_q(part)}' and "
+                f"mimeType='{_FOLDER_MIME}' and trashed=false"
+            ),
+            fields=f"files({_FIELDS})",
+            pageSize=10,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+        files = res.get("files", [])
+
+        # Match runtime behavior for a single friendly name such as AI-root:
+        # if it is not under My Drive root, also search globally.
+        if not files and index == 0 and len(parts) == 1:
+            res = service.files().list(
+                q=(
+                    f"name='{_escape_q(part)}' and "
+                    f"mimeType='{_FOLDER_MIME}' and trashed=false"
+                ),
+                fields=f"files({_FIELDS})",
+                pageSize=10,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            ).execute()
+            files = res.get("files", [])
+
+        if not files:
+            raise FileNotFoundError(f"Google Drive root folder not found: {root_spec!r}")
+
+        files.sort(key=lambda f: f["id"])
+        current_id = files[0]["id"]
+
+    return current_id
+
+
+def _walk(
+    service,
+    root_id: str,
+    archive_name: str,
+    *,
+    progress_every: int = 250,
+) -> List[FileNode]:
     """BFS the Drive tree, skipping the archive subtree."""
     out: List[FileNode] = []
     queue: List[tuple] = [(root_id, "")]
     archive_id: Optional[str] = None
+    folders_seen = 0
 
     # First, find (or note absence of) the archive folder at root so we can skip it.
     page_token = None
@@ -108,6 +185,9 @@ def _walk(service, root_id: str, archive_name: str) -> List[FileNode]:
 
     while queue:
         parent_id, prefix = queue.pop()
+        folders_seen += 1
+        if progress_every > 0 and folders_seen % progress_every == 0:
+            logger.info(f"Walk progress: {folders_seen} folders scanned, {len(out)} files found...")
         page_token = None
         while True:
             res = service.files().list(
@@ -189,13 +269,19 @@ def _download_bytes(service, file_id: str) -> bytes:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser.add_argument("--root-folder", default=None,
+                        help="Drive folder ID, root, or folder path/name to walk.")
     parser.add_argument("--root-folder-id", default=None,
-                        help="Drive folder ID to walk (defaults to $STORAGE_PATH).")
+                        help="Deprecated alias for --root-folder.")
     parser.add_argument("--archive-name", default="_archive_md",
                         help="Folder name (under root) to move originals into.")
     parser.add_argument("--apply", action="store_true",
                         help="Actually perform conversions. Without this, dry-run only.")
+    parser.add_argument("--summary-only", action="store_true",
+                        help="Only print counts, not one line per file in dry-run mode.")
+    parser.add_argument("--progress-every", type=int, default=250,
+                        help="During Drive walk, print progress every N folders. Use 0 to disable.")
     parser.add_argument("--credentials",
                         default=os.environ.get("GDRIVE_CREDENTIALS")
                         or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json"))
@@ -204,15 +290,22 @@ def main() -> int:
                         or os.path.expanduser("~/.openclaw/gdrive-ops-token.json"))
     args = parser.parse_args()
 
-    root_id = args.root_folder_id or os.environ.get("STORAGE_PATH") or "root"
+    root_spec = args.root_folder or args.root_folder_id or os.environ.get("STORAGE_PATH") or "root"
     dry = not args.apply
 
-    logger.info(f"Root folder: {root_id}")
+    logger.info(f"Root folder: {root_spec}")
     logger.info(f"Archive subfolder: {args.archive_name}")
     logger.info(f"Mode: {'DRY-RUN' if dry else 'APPLY'}")
 
     service = _build_service(args.credentials, args.token)
-    all_files = _walk(service, root_id, args.archive_name)
+    root_id = _resolve_root_folder(service, root_spec)
+    logger.info(f"Resolved root folder ID: {root_id}")
+    all_files = _walk(
+        service,
+        root_id,
+        args.archive_name,
+        progress_every=args.progress_every,
+    )
 
     md_candidates = [f for f in all_files if f.name.lower().endswith(".md")]
     to_convert = [f for f in md_candidates if f.mime_type != _GDOC_MIME]
@@ -235,6 +328,8 @@ def main() -> int:
             f"convert '{node.rel_path}' (id={node.id}, mime={node.mime_type}) -> gdoc, "
             f"archive original at '{args.archive_name}/{node.rel_path}'"
         )
+        if dry and args.summary_only:
+            continue
         if dry:
             logger.info(f"[DRY] {action}")
             continue

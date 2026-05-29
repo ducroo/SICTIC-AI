@@ -1,19 +1,14 @@
 import os
 
 import pytest
+from lib.storage_domains import dataset_raw_path, list_dataset_names
 
 
 def _discover_dataset(storage):
-    if not storage.exists("datasets"):
-        return None
-
-    items = [
-        item for item in storage.list("datasets")
-        if storage.is_dir(f"datasets/{item}")
-    ]
+    items = list_dataset_names("startups") + list_dataset_names("community")
     active = [
         item for item in items
-        if storage.exists(f"datasets/{item}/__active_dataset__")
+        if storage.exists(f"{dataset_raw_path(item)}/__active_dataset__")
     ]
     candidates = active or items
     return candidates[0] if candidates else None
@@ -29,7 +24,7 @@ def test_live_storage_discovers_dataset():
 
     if not dataset:
         pytest.skip("No dataset available in configured storage.")
-    assert storage.is_dir(f"datasets/{dataset}")
+    assert storage.is_dir(dataset_raw_path(dataset))
 
 
 @pytest.mark.live

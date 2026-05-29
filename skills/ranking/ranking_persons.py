@@ -11,6 +11,7 @@ from skills.llm_chat.llm_chat import llm_chat
 from rapidfuzz import process, fuzz
 
 from lib.slugify import slugify
+from lib.storage_domains import dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -20,7 +21,7 @@ logger = get_logger(__name__)
 
 def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], optout: Optional[List[str]]) -> List[str]:
     """Determines the final list of candidates to rank by fuzzy-matching against available profiles."""
-    dataset_dir_rel = f"datasets/{dataset_name}"
+    dataset_dir_rel = dataset_raw_path(dataset_name)
     storage = get_storage()
     available_profiles = []
     
