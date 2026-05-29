@@ -1,9 +1,15 @@
 #!/bin/sh
 # install_skills_conda.sh — conda-based installer for SICTIC-AI.
 #
-# Prerequisite: `conda` must be on PATH. Install via:
+# Prerequisite: `conda` must be on PATH.
+#   macOS:
 #     brew install --cask miniforge
-#     conda init zsh   # (or bash) — restart shell after this
+#     conda init zsh   # or bash
+#   Linux/WSL2:
+#     curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
+#     bash Miniforge3-*.sh
+#     conda init bash  # or zsh
+#   Restart the shell after initializing conda.
 #
 # What it does:
 #   1. Ensures the conda env named in environment.yml exists. If not, creates it.
@@ -71,9 +77,14 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 if ! command -v conda >/dev/null 2>&1; then
-    echo "install_skills_conda: 'conda' not on PATH. Install miniforge first:" >&2
+    echo "install_skills_conda: 'conda' not on PATH. Install Miniforge first:" >&2
+    echo "  macOS:" >&2
     echo "    brew install --cask miniforge" >&2
-    echo "    conda init zsh   # then restart your shell" >&2
+    echo "    conda init zsh   # or bash; then restart your shell" >&2
+    echo "  Linux/WSL2:" >&2
+    echo "    curl -L -O \"https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-\$(uname)-\$(uname -m).sh\"" >&2
+    echo "    bash Miniforge3-*.sh" >&2
+    echo "    conda init bash  # or zsh; then restart your shell" >&2
     exit 127
 fi
 
@@ -151,7 +162,7 @@ if [ "$SKIP_ENV" -eq 0 ]; then
                         env_exists=0
                         ;;
                     *)
-                        echo "install_skills_conda: rebuild required for the pinned Docling/macOS runtime. Re-run with --rebuild-env when ready." >&2
+                        echo "install_skills_conda: rebuild required for the pinned Docling runtime. Re-run with --rebuild-env when ready." >&2
                         exit 1
                         ;;
                 esac

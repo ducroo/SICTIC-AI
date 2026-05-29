@@ -4,12 +4,13 @@ DoclingAdapter — thin wrapper around the docling library for OCR/parsing.
 Runs in-process. No HTTP, no separate server. Models load on first call and
 are reused for the lifetime of the process via a module-level singleton.
 
-OCR backend: Apple's Vision framework via ocrmac (Neural-Engine accelerated).
+OCR backend: Apple Vision via ocrmac on macOS; RapidOCR on Linux.
 Picture descriptions: forwarded to Ollama's OpenAI-compatible endpoint, same
 as the previous docling-serve setup.
 """
 import asyncio
 import os
+import platform
 import threading
 from typing import List
 
@@ -34,6 +35,7 @@ def _build_converter():
         PdfPipelineOptions,
         PictureDescriptionApiOptions,
         OcrMacOptions,
+        RapidOcrOptions,
     )
 
     vlm_model_name = get_env_var("DEFAULT_VLM")
@@ -41,11 +43,16 @@ def _build_converter():
         vlm_model_name = vlm_model_name[7:]
     ollama_url = get_env_var("OLLAMA_HOST").rstrip("/")
 
+    if platform.system() == "Darwin":
+        ocr_options = OcrMacOptions()
+    else:
+        ocr_options = RapidOcrOptions()
+
     pipeline_opts = PdfPipelineOptions(
         do_ocr=True,
         do_picture_description=True,
         enable_remote_services=True,  # needed for picture_description_options below
-        ocr_options=OcrMacOptions(),
+        ocr_options=ocr_options,
         picture_description_options=PictureDescriptionApiOptions(
             url=f"{ollama_url}/v1/chat/completions",
             params={"model": vlm_model_name, "max_tokens": 200},

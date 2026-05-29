@@ -1,6 +1,6 @@
 # SICTIC-AI
 
-![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
 ![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
@@ -65,7 +65,7 @@ exec $SHELL           # reload your terminal
 
 **Linux / WSL2 (Ubuntu):**
 ```bash
-sudo apt update && sudo apt install wget
+sudo apt update && sudo apt install -y curl wget
 wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
 bash Miniforge3-*.sh  # Follow the prompts, say 'yes' to init
 exec $SHELL           # reload your terminal
@@ -82,8 +82,16 @@ Run the provided installer. This creates a self-contained Python environment (`s
 and inserts the toolkit in your workspace using **symlinks**.
 
 ```bash
+# macOS example
 ./install_skills_conda.sh --target /Users/you/.openclaw/workspace-ops/skills
+
+# Linux / WSL2 example
+./install_skills_conda.sh --target "$HOME/.openclaw/workspace-ops/skills"
 ```
+
+The installer creates the same `sictic-env` on macOS and Linux. Docling uses
+Apple Vision OCR through `ocrmac` on macOS and RapidOCR on Linux; both paths use
+the same `skills.dataset_chat` ingestion code.
 
 ### Step 3: Configuration
 
@@ -157,6 +165,11 @@ Once configured, the system uses two main folders under your `STORAGE_PATH`:
 * **`insights/<dataset_name>/`**: This is where the AI outputs its finished Markdown reports. 
 
 If you put a pitch deck into `datasets/spacex/`, running the `startup_profile` skill will automatically parse it, read it, and drop the final analysis into `insights/spacex/`.
+
+Document parsing is handled locally by Docling. On macOS, the installer includes
+the `ocrmac` extra for Apple Vision OCR. On Linux/WSL2, the installer uses the
+standard Docling package and RapidOCR. In both cases, `DEFAULT_VLM` is used for
+image and chart descriptions through Ollama or another configured model provider.
 
 ## Google Drive Integration (Production Mode)
 

@@ -11,7 +11,7 @@ channels:
 # has an `extra` we need (e.g. docling[ocrmac]), or is the editable project.
 
 dependencies:
-  # Match the known-good macOS/Apple Silicon Docling runtime.
+  # Python 3.12 is the supported runtime on macOS and Linux.
   - python=3.12
   - pip
 
@@ -34,13 +34,14 @@ dependencies:
   - pytest-mock
 
   - pip:
-      # Not on conda-forge (or we need the [ocrmac] extras for docling):
+      # Not on conda-forge. Docling uses ocrmac on macOS and RapidOCR on Linux.
       - apify-client
       - langchain-text-splitters
       - ollama
-      - docling[ocrmac]==2.72.0
+      - 'docling[ocrmac]==2.72.0; platform_system == "Darwin"'
+      - 'docling==2.72.0; platform_system != "Darwin"'
       - torch==2.10.0
       - torchvision==0.25.0
-      - ocrmac==1.0.1
+      - 'ocrmac==1.0.1; platform_system == "Darwin"'
       # Editable install of this repo — makes `skills.*` and `lib.*` importable.
       - --editable .
