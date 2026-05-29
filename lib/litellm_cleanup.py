@@ -10,6 +10,13 @@ async def close_litellm_sessions() -> None:
     keeps harness output readable.
     """
     try:
+        from lib.runtime_noise import configure_runtime_noise
+
+        configure_runtime_noise()
+    except Exception:
+        pass
+
+    try:
         import litellm.main as litellm_main
 
         handler = getattr(litellm_main, "base_llm_aiohttp_handler", None)

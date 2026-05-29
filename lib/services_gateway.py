@@ -4,6 +4,10 @@ import json
 import fcntl
 import time
 from typing import Any, Dict, List
+from lib.runtime_noise import configure_runtime_noise
+
+configure_runtime_noise()
+
 import litellm
 from enum import Enum
 from dotenv import load_dotenv

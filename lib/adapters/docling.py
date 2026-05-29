@@ -33,6 +33,10 @@ _convert_lock = threading.Lock()
 
 def _build_converter():
     """Construct the DocumentConverter — called once, lazily."""
+    from lib.runtime_noise import configure_runtime_noise
+
+    configure_runtime_noise()
+
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import (

@@ -1,5 +1,9 @@
 import math
 from typing import Dict, Any, Optional
+from lib.runtime_noise import configure_runtime_noise
+
+configure_runtime_noise()
+
 import litellm
 from litellm.exceptions import APIConnectionError
 from lib.services_gateway import gateway, Priority

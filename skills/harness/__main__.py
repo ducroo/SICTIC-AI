@@ -2,6 +2,10 @@ import typer
 import asyncio
 from typing import Optional, List
 
+from lib.runtime_noise import configure_runtime_noise
+
+configure_runtime_noise()
+
 from lib.logger import get_logger
 from lib.litellm_cleanup import close_litellm_sessions
 from skills.harness.harness import dispatch_command, run
