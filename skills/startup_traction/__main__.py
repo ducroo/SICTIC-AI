@@ -1,4 +1,5 @@
 import typer
+import asyncio
 from skills.startup_traction.startup_traction import startup_traction
 from lib.logger import get_logger
 
@@ -10,7 +11,7 @@ def main(
     startup: str = typer.Option(..., "--startup", "-s", help="The name of the startup to analyze.")
 ):
     try:
-        result = startup_traction(startup)
+        result = asyncio.run(startup_traction(startup))
         print(result)
     except ValueError as e:
         logger.error(str(e))

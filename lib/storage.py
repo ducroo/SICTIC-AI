@@ -249,7 +249,8 @@ def get_storage() -> Storage:
                                Drive as read-fallback and explicit sync target.
                                Writes go local-only; use scripts/gdrive_sync.py
                                to push changes back. STORAGE_PATH is the Drive
-                               root folder ID used for read-fallback.
+                               root folder ID, "root", or folder path/name used
+                               for read-fallback.
     """
     global _storage_singleton
     if _storage_singleton is not None:

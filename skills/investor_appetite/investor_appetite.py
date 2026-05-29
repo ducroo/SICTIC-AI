@@ -1,5 +1,3 @@
-import os
-
 from lib.env import get_env_var
 from lib.storage import get_storage
 from lib.logger import get_logger
@@ -22,7 +20,7 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
     # 1. Input Normalization & Fallback
     if not investors:
         logger.info(f"[{dataset_name}] No investors provided. Fetching all persons from dataset.")
-        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_name_slug}/linkedin")
+        linkedin_adapter = LinkedInAdapter(dataset_name_slug)
         investors_list = linkedin_adapter.get_all_persons()
     elif isinstance(investors, str):
         investors_list = [investors]
@@ -57,7 +55,7 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
         logger.info(f"[{dataset_name}] Processing investor appetite for: {investor_name}")
         
         output_file = get_insight_filepath(
-            dataset_name=dataset_name_lower,
+            dataset_name=dataset_name_slug,
             skill_name="investor_appetite",
             model=default_llm,
             identifier=investor_name,
@@ -65,7 +63,7 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
         )
 
         # Caching
-        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_lower], output_file, default_llm)
+        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_slug], output_file, default_llm)
         if not needs_refresh:
             results[investor_name] = cached_content
             return

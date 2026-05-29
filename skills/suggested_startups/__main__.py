@@ -1,4 +1,5 @@
 import typer
+import asyncio
 from typing import List, Optional
 from skills.suggested_startups.suggested_startups import suggested_startups
 from lib.logger import get_logger
@@ -15,7 +16,11 @@ def main(
 ):
     try:
         # We pass startups and investors directly; suggested_startups will resolve defaults
-        result = suggested_startups(startups, investors, max_startups)
+        result = asyncio.run(suggested_startups(
+            startups=startups,
+            investors=investors,
+            max_startups=max_startups
+        ))
         print(result)
     except ValueError as e:
         logger.error(str(e))

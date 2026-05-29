@@ -4,13 +4,13 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-def generate_multi_queries(question: str) -> list:
+async def generate_multi_queries(question: str) -> list:
     config = config_load()
     base_prompt = config['dataset_chat']['multi_query_prompt']
     prompt = base_prompt.replace("{{question}}", question)
     
     logger.info("Generating multi-queries via LLM...")
-    response = llm_chat(prompt=prompt)
+    response = await llm_chat(prompt=prompt)
     if response:
         return [q.strip() for q in response.split('\n') if q.strip()][:3]
     return []

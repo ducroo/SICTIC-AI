@@ -1,4 +1,5 @@
 import typer
+import asyncio
 from rich.console import Console
 from rich.markdown import Markdown
 from skills.llm_chat.llm_chat import llm_chat
@@ -15,7 +16,7 @@ def main(
     prompt: str = typer.Argument(..., help="The prompt/message you want to send to the LLM.")
 ):
     try:
-        content = llm_chat(prompt)
+        content = asyncio.run(llm_chat(prompt))
         if content:
             console.print("\n")
             console.print(Markdown(content))

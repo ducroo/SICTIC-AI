@@ -179,6 +179,15 @@ class LinkedInAdapter:
         """Returns the fully populated, in-memory list of person objects."""
         return list(self.cache.values())
 
+    def get_all_persons(self) -> List[str]:
+        """Returns all human-readable names known from the local LinkedIn cache."""
+        names = []
+        for person in self.get_cached_persons():
+            name = person.display_name
+            if name:
+                names.append(name)
+        return sorted(set(names))
+
     def get_profiles(self, person_list: List[Person], allow_scrape: bool = True) -> List[Person]:
         """
         Takes a list of sparse Person objects (full_name and/or linkedinID) and fills in the gaps.

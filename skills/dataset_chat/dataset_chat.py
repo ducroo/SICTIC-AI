@@ -54,7 +54,7 @@ async def dataset_chat(
 
     if not is_explicit_multi and not llm_instructions and response and fallback_trigger in response.strip():
         logger.info(f"[{dataset_name}] Standard search failed. Generating multi-queries and retrying...")
-        new_queries = generate_multi_queries(questions)
+        new_queries = await generate_multi_queries(questions)
         
         combined_queries = [questions] + new_queries
         merged_chunks = await dataset_search(dataset_name, combined_queries, max_chunks=max_chunks)

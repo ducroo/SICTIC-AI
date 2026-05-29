@@ -23,7 +23,7 @@ def main(
             exclude_investors=parsed_excludes,
             top_k=top_k
         ))
-        pass # Output is saved to file and logged, GUI catches it natively
+        print(result)
     except Exception as e:
         logger.error(f"Execution failed: {e}")
         import traceback

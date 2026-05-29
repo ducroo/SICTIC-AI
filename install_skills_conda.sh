@@ -18,6 +18,7 @@
 #   ./install_skills_conda.sh --target ... --prune                   # remove broken target symlinks
 #   ./install_skills_conda.sh --target ... --rebuild-env             # force a fresh conda env
 #   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2 (symlink only)
+#   ./install_skills_conda.sh --target ... --non-interactive          # do not prompt for .env values
 
 set -eu
 
@@ -27,6 +28,7 @@ ENV_FILE="$REPO_ROOT/environment.yml"
 PRUNE=0
 REBUILD_ENV=0
 SKIP_ENV=0
+INTERACTIVE=1
 
 usage() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -39,6 +41,7 @@ while [ $# -gt 0 ]; do
         --prune) PRUNE=1; shift ;;
         --rebuild-env) REBUILD_ENV=1; shift ;;
         --skip-env) SKIP_ENV=1; shift ;;
+        --non-interactive) INTERACTIVE=0; shift ;;
         --symlink) shift ;; # Kept for backwards compatibility, silently ignored (now default)
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
@@ -193,6 +196,140 @@ if [ "$PRUNE" -eq 1 ]; then
 fi
 
 echo "       Installed $installed_count skill(s)."
+
+# ---------------------------------------------------------------------------
+# Step 4: interactive .env setup
+# ---------------------------------------------------------------------------
+ENV_PATH="$REPO_ROOT/.env"
+ENV_TEMPLATE="$REPO_ROOT/.env-template"
+ENV_CREATED=0
+
+env_get() {
+    key="$1"
+    if [ ! -f "$ENV_PATH" ]; then
+        return 0
+    fi
+    awk -F= -v k="$key" '
+        $0 ~ "^[[:space:]]*" k "[[:space:]]*=" {
+            val=$0
+            sub("^[^=]*=", "", val)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            if ((val ~ /^".*"$/) || (val ~ /^\047.*\047$/)) {
+                val=substr(val, 2, length(val)-2)
+            }
+            print val
+            exit
+        }
+    ' "$ENV_PATH"
+}
+
+env_set() {
+    key="$1"
+    value="$2"
+    tmp="$ENV_PATH.tmp.$$"
+    escaped=$(printf '%s' "$value" | sed 's/[\/&]/\\&/g')
+    if grep -q "^[[:space:]]*$key[[:space:]]*=" "$ENV_PATH"; then
+        sed "s/^\\([[:space:]]*$key[[:space:]]*=\\).*/\\1$escaped/" "$ENV_PATH" > "$tmp"
+    else
+        cp "$ENV_PATH" "$tmp"
+        printf '%s=%s\n' "$key" "$value" >> "$tmp"
+    fi
+    mv "$tmp" "$ENV_PATH"
+}
+
+ask_env() {
+    key="$1"
+    prompt="$2"
+    default="$3"
+    required="$4"
+    secret="$5"
+    current=$(env_get "$key" || true)
+    shown_default="$current"
+    if [ -z "$shown_default" ]; then
+        shown_default="$default"
+    fi
+
+    while :; do
+        if [ "$ENV_CREATED" -eq 1 ] && [ "$required" -eq 1 ]; then
+            if [ -n "$shown_default" ]; then
+                printf '%s (suggested: %s): ' "$prompt" "$shown_default"
+            else
+                printf '%s: ' "$prompt"
+            fi
+        elif [ "$secret" -eq 1 ] && [ -n "$shown_default" ]; then
+            printf '%s [%s]: ' "$prompt" "configured"
+        elif [ -n "$shown_default" ]; then
+            printf '%s [%s]: ' "$prompt" "$shown_default"
+        else
+            printf '%s: ' "$prompt"
+        fi
+        IFS= read -r answer || answer=""
+        if [ -z "$answer" ] && ! { [ "$ENV_CREATED" -eq 1 ] && [ "$required" -eq 1 ]; }; then
+            answer="$shown_default"
+        fi
+        if [ -n "$answer" ] || [ "$required" -eq 0 ]; then
+            env_set "$key" "$answer"
+            break
+        fi
+        echo "  $key is required."
+    done
+}
+
+if [ ! -f "$ENV_PATH" ]; then
+    if [ ! -f "$ENV_TEMPLATE" ]; then
+        echo "install_skills_conda: cannot create .env because .env-template is missing." >&2
+        exit 1
+    fi
+    cp "$ENV_TEMPLATE" "$ENV_PATH"
+    ENV_CREATED=1
+    echo "[4/4] Created $ENV_PATH from .env-template"
+else
+    echo "[4/4] Updating $ENV_PATH"
+fi
+
+if [ "$INTERACTIVE" -eq 1 ]; then
+    echo
+    echo "Configure runtime environment variables."
+    echo "Press Enter to keep the value shown in brackets. Secrets are preserved when already configured."
+    echo
+
+    ask_env "REPO_DIR" "Repository directory" "$REPO_ROOT" 1 0
+    ask_env "WORKSPACE_DIR" "Installed skills directory" "$TARGET" 1 0
+    while :; do
+        ask_env "STORAGE_PROVIDER" "Storage provider (local, google, hybrid)" "$(env_get STORAGE_PROVIDER || true)" 1 0
+        storage_provider=$(env_get STORAGE_PROVIDER || true)
+        case "$storage_provider" in
+            local|google|hybrid) break ;;
+            *) echo "  STORAGE_PROVIDER must be local, google, or hybrid." ;;
+        esac
+    done
+
+    if [ "$storage_provider" = "local" ]; then
+        ask_env "STORAGE_PATH" "Local storage path" "" 1 0
+        ask_env "STORAGE_MIRROR_DIR" "Storage mirror dir (blank for local mode)" "" 0 0
+    elif [ "$storage_provider" = "google" ]; then
+        ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
+        ask_env "STORAGE_MIRROR_DIR" "Storage mirror dir (blank for google mode)" "" 0 0
+    else
+        ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
+        ask_env "STORAGE_MIRROR_DIR" "Local mirror directory" "" 1 0
+    fi
+
+    ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
+    ask_env "OLLAMA_HOST" "Ollama host" "$(env_get OLLAMA_HOST || true)" 1 0
+    ask_env "DEFAULT_LLM" "Default LLM model" "$(env_get DEFAULT_LLM || true)" 1 0
+    ask_env "DEFAULT_VLM" "Default VLM model" "$(env_get DEFAULT_VLM || true)" 1 0
+    ask_env "DEFAULT_EMBEDDINGS" "Default embeddings model" "$(env_get DEFAULT_EMBEDDINGS || true)" 1 0
+    ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
+    ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
+    ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
+    ask_env "APIFY_KEY" "Apify API key (blank if unused)" "$(env_get APIFY_KEY || true)" 0 1
+    ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "$(env_get DEALUM_API_KEY || true)" 0 1
+else
+    echo "[4/4] .env prompts skipped (--non-interactive)."
+    if [ -z "$(env_get REPO_DIR || true)" ]; then env_set "REPO_DIR" "$REPO_ROOT"; fi
+    if [ -z "$(env_get WORKSPACE_DIR || true)" ]; then env_set "WORKSPACE_DIR" "$TARGET"; fi
+fi
 
 echo
 echo "Done."

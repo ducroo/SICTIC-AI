@@ -31,6 +31,7 @@ def check_dataset_exists(startup):
     return True
 
 @pytest.mark.asyncio
+@pytest.mark.live
 @pytest.mark.parametrize("startup_name, target_expert", TEST_CASES)
 async def test_expert_search_semantic_and_ranking(startup_name, target_expert):
     if not check_dataset_exists(startup_name):

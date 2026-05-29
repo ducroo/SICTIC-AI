@@ -68,6 +68,7 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
     and 'mentions' (isolated chunks), excluding any LinkedIn data.
     """
     logger.info(f"[{dataset_name}] Building dossier for '{person_name}'...")
+    dataset_slug = slugify(dataset_name)
     
     dossier: List[Chunk] = []
     mentions: List[Chunk] = []

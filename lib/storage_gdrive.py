@@ -62,7 +62,9 @@ class GoogleDriveStorage:
     ):
         self.credentials_path = credentials_path
         self.token_path = token_path
-        self.root_folder_id = root_folder_id
+        self._root_folder_spec = root_folder_id or "root"
+        self.root_folder_id = self._root_folder_spec
+        self._root_resolved = self._root_folder_spec == "root"
         self._local_cache_dir = Path(
             local_cache_dir
             or os.path.expanduser("~/.cache/sictic/gdrive-materialized")
@@ -108,10 +110,92 @@ class GoogleDriveStorage:
         os.chmod(self.token_path, 0o600)
         return creds
 
+    def _resolve_root_folder(self) -> None:
+        """Resolve root spec as either a Drive ID, 'root', or a folder path/name."""
+        if self._root_resolved:
+            return
+
+        spec = self._root_folder_spec.strip().strip("/")
+        if not spec or spec == "root":
+            self.root_folder_id = "root"
+            self._root_resolved = True
+            self._path_to_id[""] = self.root_folder_id
+            return
+
+        service = self._ensure_service()
+
+        # First try the value as a real Drive file ID. This preserves existing
+        # deployments and avoids ambiguity when an ID happens to look path-like.
+        if "/" not in spec:
+            try:
+                with self._service_lock:
+                    meta = service.files().get(
+                        fileId=spec,
+                        fields="id,mimeType",
+                        supportsAllDrives=True,
+                    ).execute()
+                if meta.get("mimeType") == _FOLDER_MIME:
+                    self.root_folder_id = meta["id"]
+                    self._root_resolved = True
+                    self._path_to_id[""] = self.root_folder_id
+                    self._path_to_mime[""] = _FOLDER_MIME
+                    return
+            except HttpError:
+                pass
+
+        current_id = "root"
+        parts = [p for p in spec.split("/") if p]
+        for index, part in enumerate(parts):
+            q = (
+                f"'{current_id}' in parents and "
+                f"name='{_escape_q(part)}' and "
+                f"mimeType='{_FOLDER_MIME}' and trashed=false"
+            )
+            with self._service_lock:
+                res = service.files().list(
+                    q=q,
+                    fields=f"files({_FIELDS})",
+                    pageSize=10,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                ).execute()
+            files = res.get("files", [])
+
+            # If a single-segment name was not found under My Drive root, also
+            # allow a global folder-name search. This covers folders surfaced
+            # from shared drives or shared-with-me contexts. If duplicates exist
+            # the deterministic first ID is used; use an explicit ID to avoid
+            # ambiguity.
+            if not files and index == 0 and len(parts) == 1:
+                with self._service_lock:
+                    res = service.files().list(
+                        q=(
+                            f"name='{_escape_q(part)}' and "
+                            f"mimeType='{_FOLDER_MIME}' and trashed=false"
+                        ),
+                        fields=f"files({_FIELDS})",
+                        pageSize=10,
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True,
+                    ).execute()
+                files = res.get("files", [])
+
+            if not files:
+                raise FileNotFoundError(f"Google Drive root folder not found: {spec!r}")
+            files.sort(key=lambda f: f["id"])
+            current_id = files[0]["id"]
+
+        self.root_folder_id = current_id
+        self._root_resolved = True
+        self._path_to_id = {"": self.root_folder_id}
+        self._path_to_mime = {"": _FOLDER_MIME}
+        self._dir_children = {}
+
     # ---------- path resolution ----------
 
     def _resolve(self, rel: str) -> Optional[str]:
         """Return the Drive file ID for rel, or None if it doesn't exist."""
+        self._resolve_root_folder()
         # Use the common path validator to ensure strict relative paths
         from lib.storage import _validate_rel
         rel = _validate_rel(rel)
@@ -155,6 +239,7 @@ class GoogleDriveStorage:
         return fid
 
     def _list_children(self, rel: str) -> List[dict]:
+        self._resolve_root_folder()
         rel = rel.strip("/")
         if rel in self._dir_children:
             return self._dir_children[rel]
@@ -258,6 +343,7 @@ class GoogleDriveStorage:
         return self.read_bytes(rel).decode(encoding)
 
     def write_bytes(self, rel: str, content: bytes) -> None:
+        self._resolve_root_folder()
         rel = rel.strip("/")
         parent_rel = str(PurePosixPath(rel).parent)
         if parent_rel == ".":
@@ -395,6 +481,7 @@ class GoogleDriveStorage:
         self.remove(rel)
 
     def mkdir(self, rel: str, *, parents: bool = True, exist_ok: bool = True) -> None:
+        self._resolve_root_folder()
         rel = rel.strip("/")
         if not rel:
             return
@@ -431,6 +518,8 @@ class GoogleDriveStorage:
     def refresh(self, rel: str = "") -> None:
         """Drop cached path/listing entries under rel. Forces fresh API calls."""
         if not rel:
+            self._root_resolved = self._root_folder_spec == "root"
+            self.root_folder_id = self._root_folder_spec
             self._path_to_id = {"": self.root_folder_id}
             self._path_to_mime = {"": _FOLDER_MIME}
             self._dir_children = {}

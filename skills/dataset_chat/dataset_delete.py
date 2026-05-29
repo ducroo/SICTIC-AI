@@ -4,6 +4,7 @@ from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
 from qdrant_client import QdrantClient
+from lib.adapters.qdrant import QdrantAdapter
 
 logger = get_logger(__name__)
 
@@ -20,7 +21,7 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
         dataset_slug = slugify(dataset)
         parsed_base_path = f"datasets2md/{dataset_slug}"
 
-        prefix = f"{dataset_slug}_"
+        prefix = f"{dataset_slug}-"
         to_delete = [c for c in all_collections if c.startswith(prefix)]
 
         for col in to_delete:
@@ -40,7 +41,7 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
     # Scenario B: Delete specific embedding for a specific dataset
     if dataset and embeddings:
         dataset_slug = slugify(dataset)
-        target_collection = f"{dataset_slug}_{slugify(embeddings)}"
+        target_collection = QdrantAdapter.collection_for(dataset_slug, embeddings)
         
         if target_collection in all_collections:
             client.delete_collection(target_collection)
@@ -53,7 +54,7 @@ def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = No
 
     # Scenario C: Delete a specific embedding across all datasets
     if not dataset and embeddings:
-        suffix = f"_{slugify(embeddings)}"
+        suffix = f"-{slugify(embeddings)}"
         to_delete = [c for c in all_collections if c.endswith(suffix)]
         
         if not to_delete:

@@ -7,6 +7,89 @@ mkdir -p "$PID_DIR" "$LOG_DIR"
 
 SERVICES=(qdrant ollama)
 
+load_env_file() {
+    if [ ! -f .env ]; then
+        return
+    fi
+    while IFS= read -r line; do
+        case "$line" in
+            ""|\#*) continue ;;
+            *=*)
+                key="${line%%=*}"
+                val="${line#*=}"
+                key="$(printf '%s' "$key" | xargs)"
+                val="$(printf '%s' "$val" | xargs)"
+                case "$val" in
+                    \"*\") val="${val#\"}"; val="${val%\"}" ;;
+                    \'*\') val="${val#\'}"; val="${val%\'}" ;;
+                esac
+                if [ -z "$(eval "printf '%s' \"\${$key:-}\"")" ]; then
+                    export "$key=$val"
+                fi
+                ;;
+        esac
+    done < .env
+}
+
+ollama_model_name() {
+    local raw="$1"
+    case "$raw" in
+        ollama/*) printf '%s\n' "${raw#ollama/}" ;;
+        *) printf '\n' ;;
+    esac
+}
+
+ollama_has_model() {
+    local model="$1"
+    local host="${OLLAMA_HOST:-http://localhost:11434}"
+    if curl -fsS "$host/api/tags" 2>/dev/null | grep -Eq "\"(name|model)\":\"$model\""; then
+        return 0
+    fi
+    if command -v ollama >/dev/null 2>&1; then
+        ollama list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -qx "$model"
+        return $?
+    fi
+    return 1
+}
+
+ensure_ollama_model() {
+    local configured="$1"
+    local label="$2"
+    local model
+    model="$(ollama_model_name "$configured")"
+    if [ -z "$model" ]; then
+        return
+    fi
+    if ollama_has_model "$model"; then
+        echo "ollama model present ($label): $model"
+        return
+    fi
+    echo "Pulling missing ollama model ($label): $model"
+    local host="${OLLAMA_HOST:-http://localhost:11434}"
+    if curl -fsS "$host/api/pull" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"$model\",\"stream\":false}" >/dev/null; then
+        echo "ollama model ready ($label): $model"
+        return
+    fi
+    if command -v ollama >/dev/null 2>&1; then
+        ollama pull "$model"
+        return
+    fi
+    echo "ERROR: Failed to pull ollama model '$model' via $host/api/pull, and ollama CLI is not on PATH." >&2
+    return 1
+}
+
+ensure_ollama_models() {
+    if ! curl -s "${OLLAMA_HOST:-http://localhost:11434}" >/dev/null 2>&1; then
+        echo "WARNING: ollama is not responding; cannot check/pull models."
+        return
+    fi
+    ensure_ollama_model "${DEFAULT_LLM:-}" "DEFAULT_LLM"
+    ensure_ollama_model "${DEFAULT_VLM:-}" "DEFAULT_VLM"
+    ensure_ollama_model "${DEFAULT_EMBEDDINGS:-}" "DEFAULT_EMBEDDINGS"
+}
+
 # ---------- start ----------
 start_qdrant() {
     if [ -f "$PID_DIR/qdrant.pid" ] && ps -p "$(cat "$PID_DIR/qdrant.pid")" > /dev/null 2>&1; then
@@ -57,8 +140,11 @@ start_qdrant() {
 }
 
 start_ollama() {
-    if curl -s http://localhost:11434 > /dev/null 2>&1; then
-        echo "ollama is already responding on localhost:11434 (system service or already running externally)"
+    load_env_file
+
+    if curl -s "${OLLAMA_HOST:-http://localhost:11434}" > /dev/null 2>&1; then
+        echo "ollama is already responding on ${OLLAMA_HOST:-http://localhost:11434} (system service or already running externally)"
+        ensure_ollama_models
         return
     fi
 
@@ -72,27 +158,18 @@ start_ollama() {
         return
     fi
 
-    if [ -f .env ]; then
-        while IFS= read -r line; do
-            case "$line" in
-                OLLAMA_*=*)
-                    key="${line%%=*}"
-                    val="${line#*=}"
-                    case "$val" in
-                        \"*\") val="${val#\"}"; val="${val%\"}" ;;
-                    esac
-                    if [ -z "$(eval "printf '%s' \"\${$key:-}\"")" ]; then
-                        export "$key=$val"
-                        echo "  ollama env: $key=$val"
-                    fi
-                    ;;
-            esac
-        done < .env
-    fi
-
     echo "Starting ollama..."
     ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
     echo $! > "$PID_DIR/ollama.pid"
+
+    for _ in $(seq 1 30); do
+        if curl -s "${OLLAMA_HOST:-http://localhost:11434}" > /dev/null 2>&1; then
+            ensure_ollama_models
+            return
+        fi
+        sleep 1
+    done
+    echo "WARNING: ollama did not respond after startup; model provisioning skipped."
 }
 
 # ---------- stop ----------

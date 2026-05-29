@@ -99,7 +99,7 @@ Open `.env` in a text editor. You need to configure seven variables:
 |1| `WORKSPACE_DIR` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
 |2| `REPO_DIR` | Absolute path to the root of this SICTIC-AI git repository | `/Users/you/SICTIC-AI` |
 |3| `STORAGE_PROVIDER` | Where should data be saved? (`local` or `google`) | `local` |
-|4| `STORAGE_PATH` | If `local`: absolute path. If `google`: Folder ID or `root` | `/Users/you/sictic_data` or `root` |
+|4| `STORAGE_PATH` | If `local`: absolute path. If `google`/`hybrid`: Drive folder ID, `root`, or folder path/name | `/Users/you/sictic_data`, `SICTIC-AI`, or `root` |
 |5| `DEFAULT_LLM` | The primary model used for analysis | `google/gemini-flash-latest` |
 |6| `DEFAULT_VLM` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
 |7| `DEFAULT_EMBEDDINGS` | The model used for semantic search | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
@@ -125,6 +125,14 @@ You are ready to go! Execution of skills is straightforward. Either you ask your
 conda run -n sictic-env python -m skills.llm_chat "What is startup due diligence?"
 conda run -n sictic-env python -m skills.startup_profile --startup "SpaceX"
 ```
+
+For manual end-to-end testing, use the lightweight slash-command harness:
+
+```bash
+conda run -n sictic-env python -m skills.harness
+```
+
+Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and `/dd_checks <startup>`.
 
 <details>
 <summary>▶ Click to see a sample Startup Profile output for SpaceX</summary>
@@ -158,3 +166,34 @@ In production at SICTIC, we use Google Drive to share datasets and insights with
 
 **Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you (We did it with Openclaw)
 
+## Local Google-backed Testing
+
+For local testing with Google credentials, prefer `STORAGE_PROVIDER="hybrid"`. In hybrid mode, Google Drive is used as a read fallback while generated files are written to a local mirror, which avoids accidental production Drive writes during repeated tests.
+
+Required `.env` fields for hybrid testing:
+
+```bash
+REPO_DIR=/absolute/path/to/SICTIC-AI
+STORAGE_PROVIDER=hybrid
+STORAGE_PATH=<google-drive-folder-id-root-or-folder-path>
+STORAGE_MIRROR_DIR=/absolute/path/to/local-mirror
+GDRIVE_CREDENTIALS=/absolute/path/to/credentials.json
+GDRIVE_TOKEN=/absolute/path/to/token.json
+QDRANT_HOST=http://localhost:6333
+OLLAMA_HOST=http://localhost:11434
+DEFAULT_LLM=...
+DEFAULT_VLM=...
+DEFAULT_EMBEDDINGS=...
+```
+
+The default test suite is mocked/local and safe to run with:
+
+```bash
+conda run -n sictic-env python -m pytest -q
+```
+
+Opt-in live smoke tests require local services and configured storage:
+
+```bash
+SICTIC_RUN_LIVE_SMOKE=1 conda run -n sictic-env python -m pytest -q -m live
+```

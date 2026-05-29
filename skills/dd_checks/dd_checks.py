@@ -61,9 +61,9 @@ async def dd_checks(startup: str) -> str:
     """
     from lib.slugify import slugify
     startup_slug = slugify(startup)
-    qdrant = QdrantAdapter(collection_name=startup_slug)
-    if not qdrant.dataset_available():
-        raise ValueError(f"Dataset for {startup_slug} not found or is empty.")
+    storage = get_storage()
+    if not storage.exists(f"datasets/{startup_slug}"):
+        raise ValueError(f"Dataset for {startup_slug} not found.")
         
     output_file = initialize_report_file(startup_slug, startup)
     config = config_load()

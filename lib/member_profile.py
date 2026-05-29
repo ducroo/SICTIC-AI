@@ -15,7 +15,8 @@ async def _process_single_member(type_of_profile: str, full_name: str, target_di
     storage = get_storage()
     try:
         if type_of_profile == "person_profile":
-            profile_content = await person_profile(dataset_name="sictic_members", name=full_name)
+            persons = await person_profile(dataset_name="sictic_members", names=full_name)
+            profile_content = persons[0].person_profile if persons else None
         elif type_of_profile == "investor_appetite":
             results = await investor_appetite(dataset_name="sictic_members", investors=[full_name])
             profile_content = results.get(full_name)
@@ -72,8 +73,7 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
 
     if names is None:
         logger.info(f"No names provided for {type_of_profile}. Fetching all members from LinkedIn cache.")
-        linkedin_cache_dir = str(storage.local_path("datasets/sictic_members/linkedin"))
-        linkedin_adapter = LinkedInAdapter(cache_dir=linkedin_cache_dir)
+        linkedin_adapter = LinkedInAdapter("sictic_members")
         names_list = linkedin_adapter.get_all_persons()
     elif is_single:
         names_list = [names]

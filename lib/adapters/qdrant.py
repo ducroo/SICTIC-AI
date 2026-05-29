@@ -41,6 +41,12 @@ class Chunker:
 
 class QdrantAdapter:
     """Manages the connection and semantic operations with Qdrant."""
+    @staticmethod
+    def collection_for(collection_name: str, embeddings_model: Optional[str] = None) -> str:
+        model = embeddings_model or get_env_var("DEFAULT_EMBEDDINGS")
+        clean_model = model.split("/")[-1]
+        return slugify(f"{collection_name}-{clean_model}")
+
     def __init__(self, collection_name: str):
         # Suppress litellm boot warnings
         import litellm
@@ -48,38 +54,83 @@ class QdrantAdapter:
 
         self.client = QdrantClient(url="http://localhost:6333")
         model = get_env_var("DEFAULT_EMBEDDINGS")
-        clean_model = model.split("/")[-1]
-        self.collection_name = slugify(f"{collection_name}-{clean_model}")
+        self.collection_name = self.collection_for(collection_name, model)
 
         collections = self.client.get_collections().collections
-        if not any(c.name == self.collection_name for c in collections):
+        collection_exists = any(c.name == self.collection_name for c in collections)
+        vector_size = self._detect_vector_size(model)
+
+        if collection_exists:
+            existing_size = self._collection_vector_size()
+            if existing_size is not None and existing_size != vector_size:
+                points_count = self._collection_points_count()
+                if points_count == 0:
+                    logger.warning(
+                        f"Recreating empty Qdrant collection {self.collection_name}: "
+                        f"stored vector size {existing_size}, current model size {vector_size}."
+                    )
+                    self.client.delete_collection(self.collection_name)
+                    collection_exists = False
+                else:
+                    raise RuntimeError(
+                        f"Qdrant collection {self.collection_name} has vector size {existing_size}, "
+                        f"but {model} returns {vector_size}. Delete/rebuild the collection before rerunning."
+                    )
+
+        if not collection_exists:
             logger.info(f"Creating new Qdrant collection: {self.collection_name}")
-            
-            # Dynamically determine vector size by generating a test embedding
-            import litellm
-            dummy_kwargs = {"model": model, "input": ["test"]}
-            if model.startswith("ollama/"):
-                dummy_kwargs["api_base"] = get_env_var("OLLAMA_HOST")
-                
-            try:
-                # Use synchronous call for initialization
-                dummy_response = litellm.embedding(**dummy_kwargs)
-                vector_size = len(dummy_response.data[0]["embedding"])
-                logger.info(f"Dynamically determined vector size: {vector_size} for model {model}")
-            except Exception as e:
-                logger.error(f"Failed to determine vector size dynamically: {e}")
-                vector_size = 3072  # Fallback
-                
-            try:
-                # Suppress Qdrant warning by using check_compatibility=False implicitly via client context if possible, 
-                # but we will just let it init normally since the warning is mostly harmless and happens on instantiation.
-                pass
-            except Exception:
-                pass
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
             )
+
+    def _detect_vector_size(self, model: str) -> int:
+        """Returns the embedding dimension for the configured model."""
+        import litellm
+
+        dummy_kwargs = {"model": model, "input": ["test"]}
+        if model.startswith("ollama/"):
+            dummy_kwargs["api_base"] = get_env_var("OLLAMA_HOST")
+
+        try:
+            dummy_response = litellm.embedding(**dummy_kwargs)
+            vector_size = len(dummy_response.data[0]["embedding"])
+            logger.info(f"Dynamically determined vector size: {vector_size} for model {model}")
+            return vector_size
+        except Exception as e:
+            logger.error(f"Failed to determine vector size dynamically: {e}")
+            raise RuntimeError(f"Could not determine embedding vector size for {model}: {e}")
+
+    def _collection_info(self):
+        try:
+            return self.client.get_collection(self.collection_name)
+        except Exception as e:
+            logger.warning(f"Failed to inspect Qdrant collection {self.collection_name}: {e}")
+            return None
+
+    def _collection_vector_size(self) -> int | None:
+        info = self._collection_info()
+        if not info:
+            return None
+        vectors = getattr(getattr(info, "config", None), "params", None)
+        vectors = getattr(vectors, "vectors", None)
+        return getattr(vectors, "size", None)
+
+    def _collection_points_count(self) -> int:
+        info = self._collection_info()
+        return int(getattr(info, "points_count", 0) or 0) if info else 0
+
+    def dataset_available(self) -> bool:
+        """Returns True when the collection exists and contains at least one point."""
+        try:
+            count = self.client.count(
+                collection_name=self.collection_name,
+                exact=False,
+            )
+            return count.count > 0
+        except Exception as e:
+            logger.warning(f"Failed to check Qdrant dataset availability for {self.collection_name}: {e}")
+            return False
 
     async def _get_embedding(self, text: str) -> List[float]:
         import litellm

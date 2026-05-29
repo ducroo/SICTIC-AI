@@ -2,6 +2,7 @@ import pytest
 from skills.person_profile.person_profile import person_profile
 
 @pytest.mark.asyncio
+@pytest.mark.live
 async def test_person_profile_avientus_integration():
     """
     Integration test against the materialized Avientus dataset to assert 
@@ -31,4 +32,3 @@ async def test_person_profile_avientus_integration():
     # Ensure specific critical documents were picked up in his orbit
     assert any("CVs of Founders" in d or "CVs_Founder" in d for d in mention_docs), f"CVs not found. Found: {mention_docs}"
     assert any("Avientus_Cap_Table" in d for d in mention_docs), f"Cap Table not found. Found: {mention_docs}"
-

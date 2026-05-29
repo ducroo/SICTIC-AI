@@ -1,4 +1,3 @@
-import os
 from typing import List, Optional
 
 from skills.config_load.config_load import config_load
@@ -19,13 +18,12 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     Outputs a distinct file per investor in the suggested_startups folder.
     """
     from lib.env import get_env_var
-    import os
     
     dataset_slug = slugify(dataset_name)
     
     # Resolve default investors using LinkedInAdapter for the community dataset
     if not investors:
-        linkedin_adapter = LinkedInAdapter(cache_rel=f"datasets/{dataset_slug}/linkedin")
+        linkedin_adapter = LinkedInAdapter(dataset_slug)
         investors = linkedin_adapter.get_all_persons()
         
     # Resolve default startups dynamically using config
@@ -90,7 +88,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     
     names_to_process = [inv for inv, _ in investors_to_process]
     logger.info(f"[{dataset_name}] Batch fetching investor appetites for {len(names_to_process)} investors...")
-    investor_profiles_dict = await member_profile("investor_profile", names_to_process)
+    investor_profiles_dict = await member_profile("investor_appetite", names_to_process)
     
     import asyncio
 

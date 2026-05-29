@@ -1,4 +1,5 @@
 import typer
+import asyncio
 from skills.dd_checks.dd_checks import dd_checks
 from lib.logger import get_logger
 
@@ -13,7 +14,7 @@ def run_dd_checks(
     startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup")
 ):
     try:
-        output_file = dd_checks(startup)
+        output_file = asyncio.run(dd_checks(startup))
         print(f"DD checks complete. Output saved to {output_file}")
     except Exception as e:
         logger.error(f"Execution failed: {e}")
