@@ -11,5 +11,6 @@ async def startup_traction(startup_name: str) -> str:
         dataset_name=startup_name,
         skill_name="startup_traction",
         config_key="startup_traction",
-        max_chunks=100
+        max_chunks=100,
+        strict_insufficient_context=False,
     )

@@ -6,6 +6,7 @@ from lib.insight_filepath import get_insight_filepath
 from lib.insight_refresh import check_insight_refresh
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.dataset_chat import dataset_chat
+from skills.dataset_chat.dataset_chat import _fallback_trigger
 
 logger = get_logger(__name__)
 
@@ -15,7 +16,8 @@ async def generate_dataset_insight(
     dataset_name: str,
     skill_name: str,
     config_key: str,
-    max_chunks: int = 25
+    max_chunks: int = 25,
+    strict_insufficient_context: bool = True,
 ) -> str:
     """
     Generic pipeline to generate an insight by chatting with a dataset.
@@ -53,10 +55,18 @@ async def generate_dataset_insight(
         dataset_name=dataset_slug,
         questions=query,
         llm_instructions=llm_instructions,
-        max_chunks=max_chunks
+        max_chunks=max_chunks,
+        strict_insufficient_context=strict_insufficient_context,
     )
 
     result_md = raw_response if raw_response else "No relevant information found."
+    fallback_trigger = _fallback_trigger()
+    if result_md.strip() == fallback_trigger:
+        raise ValueError(
+            f"Insufficient indexed context for {skill_name} on dataset '{dataset_slug}'. "
+            "No insight was saved."
+        )
+
     storage.write_text(output_path, result_md)
     logger.info(f"[{dataset_slug}] Successfully saved {skill_name} to {output_path}")
 

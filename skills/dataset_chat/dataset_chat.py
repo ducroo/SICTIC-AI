@@ -29,7 +29,8 @@ async def dataset_chat(
     dataset_name: str,
     questions: str,
     llm_instructions: Optional[str] = None,
-    max_chunks: int = 25
+    max_chunks: int = 25,
+    strict_insufficient_context: bool = True,
 ) -> Optional[str]:
     """Chat with a dataset via RAG and return the string response."""
 
@@ -54,10 +55,17 @@ async def dataset_chat(
             pass1_instructions = None
             
     def build_prompt(current_chunks, inst):
-        grounding_rule = (
-            "Use ONLY the context below. If the context does not support the answer, "
-            f"output exactly: {_fallback_trigger()}"
-        )
+        if strict_insufficient_context:
+            grounding_rule = (
+                "Use ONLY the context below. If the context does not support the answer, "
+                f"output exactly: {_fallback_trigger()}"
+            )
+        else:
+            grounding_rule = (
+                "Use ONLY the context below. If the context has no direct evidence for "
+                "a requested category, say that no evidence was found in the provided "
+                "context for that category. Do not invent facts."
+            )
         prompt_parts = [grounding_rule, f"Query: {questions}"]
         if inst:
             prompt_parts.append(f"Instructions: {inst}")
