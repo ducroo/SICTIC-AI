@@ -15,15 +15,14 @@
 #   1. Ensures the conda env named in environment.yml exists. If not, creates it.
 #      If yes, updates it with --prune (removes deps no longer listed).
 #   2. Runs `pip install -e .` inside the conda environment.
-#   3. Symlinks every skills/<name>/ that has a SKILL.md into <target>/<name>/.
-#      Crucially, it skips any existing real directories in the target to prevent
-#      accidentally deleting user-created skills before they are ingested.
+#   3. Copies every skills/<name>/ that has a SKILL.md into <target>/<name>/.
+#      Existing files with the same name are overwritten; extra files already in
+#      the target are left alone.
 #
 # Usage:
 #   ./install_skills_conda.sh --target /path/to/openclaw/skill/dir   # required
-#   ./install_skills_conda.sh --target ... --prune                   # remove broken target symlinks
 #   ./install_skills_conda.sh --target ... --rebuild-env             # force a fresh conda env
-#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2 (symlink only)
+#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2 (copy only)
 #   ./install_skills_conda.sh --target ... --non-interactive          # do not prompt for .env values
 
 set -eu
@@ -31,7 +30,6 @@ set -eu
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 TARGET=""
 ENV_FILE="$REPO_ROOT/environment.yml"
-PRUNE=0
 REBUILD_ENV=0
 SKIP_ENV=0
 INTERACTIVE=1
@@ -44,11 +42,11 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --target) TARGET="$2"; shift 2 ;;
         --source) REPO_ROOT="$(cd "$2" && pwd)"; ENV_FILE="$REPO_ROOT/environment.yml"; shift 2 ;;
-        --prune) PRUNE=1; shift ;;
+        --prune) shift ;; # Kept for backwards compatibility; copy installs do not prune.
         --rebuild-env) REBUILD_ENV=1; shift ;;
         --skip-env) SKIP_ENV=1; shift ;;
         --non-interactive) INTERACTIVE=0; shift ;;
-        --symlink) shift ;; # Kept for backwards compatibility, silently ignored (now default)
+        --symlink) shift ;; # Kept for backwards compatibility; installs now copy skill files.
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
     esac
@@ -60,7 +58,7 @@ if [ -z "$TARGET" ]; then
     exit 2
 fi
 
-# Ensure TARGET resolves to an absolute path for symlinks
+# Ensure TARGET resolves to an absolute path for user-facing metadata.
 mkdir -p "$TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
 
@@ -121,6 +119,20 @@ require_env_not_active_for_rebuild() {
         echo "    $0 --target \"$TARGET\" --rebuild-env" >&2
         exit 1
     fi
+}
+
+copy_skill_dir() {
+    src_dir="$1"
+    dst_dir="$2"
+
+    mkdir -p "$dst_dir"
+    (
+        cd "$src_dir"
+        find . \
+            \( -name __pycache__ -o -name .DS_Store -o -name '*.pyc' \) -prune \
+            -o -type d -exec mkdir -p "$dst_dir/{}" \; \
+            -o -type f -exec cp "{}" "$dst_dir/{}" \;
+    )
 }
 
 echo "Installing SICTIC-AI (conda variant)"
@@ -199,9 +211,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: symlink skills
+# Step 3: copy skills
 # ---------------------------------------------------------------------------
-echo "[3/3] Symlinking skills into $TARGET ..."
+echo "[3/3] Copying skills into $TARGET ..."
 
 INSTALLED_LIST=""
 installed_count=0
@@ -213,14 +225,12 @@ for src in "$REPO_ROOT/skills"/*/; do
 
     dst="$TARGET/$name"
 
-    # SAFETY CHECK: Never delete a real directory (could be an un-ingested user skill)
-    if [ -d "$dst" ] && [ ! -L "$dst" ]; then
-        echo "       ! Skipping $name (real directory detected. Use sictic_git_sync to ingest)"
+    if [ -L "$dst" ]; then
+        echo "       ! Skipping $name (target is a symlink; delete it manually before reinstalling)"
         continue
     fi
 
-    rm -f "$dst" # Safely remove symlink if it exists
-    ln -s "$src" "$dst"
+    copy_skill_dir "$src" "$dst"
 
     INSTALLED_LIST="$INSTALLED_LIST $name "
     installed_count=$((installed_count + 1))
@@ -230,34 +240,18 @@ done
 cat > "$TARGET/_SICTIC_AI.md" <<EOF
 # SICTIC-AI skills
 
-These skill directories are symlinked to \`$REPO_ROOT/skills/\` by:
+These skill directories are copied from \`$REPO_ROOT/skills/\` by:
 
     $REPO_ROOT/install_skills_conda.sh
 
-Any edits made here will directly edit the Git repository.
+The Python runtime is installed editable in the \`$ENV_NAME\` conda environment,
+so harness commands execute the repository code even though these instruction
+folders are copied.
 
 ## Invocation
 
-Each SKILL.md "Usage" section contains universal conda run commands.
+Each SKILL.md "Usage" section contains a harness slash command.
 EOF
-
-if [ "$PRUNE" -eq 1 ]; then
-    echo "       Pruning target subdirs not present in source..."
-    for d in "$TARGET"/*/; do
-        [ -d "$d" ] || continue
-        name=$(basename "$d")
-        
-        # SAFETY CHECK: Only prune symlinks, never prune real directories
-        if [ -d "$d" ] && [ ! -L "$d" ]; then
-            continue
-        fi
-
-        case " $INSTALLED_LIST " in
-            *" $name "*) ;;
-            *) echo "       - $name"; rm -f "$d" ;;
-        esac
-    done
-fi
 
 echo "       Installed $installed_count skill(s)."
 

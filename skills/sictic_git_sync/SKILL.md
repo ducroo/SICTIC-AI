@@ -1,13 +1,15 @@
 # SICTIC-AI Git Sync & Simplicity Gatekeeper
 
 ## Description
-This skill empowers non-technical users to keep their SICTIC-AI toolbox updated and safely push contributions. It relies on a symlinked architecture where OpenClaw workspace skills point directly to the local Git repository, ensuring immediate synchronization.
+This admin skill helps keep the SICTIC-AI toolbox updated and safely push contributions.
+The installer copies `SKILL.md` instruction folders into the target workspace, while
+the Python package is installed editable from the Git repository. Reinstall the skills
+after changing skill instructions so external harnesses receive the updated copies.
 
-## Automated Symlink Parity
-This skill features an automated reconciliation engine that runs *before* any Git operation:
-1. **Prunes dead links** in the OpenClaw workspace.
-2. **Ingests raw folders** (new user-created skills) from the workspace, moves them to the Git repo, and replaces them with symlinks.
-3. **Exposes new repo content** by generating missing symlinks in the workspace.
+## Workspace Model
+1. **Source of truth:** The Git repository contains the Python package, scripts, tests, and canonical skill instructions.
+2. **Installed skill folders:** The installer copies each skill directory into the target workspace specified by `--target`.
+3. **Runtime code:** Harness commands execute the editable Python package from the Conda environment, not copied Python files from the target workspace.
 
 ## The Architecture & Simplicity Framework
 Before executing a `push` action, you (the AI Agent) MUST review modified files against these rules. If a rule is violated, you must fix it before proceeding with the push.
@@ -25,11 +27,11 @@ Before executing a `push` action, you (the AI Agent) MUST review modified files 
 
 ### Scenario A: Safely Updating the Toolbox
 1. Run `conda run -n sictic-env python -m skills.sictic_git_sync --action pull`.
-2. This automatically reconciles symlinks, executes the `git pull`, and reconciles again.
+2. Re-run `./install_skills_conda.sh --target <SKILLS_TARGET> --skip-env` if skill instruction files changed.
 3. Summarize the changes for the user.
 
 ### Scenario B: Contributing Changes & New Skills
 1. **Status Check:** Run `conda run -n sictic-env python -m skills.sictic_git_sync --action status`.
 2. **Gatekeeper Review:** If the status shows modified or new Python files, read them and ensure they adhere to the *Architecture & Simplicity Framework*. Refactor if necessary.
 3. **Push:** Run `conda run -n sictic-env python -m skills.sictic_git_sync --action push --message "<professional commit message>"`.
-4. Celebrate: Inform the user their changes are live for the community.
+4. Inform the user their changes are live for the community.

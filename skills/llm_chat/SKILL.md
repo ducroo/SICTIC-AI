@@ -1,6 +1,6 @@
 # LLM Chat Skill
 
-A robust, production-grade CLI tool for interacting with Large Language Models (LLMs) via LiteLLM.
+A robust support utility for interacting with Large Language Models (LLMs) via LiteLLM.
 
 ## Setup
 
@@ -15,7 +15,9 @@ A robust, production-grade CLI tool for interacting with Large Language Models (
 
 ## Usage
 
-You can run the script directly from the CLI.
+`llm_chat` is not exposed as a harness slash command. User-facing harness commands
+call it internally through the shared skill APIs. Run it directly only when testing
+provider configuration or debugging model behavior.
 
 ```bash
 # Basic usage with default model

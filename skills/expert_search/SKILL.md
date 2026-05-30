@@ -6,5 +6,5 @@ description: A specialized matchmaker designed to connect startups with the most
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.expert_search [args]
+conda run -n sictic-env python -m skills.harness /expert_search "<STARTUP_NAME>"
 ```

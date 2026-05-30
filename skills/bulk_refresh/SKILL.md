@@ -14,6 +14,9 @@ This skill acts as a batch job, designed to be scheduled via cron (e.g., overnig
 4. Uses graceful error handling to continue processing remaining items if one fails.
 
 ## Usage
+This is an admin/batch utility and is not exposed through the interactive harness.
+Use it directly only when intentionally refreshing many cached outputs.
+
 The command accepts optional arguments to narrow down the refresh scope. This is extremely useful for on-demand triggers:
 - `--skill <skill_name>`
 - `--dataset <dataset_name>`

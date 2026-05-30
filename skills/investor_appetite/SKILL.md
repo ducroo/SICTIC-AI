@@ -39,10 +39,10 @@ description: Determines the ideal startup profile for one or more investors base
    * Return the fully populated result dictionary.
 
 **CLI Interface:**
-* Expose a `typer` CLI in `__main__.py` that accepts an optional list of investor names as arguments.
+* Expose this skill through the shared slash-command harness.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.investor_appetite [investor_name ...]
+conda run -n sictic-env python -m skills.harness /investor_appetite [investor_name ...]
 ```

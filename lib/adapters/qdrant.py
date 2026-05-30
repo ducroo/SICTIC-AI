@@ -4,12 +4,13 @@ import uuid
 import hashlib
 from typing import List, Optional
 
-# Suppress annoying grpc/absl console warnings
-os.environ["GRPC_VERBOSITY"] = "ERROR"
-os.environ["GRPC_TRACE"] = ""
+from lib.runtime_noise import configure_runtime_noise, suppress_native_stderr
 
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+configure_runtime_noise()
+
+with suppress_native_stderr():
+    from qdrant_client import QdrantClient
+    from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from skills.dataset_chat.core.models import Chunk
 from langchain_text_splitters import MarkdownTextSplitter
 from lib.slugify import slugify

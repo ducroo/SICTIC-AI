@@ -1,11 +1,16 @@
 from typing import Optional
 from lib.env import get_env_var
+from lib.runtime_noise import configure_runtime_noise, suppress_native_stderr
 from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
-from qdrant_client import QdrantClient
 from lib.adapters.qdrant import QdrantAdapter
 from lib.storage_domains import dataset_parsed_path
+
+configure_runtime_noise()
+
+with suppress_native_stderr():
+    from qdrant_client import QdrantClient
 
 logger = get_logger(__name__)
 

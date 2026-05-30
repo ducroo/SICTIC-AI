@@ -25,18 +25,18 @@ Required python packages (installed into `the Conda environment ` by `install_sk
 
 ## Usage
 
-You can use the commands through OpenClaw or run the script directly.
+Use the commands through the shared harness.
 
 ### Chat with a Dataset
 
 ```bash
-conda run -n sictic-env python -m skills.dataset_chat chat <DATASET_NAME> "Your question here"
+conda run -n sictic-env python -m skills.harness /dataset_chat <DATASET_NAME> "Your question here"
 ```
 
-### Delete a Dataset
+### Sync a Dataset
 
 ```bash
-conda run -n sictic-env python -m skills.dataset_chat delete <DATASET_NAME>
+conda run -n sictic-env python -m skills.harness /sync <DATASET_NAME>
 ```
 
-*(Note: Deleting a dataset drops the entire Qdrant collection, which will be rebuilt upon the next chat request).*
+Dataset deletion is intentionally not exposed through the harness.

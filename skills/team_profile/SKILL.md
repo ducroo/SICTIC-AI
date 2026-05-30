@@ -31,5 +31,5 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.team_profile --startup "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.harness /team_profile "<STARTUP_NAME>"
 ```

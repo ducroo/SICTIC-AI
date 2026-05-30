@@ -124,7 +124,7 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 * **potential_investors**
   * `potential_investors.py`: Logic entry point to provide a ranked list of potential investors for a given startup.
 * **sictic_git_sync**
-  * Gatekeeper skill to synchronize OpenClaw workspace modifications with the Git repository.
+  * Gatekeeper skill to synchronize repository changes and enforce the simplicity review before publishing.
 * **standards_and_architecture**
   * The definitive source of truth for architectural standards.
 * **startup_profile**
@@ -158,7 +158,7 @@ Every skill must strictly adhere to the following Python package structure. Cust
 └── tests/                      # GLOBAL: pytest suite
 ```
 
-* **`SKILL.md`:** This file is mandatory and must always be present in the root of the skill directory. It contains the prompt instructions and metadata that OpenClaw uses to understand and trigger the skill. The `## Usage` section should provide a universal, copy-pastable bash command strictly formatted as: `conda run -n sictic-env python -m skills.<SKILL_NAME> [args]`.
+* **`SKILL.md`:** This file is mandatory and must always be present in the root of the skill directory. It contains the prompt instructions and metadata that OpenClaw, Nemoclaw, Claude, and other harnesses use to understand and trigger the skill. For user-facing skills exposed by the harness, the `## Usage` section should provide a universal, copy-pastable slash command formatted as: `conda run -n sictic-env python -m skills.harness /<COMMAND> [args]`.
 * **`__main__.py`:** Contains zero business logic. Handles Typer CLI routing, argument parsing, and top-level exception catching. Allows execution via `python -m skills.<SKILL_NAME>`. This is the *only* allowed Typer CLI entry point for a skill.
 * **`<skill_name>.py`:** The primary programmatic entry point (orchestrator/facade) for the skill. 
   * **Function Naming Rule:** The main API function inside this file must be named identically to the skill itself (e.g., `def startup_profile(...):` inside `startup_profile.py`). External modules must call this specific function.

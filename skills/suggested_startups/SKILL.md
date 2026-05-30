@@ -50,5 +50,5 @@ description: Rank a provided list of startups against a list of investors by mat
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.suggested_startups --startups "<startup1>,<startup2>" --investors "<name1>,<name2>"
+conda run -n sictic-env python -m skills.harness /suggested_startups --startups "<startup1>,<startup2>" --investors "<name1>,<name2>"
 ```

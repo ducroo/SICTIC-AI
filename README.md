@@ -82,8 +82,11 @@ Qdrant is required for semantic search. You do not need to install it manually:
 
 ### Step 2: Install the Environment
 
-Run the provided installer. This creates a self-contained Python environment (`sictic-env`) 
-and inserts the toolkit in your workspace using **symlinks**.
+Run the provided installer. This creates a self-contained Python environment
+(`sictic-env`) and copies the skill instruction folders into your AI workspace.
+The Python package itself is installed editable from this repository, so harness
+commands execute the current repo code while the target directory contains
+portable `SKILL.md` instructions for your agent.
 
 ```bash
 # macOS example
@@ -136,14 +139,15 @@ Qdrant and Ollama, and pulls the Ollama models referenced by `LLM_MODEL`,
 
 ### Step 5: Run a Skill
 
-You are ready to go! Execution of skills is straightforward. Either you ask your AI Agent to do so, or us the CLI: 
+You are ready to go. Execute user-facing skills through the lightweight
+slash-command harness:
 
 ```bash
-conda run -n sictic-env python -m skills.llm_chat "What is startup due diligence?"
-conda run -n sictic-env python -m skills.startup_profile --startup "SpaceX"
+conda run -n sictic-env python -m skills.harness /startup_profile SpaceX
+conda run -n sictic-env python -m skills.harness /dataset_chat SpaceX "What are the main risks?"
 ```
 
-For manual end-to-end testing, use the lightweight slash-command harness:
+For interactive manual testing, start the harness without a slash command:
 
 ```bash
 conda run -n sictic-env python -m skills.harness

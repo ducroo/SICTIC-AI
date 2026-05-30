@@ -34,10 +34,10 @@ description: Collate a comprehensive profile on a specific person by searching a
    * Return the profile string.
 
 **CLI Interface:**
-* Expose a `typer` CLI in `__main__.py` that accepts both `name` and `dataset_name` as required positional arguments.
+* Expose this skill through the shared slash-command harness.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.person_profile "<NAME>" "<DATASET_NAME>"
+conda run -n sictic-env python -m skills.harness /person_profile "<DATASET_NAME>" "<NAME>"
 ```

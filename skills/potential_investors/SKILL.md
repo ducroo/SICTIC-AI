@@ -53,12 +53,12 @@ description: This skill aims to find potential investors in the target startup. 
    * Return the Markdown string.
 
 **CLI Interface:**
-* Expose a `typer` CLI in `__main__.py` handling the required and optional parameters.
+* Expose this skill through the shared slash-command harness.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.potential_investors --startup-name "<STARTUP_NAME>" [--max-investors <N>]
+conda run -n sictic-env python -m skills.harness /potential_investors "<STARTUP_NAME>"
 ```
 
 ---
