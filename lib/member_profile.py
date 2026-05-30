@@ -1,19 +1,16 @@
 import asyncio
 from typing import List, Optional, Union
 
+from lib.dataset_from_insight import dataset_from_insight
 from lib.logger import get_logger
-from lib.slugify import slugify
-from lib.storage import get_storage
 from skills.person_profile.person_profile import person_profile
 from skills.investor_appetite.investor_appetite import investor_appetite
 from lib.adapters.linkedin import LinkedInAdapter
-from lib.storage_domains import dataset_raw_path
 
 logger = get_logger(__name__)
 
 
-async def _process_single_member(type_of_profile: str, full_name: str, target_dir_rel: str) -> Optional[str]:
-    storage = get_storage()
+async def _process_single_member(type_of_profile: str, full_name: str) -> Optional[str]:
     try:
         if type_of_profile == "person_profile":
             persons = await person_profile(dataset_name="sictic_members", names=full_name)
@@ -29,26 +26,6 @@ async def _process_single_member(type_of_profile: str, full_name: str, target_di
             logger.warning(f"Got empty profile content for {full_name} ({type_of_profile})")
             return None
 
-        target_rel = f"{target_dir_rel}/{slugify(full_name)}.md"
-
-        content_is_identical = False
-        if storage.exists(target_rel):
-            try:
-                existing_content = storage.read_text(target_rel)
-                if existing_content == profile_content:
-                    content_is_identical = True
-            except Exception as e:
-                logger.warning(f"Failed to read existing dataset file {target_rel}: {e}")
-
-        if not content_is_identical:
-            try:
-                storage.write_text(target_rel, profile_content)
-                logger.info(f"Updated {type_of_profile} dataset for {full_name} at {target_rel}")
-            except Exception as e:
-                logger.error(f"Failed to write dataset file {target_rel}: {e}")
-        else:
-            logger.debug(f"Dataset file for {full_name} is already up to date. Preserving timestamp.")
-
         return profile_content
     except Exception as e:
         logger.error(f"Failed to process {full_name}: {e}")
@@ -61,14 +38,9 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
     If names is a string, returns the profile string.
     If names is a list or None, returns a dict mapping names to their profiles.
     """
-    storage = get_storage()
-
     if type_of_profile not in ["person_profile", "investor_appetite"]:
         logger.error(f"Unknown type_of_profile: {type_of_profile}")
         return None
-
-    target_dir_rel = dataset_raw_path(type_of_profile)
-    storage.mkdir(target_dir_rel)
 
     is_single = isinstance(names, str)
 
@@ -87,8 +59,17 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
 
     logger.info(f"Processing {len(names_list)} members for {type_of_profile}...")
 
-    tasks = [_process_single_member(type_of_profile, name, target_dir_rel) for name in names_list]
+    tasks = [_process_single_member(type_of_profile, name) for name in names_list]
     results_list = await asyncio.gather(*tasks)
+
+    # Keep the searchable derived dataset in the same canonical shape as all
+    # other profile indexing flows: selected insight filenames, model suffixes,
+    # and stale-file cleanup are owned by dataset_from_insight().
+    await dataset_from_insight(
+        target_dataset=type_of_profile,
+        insight=type_of_profile,
+        source_dataset="sictic-members",
+    )
 
     if is_single:
         return results_list[0]

@@ -29,15 +29,15 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
     storage = get_storage()
 
     storage.write_text(
-        "insights/community/sictic-members/person-profile/person-profile-urs-gubser-qwen3-8b.md",
+        "insights/community/sictic-members/person-profile/urs-gubser-qwen3-8b.md",
         "old qwen profile",
     )
     storage.write_text(
-        "insights/community/sictic-members/person-profile/person-profile-urs-gubser-gpt-5-4-mini.md",
+        "insights/community/sictic-members/person-profile/urs-gubser-gpt-5-4-mini.md",
         "preferred gpt profile",
     )
     storage.write_text(
-        "derived/person-profile/person-profile-urs-gubser-qwen3-8b.md",
+        "derived/person-profile/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
@@ -50,9 +50,9 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
     assert result.selected == 1
     assert result.synced == 1
     assert result.removed == 1
-    assert storage.exists("derived/person-profile/person-profile-urs-gubser-gpt-5-4-mini.md")
-    assert not storage.exists("derived/person-profile/person-profile-urs-gubser-qwen3-8b.md")
-    assert storage.read_text("derived/person-profile/person-profile-urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
+    assert storage.exists("derived/person-profile/urs-gubser-gpt-5-4-mini.md")
+    assert not storage.exists("derived/person-profile/urs-gubser-qwen3-8b.md")
+    assert storage.read_text("derived/person-profile/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
 
 
 @pytest.mark.asyncio
@@ -61,11 +61,11 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     storage = get_storage()
 
     storage.write_text(
-        "insights/community/sictic-members/person-profile/person-profile-urs-gubser-gpt-5-4-mini.md",
+        "insights/community/sictic-members/person-profile/urs-gubser-gpt-5-4-mini.md",
         "preferred gpt profile",
     )
     storage.write_text(
-        "derived/person-profile/person-profile-urs-gubser-qwen3-8b.md",
+        "derived/person-profile/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
@@ -79,8 +79,8 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     assert result.dry_run is True
     assert result.synced == 1
     assert result.removed == 1
-    assert not storage.exists("derived/person-profile/person-profile-urs-gubser-gpt-5-4-mini.md")
-    assert storage.exists("derived/person-profile/person-profile-urs-gubser-qwen3-8b.md")
+    assert not storage.exists("derived/person-profile/urs-gubser-gpt-5-4-mini.md")
+    assert storage.exists("derived/person-profile/urs-gubser-qwen3-8b.md")
 
 
 @pytest.mark.asyncio

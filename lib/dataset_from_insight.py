@@ -29,7 +29,17 @@ class DatasetFromInsightResult:
 
 
 def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], target_slug: str) -> Dict[str, float]:
-    """Finds all relevant markdown files for the given insight recursively. Returns dict of path -> mtime."""
+    """Find relevant markdown files for an insight. Returns path -> mtime.
+
+    Canonical subdirectory insights are stored as:
+        insights/<domain>/<dataset>/<insight-slug>/<identifier>-<model>.md
+
+    Root-level insights are stored as:
+        insights/<domain>/<dataset>/<insight-slug>-<dataset>-<model>.md
+
+    The subdirectory name is therefore the source of truth for subdir insights;
+    filenames inside the directory do not repeat the skill name.
+    """
     storage = get_storage()
     source_slug = slugify(source_dataset) if source_dataset else None
     scan_roots = [dataset_insights_path(source_slug)] if source_slug else [
@@ -42,16 +52,25 @@ def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], targ
         if not storage.exists(scan_root):
             continue
         for name, mtime in storage.list_with_mtime(scan_root, recursive=True):
-            if name.endswith(".md") and insight_slug in name:
-                parent_dir = name.split("/")[0] if "/" in name else ""
-                
-                if not source_slug and parent_dir == target_slug:
-                    continue
+            if not name.endswith(".md"):
+                continue
 
-                if not source_slug and parent_dir and not is_active_dataset(parent_dir):
-                    continue
-                    
-                out[f"{scan_root}/{name}"] = mtime
+            parts = PurePosixPath(name).parts
+            parent_dir = parts[0] if len(parts) > 1 else ""
+            filename = parts[-1]
+            in_insight_subdir = len(parts) > 1 and parts[-2] == insight_slug
+            is_root_insight_file = not parent_dir and filename.startswith(f"{insight_slug}-")
+
+            if not in_insight_subdir and not is_root_insight_file:
+                continue
+
+            if not source_slug and parent_dir == target_slug:
+                continue
+
+            if not source_slug and parent_dir and not is_active_dataset(parent_dir):
+                continue
+
+            out[f"{scan_root}/{name}"] = mtime
     return out
 
 

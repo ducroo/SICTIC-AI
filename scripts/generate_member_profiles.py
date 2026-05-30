@@ -68,7 +68,7 @@ def _remove_existing_profile_outputs(dataset: str, people: List[Person]) -> int:
     removed = 0
 
     for filename in storage.list(profile_dir, suffix=".md"):
-        if any(filename.startswith(f"person-profile-{identifier}-") for identifier in identifiers):
+        if any(filename.startswith(f"{identifier}-") for identifier in identifiers):
             storage.remove(f"{profile_dir}/{filename}")
             removed += 1
     return removed

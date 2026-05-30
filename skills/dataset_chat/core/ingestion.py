@@ -92,6 +92,18 @@ def _list_source_files(storage, raw_rel: str):
     ]
 
 
+def _parsed_filepath(parsed_rel: str, filename: str) -> str:
+    """Return the parsed markdown cache path for a source file.
+
+    Non-Markdown sources get a Markdown sidecar (`deck.pdf.md`). Markdown
+    sources are already the desired text format, so keep the same filename
+    instead of creating visually confusing paths like `profile.md.md`.
+    """
+    if filename.lower().endswith(".md"):
+        return f"{parsed_rel}/{filename}"
+    return f"{parsed_rel}/{filename}.md"
+
+
 async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
     """Compare source mtimes against parsed mtimes; run Docling on the diff and write markdown back."""
     storage = get_storage()
@@ -99,7 +111,7 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
 
     files_to_ocr = []
     for filename, drive_mtime in source_files:
-        parsed_filepath = f"{parsed_rel}/{filename}.md"
+        parsed_filepath = _parsed_filepath(parsed_rel, filename)
         parsed_mtime = storage.mtime(parsed_filepath) or 0.0
         if drive_mtime > parsed_mtime:
             files_to_ocr.append({
@@ -130,8 +142,11 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
 
     async for filename, text in docling.extract_documents(files_to_ocr):
         if text:
-            parsed_filepath = f"{parsed_rel}/{filename}.md"
+            parsed_filepath = _parsed_filepath(parsed_rel, filename)
             storage.write_text(parsed_filepath, text)
+            legacy_filepath = f"{parsed_rel}/{filename}.md"
+            if legacy_filepath != parsed_filepath and storage.exists(legacy_filepath):
+                storage.remove(legacy_filepath)
             logger.info(f"[{dataset_name}] Saved parsed text to {parsed_filepath}")
 
 
@@ -152,12 +167,18 @@ async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str)
     for orphan in orphans:
         logger.info(f"[{dataset_slug}] File deleted from drive: {orphan}. Removing from Qdrant.")
         qdrant.delete_document(orphan)
-        parsed_filepath = f"{parsed_rel}/{orphan}.md"
+        parsed_filepath = _parsed_filepath(parsed_rel, orphan)
         if storage.exists(parsed_filepath):
             try:
                 storage.remove(parsed_filepath)
             except Exception as e:
                 logger.warning(f"[{dataset_name}] Failed to remove cached file {parsed_filepath}: {e}")
+        legacy_filepath = f"{parsed_rel}/{orphan}.md"
+        if legacy_filepath != parsed_filepath and storage.exists(legacy_filepath):
+            try:
+                storage.remove(legacy_filepath)
+            except Exception as e:
+                logger.warning(f"[{dataset_name}] Failed to remove legacy cached file {legacy_filepath}: {e}")
 
     # Process each file against DB
     files_to_embed = []
@@ -166,7 +187,7 @@ async def _sync_disk_to_qdrant(dataset_name: str, raw_rel: str, parsed_rel: str)
         db_mtime = db_mtimes.get(filename)
 
         if db_mtime is None or drive_mtime > db_mtime:
-            parsed_filepath = f"{parsed_rel}/{filename}.md"
+            parsed_filepath = _parsed_filepath(parsed_rel, filename)
             if storage.exists(parsed_filepath):
                 files_to_embed.append((filename, drive_mtime, parsed_filepath))
             else:
