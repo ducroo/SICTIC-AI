@@ -16,7 +16,7 @@ from skills.suggested_startups.suggested_startups import suggested_startups
 
 from lib.slugify import slugify
 from lib.active_dataset import is_active_dataset
-from lib.storage_domains import list_dataset_names
+from lib.storage_domains import dataset_location, list_dataset_names
 
 logger = get_logger(__name__)
 
@@ -47,38 +47,36 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
 
     logger.info(f"Starting bulk refresh routine (skills={target_skills}, datasets={target_datasets})...")
 
-    config = config_load()
-    bulk_config = config["bulk_refresh"]
+    if target_datasets:
+        all_datasets = target_datasets
+        dataset_domains = {
+            dataset_slug: dataset_location(dataset_slug).domain
+            for dataset_slug in target_datasets
+        }
+    else:
+        config = config_load()
+        bulk_config = config["bulk_refresh"]
 
-    # Extract string values from .md files and split by comma or newline
-    ignore_raw = bulk_config["ignore_datasets"]
+        # Extract string values from .md files and split by comma or newline
+        ignore_raw = bulk_config["ignore_datasets"]
 
-    ignore_datasets = [slugify(s) for s in ignore_raw.replace(',', '\n').split('\n') if slugify(s)]
-    ignore_datasets.extend(slugify(k) for k in SKILL_MAP.keys())
+        ignore_datasets = [slugify(s) for s in ignore_raw.replace(',', '\n').split('\n') if slugify(s)]
+        ignore_datasets.extend(slugify(k) for k in SKILL_MAP.keys())
 
-    # Discover datasets from configured storage domains.
-    all_datasets = []
-    dataset_domains = {}
-    for domain_name in ("startups", "community"):
-        for item in list_dataset_names(domain_name):
-            item_slug = slugify(item)
-            if item_slug in ignore_datasets:
-                continue
-            
-            # Active dataset logic
-            is_explicit = item_slug in target_datasets
-            is_active = is_active_dataset(item_slug)
-            
-            # Skip if target_datasets is provided but this dataset is not in it
-            if target_datasets and not is_explicit:
-                continue
+        # Discover datasets from configured storage domains.
+        all_datasets = []
+        dataset_domains = {}
+        for domain_name in ("startups", "community"):
+            for item in list_dataset_names(domain_name):
+                item_slug = slugify(item)
+                if item_slug in ignore_datasets:
+                    continue
                 
-            # Skip if it wasn't explicitly requested AND doesn't have the active marker
-            if not target_datasets and not is_active:
-                continue
-                
-            all_datasets.append(item)
-            dataset_domains[item_slug] = domain_name
+                if not is_active_dataset(item_slug):
+                    continue
+                    
+                all_datasets.append(item_slug)
+                dataset_domains[item_slug] = domain_name
 
     if not all_datasets:
         logger.warning("No valid datasets found to process.")
