@@ -155,6 +155,12 @@ class MirrorStorage:
             self._hydrate_if_missing(rel)
         return self.local.mtime(rel)
 
+    def set_mtime(self, rel: str, timestamp: float) -> None:
+        rel = _validate_rel(rel)
+        self.local.set_mtime(rel, timestamp)
+        if _should_upload_markdown(rel):
+            self.drive.set_mtime(rel, timestamp)
+
     def remove(self, rel: str) -> None:
         self.local.remove(rel)
 

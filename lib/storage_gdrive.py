@@ -15,7 +15,7 @@ from __future__ import annotations
 import io
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Dict, List, Optional, Tuple
 
@@ -493,6 +493,19 @@ class GoogleDriveStorage:
         with self._service_lock:
             meta = service.files().get(fileId=fid, fields="modifiedTime", supportsAllDrives=True).execute()
         return _parse_modtime(meta.get("modifiedTime"))
+
+    def set_mtime(self, rel: str, timestamp: float) -> None:
+        fid = self._resolve_or_raise(rel)
+        modified_time = datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        service = self._ensure_service()
+        with self._service_lock:
+            service.files().update(
+                fileId=fid,
+                body={"modifiedTime": modified_time},
+                fields="id,modifiedTime",
+                supportsAllDrives=True,
+            ).execute()
+        self._invalidate(rel)
 
     def remove(self, rel: str) -> None:
         fid = self._resolve(rel)

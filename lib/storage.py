@@ -31,6 +31,7 @@ class Storage(Protocol):
         self, rel: str, *, recursive: bool = False
     ) -> List[Tuple[str, float]]: ...
     def mtime(self, rel: str) -> Optional[float]: ...
+    def set_mtime(self, rel: str, timestamp: float) -> None: ...
     def remove(self, rel: str) -> None: ...
     def rmtree(self, rel: str) -> None: ...
     def mkdir(self, rel: str, *, parents: bool = True, exist_ok: bool = True) -> None: ...
@@ -114,6 +115,10 @@ class LocalStorage:
             return p.stat().st_mtime
         except FileNotFoundError:
             return None
+
+    def set_mtime(self, rel: str, timestamp: float) -> None:
+        p = self._full(rel)
+        os.utime(p, (timestamp, timestamp))
 
     def remove(self, rel: str) -> None:
         try:
@@ -205,6 +210,10 @@ class RoutedStorage:
     def mtime(self, rel: str) -> Optional[float]:
         rel, store = self._pick(rel)
         return store.mtime(rel)
+
+    def set_mtime(self, rel: str, timestamp: float) -> None:
+        rel, store = self._pick(rel)
+        store.set_mtime(rel, timestamp)
 
     def remove(self, rel: str) -> None:
         rel, store = self._pick(rel)
