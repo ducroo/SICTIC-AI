@@ -13,6 +13,7 @@ from lib.adapters.linkedin import LinkedInAdapter
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.insight_filepath import get_insight_filepath
+from lib.env import get_env_var
 from skills.person_profile.persons_in_dataset import persons_in_dataset
 from skills.person_profile.person_dossier import build_person_dossier
 from lib.models.person import Person
@@ -76,12 +77,18 @@ async def person_profile(
         else:
             profiles_to_process.append(p)
 
-    # 4. Execute Loop
-    for person in profiles_to_process:
+    # 4. Generate profiles concurrently, bounded by the LLM gateway capacity.
+    concurrency = int(get_env_var("MAX_CONCURRENT_LLMS"))
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def generate_with_logging(person: Person) -> None:
         try:
-            await _generate_single_profile(dataset_slug, person, include_dataset_context=include_dataset_context)
+            async with semaphore:
+                await _generate_single_profile(dataset_slug, person, include_dataset_context=include_dataset_context)
         except Exception as e:
             logger.error(f"[{dataset_slug}] Failed to generate profile for {person.display_name}: {e}")
+
+    await asyncio.gather(*(generate_with_logging(person) for person in profiles_to_process))
             
     return profiles_to_process
 
@@ -106,9 +113,9 @@ async def _generate_single_profile(
         identifier=identifier,
         subdir=True
     )
-    safe_llm_name = default_llm.replace(":", "_").replace("/", "_")
+    llm_name_slug = slugify(default_llm)
     
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file, safe_llm_name)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file, llm_name_slug)
     if not needs_refresh:
         person.person_profile = cached_content
         return

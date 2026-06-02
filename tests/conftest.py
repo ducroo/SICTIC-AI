@@ -26,6 +26,7 @@ os.environ["OLLAMA_HOST"] = "http://localhost:11434"
 os.environ["QDRANT_HOST"] = "http://localhost:6333"
 os.environ["OLLAMA_NUM_CTX"] = "4096"
 os.environ["OLLAMA_NUM_CTX_MAX"] = "8192"
+os.environ["MAX_CONCURRENT_LLMS"] = "10"
 os.environ["APIFY_KEY"] = "test-apify-key"
 
 
@@ -89,6 +90,7 @@ def mock_env(monkeypatch, tmp_path):
     monkeypatch.setenv("QDRANT_HOST", "http://localhost:6333")
     monkeypatch.setenv("OLLAMA_NUM_CTX", "4096")
     monkeypatch.setenv("OLLAMA_NUM_CTX_MAX", "8192")
+    monkeypatch.setenv("MAX_CONCURRENT_LLMS", "10")
 
     from lib.storage import reset_storage_singleton
     reset_storage_singleton()
