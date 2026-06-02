@@ -1,4 +1,4 @@
-from lib.insight_refresh import best_alternative, check_insight_refresh
+from lib.insight_refresh import best_alternative, check_insight_refresh, ranked_alternatives
 from lib.storage import get_storage
 from lib.storage_domains import dataset_raw_path
 
@@ -16,6 +16,20 @@ def test_best_alternative_uses_ranked_llms_order(monkeypatch):
         "jane-doe-qwen3-8b.md",
         "jane-doe-gpt-5-4-mini.md",
         "jane-doe-gemma4-31b-nvfp4.md",
+    ]
+
+
+def test_ranked_alternatives_only_yields_ranked_models_without_provider(monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "qwen3:8b")
+
+    files = [
+        "jane-doe-gpt-5-4-mini.md",
+        "jane-doe-qwen3-8b.md",
+        "jane-doe-gemma4-31b-nvfp4.md",
+    ]
+
+    assert list(ranked_alternatives("jane-doe-gpt-5-4-mini.md", files)) == [
+        "jane-doe-qwen3-8b.md",
     ]
 
 
@@ -41,6 +55,22 @@ def test_check_insight_refresh_returns_ranked_fresh_cache(mock_env, monkeypatch)
         "qwen content",
         qwen_file,
     )
+
+
+def test_check_insight_refresh_ignores_unranked_fresh_cache(mock_env, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/qwen3:8b")
+    storage = get_storage()
+
+    source_file = f"{dataset_raw_path('avientus')}/source.md"
+    unranked_file = "insights/startups/avientus/person-profile/jane-doe-gemma4-31b-nvfp4.md"
+
+    storage.write_text(source_file, "source")
+    storage.write_text(unranked_file, "gemma content")
+
+    storage.set_mtime(source_file, 100)
+    storage.set_mtime(unranked_file, 200)
+
+    assert check_insight_refresh(["avientus"], unranked_file) == (True, None, None)
 
 
 def test_check_insight_refresh_requests_refresh_when_cache_is_stale(mock_env):

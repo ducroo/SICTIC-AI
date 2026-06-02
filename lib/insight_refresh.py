@@ -20,30 +20,33 @@ def get_base_name(filename: str) -> str:
     stem = PurePosixPath(filename).stem
     return KNOWN_MODELS_REGEX.sub('', stem)
 
-def best_alternative(filename: str, directory_files: List[str]) -> Iterator[str]:
+def _ranked_model_slugs() -> List[str]:
+    ranked_llms = get_env_var("RANKED_LLMS")
+    return [slugify(m.split("/")[-1]) for m in ranked_llms.split(",") if m.strip()]
+
+
+def ranked_alternatives(filename: str, directory_files: List[str]) -> Iterator[str]:
     """
     Yields filenames from directory_files that match the base_name of the provided filename,
     strictly ordered by RANKED_LLMS priority.
-    Fallback: Yields remaining matches sorted by the largest number in the suffix.
     """
     base_name = get_base_name(filename)
-    
-    raw_ranked = ""
-    try:
-        raw_ranked = get_env_var("RANKED_LLMS")
-    except Exception:
-        pass
-    ranked_models = [slugify(m.split('/')[-1]) for m in raw_ranked.split(",") if m.strip()]
-    
-    # 1. Yield exact matches from RANKED_LLMS in strict order
     available_files = set(directory_files)
-    for model in ranked_models:
+    for model in _ranked_model_slugs():
         expected_name = f"{base_name}-{model}.md"
         if expected_name in available_files:
             yield expected_name
-            available_files.remove(expected_name)
-            
-    # 2. Fallback: Any remaining files that share the exact base_name
+
+
+def best_alternative(filename: str, directory_files: List[str]) -> Iterator[str]:
+    """
+    Yields ranked alternatives first, then remaining files that share the base name.
+    """
+    ranked = list(ranked_alternatives(filename, directory_files))
+    yield from ranked
+
+    base_name = get_base_name(filename)
+    available_files = set(directory_files) - set(ranked)
     remaining_matches = []
     for f in list(available_files):
         if get_base_name(f) == base_name:
@@ -84,8 +87,8 @@ def check_insight_refresh(
     # Get all files in that directory
     available_files = [PurePosixPath(f).name for f, _ in storage.list_with_mtime(dir_path)] if storage.exists(dir_path) else []
 
-    # Let the generator yield the best alternatives
-    for candidate_name in best_alternative(target_filename, available_files):
+    # Cache refresh is strict: only ranked LLM outputs are acceptable.
+    for candidate_name in ranked_alternatives(target_filename, available_files):
         candidate_rel = f"{dir_path}/{candidate_name}" if dir_path else candidate_name
         
         if storage.exists(candidate_rel):
