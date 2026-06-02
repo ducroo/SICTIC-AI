@@ -12,7 +12,7 @@ from lib.dataset_from_insight import dataset_from_insight
 
 logger = get_logger(__name__)
 
-async def potential_investors(startup_name: str, target_investors: Optional[List[str]] = None, exclude_investors: Optional[List[str]] = None, top_k: int = 8) -> str:
+async def potential_investors(startup_name: str, target_investors: Optional[List[str]] = None, exclude_investors: Optional[List[str]] = None, top_k: int = 16) -> str:
     """
     Provides a ranked list of potential investors for a given startup based on quickselect ranking and LLM refinement.
     """
