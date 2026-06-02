@@ -34,7 +34,7 @@ async def generate_dataset_insight(
         subdir=False
     )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_path, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_path)
     if not needs_refresh:
         logger.info(f"[{dataset_slug}] Using cached {skill_name} from {matched_file}")
         return cached_content

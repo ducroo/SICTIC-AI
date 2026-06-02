@@ -59,7 +59,7 @@ def best_alternative(filename: str, directory_files: List[str]) -> Iterator[str]
 
 
 def check_insight_refresh(
-    datasets: List[str], file_path: str, model_name: str
+    datasets: List[str], file_path: str
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Returns (needs_refresh, content, matched_file_path).

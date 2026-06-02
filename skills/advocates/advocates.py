@@ -29,7 +29,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     )
 
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", "advocates", event_name_slug], out_path, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", "advocates", event_name_slug], out_path)
     if not needs_refresh:
         logger.info(f"[{event_name_slug}] Using cached advocates from {matched_file}")
         return cached_content

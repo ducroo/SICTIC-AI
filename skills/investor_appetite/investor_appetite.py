@@ -63,7 +63,7 @@ async def investor_appetite(dataset_name: str = "sictic_members", investors: lis
         )
 
         # Caching
-        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_slug], output_file, default_llm)
+        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_name_slug], output_file)
         if not needs_refresh:
             results[investor_name] = cached_content
             return

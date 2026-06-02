@@ -113,9 +113,7 @@ async def _generate_single_profile(
         identifier=identifier,
         subdir=True
     )
-    llm_name_slug = slugify(default_llm)
-    
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file, llm_name_slug)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file)
     if not needs_refresh:
         person.person_profile = cached_content
         return

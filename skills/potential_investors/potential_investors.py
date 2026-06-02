@@ -29,7 +29,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     )
 
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", startup_slug], out_path, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", startup_slug], out_path)
     if not needs_refresh:
         logger.info(f"[{startup_slug}] Using cached potential investors from {matched_file}")
         return cached_content
