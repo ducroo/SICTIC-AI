@@ -18,7 +18,6 @@ async def test_member_profile_hydrates_from_insights_instead_of_writing_derived_
     assert result == "profile text"
     mock_person_profile.assert_called_once_with(dataset_name="sictic_members", names="Urs Gubser")
     mock_hydrate.assert_called_once_with(
-        target_dataset="person_profile",
-        insight="person_profile",
+        insight_name="person_profile",
         source_dataset="sictic-members",
     )

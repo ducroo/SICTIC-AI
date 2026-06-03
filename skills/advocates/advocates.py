@@ -45,8 +45,9 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     objective = objective_template.replace("{{overview_event}}", event_description)
 
     # 1.5 Hydrate Target Dataset
-    logger.info(f"[{event_name_slug}] Hydrating 'person_profile' dataset from 'sictic-members'...")
-    await dataset_from_insight(target_dataset="person_profile", source_dataset="sictic-members")
+    people_dataset = "sictic-members-person-profile"
+    logger.info(f"[{event_name_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
+    await dataset_from_insight(insight_name="person_profile", source_dataset="sictic-members")
 
     # 2. Call ranking_persons Engine
     logger.info(f"[{event_name_slug}] Invoking ranking_persons engine for advocates...")
@@ -55,7 +56,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     clean_excludes = [slugify(c) for c in exclude_members] if exclude_members else None
     
     result = await ranking_persons(
-        dataset_name="person_profile",
+        dataset_name=people_dataset,
         objective=objective,
         query=event_description,
         candidates=clean_targets,

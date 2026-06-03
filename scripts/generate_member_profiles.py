@@ -13,15 +13,10 @@ from typing import List, Optional
 import typer
 
 from lib.models.person import Person
+from lib.dataset_from_insight import dataset_from_insight
 from lib.slugify import slugify
 from lib.storage import get_storage
 from lib.storage_domains import dataset_insights_path
-
-try:
-    from scripts.sync_person_profiles_from_insights import sync_person_profiles_from_insights
-except ModuleNotFoundError:
-    # Allows direct execution as `python scripts/generate_member_profiles.py`.
-    from sync_person_profiles_from_insights import sync_person_profiles_from_insights
 
 app = typer.Typer(help="Generate SICTIC member person profile insights.")
 
@@ -103,7 +98,10 @@ async def generate_member_profiles(
     )
 
     if not skip_index:
-        await sync_person_profiles_from_insights(source_dataset=dataset)
+        await dataset_from_insight(
+            insight_name="person_profile",
+            source_dataset=dataset,
+        )
 
     return GenerateMemberProfilesResult(
         dataset=slugify(dataset),
@@ -119,7 +117,7 @@ def main(
     names: Optional[str] = typer.Option(None, "--names", help="Comma-separated member names or LinkedIn IDs to generate."),
     limit: Optional[int] = typer.Option(None, "--limit", min=1, help="Limit the number of discovered members to process."),
     force_refresh: bool = typer.Option(False, "--force-refresh", help="Remove existing selected profile outputs before generation."),
-    skip_index: bool = typer.Option(False, "--skip-index", help="Generate insight files without hydrating/indexing person_profile."),
+    skip_index: bool = typer.Option(False, "--skip-index", help="Generate insight files without hydrating person_profile."),
     sync_source: bool = typer.Option(False, "--sync-source/--no-sync-source", help="Force-sync the source dataset before profile generation."),
     linkedin_only: bool = typer.Option(True, "--linkedin-only/--with-dataset-context", help="Use cached LinkedIn member data only, or also search source dataset context."),
 ) -> None:
@@ -137,7 +135,7 @@ def main(
     typer.echo(f"Dataset: {result.dataset}")
     typer.echo(f"Requested profiles: {result.requested}")
     typer.echo(f"Generated profiles: {result.generated}")
-    typer.echo(f"Indexed: {'yes' if result.indexed else 'no'}")
+    typer.echo(f"Hydrated: {'yes' if result.indexed else 'no'}")
 
 
 if __name__ == "__main__":

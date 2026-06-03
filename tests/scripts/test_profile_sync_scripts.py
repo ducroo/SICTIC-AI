@@ -3,7 +3,10 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from lib.dataset_from_insight import dataset_from_insight
+from typer.testing import CliRunner
+
+from lib.active_dataset import activate_dataset
+from lib.dataset_from_insight import DatasetFromInsightResult, dataset_from_insight
 from lib.storage import get_storage
 
 
@@ -37,22 +40,21 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
         "preferred gpt profile",
     )
     storage.write_text(
-        "derived/person-profile/urs-gubser-qwen3-8b.md",
+        "derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
     result = await dataset_from_insight(
-        target_dataset="person_profile",
-        insight="person_profile",
+        insight_name="person_profile",
         source_dataset="sictic-members",
     )
 
     assert result.selected == 1
     assert result.synced == 1
     assert result.removed == 1
-    assert storage.exists("derived/person-profile/urs-gubser-gpt-5-4-mini.md")
-    assert not storage.exists("derived/person-profile/urs-gubser-qwen3-8b.md")
-    assert storage.read_text("derived/person-profile/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
+    assert storage.exists("derived/sictic-members-person-profile/urs-gubser-gpt-5-4-mini.md")
+    assert not storage.exists("derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md")
+    assert storage.read_text("derived/sictic-members-person-profile/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
 
 
 @pytest.mark.asyncio
@@ -65,13 +67,12 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
         "preferred gpt profile",
     )
     storage.write_text(
-        "derived/person-profile/urs-gubser-qwen3-8b.md",
+        "derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
     result = await dataset_from_insight(
-        target_dataset="person_profile",
-        insight="person_profile",
+        insight_name="person_profile",
         source_dataset="sictic-members",
         dry_run=True,
     )
@@ -79,8 +80,32 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     assert result.dry_run is True
     assert result.synced == 1
     assert result.removed == 1
-    assert not storage.exists("derived/person-profile/urs-gubser-gpt-5-4-mini.md")
-    assert storage.exists("derived/person-profile/urs-gubser-qwen3-8b.md")
+    assert not storage.exists("derived/sictic-members-person-profile/urs-gubser-gpt-5-4-mini.md")
+    assert storage.exists("derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md")
+
+
+@pytest.mark.asyncio
+async def test_dataset_from_insight_without_source_scans_active_datasets(mock_env, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
+    storage = get_storage()
+    activate_dataset("avientus")
+
+    storage.write_text(
+        "insights/startups/avientus/person-profile/jane-doe-gpt-5-4-mini.md",
+        "active profile",
+    )
+    storage.write_text(
+        "insights/startups/archived/person-profile/john-doe-gpt-5-4-mini.md",
+        "archived profile",
+    )
+
+    result = await dataset_from_insight("person_profile")
+
+    assert result.target_dataset == "active-person-profile"
+    assert result.target_path == "derived/active-person-profile"
+    assert result.selected == 1
+    assert storage.exists("derived/active-person-profile/jane-doe-gpt-5-4-mini.md")
+    assert not storage.exists("derived/active-person-profile/john-doe-gpt-5-4-mini.md")
 
 
 @pytest.mark.asyncio
@@ -107,31 +132,46 @@ async def test_sync_datasets_force_bypasses_recent_sync_cache(mocker):
     ]
 
 
-@pytest.mark.asyncio
-async def test_sync_person_profiles_from_insights_uses_forced_index_sync(mocker):
-    from lib.dataset_from_insight import DatasetFromInsightResult
-    script = _load_script("sync_person_profiles_from_insights")
+def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
+    import lib.dataset_from_insight as module
 
     expected = DatasetFromInsightResult(
-        target_dataset="person-profile",
-        target_path="derived/person-profile",
+        target_dataset="sictic-members-person-profile",
+        target_path="derived/sictic-members-person-profile",
         insight="person-profile",
         source_dataset="sictic-members",
         selected=2,
+        dry_run=True,
     )
-    mock_hydrate = mocker.patch.object(script, "dataset_from_insight", return_value=expected)
-    mock_sync = mocker.patch("skills.dataset_chat.core.ingestion.sync_datasets")
 
-    result = await script.sync_person_profiles_from_insights(source_dataset="sictic-members")
+    calls = []
 
-    assert result is expected
-    mock_hydrate.assert_called_once_with(
-        target_dataset="person_profile",
-        insight="person_profile",
-        source_dataset="sictic-members",
-        dry_run=False,
+    async def fake_dataset_from_insight(**kwargs):
+        calls.append(kwargs)
+        return expected
+
+    mocker.patch.object(module, "dataset_from_insight", side_effect=fake_dataset_from_insight)
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--insight-name",
+            "person_profile",
+            "--source-dataset",
+            "sictic-members",
+            "--dry-run",
+        ],
     )
-    mock_sync.assert_called_once_with(["person_profile"], raise_on_error=True, force=True)
+
+    assert result.exit_code == 0
+    assert calls == [
+        {
+            "insight_name": "person_profile",
+            "source_dataset": "sictic-members",
+            "dry_run": True,
+        }
+    ]
+    assert "Target path: derived/sictic-members-person-profile" in result.output
 
 
 @pytest.mark.asyncio
@@ -147,7 +187,7 @@ async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
         "skills.person_profile.person_profile.person_profile",
         return_value=[Person(full_name="Urs Gubser")],
     )
-    mock_index = mocker.patch.object(script, "sync_person_profiles_from_insights")
+    mock_hydrate = mocker.patch.object(script, "dataset_from_insight")
 
     result = await script.generate_member_profiles(
         dataset="sictic-members",
@@ -164,4 +204,4 @@ async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
         names=["Urs Gubser"],
         include_dataset_context=False,
     )
-    mock_index.assert_not_called()
+    mock_hydrate.assert_not_called()
