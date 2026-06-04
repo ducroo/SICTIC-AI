@@ -13,6 +13,7 @@ from enum import Enum
 from dotenv import load_dotenv
 
 from lib.logger import get_logger
+from lib.env import get_env_var
 
 load_dotenv()
 
@@ -50,7 +51,7 @@ class ServicesGateway:
             return
             
         self.MAX_CONCURRENT_EMBEDS = int(os.getenv("MAX_CONCURRENT_EMBEDS", "16"))
-        self.MAX_CONCURRENT_LLMS = int(os.getenv("MAX_CONCURRENT_LLMS", "1"))
+        self.MAX_CONCURRENT_LLMS = int(get_env_var("MAX_CONCURRENT_LLMS"))
         self.MAX_CONCURRENT_DOCLING = int(os.getenv("MAX_CONCURRENT_DOCLING", "10"))
         
         # Ensure the state file exists with basic structure

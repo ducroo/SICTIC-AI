@@ -1,9 +1,11 @@
-import time
+import asyncio
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Dict, List, Optional
 
-from lib.active_dataset import is_active_dataset, activate_dataset
+import typer
+
+from lib.active_dataset import is_active_dataset
 from lib.insight_refresh import get_base_name, best_alternative
 from lib.logger import get_logger
 from lib.slugify import slugify
@@ -11,6 +13,7 @@ from lib.storage import get_storage
 from lib.storage_domains import dataset_insights_path, dataset_raw_path, storage_domain_config
 
 logger = get_logger(__name__)
+app = typer.Typer(help="Hydrate a derived dataset from existing insight markdown files.")
 
 
 @dataclass(frozen=True)
@@ -75,8 +78,7 @@ def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], targ
 
 
 async def dataset_from_insight(
-    target_dataset: str,
-    insight: Optional[str] = None,
+    insight_name: str,
     source_dataset: Optional[str] = None,
     *,
     dry_run: bool = False,
@@ -85,10 +87,12 @@ async def dataset_from_insight(
     Universally hydrates a Qdrant dataset directory from existing insights.
     Relies on lib.insight_refresh to determine base names and best alternatives.
     """
-    target_slug = slugify(target_dataset)
-    target_rel = dataset_raw_path(target_slug)
-
-    insight_slug = slugify(insight or target_dataset)
+    insight_slug = slugify(insight_name)
+    if source_dataset:
+        target_slug = slugify(f"{source_dataset}-{insight_slug}")
+    else:
+        target_slug = slugify(f"active-{insight_slug}")
+    target_rel = dataset_raw_path(target_slug, domain="derived")
 
     logger.info(f"Hydrating dataset '{target_slug}' from insight '{insight_slug}'...")
 
@@ -202,3 +206,38 @@ async def dataset_from_insight(
         unchanged=unchanged_count,
         dry_run=dry_run,
     )
+
+
+def _print_result(result: DatasetFromInsightResult) -> None:
+    mode = "DRY-RUN" if result.dry_run else "SYNC"
+    typer.echo(f"Mode: {mode}")
+    typer.echo(f"Source dataset: {result.source_dataset or 'all active datasets'}")
+    typer.echo(f"Target dataset: {result.target_dataset}")
+    typer.echo(f"Target path: {result.target_path}")
+    typer.echo(f"Insight: {result.insight}")
+    typer.echo(f"Candidate insight files: {result.candidates}")
+    typer.echo(f"Entities evaluated: {result.entities}")
+    typer.echo(f"Profiles selected: {result.selected}")
+    typer.echo(f"Files synced: {result.synced}")
+    typer.echo(f"Files removed: {result.removed}")
+    typer.echo(f"Files unchanged: {result.unchanged}")
+
+
+@app.command()
+def main(
+    insight_name: str = typer.Option(..., "--insight-name", "--insight", help="Insight name to hydrate, e.g. person_profile."),
+    source_dataset: Optional[str] = typer.Option(None, "--source-dataset", help="Optional source dataset whose insight folder should be scanned."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report what would change without writing files."),
+) -> None:
+    result = asyncio.run(
+        dataset_from_insight(
+            insight_name=insight_name,
+            source_dataset=source_dataset,
+            dry_run=dry_run,
+        )
+    )
+    _print_result(result)
+
+
+if __name__ == "__main__":
+    app()

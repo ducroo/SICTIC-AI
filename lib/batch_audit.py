@@ -121,7 +121,7 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
         subdir=True
     )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], file_path, author)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], file_path)
     if not needs_refresh:
         if _fallback_trigger() in cached_content:
             logger.info(f"[{dataset_name}] Ignoring cached batch audit with fallback markers: {matched_file}")

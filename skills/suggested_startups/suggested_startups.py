@@ -69,7 +69,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
             subdir=True
         )
         
-        needs_refresh, cached_content, matched_file = check_insight_refresh(datasets_to_check, output_file, default_llm)
+        needs_refresh, cached_content, matched_file = check_insight_refresh(datasets_to_check, output_file)
         if not needs_refresh:
             logger.info(f"[{dataset_name}] Skipping {investor}: Cache up to date.")
             continue

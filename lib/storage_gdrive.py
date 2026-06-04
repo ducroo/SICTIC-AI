@@ -15,7 +15,7 @@ from __future__ import annotations
 import io
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Dict, List, Optional, Tuple
 
@@ -226,11 +226,72 @@ class GoogleDriveStorage:
         if not files:
             self._path_to_id[rel] = None
             return None
-        # Drive permits same-name siblings; take the first deterministically.
-        files.sort(key=lambda f: f["id"])
-        self._path_to_id[rel] = files[0]["id"]
-        self._path_to_mime[rel] = files[0].get("mimeType", "")
-        return files[0]["id"]
+        if _is_md_path(rel):
+            files = self._sort_md_candidates(files)
+        else:
+            # Drive permits same-name siblings; take the first deterministically.
+            files.sort(key=lambda f: f["id"])
+        selected = files[0]
+        self._path_to_id[rel] = selected["id"]
+        self._path_to_mime[rel] = selected.get("mimeType", "")
+        return selected["id"]
+
+    def _sort_md_candidates(self, files: List[dict]) -> List[dict]:
+        """Return same-name .md candidates with Google Docs first.
+
+        Drive names and MIME types are independent, so a logical .md path may
+        be backed by either a native Google Doc named "x.md" or a legacy binary
+        Markdown file named "x.md". The Google Doc is canonical when both exist.
+        """
+        return sorted(files, key=lambda f: (f.get("mimeType") != _GDOC_MIME, f["id"]))
+
+    def _preferred_gdoc_for_write(self, rel: str, matches: List[dict]) -> Optional[dict]:
+        gdocs = [item for item in matches if item.get("mimeType") == _GDOC_MIME]
+        if len(gdocs) > 1:
+            ids = ", ".join(item["id"] for item in gdocs)
+            raise RuntimeError(
+                f"{rel}: ambiguous Google Drive path. Found {len(gdocs)} non-trashed "
+                f"Google Docs with this name: {ids}."
+            )
+        return gdocs[0] if gdocs else None
+
+    def _delete_file_id(self, file_id: str) -> None:
+        service = self._ensure_service()
+        try:
+            with self._service_lock:
+                service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
+        except HttpError as e:
+            if e.resp.status != 404:
+                raise
+
+    def _delete_legacy_md_siblings(self, rel: str, matches: List[dict], keep_id: Optional[str]) -> None:
+        for item in matches:
+            if item["id"] == keep_id or item.get("mimeType") == _GDOC_MIME:
+                continue
+            self._delete_file_id(item["id"])
+        self._invalidate(rel)
+
+    def _resolve_md_child_for_write(self, parent_id: str, rel: str, name: str) -> Tuple[Optional[dict], List[dict]]:
+        matches = self._children_named(parent_id, name)
+        existing_gdoc = self._preferred_gdoc_for_write(rel, matches)
+        if existing_gdoc:
+            self._path_to_id[rel] = existing_gdoc["id"]
+            self._path_to_mime[rel] = existing_gdoc.get("mimeType", "")
+        else:
+            self._path_to_id[rel] = None
+            self._path_to_mime.pop(rel, None)
+        return existing_gdoc, matches
+
+    def _read_legacy_md_bytes(self, fid: str) -> bytes:
+        service = self._ensure_service()
+        with self._service_lock:
+            request = service.files().get_media(fileId=fid, supportsAllDrives=True)
+            buf = io.BytesIO()
+            downloader = MediaIoBaseDownload(buf, request)
+            done = False
+            while not done:
+                _, done = downloader.next_chunk(num_retries=5)
+        return buf.getvalue()
 
     def _resolve_or_raise(self, rel: str) -> str:
         fid = self._resolve(rel)
@@ -297,6 +358,13 @@ class GoogleDriveStorage:
         prefix = f"{rel}/" if rel else ""
         for item in items:
             child_rel = f"{prefix}{item['name']}"
+            if _is_md_path(child_rel):
+                current_mime = self._path_to_mime.get(child_rel)
+                item_mime = item.get("mimeType", "")
+                if current_mime == _GDOC_MIME and item_mime != _GDOC_MIME:
+                    continue
+                if current_mime and current_mime != _GDOC_MIME and item_mime != _GDOC_MIME:
+                    continue
             self._path_to_id[child_rel] = item["id"]
             self._path_to_mime[child_rel] = item.get("mimeType", "")
         return items
@@ -345,10 +413,7 @@ class GoogleDriveStorage:
         if _is_md_path(rel):
             mime = self._get_mime(rel, fid)
             if mime != _GDOC_MIME:
-                raise RuntimeError(
-                    f"{rel}: expected a Google Doc (mimeType={_GDOC_MIME}) but found "
-                    f"mimeType={mime!r}. Run scripts/convert_md_to_gdoc.py to migrate."
-                )
+                return self._read_legacy_md_bytes(fid)
             with self._service_lock:
                 request = service.files().export_media(fileId=fid, mimeType=_MD_MIME)
                 buf = io.BytesIO()
@@ -389,24 +454,18 @@ class GoogleDriveStorage:
             # same gdoc and Drive records a new revision instead of creating a
             # duplicate sibling.
             media = MediaIoBaseUpload(io.BytesIO(content), mimetype=_MD_MIME, resumable=False)
-            existing = self._resolve_unique_child_for_write(parent_id, rel, name)
+            existing, same_name_files = self._resolve_md_child_for_write(parent_id, rel, name)
             existing_id = existing["id"] if existing else None
+            written_id = existing_id
             with self._service_lock:
                 if existing_id:
-                    existing_mime = existing.get("mimeType") or self._get_mime(rel, existing_id)
-                    if existing_mime != _GDOC_MIME:
-                        raise RuntimeError(
-                            f"{rel}: cannot overwrite — existing file has mimeType="
-                            f"{existing_mime!r}, expected {_GDOC_MIME}. "
-                            f"Run scripts/convert_md_to_gdoc.py first."
-                        )
                     service.files().update(
                         fileId=existing_id,
                         media_body=media,
                         supportsAllDrives=True,
                     ).execute()
                 else:
-                    service.files().create(
+                    created = service.files().create(
                         body={
                             "name": name,
                             "parents": [parent_id],
@@ -416,6 +475,8 @@ class GoogleDriveStorage:
                         fields="id",
                         supportsAllDrives=True,
                     ).execute()
+                    written_id = created["id"]
+            self._delete_legacy_md_siblings(rel, same_name_files, written_id)
             self._invalidate(rel)
             return
 
@@ -493,6 +554,19 @@ class GoogleDriveStorage:
         with self._service_lock:
             meta = service.files().get(fileId=fid, fields="modifiedTime", supportsAllDrives=True).execute()
         return _parse_modtime(meta.get("modifiedTime"))
+
+    def set_mtime(self, rel: str, timestamp: float) -> None:
+        fid = self._resolve_or_raise(rel)
+        modified_time = datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+        service = self._ensure_service()
+        with self._service_lock:
+            service.files().update(
+                fileId=fid,
+                body={"modifiedTime": modified_time},
+                fields="id,modifiedTime",
+                supportsAllDrives=True,
+            ).execute()
+        self._invalidate(rel)
 
     def remove(self, rel: str) -> None:
         fid = self._resolve(rel)

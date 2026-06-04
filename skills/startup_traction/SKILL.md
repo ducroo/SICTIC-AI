@@ -20,7 +20,7 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
    * Convert `startup_name` to lowercase. 
    * Determine the current model suffix (e.g., `qwen3.5_9b`). 
    * Construct the output file path: `<REPOSITORY_DIR>/insights/<startup_name>/<startup_name>_traction_<model_name>.md`. 
-   * Call `check_insight_refresh(startup_name, "<startup_name>_traction_<model_suffix>.md")`. If it returns `False` (no refresh needed), read the existing file from disk and return its contents immediately.
+   * Call `check_insight_refresh([startup_name], "<startup_name>_traction_<model_suffix>.md")`. If it returns `False` (no refresh needed), read the existing file from disk and return its contents immediately.
 
 2. **Configuration Loading:** 
    * If a refresh is needed, call `config_load()` and extract: 

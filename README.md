@@ -158,19 +158,19 @@ Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset
 ### Member Profile Indexing Scripts
 
 Community matching skills such as `expert_search`, `potential_investors`, and
-`advocates` search the derived `person_profile` dataset. They do not scan every
-Google Drive insight on demand. Use the two maintenance scripts below to create
-member profile insights and then hydrate the searchable vector dataset from
-those insights.
+`advocates` search the derived `sictic-members-person-profile` dataset. They do
+not scan every Google Drive insight on demand. Use the two maintenance scripts
+below to create member profile insights and then hydrate the derived dataset
+from those insights.
 
-#### 1. Sync existing profile insights into Qdrant
+#### 1. Hydrate existing profile insights into a derived dataset
 
 ```bash
-conda run -n sictic-env python scripts/sync_person_profiles_from_insights.py --dry-run
-conda run -n sictic-env python scripts/sync_person_profiles_from_insights.py
+conda run -n sictic-env python -m lib.dataset_from_insight --insight-name person_profile --source-dataset sictic-members --dry-run
+conda run -n sictic-env python -m lib.dataset_from_insight --insight-name person_profile --source-dataset sictic-members
 ```
 
-This script expects existing profile insight Markdown under:
+This command expects existing profile insight Markdown under:
 
 ```text
 insights/community/sictic-members/person-profile/
@@ -180,23 +180,12 @@ It then:
 * scans the existing `person_profile` insight files;
 * groups alternative files by person;
 * chooses the preferred profile for each person using `RANKED_LLMS`;
-* writes the selected files into `derived/person-profile/`;
-* removes stale derived files when a different LLM output is now preferred;
-* force-syncs the derived `person_profile` dataset into Qdrant.
+* writes the selected files into `derived/sictic-members-person-profile/`;
+* removes stale derived files when a different LLM output is now preferred.
 
 Use `--dry-run` first. A dry run showing zero candidates means there are no
 matching profile insight files at the configured storage path yet, or the local
-hybrid mirror has not hydrated them. Use `--reset-qdrant` only when you want a
-clean rebuild, for example after changing embedding models or recovering from a
-known stale vector index.
-
-```bash
-conda run -n sictic-env python scripts/sync_person_profiles_from_insights.py --reset-qdrant
-```
-
-Normal LLM preference changes do not require a reset: stale derived Markdown
-files are removed before sync, and Qdrant deletes chunks for source files that
-disappeared.
+hybrid mirror has not hydrated them.
 
 #### 2. Generate member profiles from source member data
 
@@ -221,7 +210,7 @@ Useful options:
 # Generate only selected people
 conda run -n sictic-env python scripts/generate_member_profiles.py --names "Urs Gubser,Jane Doe"
 
-# Generate insight files but do not hydrate/index derived/person-profile yet
+# Generate insight files but do not hydrate derived/sictic-members-person-profile yet
 conda run -n sictic-env python scripts/generate_member_profiles.py --limit 10 --skip-index
 
 # Remove existing selected outputs before regenerating
@@ -247,14 +236,13 @@ insights/community/sictic-members/person-profile/
 ```
 
 Unless `--skip-index` is used, the script then calls
-`sync_person_profiles_from_insights.py` so the selected profiles end up in:
+`dataset_from_insight` so the selected profiles end up in:
 
 ```text
-derived/person-profile/
+derived/sictic-members-person-profile/
 ```
 
-and are indexed into the `person_profile` Qdrant collection used by the
-community matching skills.
+The next `dataset_chat` call against `sictic-members-person-profile` will sync/index as needed.
 
 <details>
 <summary>▶ Click to see a sample Startup Profile output for SpaceX</summary>

@@ -33,7 +33,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
         subdir=False
     )
 
-    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_slug], output_file, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_slug], output_file)
     if not needs_refresh:
         return cached_content, matched_file
 

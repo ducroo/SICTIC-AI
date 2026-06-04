@@ -32,7 +32,7 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
         subdir=False
     )
     
-    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name], output_filepath, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh([startup_name], output_filepath)
     if not needs_refresh:
         logger.info(f"[{dataset_name}] Using cached team profile from {matched_file}")
         return cached_content, matched_file

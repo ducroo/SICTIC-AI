@@ -66,8 +66,7 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
     # other profile indexing flows: selected insight filenames, model suffixes,
     # and stale-file cleanup are owned by dataset_from_insight().
     await dataset_from_insight(
-        target_dataset=type_of_profile,
-        insight=type_of_profile,
+        insight_name=type_of_profile,
         source_dataset="sictic-members",
     )
 

@@ -1,13 +1,76 @@
 import re
-from typing import List, Dict
+from typing import List
 from lib.storage import get_storage
 from lib.adapters.linkedin import LinkedInAdapter, extract_linkedin_id
 from lib.adapters.web_search import WebSearchAdapter
+from lib.insight_filepath import get_insight_filepath
 from lib.logger import get_logger
 from lib.models.person import Person
-from lib.storage_domains import dataset_parsed_path, persons_registry_path
+from lib.storage_domains import dataset_parsed_path
+from lib.slugify import slugify
 
 logger = get_logger(__name__)
+
+_LINKEDIN_URL_PATTERN = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
+
+def _markdown_cell_text(cell: str) -> str:
+    return cell.strip().replace("\\_", "_").replace("\\-", "-").replace("\\=", "=")
+
+
+def _parse_manual_persons_table(content: str) -> List[Person]:
+    persons: List[Person] = []
+    seen = set()
+    header = None
+
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or not stripped.endswith("|"):
+            continue
+
+        cells = [_markdown_cell_text(cell) for cell in stripped.strip("|").split("|")]
+        normalized = [cell.strip().lower().replace("_", "") for cell in cells]
+        if header is None:
+            if "fullname" not in normalized or "linkedinid" not in normalized:
+                continue
+            header = normalized
+            continue
+
+        if all(set(cell) <= {"-", ":"} for cell in cells):
+            continue
+
+        values = dict(zip(header, cells))
+        full_name = values.get("fullname", "").strip()
+        linkedin_id = values.get("linkedinid", "").strip()
+        if "linkedin.com/" in linkedin_id.lower():
+            linkedin_id = extract_linkedin_id(linkedin_id)
+        else:
+            linkedin_id = slugify(linkedin_id)
+
+        if not full_name and not linkedin_id:
+            continue
+
+        key = linkedin_id.lower() if linkedin_id else f"name:{slugify(full_name)}"
+        if key in seen:
+            continue
+        seen.add(key)
+        persons.append(Person(full_name=full_name, linkedinID=linkedin_id))
+
+    return persons
+
+
+def _render_manual_persons_table(dataset_name: str, persons: List[Person]) -> str:
+    lines = [
+        f"# Persons in {dataset_name}",
+        "",
+        "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten. BTW linkedinURL = https://www.linkedin.com/in/linkedinID",
+        "",
+        "| full_name | linkedinID |",
+        "|---|---|",
+    ]
+    for person in persons:
+        lines.append(f"| {person.full_name} | {person.linkedinID} |")
+    return "\n".join(lines) + "\n"
+
 
 def persons_in_dataset(dataset_name: str) -> List[Person]:
     """
@@ -22,28 +85,20 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     Returns a deduplicated list of Person objects.
     """
     storage = get_storage()
-    from lib.slugify import slugify
     dataset_slug = slugify(dataset_name)
     
-    registry_rel = persons_registry_path(dataset_slug)
-    
+    manual_rel = get_insight_filepath(
+        dataset_name=dataset_slug,
+        skill_name="persons_in_dataset",
+        model="manual",
+        subdir=False,
+    )
+
     # 1. Manual Override File (Source of Truth)
-    if storage.exists(registry_rel):
-        logger.info(f"[{dataset_name}] Found manual persons registry: {registry_rel}")
-        content = storage.read_text(registry_rel)
-        
-        discovered_persons = []
-        seen = set()
-        
-        # Extract all linkedin IDs using regex
-        pattern = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
-        for match in pattern.finditer(content):
-            slug = match.group(1).lower()
-            if slug not in seen:
-                seen.add(slug)
-                discovered_persons.append(Person(linkedinID=slug))
-                
-        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual file.")
+    if storage.exists(manual_rel):
+        logger.info(f"[{dataset_name}] Found manual persons insight: {manual_rel}")
+        discovered_persons = _parse_manual_persons_table(storage.read_text(manual_rel))
+        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual insight.")
         return discovered_persons
 
     # Otherwise, proceed with discovery
@@ -83,12 +138,10 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
             logger.info(f"[{dataset_name}] Scanning {md_dir} for explicit LinkedIn URLs...")
             files = storage.list(md_dir, suffix=".md")
             
-            pattern = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
-            
             for f in files:
                 try:
                     content = storage.read_text(f"{md_dir}/{f}")
-                    matches = pattern.findall(content)
+                    matches = _LINKEDIN_URL_PATTERN.findall(content)
                     for match in matches:
                         if match:
                             _add_person(Person(linkedinID=match.lower()))
@@ -97,18 +150,8 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
                     
     logger.info(f"[{dataset_name}] Discovery complete. Found {len(discovered_persons)} unique persons.")
     
-    # Write the results to the manual file so deal leads can edit it later
-    lines = [
-        f"# Persons in {dataset_name}",
-        "",
-        "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten.",
-        ""
-    ]
-    for p in discovered_persons:
-        if p.linkedinID:
-            lines.append(f"https://www.linkedin.com/in/{p.linkedinID}/")
-            
-    storage.write_text(registry_rel, "\n".join(lines) + "\n")
-    logger.info(f"[{dataset_name}] Wrote discovered persons list to {registry_rel}")
+    # Write the results to the manual insight so deal leads can edit it later.
+    storage.write_text(manual_rel, _render_manual_persons_table(dataset_name, discovered_persons))
+    logger.info(f"[{dataset_name}] Wrote discovered persons list to {manual_rel}")
     
     return discovered_persons

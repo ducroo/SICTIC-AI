@@ -12,7 +12,7 @@ from lib.dataset_from_insight import dataset_from_insight
 
 logger = get_logger(__name__)
 
-async def potential_investors(startup_name: str, target_investors: Optional[List[str]] = None, exclude_investors: Optional[List[str]] = None, top_k: int = 8) -> str:
+async def potential_investors(startup_name: str, target_investors: Optional[List[str]] = None, exclude_investors: Optional[List[str]] = None, top_k: int = 16) -> str:
     """
     Provides a ranked list of potential investors for a given startup based on quickselect ranking and LLM refinement.
     """
@@ -29,7 +29,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     )
 
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", startup_slug], out_path, default_llm)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(["person_profile", startup_slug], out_path)
     if not needs_refresh:
         logger.info(f"[{startup_slug}] Using cached potential investors from {matched_file}")
         return cached_content
@@ -53,8 +53,9 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     objective = objective_template.replace("{{startup_profile}}", profile_content)
 
     # 2.5 Hydrate Target Dataset
-    logger.info(f"[{startup_slug}] Hydrating 'person_profile' dataset from 'sictic-members'...")
-    await dataset_from_insight(target_dataset="person_profile", source_dataset="sictic-members")
+    people_dataset = "sictic-members-person-profile"
+    logger.info(f"[{startup_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
+    await dataset_from_insight(insight_name="person_profile", source_dataset="sictic-members")
 
     # 3. Call ranking_persons Engine
     logger.info(f"[{startup_slug}] Invoking ranking_persons engine for potential investors...")
@@ -63,7 +64,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     clean_excludes = [slugify(c) for c in exclude_investors] if exclude_investors else None
     
     result = await ranking_persons(
-        dataset_name="person_profile",
+        dataset_name=people_dataset,
         objective=objective,
         query=profile_content,
         candidates=clean_targets,

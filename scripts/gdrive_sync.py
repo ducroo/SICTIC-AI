@@ -1,38 +1,34 @@
 """
-Pull or push subtrees between the local mirror (STORAGE_MIRROR_DIR) and
-Google Drive folders listed in config/sync.yaml.
+Cleanly mirror files between STORAGE_MIRROR_DIR and Google Drive.
 
-  pull: Drive -> local. Overwrites local copies. Source of truth = Drive.
-  push: local -> Drive. Overwrites gdoc contents in place (file IDs preserved).
-        Creates folders/files on Drive that don't yet exist there.
-        Source of truth = local mirror.
+  pull [path]: Drive -> local. Drive is source of truth.
+  push [path]: local -> Drive. Local mirror is source of truth.
 
-No three-way merge: whichever direction you run wins. Use --dry-run to preview.
---prune deletes destination-side files/folders that aren't in the source.
+The optional path is a relative subtree or file path under the configured root.
+The destination is made to match the source for that path: missing files are
+created, changed files are overwritten, source mtimes are preserved on the
+destination, and destination-only files are deleted.
 
 Usage:
     python scripts/gdrive_sync.py pull
-    python scripts/gdrive_sync.py pull --target insights --dry-run
-    python scripts/gdrive_sync.py push --prune
+    python scripts/gdrive_sync.py pull insights/startups/avientus
+    python scripts/gdrive_sync.py push insights/startups/avientus
 """
 from __future__ import annotations
 
 import argparse
-import io
 import logging
 import os
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
-
-import yaml
+from typing import List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import lib.env  # noqa: F401  triggers .env load
+from lib.env import get_env_var
 from lib.logger import get_logger
-from lib.storage import LocalStorage
+from lib.storage import LocalStorage, _validate_rel
 from lib.storage_gdrive import GoogleDriveStorage
 
 logger = get_logger(__name__)
@@ -42,51 +38,37 @@ _console.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(_console)
 
 
-# Folder names to skip on both directions (archives, hidden, system).
 _SKIP_FOLDER_NAMES = {"_archive_md"}
+_MTIME_TOLERANCE_SECONDS = 1.0
 
 
-@dataclass
-class Target:
-    name: str
-    local_subdir: str
-    pull_from: str
-    push_to: str
+def _clean_rel(rel: Optional[str]) -> str:
+    if not rel:
+        return ""
+    if rel in {".", "/"}:
+        return ""
+    if rel.startswith("/"):
+        return _validate_rel(rel)
+    rel = rel.strip("/")
+    return _validate_rel(rel)
 
 
-def _load_config(path: Path) -> List[Target]:
-    with path.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
-    if not raw or "targets" not in raw:
-        raise ValueError(f"{path}: missing 'targets' key")
-    targets: List[Target] = []
-    for t in raw["targets"]:
-        if not all(k in t for k in ("name", "local_subdir", "pull_from")):
-            raise ValueError(f"{path}: target {t!r} missing required keys "
-                             f"(name, local_subdir, pull_from).")
-        targets.append(Target(
-            name=t["name"],
-            local_subdir=t["local_subdir"].strip("/"),
-            pull_from=t["pull_from"],
-            push_to=t.get("push_to") or t["pull_from"],
-        ))
-    return targets
-
-
-def _build_drive_storage(folder_id: str, credentials: str, token: str) -> GoogleDriveStorage:
+def _build_drive_storage(root_folder_id: str, credentials: str, token: str) -> GoogleDriveStorage:
     return GoogleDriveStorage(
         credentials_path=credentials,
         token_path=token,
-        root_folder_id=folder_id,
+        root_folder_id=root_folder_id,
     )
 
 
-# ---------- Drive walker (skips _archive_md/) ----------
-
 def _walk_drive(drive: GoogleDriveStorage, rel: str = "") -> List[Tuple[str, float]]:
-    """Recursive list of files under `rel`, with mtimes. Skips _SKIP_FOLDER_NAMES."""
+    """Recursive list of Drive files under rel, with paths relative to root."""
+    rel = _clean_rel(rel)
+    drive._resolve_root_folder()
+    if rel and drive.exists(rel) and not drive.is_dir(rel):
+        return [(rel, drive.mtime(rel) or 0.0)]
+
     out: List[Tuple[str, float]] = []
-    # Use the underlying client directly so we can skip folders by name.
     service = drive._ensure_service()
     parent_id = drive._resolve(rel) if rel else drive.root_folder_id
     if parent_id is None:
@@ -94,6 +76,7 @@ def _walk_drive(drive: GoogleDriveStorage, rel: str = "") -> List[Tuple[str, flo
 
     stack: List[Tuple[str, str]] = [(parent_id, rel)]
     from googleapiclient.errors import HttpError
+
     while stack:
         pid, prefix = stack.pop()
         page_token = None
@@ -116,196 +99,257 @@ def _walk_drive(drive: GoogleDriveStorage, rel: str = "") -> List[Tuple[str, flo
                     if item["name"] in _SKIP_FOLDER_NAMES:
                         continue
                     stack.append((item["id"], child_rel))
-                else:
-                    from lib.storage_gdrive import _parse_modtime
-                    out.append((child_rel, _parse_modtime(item.get("modifiedTime"))))
-                    # Warm caches so subsequent read_bytes / _get_mime are fast.
-                    drive._path_to_id[child_rel] = item["id"]
-                    drive._path_to_mime[child_rel] = item.get("mimeType", "")
+                    continue
+
+                from lib.storage_gdrive import _parse_modtime
+
+                out.append((child_rel, _parse_modtime(item.get("modifiedTime"))))
+                drive._path_to_id[child_rel] = item["id"]
+                drive._path_to_mime[child_rel] = item.get("mimeType", "")
             page_token = res.get("nextPageToken")
             if not page_token:
                 break
     return out
 
 
-# ---------- Local walker ----------
-
-def _walk_local(local: LocalStorage, subdir: str) -> List[str]:
-    """Recursive list of files under `subdir` (paths relative to subdir)."""
-    base = Path(local.base) / subdir
+def _walk_local(local: LocalStorage, rel: str = "") -> List[Tuple[str, float]]:
+    """Recursive list of local files under rel, with paths relative to root."""
+    rel = _clean_rel(rel)
+    base = Path(local.base) / rel if rel else Path(local.base)
+    if base.is_file():
+        return [(rel, base.stat().st_mtime)]
     if not base.is_dir():
         return []
-    out: List[str] = []
+
+    out: List[Tuple[str, float]] = []
     for p in base.rglob("*"):
         if not p.is_file():
             continue
-        out.append(str(p.relative_to(base).as_posix()))
+        if any(part in _SKIP_FOLDER_NAMES for part in p.relative_to(local.base).parts):
+            continue
+        out.append((str(p.relative_to(local.base).as_posix()), p.stat().st_mtime))
     return out
 
 
-# ---------- Pull ----------
+def _same_mtime(a: Optional[float], b: Optional[float]) -> bool:
+    if a is None or b is None:
+        return False
+    return abs(a - b) <= _MTIME_TOLERANCE_SECONDS
 
-def _pull_target(t: Target, mirror: LocalStorage,
-                 credentials: str, token: str,
-                 dry_run: bool, prune: bool) -> Tuple[int, int, int]:
-    """Returns (synced, failed, pruned)."""
-    logger.info(f"=== PULL target={t.name} (drive {t.pull_from} -> "
-                f"local {mirror.base}/{t.local_subdir}) ===")
-    drive = _build_drive_storage(t.pull_from, credentials, token)
-    drive_files = _walk_drive(drive)
-    logger.info(f"  {len(drive_files)} files on Drive.")
+
+def _remove_empty_parents(base: Path, rel: str) -> None:
+    parent = (base / rel).parent
+    while parent != base and parent.exists():
+        try:
+            parent.rmdir()
+        except OSError:
+            return
+        parent = parent.parent
+
+
+def _pull_file(drive: GoogleDriveStorage, mirror: LocalStorage, rel: str, source_mtime: float) -> bool:
+    if mirror.exists(rel) and _same_mtime(mirror.mtime(rel), source_mtime):
+        logger.info(f"  unchanged {rel}")
+        return False
+    content = drive.read_bytes(rel)
+    mirror.write_bytes(rel, content)
+    mirror.set_mtime(rel, source_mtime)
+    logger.info(f"  pull {rel} ({len(content)} bytes)")
+    return True
+
+
+def _push_file(mirror: LocalStorage, drive: GoogleDriveStorage, rel: str, source_mtime: float) -> bool:
+    if drive.exists(rel) and _same_mtime(drive.mtime(rel), source_mtime):
+        logger.info(f"  unchanged {rel}")
+        return False
+    content = mirror.read_bytes(rel)
+    drive.write_bytes(rel, content)
+    drive.set_mtime(rel, source_mtime)
+    logger.info(f"  push {rel} ({len(content)} bytes)")
+    return True
+
+
+def _build_sync_context(
+    *,
+    mirror_dir: Optional[str],
+    root_folder_id: Optional[str],
+    credentials: Optional[str],
+    token: Optional[str],
+) -> Tuple[LocalStorage, GoogleDriveStorage]:
+    mirror_dir = mirror_dir or os.environ.get("STORAGE_MIRROR_DIR")
+    root_folder_id = root_folder_id or os.environ.get("STORAGE_PATH") or get_env_var("STORAGE_PATH")
+    credentials = (
+        credentials
+        or os.environ.get("GDRIVE_CREDENTIALS")
+        or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
+    )
+    token = (
+        token
+        or os.environ.get("GDRIVE_TOKEN")
+        or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
+    )
+
+    if not mirror_dir:
+        raise ValueError("STORAGE_MIRROR_DIR is not set and --mirror-dir not given.")
+    if not mirror_dir.startswith("/"):
+        raise ValueError(f"mirror dir must be absolute, got: {mirror_dir}")
+    os.makedirs(mirror_dir, exist_ok=True)
+
+    return (
+        LocalStorage(mirror_dir),
+        _build_drive_storage(root_folder_id, credentials, token),
+    )
+
+
+def pull_mirror(
+    rel: Optional[str] = None,
+    *,
+    mirror_dir: Optional[str] = None,
+    root_folder_id: Optional[str] = None,
+    credentials: Optional[str] = None,
+    token: Optional[str] = None,
+) -> int:
+    """Make local mirror match Drive under rel."""
+    rel = _clean_rel(rel)
+    try:
+        mirror, drive = _build_sync_context(
+            mirror_dir=mirror_dir,
+            root_folder_id=root_folder_id,
+            credentials=credentials,
+            token=token,
+        )
+    except Exception as e:
+        logger.error(str(e))
+        return 2
+
+    logger.info(f"=== PULL path={rel or '.'} (drive -> local {mirror.base}) ===")
+    drive_files = dict(_walk_drive(drive, rel))
+    local_files = dict(_walk_local(mirror, rel))
+    logger.info(f"  source_files={len(drive_files)} destination_files={len(local_files)}")
 
     synced = 0
     failed = 0
-    drive_paths: Set[str] = set()
-    for rel, _mtime in drive_files:
-        drive_paths.add(rel)
-        local_rel = f"{t.local_subdir}/{rel}"
-        if dry_run:
-            logger.info(f"  [DRY] pull {rel}")
-            continue
+    pruned = 0
+
+    for path, mtime in sorted(drive_files.items()):
         try:
-            content = drive.read_bytes(rel)
-            mirror.write_bytes(local_rel, content)
-            logger.info(f"  pull {rel} ({len(content)} bytes)")
-            synced += 1
+            if _pull_file(drive, mirror, path, mtime):
+                synced += 1
         except Exception as e:
-            logger.error(f"  FAILED pull {rel}: {e}")
+            logger.error(f"  FAILED pull {path}: {e}")
             failed += 1
 
-    pruned = 0
-    if prune:
-        local_files = set(_walk_local(mirror, t.local_subdir))
-        to_delete = local_files - drive_paths
-        for rel in sorted(to_delete):
-            local_rel = f"{t.local_subdir}/{rel}"
-            if dry_run:
-                logger.info(f"  [DRY] prune local {local_rel}")
-                continue
-            try:
-                mirror.remove(local_rel)
-                logger.info(f"  prune local {local_rel}")
-                pruned += 1
-            except Exception as e:
-                logger.error(f"  FAILED prune {local_rel}: {e}")
+    for path in sorted(set(local_files) - set(drive_files)):
+        try:
+            mirror.remove(path)
+            _remove_empty_parents(Path(mirror.base), path)
+            logger.info(f"  prune local {path}")
+            pruned += 1
+        except Exception as e:
+            logger.error(f"  FAILED prune local {path}: {e}")
+            failed += 1
 
-    logger.info(f"  synced={synced} failed={failed} pruned={pruned}")
-    return synced, failed, pruned
+    logger.info(f"=== TOTAL synced={synced} failed={failed} pruned={pruned} ===")
+    return 0 if failed == 0 else 1
 
 
-# ---------- Push ----------
+def push_mirror(
+    rel: Optional[str] = None,
+    *,
+    mirror_dir: Optional[str] = None,
+    root_folder_id: Optional[str] = None,
+    credentials: Optional[str] = None,
+    token: Optional[str] = None,
+) -> int:
+    """Make Drive match local mirror under rel."""
+    rel = _clean_rel(rel)
+    try:
+        mirror, drive = _build_sync_context(
+            mirror_dir=mirror_dir,
+            root_folder_id=root_folder_id,
+            credentials=credentials,
+            token=token,
+        )
+    except Exception as e:
+        logger.error(str(e))
+        return 2
 
-def _push_target(t: Target, mirror: LocalStorage,
-                 credentials: str, token: str,
-                 dry_run: bool, prune: bool) -> Tuple[int, int, int]:
-    logger.info(f"=== PUSH target={t.name} (local {mirror.base}/{t.local_subdir} "
-                f"-> drive {t.push_to}) ===")
-    drive = _build_drive_storage(t.push_to, credentials, token)
-    local_files = _walk_local(mirror, t.local_subdir)
-    logger.info(f"  {len(local_files)} files locally.")
+    logger.info(f"=== PUSH path={rel or '.'} (local {mirror.base} -> drive) ===")
+    local_files = dict(_walk_local(mirror, rel))
+    drive_files = dict(_walk_drive(drive, rel))
+    logger.info(f"  source_files={len(local_files)} destination_files={len(drive_files)}")
 
     synced = 0
     failed = 0
-    local_paths: Set[str] = set(local_files)
-    for rel in local_files:
-        if dry_run:
-            logger.info(f"  [DRY] push {rel}")
-            continue
+    pruned = 0
+
+    for path, mtime in sorted(local_files.items()):
         try:
-            with open(Path(mirror.base) / t.local_subdir / rel, "rb") as f:
-                content = f.read()
-            # GoogleDriveStorage.write_bytes already handles gdoc import for
-            # .md paths and plain bytes for everything else.
-            drive.write_bytes(rel, content)
-            logger.info(f"  push {rel} ({len(content)} bytes)")
-            synced += 1
+            if _push_file(mirror, drive, path, mtime):
+                synced += 1
         except Exception as e:
-            logger.error(f"  FAILED push {rel}: {e}")
+            logger.error(f"  FAILED push {path}: {e}")
             failed += 1
 
-    pruned = 0
-    if prune:
-        drive_files = {p for p, _ in _walk_drive(drive)}
-        to_delete = drive_files - local_paths
-        for rel in sorted(to_delete):
-            if dry_run:
-                logger.info(f"  [DRY] prune drive {rel}")
-                continue
-            try:
-                drive.remove(rel)
-                logger.info(f"  prune drive {rel}")
-                pruned += 1
-            except Exception as e:
-                logger.error(f"  FAILED prune {rel}: {e}")
+    for path in sorted(set(drive_files) - set(local_files)):
+        try:
+            drive.remove(path)
+            logger.info(f"  prune drive {path}")
+            pruned += 1
+        except Exception as e:
+            logger.error(f"  FAILED prune drive {path}: {e}")
+            failed += 1
 
-    logger.info(f"  synced={synced} failed={failed} pruned={pruned}")
-    return synced, failed, pruned
+    logger.info(f"=== TOTAL synced={synced} failed={failed} pruned={pruned} ===")
+    return 0 if failed == 0 else 1
 
-
-# ---------- Main ----------
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("direction", choices=["pull", "push"],
-                        help="Sync direction.")
-    parser.add_argument("--config", default="config/sync.yaml",
-                        help="Path to sync config (default: config/sync.yaml).")
-    parser.add_argument("--target",
-                        help="Only sync the named target (default: all).")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Log actions without performing them.")
-    parser.add_argument("--prune", action="store_true",
-                        help="Delete destination-side files not present in source.")
-    parser.add_argument("--mirror-dir",
-                        default=os.environ.get("STORAGE_MIRROR_DIR"),
-                        help="Local mirror dir (default: $STORAGE_MIRROR_DIR).")
-    parser.add_argument("--credentials",
-                        default=os.environ.get("GDRIVE_CREDENTIALS")
-                        or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json"))
-    parser.add_argument("--token",
-                        default=os.environ.get("GDRIVE_TOKEN")
-                        or os.path.expanduser("~/.openclaw/gdrive-ops-token.json"))
+    parser.add_argument("direction", choices=["pull", "push"], help="Sync direction.")
+    parser.add_argument(
+        "path",
+        nargs="?",
+        default="",
+        help="Optional relative path under the configured storage root.",
+    )
+    parser.add_argument(
+        "--mirror-dir",
+        default=os.environ.get("STORAGE_MIRROR_DIR"),
+        help="Local mirror dir (default: $STORAGE_MIRROR_DIR).",
+    )
+    parser.add_argument(
+        "--root-folder-id",
+        default=os.environ.get("STORAGE_PATH"),
+        help="Drive root folder ID/path (default: $STORAGE_PATH).",
+    )
+    parser.add_argument(
+        "--credentials",
+        default=os.environ.get("GDRIVE_CREDENTIALS")
+        or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json"),
+    )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("GDRIVE_TOKEN")
+        or os.path.expanduser("~/.openclaw/gdrive-ops-token.json"),
+    )
     args = parser.parse_args()
 
-    if not args.mirror_dir:
-        logger.error("STORAGE_MIRROR_DIR is not set and --mirror-dir not given.")
-        return 2
-    if not args.mirror_dir.startswith("/"):
-        logger.error(f"mirror dir must be absolute, got: {args.mirror_dir}")
-        return 2
-    os.makedirs(args.mirror_dir, exist_ok=True)
-
-    config_path = Path(args.config)
-    if not config_path.is_absolute():
-        config_path = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) / config_path
-    if not config_path.exists():
-        logger.error(f"Config not found: {config_path}. Copy "
-                     f"config/sync.yaml.example to config/sync.yaml and fill in IDs.")
-        return 2
-
-    targets = _load_config(config_path)
-    if args.target:
-        targets = [t for t in targets if t.name == args.target]
-        if not targets:
-            logger.error(f"No target named {args.target!r} in {config_path}.")
-            return 2
-
-    mirror = LocalStorage(args.mirror_dir)
-
-    totals = [0, 0, 0]
-    for t in targets:
-        if args.direction == "pull":
-            s, f, p = _pull_target(t, mirror, args.credentials, args.token,
-                                   args.dry_run, args.prune)
-        else:
-            s, f, p = _push_target(t, mirror, args.credentials, args.token,
-                                   args.dry_run, args.prune)
-        totals[0] += s
-        totals[1] += f
-        totals[2] += p
-
-    logger.info(f"=== TOTAL synced={totals[0]} failed={totals[1]} pruned={totals[2]} ===")
-    return 0 if totals[1] == 0 else 1
+    if args.direction == "pull":
+        return pull_mirror(
+            args.path,
+            mirror_dir=args.mirror_dir,
+            root_folder_id=args.root_folder_id,
+            credentials=args.credentials,
+            token=args.token,
+        )
+    return push_mirror(
+        args.path,
+        mirror_dir=args.mirror_dir,
+        root_folder_id=args.root_folder_id,
+        credentials=args.credentials,
+        token=args.token,
+    )
 
 
 if __name__ == "__main__":
