@@ -42,6 +42,30 @@ def test_persons_in_dataset_reads_manual_insight_table(mock_env):
     ]
 
 
+def test_persons_in_dataset_reads_drive_exported_escaped_table(mock_env):
+    storage = get_storage()
+    manual_path = _manual_path("sictic-members")
+    storage.write_text(
+        manual_path,
+        "\n".join(
+            [
+                "# Persons in sictic-members",
+                "",
+                "Deal leads, feel free to add or remove employees \\- SICTIC-AI will remember the edits.",
+                "",
+                "| full\\_name | linkedinID |",
+                "| :---- | :---- |",
+                "| Patrick Schuler | schulerp |",
+            ]
+        )
+        + "\n",
+    )
+
+    persons = persons_in_dataset("sictic_members")
+
+    assert persons == [Person(full_name="Patrick Schuler", linkedinID="schulerp")]
+
+
 def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env, mocker):
     storage = get_storage()
     manual_path = _manual_path("sictic-members")

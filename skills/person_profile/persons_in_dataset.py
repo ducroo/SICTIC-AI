@@ -13,6 +13,10 @@ logger = get_logger(__name__)
 
 _LINKEDIN_URL_PATTERN = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
 
+def _markdown_cell_text(cell: str) -> str:
+    return cell.strip().replace("\\_", "_").replace("\\-", "-").replace("\\=", "=")
+
+
 def _parse_manual_persons_table(content: str) -> List[Person]:
     persons: List[Person] = []
     seen = set()
@@ -23,7 +27,7 @@ def _parse_manual_persons_table(content: str) -> List[Person]:
         if not stripped.startswith("|") or not stripped.endswith("|"):
             continue
 
-        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        cells = [_markdown_cell_text(cell) for cell in stripped.strip("|").split("|")]
         normalized = [cell.strip().lower().replace("_", "") for cell in cells]
         if header is None:
             if "fullname" not in normalized or "linkedinid" not in normalized:
