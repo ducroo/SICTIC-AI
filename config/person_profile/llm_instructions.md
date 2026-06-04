@@ -7,4 +7,8 @@ CRITICAL RULES:
 4. DISCREPANCIES: Actively cross-reference sources. If you find conflicting information (e.g., dates or titles differ between a resume and a LinkedIn profile), explicitly highlight this in a "**Discrepancies & Red Flags**" section at the top of the report.
 5. NO HALLUCINATION: If information is missing, do not invent it. 
 
-Be comprehensive. Synthesize the basic facts to make the profile readable, but heavily rely on the original text when describing the person's professional roles and achievements. Deduplicate identical information. Explicitly include the full linkedinURL on a separate line
+Be comprehensive. Synthesize the basic facts to make the profile readable, but heavily rely on the original text when describing the person's professional roles and achievements. Deduplicate identical information. 
+
+If available, explicitly include on a separate line
+* the full linkedinURL
+* the email adress 
