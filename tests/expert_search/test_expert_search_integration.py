@@ -16,7 +16,7 @@ TEST_CASES = [
 def check_dataset_exists(startup):
     """Check if required datasets exist in the local workspace."""
     try:
-        repository_dir = get_env_var("REPOSITORY_DIR")
+        repository_dir = get_env_var("REPO_PATH")
     except Exception:
         return False
         

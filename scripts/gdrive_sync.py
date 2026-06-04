@@ -1,5 +1,5 @@
 """
-Cleanly mirror files between STORAGE_MIRROR_DIR and Google Drive.
+Cleanly mirror files between STORAGE_MIRROR_PATH and Google Drive.
 
   pull [path]: Drive -> local. Drive is source of truth.
   push [path]: local -> Drive. Local mirror is source of truth.
@@ -171,12 +171,12 @@ def _push_file(mirror: LocalStorage, drive: GoogleDriveStorage, rel: str, source
 
 def _build_sync_context(
     *,
-    mirror_dir: Optional[str],
+    mirror_path: Optional[str],
     root_folder_id: Optional[str],
     credentials: Optional[str],
     token: Optional[str],
 ) -> Tuple[LocalStorage, GoogleDriveStorage]:
-    mirror_dir = mirror_dir or os.environ.get("STORAGE_MIRROR_DIR")
+    mirror_path = mirror_path or os.environ.get("STORAGE_MIRROR_PATH")
     root_folder_id = root_folder_id or os.environ.get("STORAGE_PATH") or get_env_var("STORAGE_PATH")
     credentials = (
         credentials
@@ -189,14 +189,14 @@ def _build_sync_context(
         or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
     )
 
-    if not mirror_dir:
-        raise ValueError("STORAGE_MIRROR_DIR is not set and --mirror-dir not given.")
-    if not mirror_dir.startswith("/"):
-        raise ValueError(f"mirror dir must be absolute, got: {mirror_dir}")
-    os.makedirs(mirror_dir, exist_ok=True)
+    if not mirror_path:
+        raise ValueError("STORAGE_MIRROR_PATH is not set and --mirror-path not given.")
+    if not mirror_path.startswith("/"):
+        raise ValueError(f"mirror path must be absolute, got: {mirror_path}")
+    os.makedirs(mirror_path, exist_ok=True)
 
     return (
-        LocalStorage(mirror_dir),
+        LocalStorage(mirror_path),
         _build_drive_storage(root_folder_id, credentials, token),
     )
 
@@ -204,7 +204,7 @@ def _build_sync_context(
 def pull_mirror(
     rel: Optional[str] = None,
     *,
-    mirror_dir: Optional[str] = None,
+    mirror_path: Optional[str] = None,
     root_folder_id: Optional[str] = None,
     credentials: Optional[str] = None,
     token: Optional[str] = None,
@@ -213,7 +213,7 @@ def pull_mirror(
     rel = _clean_rel(rel)
     try:
         mirror, drive = _build_sync_context(
-            mirror_dir=mirror_dir,
+            mirror_path=mirror_path,
             root_folder_id=root_folder_id,
             credentials=credentials,
             token=token,
@@ -256,7 +256,7 @@ def pull_mirror(
 def push_mirror(
     rel: Optional[str] = None,
     *,
-    mirror_dir: Optional[str] = None,
+    mirror_path: Optional[str] = None,
     root_folder_id: Optional[str] = None,
     credentials: Optional[str] = None,
     token: Optional[str] = None,
@@ -265,7 +265,7 @@ def push_mirror(
     rel = _clean_rel(rel)
     try:
         mirror, drive = _build_sync_context(
-            mirror_dir=mirror_dir,
+            mirror_path=mirror_path,
             root_folder_id=root_folder_id,
             credentials=credentials,
             token=token,
@@ -314,9 +314,9 @@ def main() -> int:
         help="Optional relative path under the configured storage root.",
     )
     parser.add_argument(
-        "--mirror-dir",
-        default=os.environ.get("STORAGE_MIRROR_DIR"),
-        help="Local mirror dir (default: $STORAGE_MIRROR_DIR).",
+        "--mirror-path",
+        default=os.environ.get("STORAGE_MIRROR_PATH"),
+        help="Local mirror path (default: $STORAGE_MIRROR_PATH).",
     )
     parser.add_argument(
         "--root-folder-id",
@@ -338,14 +338,14 @@ def main() -> int:
     if args.direction == "pull":
         return pull_mirror(
             args.path,
-            mirror_dir=args.mirror_dir,
+            mirror_path=args.mirror_path,
             root_folder_id=args.root_folder_id,
             credentials=args.credentials,
             token=args.token,
         )
     return push_mirror(
         args.path,
-        mirror_dir=args.mirror_dir,
+        mirror_path=args.mirror_path,
         root_folder_id=args.root_folder_id,
         credentials=args.credentials,
         token=args.token,

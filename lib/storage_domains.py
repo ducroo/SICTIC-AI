@@ -42,7 +42,7 @@ class DatasetLocation:
 
 
 def _config_path() -> Path:
-    return Path(get_env_var("REPO_DIR")) / "config" / "storage_domains.json"
+    return Path(get_env_var("REPO_PATH")) / "config" / "storage_domains.json"
 
 
 @lru_cache(maxsize=1)

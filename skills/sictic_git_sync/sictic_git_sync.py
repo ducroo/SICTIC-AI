@@ -18,7 +18,7 @@ def run_cmd(cmd: list[str], cwd: Path) -> str:
 
 def _reconcile_symlinks(repo_dir: Path, workspace_dir: Path) -> list[str]:
     """
-    Enforces a strict 1:1 mapping between REPO_DIR/skills and WORKSPACE_DIR.
+    Enforces a strict 1:1 mapping between REPO_PATH/skills and WORKSPACE_PATH.
     1. Removes broken symlinks.
     2. Moves raw folders from workspace to repo and replaces with symlinks.
     3. Creates missing symlinks for new repo folders.
@@ -70,8 +70,8 @@ def _reconcile_symlinks(repo_dir: Path, workspace_dir: Path) -> list[str]:
 
 async def sictic_git_sync(action: str, message: str = "") -> str:
     """Main orchestration for git sync and symlink parity."""
-    repo_dir = Path(get_env_var("REPO_DIR"))
-    workspace_dir = Path(get_env_var("WORKSPACE_DIR"))
+    repo_dir = Path(get_env_var("REPO_PATH"))
+    workspace_dir = Path(get_env_var("WORKSPACE_PATH"))
     
     output = []
     

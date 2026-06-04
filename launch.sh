@@ -87,12 +87,13 @@ ensure_ollama_model() {
 ensure_ollama_models() {
     local ollama_host="${OLLAMA_HOST:-http://localhost:11434}"
     local llm_host="${LLM_BASE_URL:-$ollama_host}"
+    local vlm_host="${VLM_BASE_URL:-$llm_host}"
     local embedding_host="${EMBEDDING_BASE_URL:-$ollama_host}"
-    local llm_model="${LLM_MODEL:-${DEFAULT_LLM:-}}"
-    local embedding_model="${EMBEDDING_MODEL:-${DEFAULT_EMBEDDINGS:-}}"
+    local llm_model="${LLM_MODEL:-}"
+    local embedding_model="${EMBEDDING_MODEL:-}"
 
     ensure_ollama_model "$llm_model" "LLM_MODEL" "$llm_host"
-    ensure_ollama_model "${DEFAULT_VLM:-}" "DEFAULT_VLM" "$ollama_host"
+    ensure_ollama_model "${VLM_MODEL:-}" "VLM_MODEL" "$vlm_host"
     ensure_ollama_model "$embedding_model" "EMBEDDING_MODEL" "$embedding_host"
 }
 

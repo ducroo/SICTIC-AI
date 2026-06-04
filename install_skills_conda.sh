@@ -295,16 +295,6 @@ env_set() {
     mv "$tmp" "$ENV_PATH"
 }
 
-env_first() {
-    for key in "$@"; do
-        value=$(env_get "$key" || true)
-        if [ -n "$value" ]; then
-            printf '%s\n' "$value"
-            return
-        fi
-    done
-}
-
 ask_env() {
     key="$1"
     prompt="$2"
@@ -355,8 +345,8 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     echo "Press Enter to keep the value shown in brackets. Secrets are preserved when already configured."
     echo
 
-    ask_env "REPO_DIR" "Repository directory" "$REPO_ROOT" 1 0
-    ask_env "WORKSPACE_DIR" "Installed skills directory" "$TARGET" 1 0
+    ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
+    ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
     while :; do
         ask_env "STORAGE_PROVIDER" "Storage provider (local, google, hybrid)" "$(env_get STORAGE_PROVIDER || true)" 1 0
         storage_provider=$(env_get STORAGE_PROVIDER || true)
@@ -368,27 +358,34 @@ if [ "$INTERACTIVE" -eq 1 ]; then
 
     if [ "$storage_provider" = "local" ]; then
         ask_env "STORAGE_PATH" "Local storage path" "$REPO_ROOT/.storage" 1 0
-        ask_env "STORAGE_MIRROR_DIR" "Storage mirror dir (blank for local mode)" "" 0 0
+        ask_env "STORAGE_MIRROR_PATH" "Storage mirror path (blank for local mode)" "" 0 0
     elif [ "$storage_provider" = "google" ]; then
         ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-        ask_env "STORAGE_MIRROR_DIR" "Storage mirror dir (blank for google mode)" "" 0 0
+        ask_env "STORAGE_MIRROR_PATH" "Storage mirror path (blank for google mode)" "" 0 0
     else
         ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-        ask_env "STORAGE_MIRROR_DIR" "Local mirror directory" "$REPO_ROOT/.storage-mirror" 1 0
+        ask_env "STORAGE_MIRROR_PATH" "Local mirror path" "$REPO_ROOT/.storage-mirror" 1 0
     fi
 
     ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
     ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_get OLLAMA_HOST || true)" 1 0
-    ask_env "LLM_MODEL" "LLM model" "$(env_first LLM_MODEL DEFAULT_LLM)" 1 0
+    ask_env "LLM_MODEL" "LLM model" "$(env_get LLM_MODEL || true)" 1 0
     ask_env "LLM_BASE_URL" "LLM base URL (blank for provider default)" "$(env_get LLM_BASE_URL || true)" 0 0
     ask_env "LLM_API_KEY" "LLM API key (blank if unused)" "$(env_get LLM_API_KEY || true)" 0 1
-    ask_env "DEFAULT_VLM" "Default VLM model" "$(env_get DEFAULT_VLM || true)" 1 0
-    ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_first EMBEDDING_MODEL DEFAULT_EMBEDDINGS)" 1 0
+    ask_env "VLM_MODEL" "VLM model" "$(env_get VLM_MODEL || true)" 1 0
+    vlm_base_default=$(env_get VLM_BASE_URL || true)
+    if [ -z "$vlm_base_default" ]; then
+        vlm_base_default=$(env_get LLM_BASE_URL || true)
+    fi
+    vlm_key_default=$(env_get VLM_API_KEY || true)
+    if [ -z "$vlm_key_default" ]; then
+        vlm_key_default=$(env_get LLM_API_KEY || true)
+    fi
+    ask_env "VLM_BASE_URL" "VLM base URL (defaults to LLM_BASE_URL)" "$vlm_base_default" 0 0
+    ask_env "VLM_API_KEY" "VLM API key (defaults to LLM_API_KEY)" "$vlm_key_default" 0 1
+    ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_get EMBEDDING_MODEL || true)" 1 0
     ask_env "EMBEDDING_BASE_URL" "Embedding base URL (blank for provider default)" "$(env_get EMBEDDING_BASE_URL || true)" 0 0
     ask_env "EMBEDDING_API_KEY" "Embedding API key (blank if unused)" "$(env_get EMBEDDING_API_KEY || true)" 0 1
-    # Keep compatibility aliases populated for older scripts and cached filenames.
-    env_set "DEFAULT_LLM" "$(env_get LLM_MODEL || true)"
-    env_set "DEFAULT_EMBEDDINGS" "$(env_get EMBEDDING_MODEL || true)"
     ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
     ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
@@ -396,8 +393,8 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "$(env_get DEALUM_API_KEY || true)" 0 1
 else
     echo "[4/4] .env prompts skipped (--non-interactive)."
-    if [ -z "$(env_get REPO_DIR || true)" ]; then env_set "REPO_DIR" "$REPO_ROOT"; fi
-    if [ -z "$(env_get WORKSPACE_DIR || true)" ]; then env_set "WORKSPACE_DIR" "$TARGET"; fi
+    if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
+    if [ -z "$(env_get WORKSPACE_PATH || true)" ]; then env_set "WORKSPACE_PATH" "$TARGET"; fi
 fi
 
 echo

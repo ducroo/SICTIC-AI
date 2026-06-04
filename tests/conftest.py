@@ -9,8 +9,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # Import once so lib.env loads any local .env before tests force safe values.
 import lib.env  # noqa: E402,F401
 
-os.environ["REPO_DIR"] = str(REPO_ROOT)
-os.environ["WORKSPACE_DIR"] = str(REPO_ROOT / "skills")
+os.environ["REPO_PATH"] = str(REPO_ROOT)
+os.environ["WORKSPACE_PATH"] = str(REPO_ROOT / "skills")
 os.environ["STORAGE_PROVIDER"] = "local"
 os.environ["STORAGE_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["LLM_MODEL"] = "ollama/test_model:1b"
@@ -19,9 +19,9 @@ os.environ["LLM_API_KEY"] = ""
 os.environ["EMBEDDING_MODEL"] = "ollama/test-embedding:8b"
 os.environ["EMBEDDING_BASE_URL"] = "http://localhost:11434"
 os.environ["EMBEDDING_API_KEY"] = ""
-os.environ["DEFAULT_LLM"] = "ollama/test_model:1b"
-os.environ["DEFAULT_VLM"] = "ollama/test-vlm:1b"
-os.environ["DEFAULT_EMBEDDINGS"] = "ollama/test-embedding:8b"
+os.environ["VLM_MODEL"] = "ollama/test-vlm:1b"
+os.environ["VLM_BASE_URL"] = "http://localhost:11434"
+os.environ["VLM_API_KEY"] = ""
 os.environ["OLLAMA_HOST"] = "http://localhost:11434"
 os.environ["QDRANT_HOST"] = "http://localhost:6333"
 os.environ["OLLAMA_NUM_CTX"] = "4096"
@@ -62,7 +62,7 @@ def pytest_pyfunc_call(pyfuncitem):
 def mock_env(monkeypatch, tmp_path):
     """
     Sets up a safe, isolated environment for tests.
-    It overrides REPOSITORY_DIR and WORKSPACE_DIR to point to a temporary directory
+    It overrides REPO_PATH and WORKSPACE_PATH to point to a temporary directory
     so that no real files are ever affected during unit testing.
     """
     # Create mock directories
@@ -75,17 +75,17 @@ def mock_env(monkeypatch, tmp_path):
     # Override environment variables
     monkeypatch.setenv("STORAGE_PROVIDER", "local")
     monkeypatch.setenv("STORAGE_PATH", str(repository_dir_mock))
-    monkeypatch.setenv("REPO_DIR", str(Path(__file__).resolve().parents[1]))
-    monkeypatch.setenv("WORKSPACE_DIR", str(workspace_mock))
+    monkeypatch.setenv("REPO_PATH", str(Path(__file__).resolve().parents[1]))
+    monkeypatch.setenv("WORKSPACE_PATH", str(workspace_mock))
     monkeypatch.setenv("LLM_MODEL", "ollama/test_model:1b")
     monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("LLM_API_KEY", "")
     monkeypatch.setenv("EMBEDDING_MODEL", "ollama/test-embedding:8b")
     monkeypatch.setenv("EMBEDDING_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("EMBEDDING_API_KEY", "")
-    monkeypatch.setenv("DEFAULT_LLM", "ollama/test_model:1b")
-    monkeypatch.setenv("DEFAULT_VLM", "ollama/test-vlm:1b")
-    monkeypatch.setenv("DEFAULT_EMBEDDINGS", "ollama/test-embedding:8b")
+    monkeypatch.setenv("VLM_MODEL", "ollama/test-vlm:1b")
+    monkeypatch.setenv("VLM_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("VLM_API_KEY", "")
     monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
     monkeypatch.setenv("QDRANT_HOST", "http://localhost:6333")
     monkeypatch.setenv("OLLAMA_NUM_CTX", "4096")

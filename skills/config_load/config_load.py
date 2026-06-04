@@ -8,11 +8,11 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 # The single source of truth is now the local Git repository's config folder.
-REPO_ROOT = Path(get_env_var("REPO_DIR"))
+REPO_ROOT = Path(get_env_var("REPO_PATH"))
 SOURCE_DIR = REPO_ROOT / "config"
 
 def _local_cache_paths() -> tuple[Path, Path]:
-    """Local cache lives in the configured REPO_DIR/cache."""
+    """Local cache lives in the configured REPO_PATH/cache."""
     cache_dir = REPO_ROOT / "cache"
     cache_file = cache_dir / "config.json"
     return cache_dir, cache_file
