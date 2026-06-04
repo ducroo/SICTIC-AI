@@ -16,7 +16,9 @@ class DatasetLocation:
     name: str
     slug: str
     domain: str
-    path: str
+    dataset_path: str
+    parsed_path: str
+    insights_path: str
     dataset_root: str
     parsed_root: str
     insights_root: str
@@ -24,15 +26,15 @@ class DatasetLocation:
 
     @property
     def raw_rel(self) -> str:
-        return f"{self.dataset_root}/{self.path}".strip("/")
+        return f"{self.dataset_root}/{self.dataset_path}".strip("/")
 
     @property
     def parsed_rel(self) -> str:
-        return f"{self.parsed_root}/{self.path}".strip("/")
+        return f"{self.parsed_root}/{self.parsed_path}".strip("/")
 
     @property
     def insights_rel(self) -> str:
-        return f"{self.insights_root}/{self.path}".strip("/")
+        return f"{self.insights_root}/{self.insights_path}".strip("/")
 
     @property
     def active_marker_rel(self) -> str:
@@ -65,6 +67,24 @@ def _domain_config(domain: str) -> Dict[str, Any]:
     return domains[domain]
 
 
+def _resolve_path_template(template: str, slug: str) -> str:
+    return template.format(dataset=slug, slug=slug).strip("/")
+
+
+def _location_path(entry: Dict[str, Any], dconf: Dict[str, Any], key: str, slug: str) -> str:
+    legacy_path = entry.get("path") or slug
+    if key in entry:
+        return entry[key].strip("/")
+
+    template_key = f"{key}_template"
+    if template_key in entry:
+        return _resolve_path_template(entry[template_key], slug)
+    if template_key in dconf:
+        return _resolve_path_template(dconf[template_key], legacy_path.strip("/"))
+
+    return legacy_path.strip("/")
+
+
 def dataset_location(dataset_name: str, *, domain: Optional[str] = None) -> DatasetLocation:
     config = storage_domain_config()
     slug = slugify(dataset_name)
@@ -75,13 +95,17 @@ def dataset_location(dataset_name: str, *, domain: Optional[str] = None) -> Data
 
     resolved_domain = domain or entry.get("domain") or config["default_domain"]
     dconf = _domain_config(resolved_domain)
-    path = entry.get("path") or slug
+    dataset_path = _location_path(entry, dconf, "dataset_path", slug)
+    parsed_path = _location_path(entry, dconf, "parsed_path", slug)
+    insights_path = _location_path(entry, dconf, "insights_path", slug)
 
     return DatasetLocation(
         name=dataset_name,
         slug=slug,
         domain=resolved_domain,
-        path=path.strip("/"),
+        dataset_path=dataset_path,
+        parsed_path=parsed_path,
+        insights_path=insights_path,
         dataset_root=dconf["dataset_root"].strip("/"),
         parsed_root=dconf["parsed_root"].strip("/"),
         insights_root=dconf["insights_root"].strip("/"),

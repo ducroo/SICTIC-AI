@@ -3,11 +3,12 @@ import pytest
 from skills.potential_investors.potential_investors import potential_investors
 
 @pytest.mark.asyncio
-async def test_potential_investors_generation(mock_env, mocker):
+async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
     """
     Tests that potential_investors correctly integrates the sub-modules,
     respects the cache, and writes the output file.
     """
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     # Mock startup_profile
     mock_startup = mocker.patch("skills.potential_investors.potential_investors.startup_profile")
     async def mock_startup_coro(*args, **kwargs):
@@ -30,7 +31,7 @@ async def test_potential_investors_generation(mock_env, mocker):
 
     # Clear the storage cache before executing
     from lib.storage import get_storage
-    get_storage().rmtree("insights/startups/teststartup")
+    get_storage().rmtree("storage/startups/teststartup/insights")
     
     # Execute
     startup = "TestStartup"
@@ -42,7 +43,7 @@ async def test_potential_investors_generation(mock_env, mocker):
     assert "90" in output
 
     # Assert File System
-    expected_file = "insights/startups/teststartup/potential-investors-teststartup-test-model-1b.md"
+    expected_file = "storage/startups/teststartup/insights/potential-investors-teststartup-test-model-1b.md"
     from lib.storage import get_storage
     assert get_storage().exists(expected_file)
 

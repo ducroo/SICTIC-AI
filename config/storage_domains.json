@@ -3,21 +3,30 @@
   "default_domain": "startups",
   "domains": {
     "startups": {
-      "dataset_root": "datasets/startups",
-      "parsed_root": "cache/datasets2md/startups",
-      "insights_root": "insights/startups",
+      "dataset_root": "storage/startups",
+      "parsed_root": "storage/datasets2md/startups",
+      "insights_root": "storage/startups",
+      "dataset_path_template": "{dataset}/datasets",
+      "parsed_path_template": "{dataset}/datasets",
+      "insights_path_template": "{dataset}/insights",
       "active_marker": "__active_dataset__"
     },
     "community": {
-      "dataset_root": "datasets/community",
-      "parsed_root": "cache/datasets2md/community",
-      "insights_root": "insights/community",
+      "dataset_root": "storage/community",
+      "parsed_root": "storage/datasets2md/community",
+      "insights_root": "storage/community",
+      "dataset_path_template": "{dataset}/datasets",
+      "parsed_path_template": "{dataset}/datasets",
+      "insights_path_template": "{dataset}/insights",
       "active_marker": "__active_dataset__"
     },
     "derived": {
-      "dataset_root": "derived",
-      "parsed_root": "cache/datasets2md/derived",
-      "insights_root": "insights/derived",
+      "dataset_root": "storage/community",
+      "parsed_root": "storage/datasets2md/community",
+      "insights_root": "storage/community",
+      "dataset_path_template": "{dataset}/datasets",
+      "parsed_path_template": "{dataset}/datasets",
+      "insights_path_template": "{dataset}/insights",
       "active_marker": "__active_dataset__"
     },
     "ephemeral": {

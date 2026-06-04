@@ -32,15 +32,15 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
     storage = get_storage()
 
     storage.write_text(
-        "insights/community/sictic-members/person-profile/urs-gubser-qwen3-8b.md",
+        "storage/community/sictic-members/insights/person-profile/urs-gubser-qwen3-8b.md",
         "old qwen profile",
     )
     storage.write_text(
-        "insights/community/sictic-members/person-profile/urs-gubser-gpt-5-4-mini.md",
+        "storage/community/sictic-members/insights/person-profile/urs-gubser-gpt-5-4-mini.md",
         "preferred gpt profile",
     )
     storage.write_text(
-        "derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md",
+        "storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
@@ -52,9 +52,9 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
     assert result.selected == 1
     assert result.synced == 1
     assert result.removed == 1
-    assert storage.exists("derived/sictic-members-person-profile/urs-gubser-gpt-5-4-mini.md")
-    assert not storage.exists("derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md")
-    assert storage.read_text("derived/sictic-members-person-profile/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
+    assert storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert not storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
+    assert storage.read_text("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
 
 
 @pytest.mark.asyncio
@@ -63,11 +63,11 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     storage = get_storage()
 
     storage.write_text(
-        "insights/community/sictic-members/person-profile/urs-gubser-gpt-5-4-mini.md",
+        "storage/community/sictic-members/insights/person-profile/urs-gubser-gpt-5-4-mini.md",
         "preferred gpt profile",
     )
     storage.write_text(
-        "derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md",
+        "storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
@@ -80,8 +80,8 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     assert result.dry_run is True
     assert result.synced == 1
     assert result.removed == 1
-    assert not storage.exists("derived/sictic-members-person-profile/urs-gubser-gpt-5-4-mini.md")
-    assert storage.exists("derived/sictic-members-person-profile/urs-gubser-qwen3-8b.md")
+    assert not storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
 
 
 @pytest.mark.asyncio
@@ -91,21 +91,21 @@ async def test_dataset_from_insight_without_source_scans_active_datasets(mock_en
     activate_dataset("avientus")
 
     storage.write_text(
-        "insights/startups/avientus/person-profile/jane-doe-gpt-5-4-mini.md",
+        "storage/startups/avientus/insights/person-profile/jane-doe-gpt-5-4-mini.md",
         "active profile",
     )
     storage.write_text(
-        "insights/startups/archived/person-profile/john-doe-gpt-5-4-mini.md",
+        "storage/startups/archived/insights/person-profile/john-doe-gpt-5-4-mini.md",
         "archived profile",
     )
 
     result = await dataset_from_insight("person_profile")
 
     assert result.target_dataset == "active-person-profile"
-    assert result.target_path == "derived/active-person-profile"
+    assert result.target_path == "storage/community/active-person-profile/datasets"
     assert result.selected == 1
-    assert storage.exists("derived/active-person-profile/jane-doe-gpt-5-4-mini.md")
-    assert not storage.exists("derived/active-person-profile/john-doe-gpt-5-4-mini.md")
+    assert storage.exists("storage/community/active-person-profile/datasets/jane-doe-gpt-5-4-mini.md")
+    assert not storage.exists("storage/community/active-person-profile/datasets/john-doe-gpt-5-4-mini.md")
 
 
 @pytest.mark.asyncio
@@ -137,7 +137,7 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
 
     expected = DatasetFromInsightResult(
         target_dataset="sictic-members-person-profile",
-        target_path="derived/sictic-members-person-profile",
+        target_path="storage/community/sictic-members-person-profile/datasets",
         insight="person-profile",
         source_dataset="sictic-members",
         selected=2,
@@ -171,7 +171,7 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
             "dry_run": True,
         }
     ]
-    assert "Target path: derived/sictic-members-person-profile" in result.output
+    assert "Target path: storage/community/sictic-members-person-profile/datasets" in result.output
 
 
 @pytest.mark.asyncio

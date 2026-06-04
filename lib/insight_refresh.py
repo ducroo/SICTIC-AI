@@ -18,6 +18,13 @@ KNOWN_MODELS_REGEX = re.compile(
 def get_base_name(filename: str) -> str:
     """Strips the model suffix and .md extension to return pure entity name."""
     stem = PurePosixPath(filename).stem
+    try:
+        for model in sorted(_ranked_model_slugs(), key=len, reverse=True):
+            suffix = f"-{model}"
+            if stem.endswith(suffix):
+                return stem[: -len(suffix)]
+    except Exception:
+        pass
     return KNOWN_MODELS_REGEX.sub('', stem)
 
 def _ranked_model_slugs() -> List[str]:

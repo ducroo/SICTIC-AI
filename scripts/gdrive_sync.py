@@ -11,8 +11,8 @@ destination, and destination-only files are deleted.
 
 Usage:
     python scripts/gdrive_sync.py pull
-    python scripts/gdrive_sync.py pull insights/startups/avientus
-    python scripts/gdrive_sync.py push insights/startups/avientus
+    python scripts/gdrive_sync.py pull storage/startups/avientus/insights
+    python scripts/gdrive_sync.py push storage/startups/avientus/insights
 """
 from __future__ import annotations
 

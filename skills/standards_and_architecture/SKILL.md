@@ -12,13 +12,14 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
 The AI and all skills must strictly adhere to the configured storage-domain layout. The root of this structure is defined dynamically by the user's `STORAGE_PATH` environment variable (either a local directory or a Google Drive Folder ID). The domain roots are defined in `config/storage_domains.json`; code must use `lib.storage_domains` rather than hardcoding storage paths.
 
 *   `config/` — A folder structure filled with `.md` files containing prompts and settings. The `config_load` skill compiles these into a single JSON dictionary at runtime.
-*   `datasets/startups/<dataset_name>/` — raw startup data rooms.
+*   `storage/startups/<dataset_name>/datasets/` — raw startup data rooms.
     *   `__active_dataset__` — A blank marker file. If present, it signals to batch jobs (like `bulk_refresh`) that this startup should be actively processed.
-*   `datasets/community/<dataset_name>/` — raw community/member datasets.
+*   `storage/startups/<dataset_name>/insights/` — generated startup AI reports and profiles.
+*   `storage/community/<dataset_name>/datasets/` — raw community/member datasets and derived searchable datasets, such as member profiles used by ranking.
+*   `storage/community/<dataset_name>/insights/` — generated community AI reports and profiles.
+*   `storage/datasets2md/<domain>/<dataset_name>/datasets/` — durable Docling-extracted Markdown storage. This is generated, but it is not disposable cache.
 *   `registry/persons/<dataset_name>.md` — manually maintained person lists. These are input registries, not generated insights.
-*   `derived/<dataset_name>/` — generated searchable datasets, such as member profiles used by ranking.
-*   `cache/datasets2md/<domain>/<dataset_name>/` — local Docling-extracted Markdown cache. This is re-derivable and should not be treated as Drive source of truth.
-*   `insights/startups/<dataset_name>/` and `insights/community/<dataset_name>/` — generated AI reports and profiles.
+*   `cache/` — disposable runtime cache and temporary operational state.
 
 *(Note on Data Sharing: If a Deal Lead needs access to a specific startup's data, do not break this structure. Instead, use Google Drive "Shortcuts" to create a custom, safely-named viewing folder for the human, while preserving this configured hierarchy for the AI.)*
 

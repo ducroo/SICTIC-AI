@@ -35,23 +35,28 @@ def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], targ
     """Find relevant markdown files for an insight. Returns path -> mtime.
 
     Canonical subdirectory insights are stored as:
-        insights/<domain>/<dataset>/<insight-slug>/<identifier>-<model>.md
+        storage/<domain>/<dataset>/insights/<insight-slug>/<identifier>-<model>.md
 
     Root-level insights are stored as:
-        insights/<domain>/<dataset>/<insight-slug>-<dataset>-<model>.md
+        storage/<domain>/<dataset>/insights/<insight-slug>-<dataset>-<model>.md
 
     The subdirectory name is therefore the source of truth for subdir insights;
     filenames inside the directory do not repeat the skill name.
     """
     storage = get_storage()
     source_slug = slugify(source_dataset) if source_dataset else None
-    scan_roots = [dataset_insights_path(source_slug)] if source_slug else [
-        domain["insights_root"].strip("/")
-        for domain in storage_domain_config()["domains"].values()
-    ]
+    if source_slug:
+        scan_roots = [(dataset_insights_path(source_slug), source_slug, True)]
+    else:
+        config = storage_domain_config()
+        scan_roots = [
+            (config["domains"][domain]["insights_root"].strip("/"), "", False)
+            for domain in ("startups", "community")
+            if domain in config["domains"]
+        ]
 
     out = {}
-    for scan_root in dict.fromkeys(scan_roots):
+    for scan_root, fixed_entity_slug, root_is_insights_dir in dict.fromkeys(scan_roots):
         if not storage.exists(scan_root):
             continue
         for name, mtime in storage.list_with_mtime(scan_root, recursive=True):
@@ -59,18 +64,27 @@ def _gather_insight_files(insight_slug: str, source_dataset: Optional[str], targ
                 continue
 
             parts = PurePosixPath(name).parts
-            parent_dir = parts[0] if len(parts) > 1 else ""
-            filename = parts[-1]
-            in_insight_subdir = len(parts) > 1 and parts[-2] == insight_slug
+            if root_is_insights_dir:
+                entity_slug = fixed_entity_slug
+                insight_parts = parts
+            else:
+                if len(parts) < 3 or parts[1] != "insights":
+                    continue
+                entity_slug = parts[0]
+                insight_parts = parts[2:]
+
+            parent_dir = insight_parts[0] if len(insight_parts) > 1 else ""
+            filename = insight_parts[-1]
+            in_insight_subdir = len(insight_parts) > 1 and insight_parts[-2] == insight_slug
             is_root_insight_file = not parent_dir and filename.startswith(f"{insight_slug}-")
 
             if not in_insight_subdir and not is_root_insight_file:
                 continue
 
-            if not source_slug and parent_dir == target_slug:
+            if not source_slug and entity_slug == target_slug:
                 continue
 
-            if not source_slug and parent_dir and not is_active_dataset(parent_dir):
+            if not source_slug and not is_active_dataset(entity_slug):
                 continue
 
             out[f"{scan_root}/{name}"] = mtime

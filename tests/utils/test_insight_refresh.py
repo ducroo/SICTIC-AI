@@ -38,7 +38,7 @@ def test_check_insight_refresh_returns_ranked_fresh_cache(mock_env, monkeypatch)
     storage = get_storage()
 
     source_file = f"{dataset_raw_path('avientus')}/source.md"
-    target_dir = "insights/startups/avientus/person-profile"
+    target_dir = "storage/startups/avientus/insights/person-profile"
     gpt_file = f"{target_dir}/jane-doe-gpt-5-4-mini.md"
     qwen_file = f"{target_dir}/jane-doe-qwen3-8b.md"
 
@@ -62,7 +62,7 @@ def test_check_insight_refresh_ignores_unranked_fresh_cache(mock_env, monkeypatc
     storage = get_storage()
 
     source_file = f"{dataset_raw_path('avientus')}/source.md"
-    unranked_file = "insights/startups/avientus/person-profile/jane-doe-gemma4-31b-nvfp4.md"
+    unranked_file = "storage/startups/avientus/insights/person-profile/jane-doe-gemma4-31b-nvfp4.md"
 
     storage.write_text(source_file, "source")
     storage.write_text(unranked_file, "gemma content")
@@ -77,7 +77,7 @@ def test_check_insight_refresh_requests_refresh_when_cache_is_stale(mock_env):
     storage = get_storage()
 
     source_file = f"{dataset_raw_path('avientus')}/source.md"
-    target_file = "insights/startups/avientus/person-profile/jane-doe-gpt-5-4-mini.md"
+    target_file = "storage/startups/avientus/insights/person-profile/jane-doe-gpt-5-4-mini.md"
 
     storage.write_text(source_file, "source")
     storage.write_text(target_file, "cached")

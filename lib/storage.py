@@ -155,8 +155,9 @@ class MockStorage(LocalStorage):
 # ---------- Routing ----------
 
 # Paths whose first segment matches these always go to the local cache,
-# even when the main storage is remote. Caches are re-derivable.
-_CACHE_PREFIXES = ("datasets2md", "cache")
+# even when the main storage is remote. Durable converted Markdown lives under
+# storage/datasets2md and must not be routed here.
+_CACHE_PREFIXES = ("cache",)
 
 
 class RoutedStorage:

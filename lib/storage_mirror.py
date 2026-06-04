@@ -20,9 +20,9 @@ from lib.storage import LocalStorage, _validate_rel
 from lib.storage_gdrive import GoogleDriveStorage
 
 
-# Path prefixes that must never trigger a Drive fallback or sync; they're caches
-# or derivable data. Same idea as the old RoutedStorage._CACHE_PREFIXES.
-_LOCAL_PREFIXES = ("datasets2md", "cache")
+# Path prefixes that must never trigger a Drive fallback or sync. Durable
+# converted Markdown lives under storage/datasets2md and should sync normally.
+_LOCAL_PREFIXES = ("cache",)
 
 
 def _is_local_only(rel: str) -> bool:

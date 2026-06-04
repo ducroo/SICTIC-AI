@@ -24,9 +24,9 @@ async def test_dataset_search_defaults_threshold_when_max_chunks_is_provided(moc
 
 
 def test_parsed_filepath_keeps_markdown_source_name():
-    assert _parsed_filepath("cache/datasets2md/derived/person-profile", "urs-gubser.md") == (
-        "cache/datasets2md/derived/person-profile/urs-gubser.md"
+    assert _parsed_filepath("storage/datasets2md/community/person-profile/datasets", "urs-gubser.md") == (
+        "storage/datasets2md/community/person-profile/datasets/urs-gubser.md"
     )
-    assert _parsed_filepath("cache/datasets2md/startups/avientus", "deck.pdf") == (
-        "cache/datasets2md/startups/avientus/deck.pdf.md"
+    assert _parsed_filepath("storage/datasets2md/startups/avientus/datasets", "deck.pdf") == (
+        "storage/datasets2md/startups/avientus/datasets/deck.pdf.md"
     )

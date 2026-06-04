@@ -3,11 +3,12 @@ import pytest
 from skills.person_profile.person_profile import person_profile
 
 @pytest.mark.asyncio
-async def test_person_profile_generation(mock_env, mocker):
+async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     """
     Tests that person_profile correctly aggregates data, generates a file,
     and formats the output path correctly without calling the real LLM.
     """
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     # 1. Mock external dependencies
     mock_llm = mocker.patch("skills.person_profile.person_profile.llm_chat")
     async def mock_llm_coro(*args, **kwargs):
@@ -38,7 +39,7 @@ async def test_person_profile_generation(mock_env, mocker):
 
     # Clear the storage cache before executing to ensure we aren't picking up files from a previous run
     from lib.storage import get_storage
-    get_storage().rmtree("insights/community/sictic-members/person-profile")
+    get_storage().rmtree("storage/community/sictic-members/insights/person-profile")
     
     # 2. Execute
     name = "Jane Doe"
@@ -49,7 +50,7 @@ async def test_person_profile_generation(mock_env, mocker):
     assert len(output) == 1 and output[0].person_profile == "This is a mocked profile for Jane Doe."
 
     # 4. Assert File System
-    expected_file = "insights/community/sictic-members/person-profile/jane-doe-test-model-1b.md"
+    expected_file = "storage/community/sictic-members/insights/person-profile/jane-doe-test-model-1b.md"
 
     from lib.storage import get_storage
     storage = get_storage()

@@ -64,10 +64,10 @@ def test_hybrid_markdown_write_uploads_after_local_write(tmp_path):
     drive = FakeDrive()
     storage = MirrorStorage(local=local, drive=drive)
 
-    storage.write_text("insights/startups/bewe/report.md", "# Report\n")
+    storage.write_text("storage/startups/bewe/insights/report.md", "# Report\n")
 
-    assert (tmp_path / "insights/startups/bewe/report.md").read_text() == "# Report\n"
-    assert drive.writes == [("insights/startups/bewe/report.md", b"# Report\n")]
+    assert (tmp_path / "storage/startups/bewe/insights/report.md").read_text() == "# Report\n"
+    assert drive.writes == [("storage/startups/bewe/insights/report.md", b"# Report\n")]
 
 
 def test_hybrid_cache_markdown_stays_local_only(tmp_path):
@@ -81,14 +81,25 @@ def test_hybrid_cache_markdown_stays_local_only(tmp_path):
     assert drive.writes == []
 
 
+def test_hybrid_storage_datasets2md_markdown_uploads(tmp_path):
+    local = LocalStorage(tmp_path)
+    drive = FakeDrive()
+    storage = MirrorStorage(local=local, drive=drive)
+
+    storage.write_text("storage/datasets2md/startups/bewe/datasets/source.md", "# Parsed\n")
+
+    assert (tmp_path / "storage/datasets2md/startups/bewe/datasets/source.md").read_text() == "# Parsed\n"
+    assert drive.writes == [("storage/datasets2md/startups/bewe/datasets/source.md", b"# Parsed\n")]
+
+
 def test_hybrid_non_markdown_write_stays_local_only(tmp_path):
     local = LocalStorage(tmp_path)
     drive = FakeDrive()
     storage = MirrorStorage(local=local, drive=drive)
 
-    storage.write_bytes("datasets/startups/bewe/blob.pdf", b"pdf")
+    storage.write_bytes("storage/startups/bewe/datasets/blob.pdf", b"pdf")
 
-    assert (tmp_path / "datasets/startups/bewe/blob.pdf").read_bytes() == b"pdf"
+    assert (tmp_path / "storage/startups/bewe/datasets/blob.pdf").read_bytes() == b"pdf"
     assert drive.writes == []
 
 
@@ -98,65 +109,65 @@ def test_hybrid_drive_upload_failure_keeps_local_file_and_raises(tmp_path):
     storage = MirrorStorage(local=local, drive=drive)
 
     with pytest.raises(RuntimeError, match="drive unavailable"):
-        storage.write_text("insights/startups/bewe/report.md", "# Report\n")
+        storage.write_text("storage/startups/bewe/insights/report.md", "# Report\n")
 
-    assert (tmp_path / "insights/startups/bewe/report.md").read_text() == "# Report\n"
+    assert (tmp_path / "storage/startups/bewe/insights/report.md").read_text() == "# Report\n"
 
 
 def test_hybrid_list_recursively_pulls_drive_folder_and_preserves_mtime(tmp_path):
     local = LocalStorage(tmp_path)
     drive = FakeDrive(files={
-        "insights/startups/bewe/report.md": (b"# Remote\n", 200.0),
-        "insights/startups/bewe/nested/team.md": (b"# Team\n", 201.0),
+        "storage/startups/bewe/insights/report.md": (b"# Remote\n", 200.0),
+        "storage/startups/bewe/insights/nested/team.md": (b"# Team\n", 201.0),
     })
     storage = MirrorStorage(local=local, drive=drive)
 
-    names = storage.list_with_mtime("insights/startups/bewe", recursive=True)
+    names = storage.list_with_mtime("storage/startups/bewe/insights", recursive=True)
 
     assert sorted(name for name, _ in names) == ["nested/team.md", "report.md"]
-    assert (tmp_path / "insights/startups/bewe/report.md").read_text() == "# Remote\n"
-    assert local.mtime("insights/startups/bewe/report.md") == 200.0
-    assert drive.list_calls == [("insights/startups/bewe", True)]
+    assert (tmp_path / "storage/startups/bewe/insights/report.md").read_text() == "# Remote\n"
+    assert local.mtime("storage/startups/bewe/insights/report.md") == 200.0
+    assert drive.list_calls == [("storage/startups/bewe/insights", True)]
 
 
 def test_hybrid_sync_prunes_local_files_missing_from_drive(tmp_path):
     local = LocalStorage(tmp_path)
-    local.write_text("insights/startups/bewe/stale.md", "# Stale\n")
-    local.write_text("insights/startups/bewe/keep.md", "# Old\n")
-    local.set_mtime("insights/startups/bewe/keep.md", 100.0)
+    local.write_text("storage/startups/bewe/insights/stale.md", "# Stale\n")
+    local.write_text("storage/startups/bewe/insights/keep.md", "# Old\n")
+    local.set_mtime("storage/startups/bewe/insights/keep.md", 100.0)
     drive = FakeDrive(files={
-        "insights/startups/bewe/keep.md": (b"# Fresh\n", 200.0),
+        "storage/startups/bewe/insights/keep.md": (b"# Fresh\n", 200.0),
     })
     storage = MirrorStorage(local=local, drive=drive)
 
-    assert storage.exists("insights/startups/bewe/keep.md")
+    assert storage.exists("storage/startups/bewe/insights/keep.md")
 
-    assert not local.exists("insights/startups/bewe/stale.md")
-    assert local.read_text("insights/startups/bewe/keep.md") == "# Fresh\n"
-    assert local.mtime("insights/startups/bewe/keep.md") == 200.0
+    assert not local.exists("storage/startups/bewe/insights/stale.md")
+    assert local.read_text("storage/startups/bewe/insights/keep.md") == "# Fresh\n"
+    assert local.mtime("storage/startups/bewe/insights/keep.md") == 200.0
 
 
 def test_hybrid_syncs_a_drive_folder_only_once_per_process(tmp_path):
     local = LocalStorage(tmp_path)
     drive = FakeDrive(files={
-        "insights/startups/bewe/report.md": (b"# Remote\n", 200.0),
+        "storage/startups/bewe/insights/report.md": (b"# Remote\n", 200.0),
     })
     storage = MirrorStorage(local=local, drive=drive)
 
-    assert storage.exists("insights/startups/bewe/report.md")
-    assert storage.exists("insights/startups/bewe/report.md")
+    assert storage.exists("storage/startups/bewe/insights/report.md")
+    assert storage.exists("storage/startups/bewe/insights/report.md")
 
-    assert drive.list_calls == [("insights/startups/bewe", True)]
+    assert drive.list_calls == [("storage/startups/bewe/insights", True)]
 
 
 def test_hybrid_exists_on_drive_folder_syncs_that_folder_not_parent(tmp_path):
     local = LocalStorage(tmp_path)
     drive = FakeDrive(files={
-        "datasets/startups/bewe/source.pdf": (b"pdf", 200.0),
+        "storage/startups/bewe/datasets/source.pdf": (b"pdf", 200.0),
     })
     storage = MirrorStorage(local=local, drive=drive)
 
-    assert storage.exists("datasets/startups/bewe")
+    assert storage.exists("storage/startups/bewe/datasets")
 
-    assert drive.list_calls == [("datasets/startups/bewe", True)]
-    assert local.exists("datasets/startups/bewe/source.pdf")
+    assert drive.list_calls == [("storage/startups/bewe/datasets", True)]
+    assert local.exists("storage/startups/bewe/datasets/source.pdf")
