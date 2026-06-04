@@ -170,9 +170,9 @@ conda run -n sictic-env python -m skills.harness
 
 Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and `/dd_checks <startup>`.
 
-### Using it in practice
+## Using it in practice
 
-#### 1. Community management
+### 1. Community management
 
 Communities can be large, so it is useful to do some preparation overnight.
 
@@ -207,7 +207,7 @@ The matching skills such as `expert_search`, `potential_investors`, and
 conda run -n sictic-env python -m lib.dataset_from_insight --insight-name person_profile --source-dataset sictic-members
 ```
 
-#### 2. Overnight Refresh
+### 2. Overnight Refresh
 
 The `bulk_refresh` command can refresh a set of insights on a set of datasets.
 * If the datasets are not specified, it will refresh all skills with a `__active_dataset__` file in the dataset subfolder.
@@ -225,7 +225,7 @@ conda run -n sictic-env python -m bulk_refresh/
 
 ```
 
-## Where is my data?
+### 3. Where is my data?
 
 Once configured, the system uses the storage domains defined in
 `config/storage_domains.json`. The default layout is:
@@ -247,15 +247,15 @@ the `ocrmac` extra for Apple Vision OCR. On Linux/WSL2, the installer uses the
 standard Docling package and RapidOCR. In both cases, `VLM_MODEL` is used for
 image and chart descriptions through Ollama or another configured model provider.
 
-## Google Drive Integration (Production Mode)
+### 4. Google Drive Integration (Production Mode)
 
-By default (`STORAGE_PROVIDER="local"`), all datasets and generated insights are written to the local file system path provided in `STORAGE_PATH`.
+(You read this far, so you're serious about this.) By default (`STORAGE_PROVIDER="local"`), all datasets and generated insights are written to the local file system path provided in `STORAGE_PATH`.
 
 In production at SICTIC, we use Google Drive to share datasets and insights with Deal Leads. When `STORAGE_PROVIDER="google"`, the skills read and write directly to Google Drive via the native API.
 
 **Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you (We did it with Openclaw)
 
-## Local Google-backed Testing
+#### Local Google-backed Testing
 
 For local testing with Google credentials, prefer `STORAGE_PROVIDER="hybrid"`. In hybrid mode, Google Drive is used as a read fallback while generated files are written to a local mirror first. Markdown outputs outside local cache paths are then uploaded to Drive as Google Docs; updating an existing Google Doc preserves the file ID and creates a normal Drive revision.
 
