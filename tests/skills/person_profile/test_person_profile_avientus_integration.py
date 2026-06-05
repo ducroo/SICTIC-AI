@@ -15,7 +15,7 @@ async def test_person_profile_avientus_integration():
     p = persons[0]
     
     # 2. Assert Canonical Fields
-    assert p.linkedinID == "johannes-aicher"
+    assert p.linkedin_id == "johannes-aicher"
     assert p.full_name == "Johannes Aicher"
     
     # 3. Assert LinkedIn Hydration

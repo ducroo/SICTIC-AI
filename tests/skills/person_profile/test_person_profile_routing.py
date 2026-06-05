@@ -14,9 +14,9 @@ async def test_person_profile_routing_and_fuzzy_match():
     from lib.models.person import Person
     # Mock data to return from the adapter
     mock_profiles = [
-        Person(linkedinID="johannes-aicher", full_name="Johannes Aicher", linkedin_profile={}),
-        Person(linkedinID="urs-gubser", full_name="Urs Gubser", linkedin_profile={}),
-        Person(linkedinID="ghost-user", full_name="Ghost User", linkedin_profile={})
+        Person(linkedin_id="johannes-aicher", full_name="Johannes Aicher", linkedin_profile={}),
+        Person(linkedin_id="urs-gubser", full_name="Urs Gubser", linkedin_profile={}),
+        Person(linkedin_id="ghost-user", full_name="Ghost User", linkedin_profile={})
     ]
 
     with patch('skills.person_profile.person_profile.persons_in_dataset') as mock_discover, \
@@ -24,7 +24,7 @@ async def test_person_profile_routing_and_fuzzy_match():
          patch('skills.person_profile.person_profile._generate_single_profile') as mock_generate:
         
         # Setup mocks
-        mock_discover.return_value = [Person(linkedinID="johannes-aicher"), Person(linkedinID="urs-gubser"), Person(linkedinID="ghost-user")]
+        mock_discover.return_value = [Person(linkedin_id="johannes-aicher"), Person(linkedin_id="urs-gubser"), Person(linkedin_id="ghost-user")]
         
         mock_adapter_instance = MagicMock()
         # Dynamic mock for get_profiles to mirror real behavior
@@ -58,7 +58,7 @@ async def test_person_profile_routing_and_fuzzy_match():
         
         # Verify the correct wrapper was passed to the generator
         called_wrapper = mock_generate.call_args[0][1]
-        assert called_wrapper.linkedinID == "johannes-aicher"
+        assert called_wrapper.linkedin_id == "johannes-aicher"
         mock_generate.reset_mock()
         
         # --- TEST 2.3: Substring Match ---
@@ -76,7 +76,7 @@ async def test_person_profile_routing_and_fuzzy_match():
         
         # Verify it mapped the typo to the canonical user
         called_wrapper = mock_generate.call_args[0][1]
-        assert called_wrapper.linkedinID == "johannes-aicher"
+        assert called_wrapper.linkedin_id == "johannes-aicher"
         mock_generate.reset_mock()
         
         # --- TEST: Unmatched ---

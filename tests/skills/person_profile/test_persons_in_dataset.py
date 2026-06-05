@@ -22,11 +22,11 @@ def test_persons_in_dataset_reads_manual_insight_table(mock_env):
             [
                 "# Persons in sictic-members",
                 "",
-                "| full_name | linkedinID |",
-                "|---|---|",
-                "| Urs Gubser | urs-gubser |",
-                "| Jane Doe | |",
-                "| | no-name |",
+                "| full-name | linkedin-id | email-addresses |",
+                "|---|---|---|",
+                "| Urs Gubser | urs-gubser | urs@gubser.ch, urs.gubser@investor.sictic.ch |",
+                "| Jane Doe | | jane@example.com |",
+                "| | no-name | |",
                 "| | |",
             ]
         )
@@ -36,13 +36,17 @@ def test_persons_in_dataset_reads_manual_insight_table(mock_env):
     persons = persons_in_dataset("sictic_members")
 
     assert persons == [
-        Person(full_name="Urs Gubser", linkedinID="urs-gubser"),
-        Person(full_name="Jane Doe", linkedinID=""),
-        Person(full_name="", linkedinID="no-name"),
+        Person(
+            full_name="Urs Gubser",
+            linkedin_id="urs-gubser",
+            email_addresses=["urs@gubser.ch", "urs.gubser@investor.sictic.ch"],
+        ),
+        Person(full_name="Jane Doe", linkedin_id="", email_addresses=["jane@example.com"]),
+        Person(full_name="", linkedin_id="no-name"),
     ]
 
 
-def test_persons_in_dataset_reads_drive_exported_escaped_table(mock_env):
+def test_persons_in_dataset_ignores_and_recreates_legacy_manual_table_headers(mock_env, mocker):
     storage = get_storage()
     manual_path = _manual_path("sictic-members")
     storage.write_text(
@@ -53,17 +57,24 @@ def test_persons_in_dataset_reads_drive_exported_escaped_table(mock_env):
                 "",
                 "Deal leads, feel free to add or remove employees \\- SICTIC-AI will remember the edits.",
                 "",
-                "| full\\_name | linkedinID |",
+                "| full\\_name | linkedin_id |",
                 "| :---- | :---- |",
                 "| Patrick Schuler | schulerp |",
             ]
         )
         + "\n",
     )
+    adapter_cls = mocker.patch("skills.person_profile.persons_in_dataset.LinkedInAdapter")
+    adapter_cls.return_value.get_cached_persons.return_value = [
+        Person(full_name="Patrick Schuler", linkedin_id="schulerp", email_addresses=["patrick@example.com"])
+    ]
 
     persons = persons_in_dataset("sictic_members")
 
-    assert persons == [Person(full_name="Patrick Schuler", linkedinID="schulerp")]
+    assert persons == [
+        Person(full_name="Patrick Schuler", linkedin_id="schulerp", email_addresses=["patrick@example.com"])
+    ]
+    assert "| full-name | linkedin-id | email-addresses |" in storage.read_text(manual_path)
 
 
 def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env, mocker):
@@ -72,27 +83,27 @@ def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env,
 
     adapter_cls = mocker.patch("skills.person_profile.persons_in_dataset.LinkedInAdapter")
     adapter_cls.return_value.get_cached_persons.return_value = [
-        Person(full_name="Urs Gubser", linkedinID="urs-gubser"),
-        Person(full_name="", linkedinID="jane-doe"),
+        Person(full_name="Urs Gubser", linkedin_id="urs-gubser", email_addresses=["urs@gubser.ch"]),
+        Person(full_name="", linkedin_id="jane-doe"),
     ]
 
     persons = persons_in_dataset("sictic_members")
 
     assert persons == [
-        Person(full_name="Urs Gubser", linkedinID="urs-gubser"),
-        Person(full_name="", linkedinID="jane-doe"),
+        Person(full_name="Urs Gubser", linkedin_id="urs-gubser", email_addresses=["urs@gubser.ch"]),
+        Person(full_name="", linkedin_id="jane-doe"),
     ]
     assert storage.exists(manual_path)
     assert storage.read_text(manual_path) == "\n".join(
         [
             "# Persons in sictic_members",
             "",
-            "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten. BTW linkedinURL = https://www.linkedin.com/in/linkedinID",
+            "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten.",
             "",
-            "| full_name | linkedinID |",
-            "|---|---|",
-            "| Urs Gubser | urs-gubser |",
-            "|  | jane-doe |",
+            "| full-name | linkedin-id | email-addresses |",
+            "|---|---|---|",
+            "| Urs Gubser | urs-gubser | urs@gubser.ch |",
+            "|  | jane-doe |  |",
             "",
         ]
     )

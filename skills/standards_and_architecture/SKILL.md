@@ -43,7 +43,8 @@ The AI and all skills must strictly adhere to the configured storage-domain layo
   ```python
   {
       "full_name": str,          # Sanitized: Latin characters preserved, emojis/symbols stripped
-      "linkedinID": str,         # Canonical slug (e.g., 'john-doe'). This is the unique ID and cache filename
+      "linkedin_id": str,         # Canonical slug (e.g., 'john-doe'). This is the unique ID and cache filename
+      "email_addresses": list,    # Normalized lowercase email addresses for matching and contact tables
       "linkedin_profile": dict,  # Full JSON payload returned by the scraper
       "dossier": dict,           # High-value complete documents (e.g., full Resumes/CVs text)
       "mentions": list           # Isolated chunks where the person is mentioned downstream

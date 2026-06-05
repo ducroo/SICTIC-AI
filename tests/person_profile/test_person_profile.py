@@ -34,7 +34,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     from lib.models.person import Person
     mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInAdapter")
     mock_linkedin_instance = mock_linkedin.return_value
-    mock_linkedin_instance.get_profiles.return_value = [Person(full_name="Jane Doe", linkedinID="jane-doe", linkedin_profile={"headline": "CEO at Test"})]
+    mock_linkedin_instance.get_profiles.return_value = [Person(full_name="Jane Doe", linkedin_id="jane-doe", linkedin_profile={"headline": "CEO at Test"})]
     mock_linkedin_instance.get_filename_for_profile.return_value = "jane-doe.json"
 
     # Clear the storage cache before executing to ensure we aren't picking up files from a previous run

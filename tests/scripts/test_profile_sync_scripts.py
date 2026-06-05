@@ -181,7 +181,7 @@ async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
 
     mocker.patch(
         "skills.person_profile.persons_in_dataset.persons_in_dataset",
-        return_value=[Person(full_name="Urs Gubser", linkedinID="urs-gubser")],
+        return_value=[Person(full_name="Urs Gubser", linkedin_id="urs-gubser")],
     )
     mock_profile = mocker.patch(
         "skills.person_profile.person_profile.person_profile",
