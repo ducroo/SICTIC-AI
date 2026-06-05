@@ -47,9 +47,7 @@ def _base_url_for_model(model: str, explicit: Optional[str]) -> Optional[str]:
 
 
 def llm_endpoint() -> ModelEndpoint:
-    model = _first_env("LLM_MODEL", "DEFAULT_LLM")
-    if not model:
-        model = get_env_var("DEFAULT_LLM")
+    model = get_env_var("LLM_MODEL")
     return ModelEndpoint(
         model=model,
         base_url=_base_url_for_model(model, _first_env("LLM_BASE_URL")),
@@ -58,9 +56,7 @@ def llm_endpoint() -> ModelEndpoint:
 
 
 def embedding_endpoint() -> ModelEndpoint:
-    model = _first_env("EMBEDDING_MODEL", "DEFAULT_EMBEDDINGS")
-    if not model:
-        model = get_env_var("DEFAULT_EMBEDDINGS")
+    model = get_env_var("EMBEDDING_MODEL")
     return ModelEndpoint(
         model=model,
         base_url=_base_url_for_model(model, _first_env("EMBEDDING_BASE_URL")),

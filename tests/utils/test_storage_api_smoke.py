@@ -1,7 +1,7 @@
 """
 Smoke-test every Storage protocol method against the LIVE backend selected by
 GDRIVE_USE_API. With GDRIVE_USE_API=1 this exercises GoogleDriveStorage; without
-it, LocalStorage(REPOSITORY_DIR). Same assertions either way.
+it, LocalStorage(REPO_PATH). Same assertions either way.
 
 If every method passes here, then every skill that uses these methods (which is
 all of them, since the static scan confirmed no direct-FS) will be wired up
@@ -141,23 +141,19 @@ def test_refresh_does_not_raise(s):
     s.refresh(PREFIX)
 
 
-def test_absolute_path_normalization(s):
-    """The legacy-compat shim in lib/storage.py: absolute paths under
-    REPOSITORY_DIR get stripped to relative. Anywhere else → ValueError."""
+def test_absolute_paths_are_rejected(s):
+    """Storage API callers must pass relative paths, not local filesystem paths."""
     rel = f"{PREFIX}/normtest.txt"
     s.write_text(rel, "hi")
-    # Absolute path that happens to be under REPOSITORY_DIR should resolve to the same file.
-    mount = os.environ.get("REPOSITORY_DIR", "").rstrip("/")
+
+    mount = os.environ.get("REPO_PATH", "").rstrip("/")
     if mount:
         abs_path = f"{mount}/{rel}"
-        assert s.read_text(abs_path) == "hi"
-    # Absolute path OUTSIDE REPOSITORY_DIR should be rejected.
-    raised = False
-    try:
+        with pytest.raises(ValueError):
+            s.read_text(abs_path)
+
+    with pytest.raises(ValueError):
         s.read_text("/etc/passwd")
-    except ValueError:
-        raised = True
-    assert raised, "absolute path outside REPOSITORY_DIR should raise ValueError"
 
 
 if __name__ == "__main__":

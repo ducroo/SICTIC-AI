@@ -46,10 +46,17 @@ def _build_converter():
         RapidOcrOptions,
     )
 
-    vlm_model_name = get_env_var("DEFAULT_VLM")
+    vlm_model_name = get_env_var("VLM_MODEL")
     if vlm_model_name.startswith("ollama/"):
         vlm_model_name = vlm_model_name[7:]
-    ollama_url = get_env_var("OLLAMA_HOST").rstrip("/")
+    vlm_base_url = (
+        os.environ.get("VLM_BASE_URL")
+        or os.environ.get("LLM_BASE_URL")
+        or os.environ.get("OLLAMA_HOST")
+        or "http://localhost:11434"
+    ).rstrip("/")
+    vlm_api_key = os.environ.get("VLM_API_KEY") or os.environ.get("LLM_API_KEY") or ""
+    headers = {"Authorization": f"Bearer {vlm_api_key}"} if vlm_api_key else {}
 
     if platform.system() == "Darwin":
         ocr_options = OcrMacOptions()
@@ -62,7 +69,8 @@ def _build_converter():
         enable_remote_services=True,  # needed for picture_description_options below
         ocr_options=ocr_options,
         picture_description_options=PictureDescriptionApiOptions(
-            url=f"{ollama_url}/v1/chat/completions",
+            url=f"{vlm_base_url}/v1/chat/completions",
+            headers=headers,
             params={"model": vlm_model_name, "max_tokens": 200},
             prompt="Describe this image in a few sentences.",
             timeout=600,

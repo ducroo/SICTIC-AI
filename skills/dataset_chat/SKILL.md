@@ -16,7 +16,7 @@ The following environment variables must be present in the repo's `.env` file (`
 - `DOCLING_HOST`: e.g., `http://localhost:5001`
 - `OLLAMA_HOST`: e.g., `http://localhost:11434`
 - `RCLONE_HOST`: e.g., `http://localhost:5572`
-- `DEFAULT_VLM`: Used by Docling-Serve/Ollama for image-to-text generation.
+- `VLM_MODEL`: Used by Docling-Serve/Ollama for image-to-text generation.
 - `EMBEDDING_MODEL`: Model used for vector embeddings.
 - `EMBEDDING_BASE_URL`: Optional endpoint base URL. Use `http://localhost:11434` for local Ollama.
 - `EMBEDDING_API_KEY`: Optional endpoint API key. Leave blank for local Ollama.

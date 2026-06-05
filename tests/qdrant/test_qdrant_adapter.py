@@ -9,7 +9,7 @@ from skills.dataset_chat.core.models import Chunk
 @pytest.fixture
 def mock_env(monkeypatch):
     """Mock the environment variables required by QdrantAdapter."""
-    monkeypatch.setenv("DEFAULT_EMBEDDINGS", "ollama/test-embedding:8b")
+    monkeypatch.setenv("EMBEDDING_MODEL", "ollama/test-embedding:8b")
     monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
     # Suppress console warnings for tests
     monkeypatch.setenv("GRPC_VERBOSITY", "ERROR")

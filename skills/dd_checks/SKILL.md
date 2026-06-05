@@ -22,7 +22,7 @@ The skill executes a python script in the background that manages the process:
    3. For each chapter, it selects the key that matches the identified `<industry_type>`. If an industry-specific version doesn't exist for that chapter, it falls back to the `general` version.
 3. **Comprehensive Review:** For each selected checklist, it uses `batch_audit` to process all items against the data room.
 4. **Resiliency:** If a chapter fails (e.g., LLM timeout, context window limit), the script logs the error inside the Markdown output file for that specific chapter, safely catches the exception, and continues processing the remaining chapters.
-5. **Output:** All chapter results are collated and saved to a file named `<STARTUP_NAME>_dd_checks_<MODEL_NAME>.md` inside the directory `<REPOSITORY_DIR>/insights/<STARTUP_NAME>/`. Each chapter's findings are appended to this file as soon as they become available.
+5. **Output:** All chapter results are collated and saved to a file named `<STARTUP_NAME>_dd_checks_<MODEL_NAME>.md` inside the directory `<REPO_PATH>/insights/<STARTUP_NAME>/`. Each chapter's findings are appended to this file as soon as they become available.
 
 ## Usage
 

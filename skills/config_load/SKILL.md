@@ -18,4 +18,4 @@ Compiles Markdown-based configuration files from a Google Drive rclone mount int
 
 **Prerequisites:**
 - All runtime dependencies (including `rich`) are installed in the project venv at `the Conda environment ` by `{{REPO_ROOT}}/install_skills.sh`.
-- The Google Drive must be mounted via rclone to the path set in `REPOSITORY_DIR` (see `.env`).
+- The Google Drive must be mounted via rclone to the path set in `REPO_PATH` (see `.env`).

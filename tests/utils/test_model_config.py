@@ -2,7 +2,6 @@ from lib.model_config import embedding_endpoint, llm_endpoint
 
 
 def test_llm_endpoint_prefers_explicit_llm_vars(monkeypatch):
-    monkeypatch.setenv("DEFAULT_LLM", "ollama/old:1b")
     monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
     monkeypatch.setenv("LLM_MODEL", "openai/gpt-4.1-mini")
     monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.test/v1")
@@ -21,7 +20,6 @@ def test_llm_endpoint_prefers_explicit_llm_vars(monkeypatch):
 
 
 def test_embedding_endpoint_prefers_explicit_embedding_vars(monkeypatch):
-    monkeypatch.setenv("DEFAULT_EMBEDDINGS", "ollama/old-embed:1b")
     monkeypatch.setenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
     monkeypatch.setenv("EMBEDDING_BASE_URL", "https://embed.example.test/v1")
     monkeypatch.setenv("EMBEDDING_API_KEY", "embed-key")

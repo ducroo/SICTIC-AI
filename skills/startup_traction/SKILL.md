@@ -19,7 +19,7 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
 1. **Filename Generation & Caching:** 
    * Convert `startup_name` to lowercase. 
    * Determine the current model suffix (e.g., `qwen3.5_9b`). 
-   * Construct the output file path: `<REPOSITORY_DIR>/insights/<startup_name>/<startup_name>_traction_<model_name>.md`. 
+   * Construct the output file path: `<REPO_PATH>/insights/<startup_name>/<startup_name>_traction_<model_name>.md`. 
    * Call `check_insight_refresh([startup_name], "<startup_name>_traction_<model_suffix>.md")`. If it returns `False` (no refresh needed), read the existing file from disk and return its contents immediately.
 
 2. **Configuration Loading:** 
@@ -35,7 +35,7 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
    * *Note:* Ensure `dataset_chat` returns the raw Markdown string directly, as we expect a combined table and synthesis rather than a strictly parsed JSON object.
 
 4. **Output Generation:** 
-   * Ensure the output directory `<REPOSITORY_DIR>/insights/<startup_name>/` exists. 
+   * Ensure the output directory `<REPO_PATH>/insights/<startup_name>/` exists. 
    * Write the returned Markdown string to the constructed output file path. 
    * Log success using the centralized `logger`. 
    * Return the raw Markdown string to the user/CLI.
