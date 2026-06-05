@@ -20,6 +20,35 @@ from lib.models.person import Person
 
 logger = get_logger(__name__)
 
+
+def _profile_metadata_header(person: Person) -> str:
+    return "\n".join(
+        [
+            f"Full-name: {person.full_name}",
+            f"linkedin-id: {person.linkedin_id}",
+            f"Email-addresses: {', '.join(person.email_addresses)}",
+            "",
+            "",
+        ]
+    )
+
+
+def _profile_has_metadata_header(content: str) -> bool:
+    lines = [line.strip().lower() for line in content.splitlines()[:3]]
+    return lines == ["full-name:", "linkedin-id:", "email-addresses:"] or (
+        len(lines) == 3
+        and lines[0].startswith("full-name:")
+        and lines[1].startswith("linkedin-id:")
+        and lines[2].startswith("email-addresses:")
+    )
+
+
+def _ensure_profile_metadata_header(person: Person, content: str) -> str:
+    if _profile_has_metadata_header(content):
+        return content
+    return _profile_metadata_header(person) + content.lstrip()
+
+
 async def person_profile(
     dataset_name: str,
     names: str | list[str] = None,
@@ -115,7 +144,7 @@ async def _generate_single_profile(
     )
     needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file)
     if not needs_refresh:
-        person.person_profile = cached_content
+        person.person_profile = _ensure_profile_metadata_header(person, cached_content)
         return
 
     # Load Configuration
@@ -160,11 +189,18 @@ async def _generate_single_profile(
     else:
         # LLM Generation
         full_context = "\n\n".join(context_parts)
-        prompt = f"Context from {dataset_slug}:\n{full_context}\n\nQuery: {query}\n\nInstructions: {llm_instructions}"
+        person_metadata = _profile_metadata_header(person).strip()
+        prompt = (
+            f"Person metadata:\n{person_metadata}\n\n"
+            f"Context from {dataset_slug}:\n{full_context}\n\n"
+            f"Query: {query}\n\nInstructions: {llm_instructions}"
+        )
         profile_output = await llm_chat(prompt=prompt)
     
     if not profile_output or not profile_output.strip():
         raise ValueError(f"LLM returned empty response for the person profile output of '{display_name}'.")
+
+    profile_output = _ensure_profile_metadata_header(person, profile_output)
 
     # Save and update object
     storage = get_storage()
