@@ -14,11 +14,32 @@ from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.insight_filepath import get_insight_filepath
 from lib.env import get_env_var
+from lib.storage_domains import dataset_raw_path
 from skills.person_profile.persons_in_dataset import persons_in_dataset
 from skills.person_profile.person_dossier import build_person_dossier
 from lib.models.person import Person
 
 logger = get_logger(__name__)
+
+
+def _read_valid_person_profile_cache(dataset_slug: str, person: Person, output_file: str) -> str | None:
+    """Return cached profile when it is newer than the person's direct source file."""
+    storage = get_storage()
+    if not storage.exists(output_file):
+        return None
+
+    source_mtime = 0.0
+    if person.linkedinID:
+        source_file = f"{dataset_raw_path(dataset_slug)}/linkedin/{person.linkedinID}.json"
+        if storage.exists(source_file):
+            source_mtime = storage.mtime(source_file) or 0.0
+
+    output_mtime = storage.mtime(output_file) or 0.0
+    if output_mtime >= source_mtime:
+        logger.info(f"[{dataset_slug}] Using valid cached person profile: {output_file}")
+        return storage.read_text(output_file)
+
+    return None
 
 async def person_profile(
     dataset_name: str,
@@ -113,10 +134,16 @@ async def _generate_single_profile(
         identifier=identifier,
         subdir=True
     )
-    needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file)
-    if not needs_refresh:
+    cached_content = _read_valid_person_profile_cache(dataset_slug, person, output_file)
+    if cached_content is not None:
         person.person_profile = cached_content
         return
+
+    if not person.linkedinID:
+        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file)
+        if not needs_refresh:
+            person.person_profile = cached_content
+            return
 
     # Load Configuration
     try:
@@ -135,7 +162,15 @@ async def _generate_single_profile(
     # Context Building (Qdrant & Resumes)
     context_parts = []
 
-    if include_dataset_context:
+    use_dataset_context = include_dataset_context
+    if dataset_slug == "sictic-members" and person.linkedin_profile:
+        use_dataset_context = False
+        logger.info(
+            f"[{dataset_slug}] Skipping dataset RAG for '{display_name}'; "
+            "using resolved LinkedIn profile as direct source."
+        )
+
+    if use_dataset_context:
         dossier, mentions = await build_person_dossier(dataset_slug, display_name, query)
 
         if dossier:

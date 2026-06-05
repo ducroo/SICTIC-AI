@@ -6,7 +6,7 @@ from lib.adapters.web_search import WebSearchAdapter
 from lib.insight_filepath import get_insight_filepath
 from lib.logger import get_logger
 from lib.models.person import Person
-from lib.storage_domains import dataset_parsed_path
+from lib.storage_domains import dataset_parsed_path, persons_registry_path
 from lib.slugify import slugify
 
 logger = get_logger(__name__)
@@ -24,6 +24,17 @@ def _parse_manual_persons_table(content: str) -> List[Person]:
 
     for line in content.splitlines():
         stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if "linkedin.com/" in stripped.lower():
+            linkedin_slug = extract_linkedin_id(stripped)
+            key = linkedin_slug.lower()
+            if key not in seen:
+                seen.add(key)
+                persons.append(Person(linkedinID=linkedin_slug))
+            continue
+
         if not stripped.startswith("|") or not stripped.endswith("|"):
             continue
 
@@ -87,18 +98,26 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     storage = get_storage()
     dataset_slug = slugify(dataset_name)
     
-    manual_rel = get_insight_filepath(
+    manual_rel = persons_registry_path(dataset_slug)
+
+    # 1. Manual Override File (Source of Truth)
+    if storage.exists(manual_rel):
+        logger.info(f"[{dataset_name}] Found manual persons registry: {manual_rel}")
+        discovered_persons = _parse_manual_persons_table(storage.read_text(manual_rel))
+        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual registry.")
+        return discovered_persons
+
+    legacy_manual_rel = get_insight_filepath(
         dataset_name=dataset_slug,
         skill_name="persons_in_dataset",
         model="manual",
         subdir=False,
     )
 
-    # 1. Manual Override File (Source of Truth)
-    if storage.exists(manual_rel):
-        logger.info(f"[{dataset_name}] Found manual persons insight: {manual_rel}")
-        discovered_persons = _parse_manual_persons_table(storage.read_text(manual_rel))
-        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual insight.")
+    if storage.exists(legacy_manual_rel):
+        logger.info(f"[{dataset_name}] Found legacy manual persons insight: {legacy_manual_rel}")
+        discovered_persons = _parse_manual_persons_table(storage.read_text(legacy_manual_rel))
+        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from legacy manual insight.")
         return discovered_persons
 
     # Otherwise, proceed with discovery

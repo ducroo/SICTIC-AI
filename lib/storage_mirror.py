@@ -2,7 +2,8 @@
 MirrorStorage — local filesystem working copy with Google Drive freshness.
 
 Behavior:
-  - read/list/exists/mtime: recursively pull-prune the relevant Drive folder
+  - read/exists/mtime for files: pull just that Drive file once per process.
+  - list/exists for folders: recursively pull-prune the relevant Drive folder
     once per process, then read locally.
   - write_*: write local first; for non-cache Markdown files, also upload to Drive
     as Google Docs. Existing Google Docs are updated in-place so Drive keeps
@@ -45,6 +46,7 @@ class MirrorStorage:
         self.local = local
         self.drive = drive
         self._synced_dirs: set[str] = set()
+        self._synced_files: set[str] = set()
 
     # ---------- internal: lazy recursive pull ----------
 
@@ -101,6 +103,36 @@ class MirrorStorage:
 
         self._synced_dirs.add(rel)
 
+    def _ensure_drive_file_synced(self, rel: str) -> None:
+        """Mirror one Drive file into local without syncing its whole parent."""
+        rel = _validate_rel(rel)
+        rel = rel.strip("/")
+        if _is_local_only(rel) or rel in self._synced_files:
+            return
+
+        if not self.drive.exists(rel):
+            if rel and self.local.exists(rel):
+                if self.local.is_dir(rel):
+                    self.local.rmtree(rel)
+                else:
+                    self.local.remove(rel)
+            self._synced_files.add(rel)
+            return
+
+        if self.drive.is_dir(rel):
+            self._ensure_drive_dir_synced(rel)
+            return
+
+        source_mtime = self.drive.mtime(rel) or 0.0
+        if self.local.exists(rel) and _same_mtime(self.local.mtime(rel), source_mtime):
+            self._synced_files.add(rel)
+            return
+
+        content = self.drive.read_bytes(rel)
+        self.local.write_bytes(rel, content)
+        self.local.set_mtime(rel, source_mtime)
+        self._synced_files.add(rel)
+
     def _ensure_parent_synced(self, rel: str) -> None:
         rel = _validate_rel(rel)
         if _is_local_only(rel):
@@ -109,8 +141,13 @@ class MirrorStorage:
         parent = self._parent_dir(rel)
         if rel in self._synced_dirs or parent in self._synced_dirs:
             return
-        if self.drive.exists(rel) and self.drive.is_dir(rel):
-            self._ensure_drive_dir_synced(rel)
+        if rel in self._synced_files:
+            return
+        if self.drive.exists(rel):
+            if self.drive.is_dir(rel):
+                self._ensure_drive_dir_synced(rel)
+            else:
+                self._ensure_drive_file_synced(rel)
             return
         self._ensure_drive_dir_synced(parent)
 
@@ -183,11 +220,17 @@ class MirrorStorage:
         self.drive.refresh(rel)
         if not rel:
             self._synced_dirs.clear()
+            self._synced_files.clear()
             return
         rel = rel.strip("/")
         self._synced_dirs = {
             synced
             for synced in self._synced_dirs
+            if synced != rel and not synced.startswith(f"{rel}/")
+        }
+        self._synced_files = {
+            synced
+            for synced in self._synced_files
             if synced != rel and not synced.startswith(f"{rel}/")
         }
 

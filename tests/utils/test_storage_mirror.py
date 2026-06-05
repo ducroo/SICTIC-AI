@@ -140,11 +140,28 @@ def test_hybrid_sync_prunes_local_files_missing_from_drive(tmp_path):
     })
     storage = MirrorStorage(local=local, drive=drive)
 
-    assert storage.exists("storage/startups/bewe/insights/keep.md")
+    assert storage.exists("storage/startups/bewe/insights")
 
     assert not local.exists("storage/startups/bewe/insights/stale.md")
     assert local.read_text("storage/startups/bewe/insights/keep.md") == "# Fresh\n"
     assert local.mtime("storage/startups/bewe/insights/keep.md") == 200.0
+
+
+def test_hybrid_syncs_a_drive_file_without_listing_parent_folder(tmp_path):
+    local = LocalStorage(tmp_path)
+    drive = FakeDrive(files={
+        "storage/startups/bewe/insights/other.md": (b"# Other\n", 201.0),
+        "storage/startups/bewe/insights/report.md": (b"# Remote\n", 200.0),
+    })
+    storage = MirrorStorage(local=local, drive=drive)
+
+    assert storage.exists("storage/startups/bewe/insights/report.md")
+    assert storage.exists("storage/startups/bewe/insights/report.md")
+
+    assert drive.list_calls == []
+    assert drive.reads == ["storage/startups/bewe/insights/report.md"]
+    assert local.read_text("storage/startups/bewe/insights/report.md") == "# Remote\n"
+    assert not local.exists("storage/startups/bewe/insights/other.md")
 
 
 def test_hybrid_syncs_a_drive_folder_only_once_per_process(tmp_path):
@@ -154,8 +171,8 @@ def test_hybrid_syncs_a_drive_folder_only_once_per_process(tmp_path):
     })
     storage = MirrorStorage(local=local, drive=drive)
 
-    assert storage.exists("storage/startups/bewe/insights/report.md")
-    assert storage.exists("storage/startups/bewe/insights/report.md")
+    assert storage.exists("storage/startups/bewe/insights")
+    assert storage.exists("storage/startups/bewe/insights")
 
     assert drive.list_calls == [("storage/startups/bewe/insights", True)]
 
