@@ -1,6 +1,5 @@
-import asyncio
 from typing import Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
@@ -10,27 +9,25 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 class ProfileRationale(BaseModel):
-    profile_id: str
-    profile_name: str
-    balanced_rationale_for_ranking: str
+    id: str
+    rationale: str
 
 class BatchRationaleResult(BaseModel):
     results: List[ProfileRationale]
 
-async def ranking_writeup(
+async def ranking_rationale(
     ranked_items: List[Dict[str, Any]], 
     objective: str
 ) -> List[Dict[str, Any]]:
     """
-    Augments the ranked_items with a human readable name and a balanced rationale.
-    Returns the exact same data structure it receives, but updated with 'profile_name' 
-    and 'rationale' keys for each item.
+    Augments ranked_items with concise ranking rationales.
+    Person identity fields are supplied by the Person metadata, not by the LLM.
     """
     if not ranked_items:
         return []
 
     config = config_load()
-    prompt = config['ranking_writeup']['writeup_instructions']
+    prompt = config['ranking_rationale']['rationale_instructions']
 
     profiles_text = []
     # ranked_items comes strictly ordered with final ranks already populated.
@@ -50,24 +47,20 @@ async def ranking_writeup(
         parsed_dict = repair_json_payload(response_content)
         parsed_data = BatchRationaleResult.model_validate(parsed_dict)
 
-        # Create a lookup dictionary for fast merging
-        rationale_lookup = {r.profile_id: r for r in parsed_data.results}
+        rationale_lookup = {r.id: r.rationale for r in parsed_data.results}
 
         # Merge the results back into the original ranked_items list
         for item in ranked_items:
             item_id = item["id"]
             if item_id in rationale_lookup:
-                item["profile_name"] = rationale_lookup[item_id].profile_name
-                item["rationale"] = rationale_lookup[item_id].balanced_rationale_for_ranking
+                item["rationale"] = rationale_lookup[item_id]
             else:
-                item["profile_name"] = item_id
                 item["rationale"] = "Rationale missing from LLM response."
 
     except Exception as e:
-        logger.error(f"Error in ranking_writeup: {e}")
+        logger.error(f"Error in ranking_rationale: {e}")
         # Ensure we always return the original structure even if the LLM call fails
         for item in ranked_items:
-            item["profile_name"] = item["id"]
             item["rationale"] = "Error generating rationale."
 
     return ranked_items

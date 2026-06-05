@@ -5,19 +5,35 @@ from lib.adapters.linkedin import LinkedInAdapter, extract_linkedin_id
 from lib.adapters.web_search import WebSearchAdapter
 from lib.insight_filepath import get_insight_filepath
 from lib.logger import get_logger
-from lib.models.person import Person
+from lib.models.person import Person, normalize_email_addresses
 from lib.storage_domains import dataset_parsed_path, persons_registry_path
 from lib.slugify import slugify
 
 logger = get_logger(__name__)
 
 _LINKEDIN_URL_PATTERN = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
+_MANUAL_TABLE_HEADER = ["full-name", "linkedin-id", "email-addresses"]
+
+
+def _manual_header_key(value: str) -> str:
+    normalized = value.strip().lower().replace("_", "-")
+    if normalized in {"fullname", "full-name"}:
+        return "full-name"
+    if normalized in {"linkedinid", "linkedin-id"}:
+        return "linkedin-id"
+    if normalized in {"emailaddresses", "email-addresses"}:
+        return "email-addresses"
+    return normalized
 
 def _markdown_cell_text(cell: str) -> str:
     return cell.strip().replace("\\_", "_").replace("\\-", "-").replace("\\=", "=")
 
 
-def _parse_manual_persons_table(content: str) -> List[Person]:
+def _markdown_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").strip()
+
+
+def _parse_manual_persons_table(content: str) -> List[Person] | None:
     persons: List[Person] = []
     seen = set()
     header = None
@@ -32,16 +48,16 @@ def _parse_manual_persons_table(content: str) -> List[Person]:
             key = linkedin_slug.lower()
             if key not in seen:
                 seen.add(key)
-                persons.append(Person(linkedinID=linkedin_slug))
+                persons.append(Person(linkedin_id=linkedin_slug))
             continue
 
         if not stripped.startswith("|") or not stripped.endswith("|"):
             continue
 
         cells = [_markdown_cell_text(cell) for cell in stripped.strip("|").split("|")]
-        normalized = [cell.strip().lower().replace("_", "") for cell in cells]
+        normalized = [_manual_header_key(cell) for cell in cells]
         if header is None:
-            if "fullname" not in normalized or "linkedinid" not in normalized:
+            if "full-name" not in normalized or "linkedin-id" not in normalized:
                 continue
             header = normalized
             continue
@@ -50,36 +66,41 @@ def _parse_manual_persons_table(content: str) -> List[Person]:
             continue
 
         values = dict(zip(header, cells))
-        full_name = values.get("fullname", "").strip()
-        linkedin_id = values.get("linkedinid", "").strip()
+        full_name = values.get("full-name", "").strip()
+        linkedin_id = values.get("linkedin-id", "").strip()
+        email_addresses = normalize_email_addresses(values.get("email-addresses", ""))
         if "linkedin.com/" in linkedin_id.lower():
             linkedin_id = extract_linkedin_id(linkedin_id)
         else:
             linkedin_id = slugify(linkedin_id)
 
-        if not full_name and not linkedin_id:
+        if not full_name and not linkedin_id and not email_addresses:
             continue
 
-        key = linkedin_id.lower() if linkedin_id else f"name:{slugify(full_name)}"
+        key = linkedin_id.lower() if linkedin_id else ",".join(email_addresses) or f"name:{slugify(full_name)}"
         if key in seen:
             continue
         seen.add(key)
-        persons.append(Person(full_name=full_name, linkedinID=linkedin_id))
+        persons.append(Person(full_name=full_name, linkedin_id=linkedin_id, email_addresses=email_addresses))
 
-    return persons
+    return persons if header is not None or persons else None
 
 
 def _render_manual_persons_table(dataset_name: str, persons: List[Person]) -> str:
     lines = [
         f"# Persons in {dataset_name}",
         "",
-        "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten. BTW linkedinURL = https://www.linkedin.com/in/linkedinID",
+        "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten.",
         "",
-        "| full_name | linkedinID |",
-        "|---|---|",
+        "| full-name | linkedin-id | email-addresses |",
+        "|---|---|---|",
     ]
     for person in persons:
-        lines.append(f"| {person.full_name} | {person.linkedinID} |")
+        lines.append(
+            f"| {_markdown_table_cell(person.full_name)} | "
+            f"{_markdown_table_cell(person.linkedin_id)} | "
+            f"{_markdown_table_cell(', '.join(person.email_addresses))} |"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -104,8 +125,10 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     if storage.exists(manual_rel):
         logger.info(f"[{dataset_name}] Found manual persons registry: {manual_rel}")
         discovered_persons = _parse_manual_persons_table(storage.read_text(manual_rel))
-        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual registry.")
-        return discovered_persons
+        if discovered_persons is not None:
+            logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual registry.")
+            return discovered_persons
+        logger.info(f"[{dataset_name}] Ignoring unsupported manual persons registry: {manual_rel}")
 
     legacy_manual_rel = get_insight_filepath(
         dataset_name=dataset_slug,
@@ -117,8 +140,10 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
     if storage.exists(legacy_manual_rel):
         logger.info(f"[{dataset_name}] Found legacy manual persons insight: {legacy_manual_rel}")
         discovered_persons = _parse_manual_persons_table(storage.read_text(legacy_manual_rel))
-        logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from legacy manual insight.")
-        return discovered_persons
+        if discovered_persons is not None:
+            logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from legacy manual insight.")
+            return discovered_persons
+        logger.info(f"[{dataset_name}] Ignoring legacy manual persons insight: {legacy_manual_rel}")
 
     # Otherwise, proceed with discovery
     discovered_persons: List[Person] = []
@@ -147,7 +172,7 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
                 link = r.get("link", "")
                 slug = extract_linkedin_id(link)
                 if slug:
-                    _add_person(Person(linkedinID=slug))
+                    _add_person(Person(linkedin_id=slug))
         except Exception as e:
             logger.warning(f"[{dataset_name}] Web search discovery failed: {e}")
             
@@ -163,7 +188,7 @@ def persons_in_dataset(dataset_name: str) -> List[Person]:
                     matches = _LINKEDIN_URL_PATTERN.findall(content)
                     for match in matches:
                         if match:
-                            _add_person(Person(linkedinID=match.lower()))
+                            _add_person(Person(linkedin_id=match.lower()))
                 except Exception as e:
                     logger.warning(f"Failed to read {f} for regex scanning: {e}")
                     

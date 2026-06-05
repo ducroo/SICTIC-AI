@@ -84,7 +84,7 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     full_prompt += "#### DISCOVERED PERSONS (Synthesized Profiles) ####\n\n"
     for p in persons:
         full_prompt += f"**Name:** {p.full_name}\n"
-        full_prompt += f"**LinkedIn ID:** {p.linkedinID}\n\n"
+        full_prompt += f"**LinkedIn ID:** {p.linkedin_id}\n\n"
         if p.person_profile:
             full_prompt += f"**Profile Summary:**\n{p.person_profile}\n\n"
         full_prompt += "---\n\n"

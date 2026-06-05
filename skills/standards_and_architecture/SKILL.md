@@ -43,7 +43,8 @@ The AI and all skills must strictly adhere to the configured storage-domain layo
   ```python
   {
       "full_name": str,          # Sanitized: Latin characters preserved, emojis/symbols stripped
-      "linkedinID": str,         # Canonical slug (e.g., 'john-doe'). This is the unique ID and cache filename
+      "linkedin_id": str,         # Canonical slug (e.g., 'john-doe'). This is the unique ID and cache filename
+      "email_addresses": list,    # Normalized lowercase email addresses for matching and contact tables
       "linkedin_profile": dict,  # Full JSON payload returned by the scraper
       "dossier": dict,           # High-value complete documents (e.g., full Resumes/CVs text)
       "mentions": list           # Isolated chunks where the person is mentioned downstream
@@ -86,7 +87,7 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 * `json_parser.py`: JSON parsing helper utility.
 * `logger.py`: Centralized logger configuration. Writes to `logs/sictic-ai.log`.
 * `member_profile.py`: Centralized profile builder for SICTIC members.
-* `ranking_writeup.py`: Utility to generate Markdown tables for ranked LLM results.
+* `ranking_rationale.py`: Utility to generate concise ranking rationales for ranked LLM results.
 * `slugify.py`: Filename slugification utility.
 * `services_gateway.py`: IPC gateway for concurrency control across LLM/embed/docling calls.
 * `storage.py` / `storage_gdrive.py`: Storage abstraction (local directory or native Drive API).

@@ -1,62 +1,126 @@
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Any
+import re
+from typing import Dict, List, Any, Iterable
 from rapidfuzz import fuzz
 from lib.slugify import slugify
 from skills.dataset_chat.core.models import Chunk
 
+EMAIL_PATTERN = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
+
+
+def normalize_email_addresses(values: str | Iterable[str] | None) -> List[str]:
+    if not values:
+        return []
+
+    candidates: List[str] = []
+    if isinstance(values, str):
+        candidates.extend(EMAIL_PATTERN.findall(values))
+        if not candidates:
+            candidates.extend(re.split(r"[,;]", values))
+    else:
+        for value in values:
+            if value:
+                candidates.extend(EMAIL_PATTERN.findall(value) or re.split(r"[,;]", value))
+
+    normalized: List[str] = []
+    seen = set()
+    for candidate in candidates:
+        email = candidate.strip().removeprefix("mailto:").lower()
+        if email and email not in seen:
+            normalized.append(email)
+            seen.add(email)
+    return normalized
+
+
+def extract_email_addresses(data: Any) -> List[str]:
+    if isinstance(data, str):
+        return normalize_email_addresses(data)
+    if isinstance(data, dict):
+        emails: List[str] = []
+        for value in data.values():
+            emails.extend(extract_email_addresses(value))
+        return normalize_email_addresses(emails)
+    if isinstance(data, list):
+        emails: List[str] = []
+        for item in data:
+            emails.extend(extract_email_addresses(item))
+        return normalize_email_addresses(emails)
+    return []
+
+
+def _email_local_part_score(full_name: str, emails: List[str]) -> int:
+    if not full_name or not emails:
+        return 0
+
+    name = slugify(full_name).replace("-", " ")
+    best = 0
+    for email in emails:
+        local_part = email.split("@", 1)[0]
+        candidate = re.sub(r"[._+\-]+", " ", local_part)
+        best = max(best, fuzz.token_sort_ratio(name, candidate))
+    return best if best >= 90 else 0
+
+
 @dataclass
 class Person:
     full_name: str = ""
-    linkedinID: str = ""
+    linkedin_id: str = ""
+    email_addresses: List[str] = field(default_factory=list)
     linkedin_profile: Dict[str, Any] = field(default_factory=dict)
     dossier: List[Chunk] = field(default_factory=list)
     mentions: List[Chunk] = field(default_factory=list)
     person_profile: str = ""
 
+    def __post_init__(self) -> None:
+        self.linkedin_id = self.linkedin_id.strip().lower()
+        self.email_addresses = normalize_email_addresses(self.email_addresses)
+
     @property
     def identifier(self) -> str:
-        """Returns the canonical ID, falling back to a slugified name."""
-        return self.linkedinID if self.linkedinID else slugify(self.full_name)
+        """Returns the canonical ID, falling back to email or a slugified name."""
+        if self.linkedin_id:
+            return self.linkedin_id
+        if self.email_addresses:
+            return self.email_addresses[0]
+        return slugify(self.full_name)
 
     @property
     def display_name(self) -> str:
         """Returns the best human-readable name."""
-        return self.full_name if self.full_name else self.linkedinID
+        if self.full_name:
+            return self.full_name
+        if self.linkedin_id:
+            return self.linkedin_id
+        return self.email_addresses[0] if self.email_addresses else ""
 
     def match_score(self, other: 'Person') -> int:
         """
         Returns a 0-100 score indicating how closely this person matches another.
         """
-        # 1. Exact ID Match (Strongest signal)
-        if self.linkedinID and other.linkedinID:
-            if self.linkedinID.lower() == other.linkedinID.lower():
+        # 1. LinkedIn ID is unique: different IDs are a hard non-match.
+        if self.linkedin_id and other.linkedin_id:
+            return 100 if self.linkedin_id == other.linkedin_id else 0
+
+        # 2. Email overlap is the next strongest signal.
+        if self.email_addresses and other.email_addresses:
+            if set(self.email_addresses) & set(other.email_addresses):
                 return 100
-                
-        # 2. Name Match (Exact or Substring)
+
+        # 3. Name Match (Exact, Substring, or Fuzzy)
         if self.full_name and other.full_name:
             n1, n2 = self.full_name.lower(), other.full_name.lower()
             if n1 == n2 or n1 in n2 or n2 in n1:
                 return 100
             
-            # Fuzzy match score
             score = fuzz.token_sort_ratio(n1, n2)
             if score > 0:
                 return score
-                
-        # 3. Cross-match Fallback (ID vs Name)
-        if self.linkedinID and other.full_name:
-            if slugify(other.full_name) in self.linkedinID.lower():
-                return 100
-        if other.linkedinID and self.full_name:
-            if slugify(self.full_name) in other.linkedinID.lower():
-                return 100
-                
-        # 4. Strict Identifier Fallback
-        id1, id2 = self.identifier.lower(), other.identifier.lower()
-        if id1 and id2 and id1 == id2:
-            return 100
-            
-        return 0
+
+        # 4. If only one side has a name, compare it to email local parts.
+        return max(
+            _email_local_part_score(self.full_name, other.email_addresses),
+            _email_local_part_score(other.full_name, self.email_addresses),
+        )
 
     def matches(self, other: 'Person', threshold: int = 85) -> bool:
         """Determines if two Person objects represent the same individual (1-to-1 equivalence)."""
@@ -86,8 +150,10 @@ class Person:
         elif self.full_name and other.full_name and len(other.full_name) > len(self.full_name):
             self.full_name = other.full_name
             
-        if not self.linkedinID and other.linkedinID:
-            self.linkedinID = other.linkedinID
+        if not self.linkedin_id and other.linkedin_id:
+            self.linkedin_id = other.linkedin_id
+
+        self.email_addresses = normalize_email_addresses(self.email_addresses + other.email_addresses)
             
         if not self.linkedin_profile and other.linkedin_profile:
             self.linkedin_profile = other.linkedin_profile

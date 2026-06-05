@@ -6,11 +6,11 @@ from rapidfuzz import process, fuzz
 
 from lib.logger import get_logger
 from lib.storage import get_storage
-from lib.env import get_env_var
 from lib.adapters.apify import ApifyAdapter
 from lib.adapters.web_search import WebSearchAdapter
-from lib.models.person import Person
+from lib.models.person import Person, extract_email_addresses
 from lib.storage_domains import dataset_raw_path, list_dataset_names
+from lib.slugify import slugify
 
 logger = get_logger(__name__)
 
@@ -42,8 +42,8 @@ class LinkedInAdapter:
         self.google = WebSearchAdapter()
         
         # In-memory State
-        self.cache: Dict[str, Person] = {}  # linkedinID -> Person
-        self.fuzz_index: List[Dict[str, str]] = []  # [{"full_name": ..., "linkedinID": ...}]
+        self.cache: Dict[str, Person] = {}  # linkedin_id -> Person
+        self.fuzz_index: List[Dict[str, str]] = []  # [{"full_name": ..., "linkedin_id": ...}]
         self.registry: Dict[str, Dict[str, Any]] = {} # id/name -> registry status
         
         self._initialize_state()
@@ -91,7 +91,7 @@ class LinkedInAdapter:
             if not data:
                 continue
                 
-            linkedinID = filename.replace(".json", "")
+            linkedin_id = filename.replace(".json", "")
             
             # Reconstruct name
             raw_name = data.get("fullName", "")
@@ -105,15 +105,16 @@ class LinkedInAdapter:
             # Build Standard Person Object
             person_wrapper = Person(
                 full_name=sanitized_name or raw_name,
-                linkedinID=linkedinID,
+                linkedin_id=linkedin_id,
+                email_addresses=extract_email_addresses(data),
                 linkedin_profile=data
             )
             
-            self.cache[linkedinID] = person_wrapper
+            self.cache[linkedin_id] = person_wrapper
             if sanitized_name:
                 self.fuzz_index.append({
                     "full_name": sanitized_name,
-                    "linkedinID": linkedinID
+                    "linkedin_id": linkedin_id
                 })
 
     def _save_registry(self):
@@ -191,7 +192,7 @@ class LinkedInAdapter:
 
     def get_profiles(self, person_list: List[Person], allow_scrape: bool = True) -> List[Person]:
         """
-        Takes a list of sparse Person objects (full_name and/or linkedinID) and fills in the gaps.
+        Takes a list of sparse Person objects (full_name and/or linkedin_id) and fills in the gaps.
         Executes caching, fuzzy matching, deduplicated web searching, and optional blocking Apify batch scrapes.
         Returns a list of cleanly hydrated Person objects.
         """
@@ -201,21 +202,22 @@ class LinkedInAdapter:
 
         for p in person_list:
             raw_name = p.full_name
-            linkedinID = p.linkedinID
+            linkedin_id = p.linkedin_id
                     
             sanitized_name = self._sanitize_name(raw_name)
                 
             # Define placeholder Person
             placeholder = Person(
                 full_name=sanitized_name or raw_name,
-                linkedinID=linkedinID
+                linkedin_id=linkedin_id,
+                email_addresses=p.email_addresses,
             )
                 
             # --- STEP A: Cache Lookup ---
             
             # 1. Exact ID Match
-            if linkedinID and linkedinID in self.cache:
-                result.append(self.cache[linkedinID])
+            if linkedin_id and linkedin_id in self.cache:
+                result.append(self.cache[linkedin_id])
                 continue
                 
             # 2. Fuzzy Name Match
@@ -226,7 +228,7 @@ class LinkedInAdapter:
                 if matches:
                     best_match, score, index = matches[0]
                     if score >= 90:  # Strict threshold to prevent false positives
-                        matched_id = self.fuzz_index[index]["linkedinID"]
+                        matched_id = self.fuzz_index[index]["linkedin_id"]
                         
             if matched_id and matched_id in self.cache:
                 logger.info(f"Fuzzy matched '{sanitized_name}' to cache '{matched_id}' (score: {score})")
@@ -235,7 +237,7 @@ class LinkedInAdapter:
                 
             # --- STEP B: Handle Misses (Registry & Web Search) ---
             
-            registry_key = linkedinID if linkedinID else sanitized_name
+            registry_key = linkedin_id if linkedin_id else sanitized_name
             if not registry_key:
                 logger.warning("Person provided with no name and no ID/URL. Skipping entirely.")
                 continue
@@ -253,19 +255,19 @@ class LinkedInAdapter:
                 continue
                 
             # If no ID exists, attempt Web Search to find it
-            if not linkedinID:
+            if not linkedin_id:
                 logger.info(f"No LinkedIn URL for '{sanitized_name}'. Searching web...")
                 url = self._extract_linkedin_url(f"{sanitized_name} {self.dataset_name}")
                 if url:
-                    linkedinID = extract_linkedin_id(url)
-                    registry_key = linkedinID  # Upgrade registry key to the actual ID
-                    placeholder.linkedinID = linkedinID  # Update placeholder with new ID
+                    linkedin_id = extract_linkedin_id(url)
+                    registry_key = linkedin_id  # Upgrade registry key to the actual ID
+                    placeholder.linkedin_id = linkedin_id  # Update placeholder with new ID
                 else:
                     logger.warning(f"URL not found via Web Search for '{sanitized_name}'.")
                     self.registry[registry_key] = {
                         "dataset": self.dataset_name,
                         "full_name": sanitized_name or raw_name,
-                        "linkedinID": "",
+                        "linkedin_id": "",
                         "status": "URL_NOT_FOUND"
                     }
                     self._save_registry()
@@ -276,13 +278,13 @@ class LinkedInAdapter:
             self.registry[registry_key] = {
                 "dataset": self.dataset_name,
                 "full_name": sanitized_name or raw_name,
-                "linkedinID": linkedinID,
+                "linkedin_id": linkedin_id,
                 "status": "PENDING"
             }
             
-            target_url = f"https://www.linkedin.com/in/{linkedinID}/"
+            target_url = f"https://www.linkedin.com/in/{linkedin_id}/"
             to_scrape_urls.append(target_url)
-            to_scrape_ids.append(linkedinID)
+            to_scrape_ids.append(linkedin_id)
             
             # Add the wrapper to the result set (will be updated if scrape succeeds)
             result.append(placeholder)
@@ -319,12 +321,13 @@ class LinkedInAdapter:
                     
                     wrapper = Person(
                         full_name=sanitized or raw_name,
-                        linkedinID=scraped_id,
+                        linkedin_id=scraped_id,
+                        email_addresses=extract_email_addresses(cleaned),
                         linkedin_profile=cleaned
                     )
                     self.cache[scraped_id] = wrapper
                     if sanitized:
-                        self.fuzz_index.append({"full_name": sanitized, "linkedinID": scraped_id})
+                        self.fuzz_index.append({"full_name": sanitized, "linkedin_id": scraped_id})
                         
                     # Mark Success in Registry by removing it completely
                     if scraped_id in self.registry:
@@ -333,9 +336,10 @@ class LinkedInAdapter:
                     
                     # Patch the result placeholder with the actual scraped data
                     for r in result:
-                        if r.linkedinID == scraped_id:
+                        if r.linkedin_id == scraped_id:
                             r.linkedin_profile = cleaned
                             r.full_name = wrapper.full_name
+                            r.email_addresses = wrapper.email_addresses
                             
                 # Mark Failures in Registry
                 for sid in to_scrape_ids:
@@ -452,7 +456,7 @@ def linkedin_bulk_import(file_path: str, dataset: str = None) -> int:
         
         # 2. Handle Explicit Manual Failures (Ghosts)
         if profile.get("error") or profile.get("not_found"):
-            ident = ident or profile.get("linkedinID", "")
+            ident = ident or profile.get("linkedin_id", "")
             if ident and ident in full_registry:
                 logger.info(f"Manual scrape failed for {ident}. Marking as DO_NOT_SCRAPE.")
                 full_registry[ident]["status"] = "DO_NOT_SCRAPE"
@@ -468,7 +472,7 @@ def linkedin_bulk_import(file_path: str, dataset: str = None) -> int:
         if not registry_entry:
             # Maybe it's registered under a fuzzy name?
             for key, val in full_registry.items():
-                if val.get("linkedinID") == ident:
+                if val.get("linkedin_id") == ident:
                     registry_entry = val
                     ident = key # Real key to pop later
                     break
