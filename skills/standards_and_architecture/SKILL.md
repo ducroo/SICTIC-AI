@@ -87,7 +87,7 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 * `json_parser.py`: JSON parsing helper utility.
 * `logger.py`: Centralized logger configuration. Writes to `logs/sictic-ai.log`.
 * `member_profile.py`: Centralized profile builder for SICTIC members.
-* `ranking_writeup.py`: Utility to generate Markdown tables for ranked LLM results.
+* `ranking_rationale.py`: Utility to generate concise ranking rationales for ranked LLM results.
 * `slugify.py`: Filename slugification utility.
 * `services_gateway.py`: IPC gateway for concurrency control across LLM/embed/docling calls.
 * `storage.py` / `storage_gdrive.py`: Storage abstraction (local directory or native Drive API).

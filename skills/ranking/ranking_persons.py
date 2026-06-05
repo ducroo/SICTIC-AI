@@ -2,16 +2,15 @@ from typing import List, Optional
 
 from lib.logger import get_logger
 from lib.storage import get_storage
-from skills.config_load.config_load import config_load
 from skills.dataset_chat.dataset_search import dataset_search
-from skills.ranking.ranking_writeup import ranking_writeup
+from skills.ranking.ranking_rationale import ranking_rationale
 from skills.ranking.ranking_top_k import ranking_top_k
-from skills.llm_chat.llm_chat import llm_chat
 
 from rapidfuzz import process, fuzz
 
 from lib.slugify import slugify
 from lib.storage_domains import dataset_raw_path
+from lib.models.person import normalize_email_addresses
 
 logger = get_logger(__name__)
 
@@ -70,6 +69,35 @@ def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], opto
         
     return list(set(final_candidates))
 
+
+def _markdown_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _extract_person_metadata(profile_id: str, text: str) -> dict:
+    metadata = {
+        "full_name": "",
+        "linkedin_id": "",
+        "email_addresses": [],
+    }
+
+    for line in text.splitlines():
+        key, _, value = line.partition(":")
+        normalized_key = key.strip().lower()
+        if normalized_key == "full-name":
+            metadata["full_name"] = value.strip()
+        elif normalized_key == "linkedin-id":
+            metadata["linkedin_id"] = value.strip().lower()
+        elif normalized_key == "email-addresses":
+            metadata["email_addresses"] = normalize_email_addresses(value)
+
+    if not metadata["linkedin_id"]:
+        metadata["linkedin_id"] = slugify(profile_id)
+    if not metadata["full_name"]:
+        metadata["full_name"] = metadata["linkedin_id"]
+
+    return metadata
+
 # ==========================================
 # MAIN ORCHESTRATOR
 # ==========================================
@@ -109,16 +137,20 @@ async def ranking_persons(
         raise RuntimeError(err_msg)
 
     id_to_text = {}
+    metadata_by_id = {}
     
     # Filter chunks based on the resolved candidates list
     for c in chunks:
         doc_name = c.document_name
             
         if doc_name in final_candidates:
-            if doc_name not in id_to_text:
-                id_to_text[doc_name] = ""
+            metadata = _extract_person_metadata(doc_name, c.text)
+            person_id = metadata["linkedin_id"]
+            if person_id not in id_to_text:
+                id_to_text[person_id] = ""
+                metadata_by_id[person_id] = metadata
             # Aggregate the chunks cleanly into the person's text block
-            id_to_text[doc_name] += c.to_md() + "\n\n"
+            id_to_text[person_id] += c.to_md() + "\n\n"
             if len(id_to_text) >= cutoff_m:
                 break
                 
@@ -135,9 +167,12 @@ async def ranking_persons(
         top_k=top_k
     )
 
-    # 4. Synthesize Final Report
-    logger.info(f"Starting ranking_writeup with top {actual_top_k} out of {len(ranked_items)} ranked candidates.")
-    augmented_items = await ranking_writeup(
+    for item in ranked_items:
+        item.update(metadata_by_id.get(item["id"], {}))
+
+    # 4. Synthesize Final Rationales
+    logger.info(f"Starting ranking_rationale with top {actual_top_k} out of {len(ranked_items)} ranked candidates.")
+    augmented_items = await ranking_rationale(
         ranked_items=ranked_items,
         objective=objective
     )
@@ -146,16 +181,22 @@ async def ranking_persons(
     lines = [
         "## Top Candidates",
         "",
-        "| Rank | Name | LinkedIn ID | Fit Rationale |",
-        "| :--- | :--- | :--- | :--- |"
+        "| Rank | Full Name | LinkedIn ID | Email Addresses | Ranking Rationale |",
+        "| :--- | :--- | :--- | :--- | :--- |"
     ]
     
     for item in augmented_items:
-        # Replace newlines in rationale so it doesn't break the markdown table
-        clean_rationale = item.get('rationale', '').replace('\n', ' ')
-        profile_name = item.get('profile_name', item['id'])
-        linkedin_id = item['id']
-        lines.append(f"| {item.get('rank', '-')} | {profile_name} | {linkedin_id} | {clean_rationale} |")
+        full_name = item.get("full_name") or item["id"]
+        linkedin_id = item.get("linkedin_id") or item["id"]
+        email_addresses = ", ".join(item.get("email_addresses") or [])
+        clean_rationale = item.get("rationale", "").replace("\n", " ")
+        lines.append(
+            f"| {item.get('rank', '-')} | "
+            f"{_markdown_table_cell(full_name)} | "
+            f"{_markdown_table_cell(linkedin_id)} | "
+            f"{_markdown_table_cell(email_addresses)} | "
+            f"{_markdown_table_cell(clean_rationale)} |"
+        )
 
     result = "\n".join(lines) + "\n"
 
