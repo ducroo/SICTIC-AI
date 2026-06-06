@@ -92,7 +92,7 @@ def test_hybrid_storage_datasets2md_markdown_uploads(tmp_path):
     assert drive.writes == [("storage/datasets2md/startups/bewe/datasets/source.md", b"# Parsed\n")]
 
 
-def test_hybrid_non_markdown_write_stays_local_only(tmp_path):
+def test_hybrid_non_cache_binary_write_uploads_to_drive(tmp_path):
     local = LocalStorage(tmp_path)
     drive = FakeDrive()
     storage = MirrorStorage(local=local, drive=drive)
@@ -100,7 +100,7 @@ def test_hybrid_non_markdown_write_stays_local_only(tmp_path):
     storage.write_bytes("storage/startups/bewe/datasets/blob.pdf", b"pdf")
 
     assert (tmp_path / "storage/startups/bewe/datasets/blob.pdf").read_bytes() == b"pdf"
-    assert drive.writes == []
+    assert drive.writes == [("storage/startups/bewe/datasets/blob.pdf", b"pdf")]
 
 
 def test_hybrid_drive_upload_failure_keeps_local_file_and_raises(tmp_path):

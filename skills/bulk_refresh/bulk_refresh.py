@@ -82,6 +82,22 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
         logger.warning("No valid datasets found to process.")
         return
 
+    from lib.startup_data_sources import ensure_startup_dataset
+
+    resolved_datasets = []
+    resolved_domains = {}
+    for dataset_name in list(all_datasets):
+        if dataset_domains.get(dataset_name) == "startups":
+            status = await ensure_startup_dataset(dataset_name, sync_after_import=False)
+            resolved_slug = status.dataset_slug
+            resolved_datasets.append(resolved_slug)
+            resolved_domains[resolved_slug] = "startups"
+        else:
+            resolved_datasets.append(dataset_name)
+            resolved_domains[dataset_name] = dataset_domains[dataset_name]
+    all_datasets = list(dict.fromkeys(resolved_datasets))
+    dataset_domains = resolved_domains
+
     logger.info(f"Discovered {len(all_datasets)} datasets matching targets. Starting synchronous pre-ingestion...")
 
     # 1. Synchronous Pre-Ingestion

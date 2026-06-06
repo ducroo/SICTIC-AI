@@ -75,6 +75,10 @@ async def dd_checks(startup: str) -> str:
     """
     from lib.slugify import slugify
     startup_slug = slugify(startup)
+    from lib.startup_data_sources import ensure_startup_dataset
+
+    status = await ensure_startup_dataset(startup_slug)
+    startup_slug = status.dataset_slug
     storage = get_storage()
     raw_path = dataset_raw_path(startup_slug)
     if not storage.exists(raw_path):

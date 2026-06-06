@@ -38,6 +38,7 @@ def test_harness_help_lists_core_commands():
     assert "/dataset_chat <dataset> <question>" in text
     assert "/startup_profile <startup>" in text
     assert "/dd_checks <startup>" in text
+    assert "/dealum_import <startup>" in text
 
 
 def test_harness_cli_accepts_one_shot_command():

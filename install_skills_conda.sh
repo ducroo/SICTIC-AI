@@ -375,13 +375,18 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "VLM_MODEL" "VLM model" "$(env_get VLM_MODEL || true)" 1 0
     vlm_base_default=$(env_get VLM_BASE_URL || true)
     if [ -z "$vlm_base_default" ]; then
-        vlm_base_default=$(env_get LLM_BASE_URL || true)
+        vlm_model_current=$(env_get VLM_MODEL || true)
+        if [[ "$vlm_model_current" == ollama/* ]]; then
+            vlm_base_default=$(env_get OLLAMA_HOST || true)
+        else
+            vlm_base_default=$(env_get LLM_BASE_URL || true)
+        fi
     fi
     vlm_key_default=$(env_get VLM_API_KEY || true)
     if [ -z "$vlm_key_default" ]; then
         vlm_key_default=$(env_get LLM_API_KEY || true)
     fi
-    ask_env "VLM_BASE_URL" "VLM base URL (defaults to LLM_BASE_URL)" "$vlm_base_default" 0 0
+    ask_env "VLM_BASE_URL" "VLM base URL (local Ollama VLMs should use OLLAMA_HOST)" "$vlm_base_default" 0 0
     ask_env "VLM_API_KEY" "VLM API key (defaults to LLM_API_KEY)" "$vlm_key_default" 0 1
     ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_get EMBEDDING_MODEL || true)" 1 0
     ask_env "EMBEDDING_BASE_URL" "Embedding base URL (blank for provider default)" "$(env_get EMBEDDING_BASE_URL || true)" 0 0
@@ -391,6 +396,8 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
     ask_env "APIFY_KEY" "Apify API key (blank if unused)" "$(env_get APIFY_KEY || true)" 0 1
     ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "$(env_get DEALUM_API_KEY || true)" 0 1
+    ask_env "DEALUM_DEALROOM_ID" "Dealum deal room ID (blank if unused)" "$(env_get DEALUM_DEALROOM_ID || true)" 0 1
+    ask_env "DEALUM_SYNC_TTL_SECONDS" "Dealum sync TTL in seconds" "$(env_get DEALUM_SYNC_TTL_SECONDS || true)" 0 0
 else
     echo "[4/4] .env prompts skipped (--non-interactive)."
     if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi

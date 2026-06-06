@@ -24,6 +24,11 @@ async def generate_dataset_insight(
     Handles cache checking, config loading, executing dataset_chat, and saving output.
     """
     dataset_slug = slugify(dataset_name)
+    from lib.startup_data_sources import ensure_startup_dataset
+
+    status = await ensure_startup_dataset(dataset_slug)
+    dataset_slug = status.dataset_slug
+    dataset_name = dataset_slug
     default_llm = llm_model()
     storage = get_storage()
     

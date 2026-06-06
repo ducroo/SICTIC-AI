@@ -5,9 +5,9 @@ Behavior:
   - read/exists/mtime for files: pull just that Drive file once per process.
   - list/exists for folders: recursively pull-prune the relevant Drive folder
     once per process, then read locally.
-  - write_*: write local first; for non-cache Markdown files, also upload to Drive
-    as Google Docs. Existing Google Docs are updated in-place so Drive keeps
-    revision history.
+  - write_*: write local first; for non-cache files, also upload to Drive.
+    Markdown files are uploaded as Google Docs by GoogleDriveStorage. Existing
+    Google Docs are updated in-place so Drive keeps revision history.
   - remove/rmtree: local only. Destructive Drive changes still require explicit
     sync tooling.
   - Paths whose first segment is in _LOCAL_PREFIXES skip Drive entirely.
@@ -31,8 +31,8 @@ def _is_local_only(rel: str) -> bool:
     return head in _LOCAL_PREFIXES
 
 
-def _should_upload_markdown(rel: str) -> bool:
-    return not _is_local_only(rel) and rel.lower().endswith(".md")
+def _should_upload_to_drive(rel: str) -> bool:
+    return not _is_local_only(rel)
 
 
 def _same_mtime(a: Optional[float], b: Optional[float]) -> bool:
@@ -164,13 +164,13 @@ class MirrorStorage:
     def write_bytes(self, rel: str, content: bytes) -> None:
         rel = _validate_rel(rel)
         self.local.write_bytes(rel, content)
-        if _should_upload_markdown(rel):
+        if _should_upload_to_drive(rel):
             self.drive.write_bytes(rel, content)
 
     def write_text(self, rel: str, content: str, *, encoding: str = "utf-8") -> None:
         rel = _validate_rel(rel)
         self.local.write_text(rel, content, encoding=encoding)
-        if _should_upload_markdown(rel):
+        if _should_upload_to_drive(rel):
             self.drive.write_bytes(rel, content.encode(encoding))
 
     def exists(self, rel: str) -> bool:
@@ -203,7 +203,7 @@ class MirrorStorage:
     def set_mtime(self, rel: str, timestamp: float) -> None:
         rel = _validate_rel(rel)
         self.local.set_mtime(rel, timestamp)
-        if _should_upload_markdown(rel):
+        if _should_upload_to_drive(rel):
             self.drive.set_mtime(rel, timestamp)
 
     def remove(self, rel: str) -> None:

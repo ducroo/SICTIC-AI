@@ -14,6 +14,7 @@ from lib.storage_domains import dataset_raw_path, dataset_parsed_path
 logger = get_logger(__name__)
 
 IGNORED_EXTENSIONS = (
+    '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
     '.mp4', '.avi', '.mov', '.mkv', '.wmv',
     '.mp3', '.wav', '.aac', '.flac', '.m4a',
     '.zip', '.rar', '.7z', '.tar', '.gz',
@@ -22,6 +23,8 @@ IGNORED_EXTENSIONS = (
 )
 IGNORED_FILENAMES = {
     "__active_dataset__",
+    "application.raw.json",
+    "manifest.json",
 }
 
 _sync_locks = {}
