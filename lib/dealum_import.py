@@ -6,12 +6,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from lib.active_dataset import activate_dataset
 from lib.adapters.dealum import DealumAdapter, DealumFileLink
 from lib.logger import get_logger
-from lib.slugify import slugify
+from lib.startup_dossier import canonical_startup_slug, ensure_startup_dossier
 from lib.storage import get_storage
-from lib.storage_domains import dataset_raw_path
+from lib.storage_domains import dataset_parsed_path, dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -37,7 +36,7 @@ class DealumImportResult:
 
 
 def dealum_dataset_rel(dataset_slug: str) -> str:
-    return f"{dataset_raw_path(dataset_slug)}/{DEALUM_SUBDIR}"
+    return f"{dataset_raw_path(canonical_startup_slug(dataset_slug))}/{DEALUM_SUBDIR}"
 
 
 def dealum_manifest_path(dataset_slug: str) -> str:
@@ -56,7 +55,9 @@ def import_startup_from_dealum(
         raise ValueError("Dealum is not configured. Set DEALUM_API_KEY and DEALUM_DEALROOM_ID.")
 
     application = adapter.find_application(startup)
-    dataset_slug = slugify(application.get("name", startup) if application else startup)
+    dataset_slug = canonical_startup_slug(
+        application.get("name", startup) if application else startup
+    )
     if not application:
         return DealumImportResult(
             startup=startup,
@@ -67,9 +68,18 @@ def import_startup_from_dealum(
         )
 
     storage = get_storage()
+    active_marker = f"{dataset_raw_path(dataset_slug)}/__active_dataset__"
+    dossier_paths = [
+        f"{root}/{subdir}"
+        for root in (dataset_raw_path(dataset_slug), dataset_parsed_path(dataset_slug))
+        for subdir in ("data-room", "linkedin", "dealum", "snippets", "post-deal")
+    ]
+    dossier_changed = (activate and not storage.exists(active_marker)) or any(
+        not storage.exists(path) for path in dossier_paths
+    )
+    ensure_startup_dossier(dataset_slug, storage=storage, activate=activate)
     raw_rel = dataset_raw_path(dataset_slug)
     dealum_rel = dealum_dataset_rel(dataset_slug)
-    storage.mkdir(dealum_rel)
 
     previous_manifest = _read_manifest(dataset_slug)
     answer_hash = _stable_hash(_application_content_for_hash(application))
@@ -79,7 +89,7 @@ def import_startup_from_dealum(
     raw_json_path = f"{dealum_rel}/{APPLICATION_RAW_JSON}"
     manifest_path = dealum_manifest_path(dataset_slug)
 
-    changed = False
+    changed = dossier_changed
     if application_changed or not storage.exists(application_path):
         storage.write_text(application_path, render_application_markdown(application))
         storage.write_text(raw_json_path, _stable_json(application))
@@ -155,10 +165,6 @@ def import_startup_from_dealum(
     )
     if manifest_changed or not storage.exists(manifest_path):
         storage.write_text(manifest_path, _stable_json(manifest))
-        changed = True
-
-    if activate and not storage.exists(f"{raw_rel}/__active_dataset__"):
-        activate_dataset(dataset_slug)
         changed = True
 
     return DealumImportResult(

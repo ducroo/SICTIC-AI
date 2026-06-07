@@ -10,6 +10,8 @@ from lib.adapters.apify import ApifyAdapter
 from lib.adapters.web_search import WebSearchAdapter
 from lib.models.person import Person, extract_email_addresses
 from lib.storage_domains import dataset_raw_path, list_dataset_names
+from lib.storage_domains import dataset_location
+from lib.startup_dossier import canonical_startup_slug, ensure_startup_dossier
 from lib.slugify import slugify
 
 logger = get_logger(__name__)
@@ -31,6 +33,10 @@ class LinkedInAdapter:
         Instantly loads the cache, sanitizes names, builds an in-memory RapidFuzz index,
         and loads the missing_profiles state registry.
         """
+        location = dataset_location(dataset_name)
+        if location.domain == "startups":
+            dataset_name = canonical_startup_slug(dataset_name)
+            ensure_startup_dossier(dataset_name)
         self.dataset_name = dataset_name
         self.cache_rel = f"{dataset_raw_path(dataset_name)}/linkedin"
         

@@ -9,6 +9,7 @@ from lib.adapters.dealum import DealumAdapter
 from lib.dealum_import import DealumImportResult, dealum_manifest_path, import_startup_from_dealum
 from lib.logger import get_logger
 from lib.slugify import slugify
+from lib.startup_dossier import canonical_startup_slug
 from lib.storage import get_storage
 from lib.storage_domains import dataset_raw_path
 
@@ -34,7 +35,7 @@ async def ensure_startup_dataset(
     sync_after_import: bool = True,
 ) -> StartupDataStatus:
     """Optionally hydrate a startup dataset from Dealum without changing no-Dealum behavior."""
-    dataset_slug = slugify(startup)
+    dataset_slug = canonical_startup_slug(startup)
     storage = get_storage()
     raw_path = dataset_raw_path(dataset_slug)
     dataset_exists = storage.exists(raw_path)
