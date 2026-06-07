@@ -13,6 +13,7 @@ from skills.dd_checks.dd_checks import dd_checks
 from skills.expert_search.expert_search import expert_search
 from skills.potential_investors.potential_investors import potential_investors
 from skills.suggested_startups.suggested_startups import suggested_startups
+from skills.person_profile.persons_in_dataset import persons_in_dataset
 
 from lib.slugify import slugify
 from lib.active_dataset import is_active_dataset
@@ -20,8 +21,24 @@ from lib.storage_domains import dataset_location, list_dataset_names
 
 logger = get_logger(__name__)
 
+
+async def _refresh_persons_in_dataset(dataset_name: str):
+    import asyncio
+
+    return await asyncio.to_thread(persons_in_dataset, dataset_name)
+
+
 SKILL_MAP = {
-    "person-profile": {"func": person_profile, "domains": ["startups", "community"], "depends_on": []},
+    "persons-in-dataset": {
+        "func": _refresh_persons_in_dataset,
+        "domains": ["startups", "community"],
+        "depends_on": [],
+    },
+    "person-profile": {
+        "func": person_profile,
+        "domains": ["startups", "community"],
+        "depends_on": ["persons-in-dataset"],
+    },
     "startup-profile": {"func": startup_profile, "domains": ["startups"], "depends_on": []},
 
     "investor-appetite": {"func": investor_appetite, "domains": ["community"], "depends_on": ["person-profile"]},
@@ -35,6 +52,37 @@ SKILL_MAP = {
     "suggested-startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup-profile", "person-profile"]}
 }
 
+
+def _expand_skill_dependencies(target_skills: list[str]) -> list[str]:
+    expanded = set()
+
+    def add_with_dependencies(skill_name: str) -> None:
+        if skill_name not in SKILL_MAP:
+            raise ValueError(f"Unknown bulk refresh skill: {skill_name}")
+        if skill_name in expanded:
+            return
+        for dependency in SKILL_MAP[skill_name].get("depends_on", []):
+            add_with_dependencies(dependency)
+        expanded.add(skill_name)
+
+    for skill_name in target_skills:
+        add_with_dependencies(skill_name)
+    return [skill_name for skill_name in SKILL_MAP if skill_name in expanded]
+
+
+def _is_insight_derived_dataset(dataset_name: str) -> bool:
+    dataset_slug = slugify(dataset_name)
+    for skill_name in SKILL_MAP:
+        skill_slug = slugify(skill_name)
+        if (
+            dataset_slug == skill_slug
+            or dataset_slug == f"active-{skill_slug}"
+            or dataset_slug.endswith(f"-{skill_slug}")
+        ):
+            return True
+    return False
+
+
 async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optional[str] = None):
     """
     Refreshes core insights. Performs synchronous dataset ingestion first to prevent memory exhaustion,
@@ -43,7 +91,23 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     import asyncio
 
     target_skills = [slugify(s) for s in target_skill.split(",")] if target_skill else []
+    target_skills = _expand_skill_dependencies(target_skills) if target_skills else []
     target_datasets = [slugify(d) for d in target_dataset.split(",")] if target_dataset else []
+    skipped_derived = [
+        dataset_name
+        for dataset_name in target_datasets
+        if _is_insight_derived_dataset(dataset_name)
+    ]
+    if skipped_derived:
+        logger.info(
+            "Skipping insight-derived datasets: "
+            + ", ".join(skipped_derived)
+        )
+    target_datasets = [
+        dataset_name
+        for dataset_name in target_datasets
+        if not _is_insight_derived_dataset(dataset_name)
+    ]
 
     logger.info(f"Starting bulk refresh routine (skills={target_skills}, datasets={target_datasets})...")
 
@@ -69,7 +133,7 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
         for domain_name in ("startups", "community"):
             for item in list_dataset_names(domain_name):
                 item_slug = slugify(item)
-                if item_slug in ignore_datasets:
+                if item_slug in ignore_datasets or _is_insight_derived_dataset(item_slug):
                     continue
                 
                 if not is_active_dataset(item_slug):
@@ -114,7 +178,9 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
     while skills_to_run:
         # Find skills whose dependencies are fully met
         current_batch = []
-        for skill_name in list(skills_to_run):
+        for skill_name in SKILL_MAP:
+            if skill_name not in skills_to_run:
+                continue
             deps = SKILL_MAP[skill_name].get("depends_on", [])
             # A dependency is met if it's already completed OR if it wasn't even requested
             # Actually, standard DAG behavior: we only care if the dependencies that are *also* being run are met.
