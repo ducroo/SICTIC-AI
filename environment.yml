@@ -38,8 +38,8 @@ dependencies:
       - apify-client
       - langchain-text-splitters
       - ollama
-      - 'docling[ocrmac]==2.72.0; platform_system == "Darwin"'
-      - 'docling==2.72.0; platform_system != "Darwin"'
+      - 'docling[ocrmac]==2.96.1; platform_system == "Darwin"'
+      - 'docling==2.96.1; platform_system != "Darwin"'
       - torch==2.10.0
       - torchvision==0.25.0
       - 'ocrmac==1.0.1; platform_system == "Darwin"'

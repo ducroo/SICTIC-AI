@@ -18,6 +18,11 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     """
     storage = get_storage()
     startup_slug = slugify(startup_name)
+    from lib.startup_data_sources import ensure_startup_dataset
+
+    status = await ensure_startup_dataset(startup_slug)
+    startup_slug = status.dataset_slug
+    startup_name = startup_slug
     default_llm = llm_model()
 
     from lib.insight_filepath import get_insight_filepath

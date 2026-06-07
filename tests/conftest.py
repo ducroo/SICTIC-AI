@@ -28,6 +28,8 @@ os.environ["OLLAMA_NUM_CTX"] = "4096"
 os.environ["OLLAMA_NUM_CTX_MAX"] = "8192"
 os.environ["MAX_CONCURRENT_LLMS"] = "10"
 os.environ["APIFY_KEY"] = "test-apify-key"
+os.environ["DEALUM_API_KEY"] = ""
+os.environ["DEALUM_DEALROOM_ID"] = ""
 
 
 def pytest_collection_modifyitems(config, items):
@@ -91,6 +93,8 @@ def mock_env(monkeypatch, tmp_path):
     monkeypatch.setenv("OLLAMA_NUM_CTX", "4096")
     monkeypatch.setenv("OLLAMA_NUM_CTX_MAX", "8192")
     monkeypatch.setenv("MAX_CONCURRENT_LLMS", "10")
+    monkeypatch.setenv("DEALUM_API_KEY", "")
+    monkeypatch.setenv("DEALUM_DEALROOM_ID", "")
 
     from lib.storage import reset_storage_singleton
     reset_storage_singleton()

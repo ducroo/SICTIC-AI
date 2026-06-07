@@ -19,6 +19,10 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     synthesizes person profiles, and evaluates the team composition.
     """
     dataset_name = slugify(startup_name)
+    from lib.startup_data_sources import ensure_startup_dataset
+
+    status = await ensure_startup_dataset(dataset_name)
+    dataset_name = status.dataset_slug
 
     logger.info(f"[{dataset_name}] Starting Team Profiling")
 

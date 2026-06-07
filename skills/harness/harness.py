@@ -180,6 +180,24 @@ async def _dd_checks(args: List[str]) -> str:
     return f"DD checks complete. Output saved to {output_path}"
 
 
+async def _dealum_import(args: List[str]) -> str:
+    parser = _parser("/dealum_import")
+    parser.add_argument("startup")
+    ns = parser.parse_args(args)
+    from skills.dealum_import.dealum_import import dealum_import
+
+    result = await dealum_import(ns.startup)
+    if not result.application_found:
+        return f"No Dealum application found for {ns.startup}."
+    return (
+        f"Imported {result.dataset_slug}: changed={result.changed}, "
+        f"downloaded={result.downloaded_files}, skipped={result.skipped_files}, "
+        f"step={result.step}\n"
+        f"APPLICATION_PATH: {result.application_path}\n"
+        f"MANIFEST_PATH: {result.manifest_path}"
+    )
+
+
 def build_registry() -> Dict[str, HarnessCommand]:
     commands = [
         HarnessCommand("/config", "/config", "Load config cache.", _config),
@@ -195,6 +213,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
+        HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}
 
