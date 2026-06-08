@@ -129,19 +129,6 @@ def dataset_active_marker_path(dataset_name: str, *, domain: Optional[str] = Non
     return dataset_location(dataset_name, domain=domain).active_marker_rel
 
 
-def registry_path(*parts: str) -> str:
-    root = storage_domain_config().get("registry", {}).get("root", "registry").strip("/")
-    clean = [p.strip("/") for p in parts if p and p.strip("/")]
-    return "/".join([root, *clean])
-
-
-def persons_registry_path(dataset_name: str) -> str:
-    slug = slugify(dataset_name)
-    entry = storage_domain_config().get("datasets", {}).get(slug, {})
-    rel = entry.get("persons_registry") or f"persons/{slug}.md"
-    return registry_path(rel)
-
-
 def list_dataset_names(domain: str) -> list[str]:
     dconf = _domain_config(domain)
     root = dconf["dataset_root"].strip("/")

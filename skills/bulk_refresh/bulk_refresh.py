@@ -5,7 +5,7 @@ from skills.config_load.config_load import config_load
 from skills.dataset_chat.core.ingestion import sync_datasets
 
 from skills.person_profile.person_profile import person_profile
-from skills.investor_appetite.investor_appetite import investor_appetite
+from skills.investor_profile.investor_profile import investor_profile
 from skills.startup_profile.startup_profile import startup_profile
 from skills.team_profile.team_profile import team_profile
 from skills.startup_traction.startup_traction import startup_traction
@@ -41,15 +41,15 @@ SKILL_MAP = {
     },
     "startup-profile": {"func": startup_profile, "domains": ["startups"], "depends_on": []},
 
-    "investor-appetite": {"func": investor_appetite, "domains": ["community"], "depends_on": ["person-profile"]},
+    "investor-profile": {"func": investor_profile, "domains": ["community"], "depends_on": ["person-profile"]},
     "team-profile": {"func": team_profile, "domains": ["startups"], "depends_on": ["startup-profile"]},
     "startup-traction": {"func": startup_traction, "domains": ["startups"], "depends_on": ["startup-profile"]},
     "dd-checks": {"func": dd_checks, "domains": ["startups"], "depends_on": ["startup-profile"]},
 
-    "expert-search": {"func": expert_search, "domains": ["startups"], "depends_on": ["startup-profile", "person-profile"]},
-    "potential-investors": {"func": potential_investors, "domains": ["startups"], "depends_on": ["startup-profile", "investor-appetite"]},
+    "expert-search": {"func": expert_search, "domains": ["startups"], "depends_on": ["startup-profile", "investor-profile"]},
+    "potential-investors": {"func": potential_investors, "domains": ["startups"], "depends_on": ["startup-profile", "investor-profile"]},
 
-    "suggested-startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup-profile", "person-profile"]}
+    "suggested-startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup-profile", "investor-profile"]}
 }
 
 

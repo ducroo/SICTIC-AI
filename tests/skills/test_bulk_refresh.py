@@ -17,11 +17,23 @@ def test_persons_in_dataset_can_be_selected_directly():
 
 
 def test_nested_dependencies_are_expanded_in_registry_order():
-    assert bulk_refresh_module._expand_skill_dependencies(["investor-appetite"]) == [
+    assert bulk_refresh_module._expand_skill_dependencies(["investor-profile"]) == [
         "persons-in-dataset",
         "person-profile",
-        "investor-appetite",
+        "investor-profile",
     ]
+
+
+@pytest.mark.parametrize(
+    "skill_name",
+    ["expert-search", "potential-investors", "suggested-startups"],
+)
+def test_member_matching_skills_depend_on_investor_profile(skill_name):
+    dependencies = bulk_refresh_module._expand_skill_dependencies([skill_name])
+
+    assert "persons-in-dataset" in dependencies
+    assert "person-profile" in dependencies
+    assert "investor-profile" in dependencies
 
 
 @pytest.mark.parametrize(
@@ -31,7 +43,7 @@ def test_nested_dependencies_are_expanded_in_registry_order():
         "active-person-profile",
         "sictic-members-person-profile",
         "avientus-startup-profile",
-        "active-investor-appetite",
+        "active-investor-profile",
     ],
 )
 def test_insight_derived_dataset_names_are_detected(dataset_name):

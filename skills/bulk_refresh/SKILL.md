@@ -8,7 +8,7 @@ description: Automatically refreshes caches and profiles in bulk. Can be used as
 This skill acts as a batch job, designed to be scheduled via cron (e.g., overnight) or run manually on-demand. It ensures all core insights and profiles are pre-generated and cached for immediate use.
 
 ## Workflow
-1. Extracts all SICTIC members and sequentially runs `person_profile` and `investor_appetite` (if targeted).
+1. Extracts all SICTIC members and sequentially runs `person_profile` and `investor_profile` (if targeted).
 2. Scans the datasets directory to identify startup datasets (or targets a specific one).
 3. Sequentially runs `startup_profile`, `team_profile`, and `startup_traction` for each startup (if targeted).
 4. Uses graceful error handling to continue processing remaining items if one fails.

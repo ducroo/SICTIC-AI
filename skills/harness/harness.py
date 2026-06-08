@@ -121,10 +121,13 @@ async def _team_profile(args: List[str]) -> str:
     return _format_result(await team_profile(ns.startup))
 
 
-async def _investor_appetite(args: List[str]) -> str:
-    from skills.investor_appetite.investor_appetite import investor_appetite
+async def _investor_profile(args: List[str]) -> str:
+    parser = _parser("/investor_profile")
+    parser.add_argument("--source-dataset", default="sictic-members")
+    ns = parser.parse_args(args)
+    from skills.investor_profile.investor_profile import investor_profile
 
-    return _format_result(await investor_appetite(investors=args or None))
+    return _format_result(await investor_profile(source_dataset=ns.source_dataset))
 
 
 async def _expert_search(args: List[str]) -> str:
@@ -207,7 +210,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/startup_traction", "/startup_traction <startup>", "Summarize commercial traction.", _startup_traction),
         HarnessCommand("/person_profile", "/person_profile <dataset> <person>", "Generate a person profile.", _person_profile),
         HarnessCommand("/team_profile", "/team_profile <startup>", "Generate a team profile.", _team_profile),
-        HarnessCommand("/investor_appetite", "/investor_appetite [investor...]", "Generate investor appetite profiles.", _investor_appetite),
+        HarnessCommand("/investor_profile", "/investor_profile [--source-dataset dataset]", "Build investor profiles.", _investor_profile),
         HarnessCommand("/expert_search", "/expert_search <startup>", "Rank relevant experts.", _expert_search),
         HarnessCommand("/potential_investors", "/potential_investors <startup>", "Rank potential investors.", _potential_investors),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),

@@ -2,7 +2,6 @@ from lib.storage_domains import (
     dataset_insights_path,
     dataset_parsed_path,
     dataset_raw_path,
-    persons_registry_path,
 )
 
 
@@ -16,7 +15,6 @@ def test_community_dataset_paths_use_configured_domain():
     assert dataset_raw_path("sictic_members") == "storage/community/sictic-members/datasets"
     assert dataset_parsed_path("sictic_members") == "storage/datasets2md/community/sictic-members/datasets"
     assert dataset_insights_path("sictic_members") == "storage/community/sictic-members/insights"
-    assert persons_registry_path("sictic_members") == "registry/persons/sictic-members.md"
 
 
 def test_derived_dataset_paths_use_derived_domain():
