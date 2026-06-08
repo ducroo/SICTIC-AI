@@ -9,7 +9,7 @@
       "dataset_path_template": "{dataset}/datasets",
       "parsed_path_template": "{dataset}/datasets",
       "insights_path_template": "{dataset}/insights",
-      "active_marker": "__active_dataset__"
+      "active_marker": "__active_dataset__.md"
     },
     "community": {
       "dataset_root": "storage/community",
@@ -18,7 +18,7 @@
       "dataset_path_template": "{dataset}/datasets",
       "parsed_path_template": "{dataset}/datasets",
       "insights_path_template": "{dataset}/insights",
-      "active_marker": "__active_dataset__"
+      "active_marker": "__active_dataset__.md"
     },
     "derived": {
       "dataset_root": "storage/community",
@@ -27,20 +27,19 @@
       "dataset_path_template": "{dataset}/datasets",
       "parsed_path_template": "{dataset}/datasets",
       "insights_path_template": "{dataset}/insights",
-      "active_marker": "__active_dataset__"
+      "active_marker": "__active_dataset__.md"
     },
     "ephemeral": {
       "dataset_root": "cache/datasets/ephemeral",
       "parsed_root": "cache/datasets2md/ephemeral",
       "insights_root": "cache/insights/ephemeral",
-      "active_marker": "__active_dataset__"
+      "active_marker": "__active_dataset__.md"
     }
   },
   "datasets": {
     "sictic-members": {
       "domain": "community",
-      "path": "sictic-members",
-      "persons_registry": "persons/sictic-members.md"
+      "path": "sictic-members"
     }
   },
   "derived_datasets": {
@@ -48,12 +47,9 @@
       "domain": "derived",
       "path": "person-profile"
     },
-    "investor-appetite": {
+    "investor-profile": {
       "domain": "derived",
-      "path": "investor-appetite"
+      "path": "investor-profile"
     }
-  },
-  "registry": {
-    "root": "registry"
   }
 }

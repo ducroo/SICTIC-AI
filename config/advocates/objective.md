@@ -8,7 +8,7 @@ Evaluate members based on their ability to act as a 'face' for the SICTIC brand.
 
 **Inference & Selection Logic:**
 
-* **Ecosystem Track Record:** Prioritize candidates whose resumes show active participation in the startup world (e.g., board seats, prior speaking engagements, mentorship, or leadership roles).
+* **Ecosystem and Investment Track Record:** Prioritize candidates whose professional and investment histories demonstrate active participation in the startup world, including investments, board seats, speaking engagements, mentorship, or leadership roles.
 
 * **The 'Representational' Balance:** While high technical proficiency ('geekiness') is a plus, it must be paired with evidence of social/professional presence. Look for indicators of leadership, clarity in experience, and a history of public-facing roles.
 
@@ -16,4 +16,4 @@ Evaluate members based on their ability to act as a 'face' for the SICTIC brand.
 
 * **Tone:** The ideal candidate should come across as a seasoned, credible authority within the startup investment space.
 
-* **Comprehensive Scan:** Do not rely solely on "Executive Summary" in the provided expert profiles; also check the "Professional Experience" and "Education" sections for deep domain knowledge.
+* **Comprehensive Scan:** Do not rely solely on "Executive Summary". Review the "Professional Experience", "Education", and "Investment Track Record and Preferences" sections for credibility, ecosystem involvement, and relevant domain knowledge.

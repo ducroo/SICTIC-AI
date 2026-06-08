@@ -42,3 +42,14 @@ def test_extract_email_addresses_recursively_scans_linkedin_payloads():
         "urs@gubser.ch",
         "urs.gubser@investor.sictic.ch",
     ]
+
+
+def test_extract_email_addresses_ignores_non_email_linkedin_text():
+    payload = {
+        "fullName": "Urs Gubser",
+        "headline": "Investor and entrepreneur",
+        "summary": "Long professional biography without contact information.",
+        "experience": [{"description": "Built and scaled several companies."}],
+    }
+
+    assert extract_email_addresses(payload) == []

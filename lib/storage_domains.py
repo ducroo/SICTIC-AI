@@ -22,7 +22,7 @@ class DatasetLocation:
     dataset_root: str
     parsed_root: str
     insights_root: str
-    active_marker: str = "__active_dataset__"
+    active_marker: str = "__active_dataset__.md"
 
     @property
     def raw_rel(self) -> str:
@@ -109,7 +109,7 @@ def dataset_location(dataset_name: str, *, domain: Optional[str] = None) -> Data
         dataset_root=dconf["dataset_root"].strip("/"),
         parsed_root=dconf["parsed_root"].strip("/"),
         insights_root=dconf["insights_root"].strip("/"),
-        active_marker=dconf.get("active_marker", "__active_dataset__"),
+        active_marker=dconf.get("active_marker", "__active_dataset__.md"),
     )
 
 
@@ -127,19 +127,6 @@ def dataset_insights_path(dataset_name: str, *, domain: Optional[str] = None) ->
 
 def dataset_active_marker_path(dataset_name: str, *, domain: Optional[str] = None) -> str:
     return dataset_location(dataset_name, domain=domain).active_marker_rel
-
-
-def registry_path(*parts: str) -> str:
-    root = storage_domain_config().get("registry", {}).get("root", "registry").strip("/")
-    clean = [p.strip("/") for p in parts if p and p.strip("/")]
-    return "/".join([root, *clean])
-
-
-def persons_registry_path(dataset_name: str) -> str:
-    slug = slugify(dataset_name)
-    entry = storage_domain_config().get("datasets", {}).get(slug, {})
-    rel = entry.get("persons_registry") or f"persons/{slug}.md"
-    return registry_path(rel)
 
 
 def list_dataset_names(domain: str) -> list[str]:

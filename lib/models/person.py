@@ -15,12 +15,10 @@ def normalize_email_addresses(values: str | Iterable[str] | None) -> List[str]:
     candidates: List[str] = []
     if isinstance(values, str):
         candidates.extend(EMAIL_PATTERN.findall(values))
-        if not candidates:
-            candidates.extend(re.split(r"[,;]", values))
     else:
         for value in values:
             if value:
-                candidates.extend(EMAIL_PATTERN.findall(value) or re.split(r"[,;]", value))
+                candidates.extend(EMAIL_PATTERN.findall(value))
 
     normalized: List[str] = []
     seen = set()

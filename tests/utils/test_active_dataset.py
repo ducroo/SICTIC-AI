@@ -1,16 +1,18 @@
+import time
+
 from lib.active_dataset import (
-    MARKER_MTIME,
     MARKER_TEXT,
     activate_dataset,
     archive_dataset,
     dataset_archived_marker_path,
     is_active_dataset,
 )
-from lib.storage import get_storage, reset_storage_singleton
+from lib.storage import get_storage
 from lib.storage_domains import dataset_active_marker_path
 
 
-def test_activate_dataset_writes_active_marker_and_backdates_it(mock_env):
+def test_activate_dataset_writes_current_active_marker(mock_env):
+    started_at = time.time()
     activate_dataset("Avientus")
 
     storage = get_storage()
@@ -20,7 +22,7 @@ def test_activate_dataset_writes_active_marker_and_backdates_it(mock_env):
     assert storage.exists(active_marker)
     assert not storage.exists(archived_marker)
     assert storage.read_text(active_marker) == MARKER_TEXT
-    assert storage.mtime(active_marker) == MARKER_MTIME
+    assert storage.mtime(active_marker) >= started_at
     assert is_active_dataset("Avientus")
 
 
@@ -35,7 +37,6 @@ def test_archive_dataset_replaces_active_marker_with_archived_marker(mock_env):
     assert not storage.exists(active_marker)
     assert storage.exists(archived_marker)
     assert storage.read_text(archived_marker) == MARKER_TEXT
-    assert storage.mtime(archived_marker) == MARKER_MTIME
     assert not is_active_dataset("Avientus")
 
 
@@ -50,21 +51,28 @@ def test_activate_dataset_replaces_archived_marker_with_active_marker(mock_env):
     assert storage.exists(active_marker)
     assert not storage.exists(archived_marker)
     assert storage.read_text(active_marker) == MARKER_TEXT
-    assert storage.mtime(active_marker) == MARKER_MTIME
 
 
 def test_archive_dataset_by_age_writes_archived_marker(mock_env):
     activate_dataset("Avientus")
+    storage = get_storage()
+    active_marker = dataset_active_marker_path("Avientus")
+    old_mtime = time.time() - (2 * 86400)
+    storage.set_mtime(active_marker, old_mtime)
+
     archive_dataset(age_days=1)
 
-    storage = get_storage()
-    assert not storage.exists(dataset_active_marker_path("Avientus"))
+    assert not storage.exists(active_marker)
     assert storage.exists(dataset_archived_marker_path("Avientus"))
 
 
-def test_marker_mtime_is_31_dec_1999_gmt(mock_env):
+def test_activate_dataset_does_not_touch_existing_marker(mock_env):
     activate_dataset("Avientus")
-    reset_storage_singleton()
-
     storage = get_storage()
-    assert storage.mtime(dataset_active_marker_path("Avientus")) == 946598400.0
+    marker = dataset_active_marker_path("Avientus")
+    original_mtime = 1_700_000_000.0
+    storage.set_mtime(marker, original_mtime)
+
+    activate_dataset("Avientus")
+
+    assert storage.mtime(marker) == original_mtime

@@ -1,14 +1,18 @@
 import os
 
 import pytest
-from lib.storage_domains import dataset_raw_path, list_dataset_names
+from lib.storage_domains import (
+    dataset_active_marker_path,
+    dataset_raw_path,
+    list_dataset_names,
+)
 
 
 def _discover_dataset(storage):
     items = list_dataset_names("startups") + list_dataset_names("community")
     active = [
         item for item in items
-        if storage.exists(f"{dataset_raw_path(item)}/__active_dataset__")
+        if storage.exists(dataset_active_marker_path(item))
     ]
     candidates = active or items
     return candidates[0] if candidates else None

@@ -1,6 +1,6 @@
 import time
-from datetime import datetime, timezone
 from typing import Optional
+
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
@@ -8,24 +8,26 @@ from lib.storage_domains import dataset_active_marker_path, dataset_raw_path, li
 
 logger = get_logger(__name__)
 
-ACTIVE_MARKER = "__active_dataset__"
-ARCHIVED_MARKER = "__archived_dataset__"
-MARKER_TEXT = """Feel free to adjust the name of this file. It only signals whether this dataset should be included in the overnight bulk refresh dependent on the name
+ACTIVE_MARKER = "__active_dataset__.md"
+ARCHIVED_MARKER = "__archived_dataset__.md"
+MARKER_TEXT = """# Dataset Refresh Status
 
-* __active_dataset__ => do include
-* __archived_dataset__ => do not include
+This marker controls whether the dataset is included in automated bulk refreshes.
+
+- `__active_dataset__.md`: include the dataset.
+- `__archived_dataset__.md`: exclude the dataset.
+
+Rename this file to the other marker name to change the dataset's refresh status.
 """
-MARKER_MTIME = datetime(1999, 12, 31, tzinfo=timezone.utc).timestamp()
 
 
 def dataset_archived_marker_path(dataset_name: str) -> str:
-    """Returns the __archived_dataset__ marker file path for a dataset."""
+    """Returns the archived dataset marker file path for a dataset."""
     return f"{dataset_raw_path(dataset_name)}/{ARCHIVED_MARKER}"
 
 
 def _write_marker(storage, marker_path: str) -> None:
     storage.write_text(marker_path, MARKER_TEXT)
-    storage.set_mtime(marker_path, MARKER_MTIME)
 
 
 def _set_dataset_marker(dataset_name: str, *, active: bool) -> str:
@@ -34,27 +36,28 @@ def _set_dataset_marker(dataset_name: str, *, active: bool) -> str:
     active_marker_path = dataset_active_marker_path(slug)
     archived_marker_path = dataset_archived_marker_path(slug)
     marker_path = active_marker_path if active else archived_marker_path
+    other_marker_path = archived_marker_path if active else active_marker_path
 
-    storage.remove(active_marker_path)
-    storage.remove(archived_marker_path)
-    _write_marker(storage, marker_path)
+    storage.remove(other_marker_path)
+    if not storage.exists(marker_path):
+        _write_marker(storage, marker_path)
     return marker_path
 
 
 def is_active_dataset(dataset_name: str) -> bool:
-    """Checks if a dataset has the __active_dataset__ marker file."""
+    """Checks if a dataset has the active dataset marker file."""
     slug = slugify(dataset_name)
     return get_storage().exists(dataset_active_marker_path(slug))
 
 def activate_dataset(dataset_name: str) -> None:
-    """Switches a dataset to the __active_dataset__ marker file."""
+    """Switches a dataset to the active dataset marker file."""
     slug = slugify(dataset_name)
     marker_path = _set_dataset_marker(slug, active=True)
     logger.info(f"Activated dataset: {slug} (created {marker_path})")
 
 def archive_dataset(dataset_name: Optional[str] = None, age_days: Optional[int] = None) -> None:
     """
-    Archives datasets by switching from __active_dataset__ to __archived_dataset__.
+    Archives datasets by switching from the active marker to the archived marker.
     - If dataset_name is provided, archives just that dataset.
     - If age_days is provided, archives datasets whose marker file is older than age_days.
     """

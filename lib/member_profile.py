@@ -4,7 +4,6 @@ from typing import List, Optional, Union
 from lib.dataset_from_insight import dataset_from_insight
 from lib.logger import get_logger
 from skills.person_profile.person_profile import person_profile
-from skills.investor_appetite.investor_appetite import investor_appetite
 from lib.adapters.linkedin import LinkedInAdapter
 
 logger = get_logger(__name__)
@@ -15,9 +14,6 @@ async def _process_single_member(type_of_profile: str, full_name: str) -> Option
         if type_of_profile == "person_profile":
             persons = await person_profile(dataset_name="sictic_members", names=full_name)
             profile_content = persons[0].person_profile if persons else None
-        elif type_of_profile == "investor_appetite":
-            results = await investor_appetite(dataset_name="sictic_members", investors=[full_name])
-            profile_content = results.get(full_name)
         else:
             logger.error(f"Unknown type_of_profile: {type_of_profile}")
             return None
@@ -38,7 +34,7 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
     If names is a string, returns the profile string.
     If names is a list or None, returns a dict mapping names to their profiles.
     """
-    if type_of_profile not in ["person_profile", "investor_appetite"]:
+    if type_of_profile not in ["person_profile", "investor_profile"]:
         logger.error(f"Unknown type_of_profile: {type_of_profile}")
         return None
 
@@ -58,6 +54,18 @@ async def member_profile(type_of_profile: str, names: Union[str, List[str], None
         return None if is_single else {}
 
     logger.info(f"Processing {len(names_list)} members for {type_of_profile}...")
+
+    if type_of_profile == "investor_profile":
+        from skills.investor_profile.investor_profile import (
+            investor_profile,
+            read_investor_profiles,
+        )
+
+        await investor_profile(source_dataset="sictic-members")
+        results = read_investor_profiles("sictic-members", names_list)
+        if is_single:
+            return results.get(names_list[0])
+        return {name: results.get(name) for name in names_list}
 
     tasks = [_process_single_member(type_of_profile, name) for name in names_list]
     results_list = await asyncio.gather(*tasks)

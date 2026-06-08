@@ -5,7 +5,7 @@ description: This skill aims to find potential investors in the target startup. 
 
 ## Skill Prompt: `potential_investors`
 
-**Objective:** Match a specific startup against the SICTIC investor base, leveraging vector search on investor appetites followed by an LLM-driven deep-dive ranking against full person profiles.
+**Objective:** Match a specific startup against the SICTIC investor base, leveraging investor profiles that combine professional experience with investment track records and preferences.
 
 **Inputs:**
 * `startup_name` (Required): The name of the startup to match. 
@@ -18,10 +18,10 @@ description: This skill aims to find potential investors in the target startup. 
 1. **Fetch data:** 
    * Fetch the `startup_profile` for the given `startup_name`. If it does not exist, throw an error. The full text of this profile will act as our semantic query. 
    * Compile the list of `target_investors`. If none are provided, load all members. Remove any names present in `exclude_investors`.
-   * Read in the person profile and investor appetite for all `target_investors`. This guarantees the profiles are up to date.
+   * Read the investor profile for all `target_investors`. Each profile combines the person profile with the manually maintained investment track record and preferences.
 
-2. **Semantic Search (Appetite Level):** 
-   * Perform a semantic search via `dataset_chat.dataset_search` against the `investor_appetites` dataset using the full `startup_profile` text as the query. 
+2. **Semantic Search (Investor Profile Level):**
+   * Perform semantic search against the investor-profile dataset using the full `startup_profile` text as the query.
    * Ensure `return_full_docs=True` and retrieve a large initial pool (e.g., `max_chunks=200`). 
    * **Filtering:** Iterate through the semantic results. 
      * Extract the investor name from the `document_name`. 

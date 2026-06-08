@@ -22,7 +22,11 @@ IGNORED_EXTENSIONS = (
     '.gdoc', '.gsheet', '.gslide', '.gdraw'
 )
 IGNORED_FILENAMES = {
+    "__active_dataset__.md",
+    "__archived_dataset__.md",
+    # Keep ignoring legacy markers until the Google Drive migration is complete.
     "__active_dataset__",
+    "__archived_dataset__",
     "application.raw.json",
     "manifest.json",
 }

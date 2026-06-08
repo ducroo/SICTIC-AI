@@ -32,7 +32,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         config = config_load()
         bulk_config = config.get("bulk_refresh", {})
         community_datasets = [slugify(s) for s in bulk_config.get("community_datasets", ["sictic-members"])]
-        ignore_datasets = [slugify(s) for s in bulk_config.get("ignore_datasets", ["investor-appetite", "person-profile"])]
+        ignore_datasets = [slugify(s) for s in bulk_config.get("ignore_datasets", ["investor-profile", "person-profile"])]
 
         discovered = []
         for item in list_dataset_names("startups"):
@@ -83,8 +83,8 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     compiled_startups = await compile_startup_profiles(startups)
     
     names_to_process = [inv for inv, _ in investors_to_process]
-    logger.info(f"[{dataset_name}] Batch fetching investor appetites for {len(names_to_process)} investors...")
-    investor_profiles_dict = await member_profile("investor_appetite", names_to_process)
+    logger.info(f"[{dataset_name}] Batch fetching investor profiles for {len(names_to_process)} investors...")
+    investor_profiles_dict = await member_profile("investor_profile", names_to_process)
     
     import asyncio
 

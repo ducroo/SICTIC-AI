@@ -112,6 +112,51 @@ def _walk_drive(drive: GoogleDriveStorage, rel: str = "") -> List[Tuple[str, flo
     return out
 
 
+def _walk_drive_dirs(drive: GoogleDriveStorage, rel: str = "") -> List[str]:
+    """Recursive list of Drive folders under rel, relative to the storage root."""
+    rel = _clean_rel(rel)
+    drive._resolve_root_folder()
+    service = drive._ensure_service()
+    parent_id = drive._resolve(rel) if rel else drive.root_folder_id
+    if parent_id is None:
+        return []
+
+    out: List[str] = []
+    stack: List[Tuple[str, str]] = [(parent_id, rel)]
+    from googleapiclient.errors import HttpError
+
+    while stack:
+        pid, prefix = stack.pop()
+        page_token = None
+        while True:
+            try:
+                res = service.files().list(
+                    q=f"'{pid}' in parents and trashed=false",
+                    fields="nextPageToken,files(id,name,mimeType)",
+                    pageSize=1000,
+                    pageToken=page_token,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                ).execute()
+            except HttpError as e:
+                logger.error(f"list error under {prefix!r}: {e}")
+                break
+            for item in res.get("files", []):
+                if item.get("mimeType") != "application/vnd.google-apps.folder":
+                    continue
+                if item["name"] in _SKIP_FOLDER_NAMES:
+                    continue
+                child_rel = f"{prefix}/{item['name']}" if prefix else item["name"]
+                out.append(child_rel)
+                drive._path_to_id[child_rel] = item["id"]
+                drive._path_to_mime[child_rel] = item["mimeType"]
+                stack.append((item["id"], child_rel))
+            page_token = res.get("nextPageToken")
+            if not page_token:
+                break
+    return out
+
+
 def _walk_local(local: LocalStorage, rel: str = "") -> List[Tuple[str, float]]:
     """Recursive list of local files under rel, with paths relative to root."""
     rel = _clean_rel(rel)
@@ -129,6 +174,22 @@ def _walk_local(local: LocalStorage, rel: str = "") -> List[Tuple[str, float]]:
             continue
         out.append((str(p.relative_to(local.base).as_posix()), p.stat().st_mtime))
     return out
+
+
+def _walk_local_dirs(local: LocalStorage, rel: str = "") -> List[str]:
+    """Recursive list of local folders under rel, relative to the storage root."""
+    rel = _clean_rel(rel)
+    base = Path(local.base) / rel if rel else Path(local.base)
+    if not base.is_dir():
+        return []
+    return sorted(
+        str(path.relative_to(local.base).as_posix())
+        for path in base.rglob("*")
+        if path.is_dir()
+        and not any(
+            part in _SKIP_FOLDER_NAMES for part in path.relative_to(local.base).parts
+        )
+    )
 
 
 def _same_mtime(a: Optional[float], b: Optional[float]) -> bool:
@@ -225,11 +286,22 @@ def pull_mirror(
     logger.info(f"=== PULL path={rel or '.'} (drive -> local {mirror.base}) ===")
     drive_files = dict(_walk_drive(drive, rel))
     local_files = dict(_walk_local(mirror, rel))
+    drive_dirs = set(_walk_drive_dirs(drive, rel))
+    local_dirs = set(_walk_local_dirs(mirror, rel))
     logger.info(f"  source_files={len(drive_files)} destination_files={len(local_files)}")
 
     synced = 0
     failed = 0
     pruned = 0
+
+    for path in sorted(drive_dirs - local_dirs, key=lambda item: len(Path(item).parts)):
+        try:
+            mirror.mkdir(path)
+            logger.info(f"  mkdir local {path}")
+            synced += 1
+        except Exception as e:
+            logger.error(f"  FAILED mkdir local {path}: {e}")
+            failed += 1
 
     for path, mtime in sorted(drive_files.items()):
         try:
@@ -247,6 +319,22 @@ def pull_mirror(
             pruned += 1
         except Exception as e:
             logger.error(f"  FAILED prune local {path}: {e}")
+            failed += 1
+
+    for path in sorted(
+        local_dirs - drive_dirs,
+        key=lambda item: len(Path(item).parts),
+        reverse=True,
+    ):
+        try:
+            local_path = Path(mirror.base) / path
+            local_path.rmdir()
+            logger.info(f"  prune local folder {path}")
+            pruned += 1
+        except OSError:
+            pass
+        except Exception as e:
+            logger.error(f"  FAILED prune local folder {path}: {e}")
             failed += 1
 
     logger.info(f"=== TOTAL synced={synced} failed={failed} pruned={pruned} ===")
@@ -277,11 +365,22 @@ def push_mirror(
     logger.info(f"=== PUSH path={rel or '.'} (local {mirror.base} -> drive) ===")
     local_files = dict(_walk_local(mirror, rel))
     drive_files = dict(_walk_drive(drive, rel))
+    local_dirs = set(_walk_local_dirs(mirror, rel))
+    drive_dirs = set(_walk_drive_dirs(drive, rel))
     logger.info(f"  source_files={len(local_files)} destination_files={len(drive_files)}")
 
     synced = 0
     failed = 0
     pruned = 0
+
+    for path in sorted(local_dirs - drive_dirs, key=lambda item: len(Path(item).parts)):
+        try:
+            drive.mkdir(path)
+            logger.info(f"  mkdir drive {path}")
+            synced += 1
+        except Exception as e:
+            logger.error(f"  FAILED mkdir drive {path}: {e}")
+            failed += 1
 
     for path, mtime in sorted(local_files.items()):
         try:
@@ -298,6 +397,19 @@ def push_mirror(
             pruned += 1
         except Exception as e:
             logger.error(f"  FAILED prune drive {path}: {e}")
+            failed += 1
+
+    for path in sorted(
+        drive_dirs - local_dirs,
+        key=lambda item: len(Path(item).parts),
+        reverse=True,
+    ):
+        try:
+            drive.remove(path)
+            logger.info(f"  prune drive folder {path}")
+            pruned += 1
+        except Exception as e:
+            logger.error(f"  FAILED prune drive folder {path}: {e}")
             failed += 1
 
     logger.info(f"=== TOTAL synced={synced} failed={failed} pruned={pruned} ===")
