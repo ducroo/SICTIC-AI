@@ -9,7 +9,11 @@ from lib.active_dataset import activate_dataset
 from lib.env import get_env_var
 from lib.slugify import slugify
 from lib.storage import Storage, get_storage
-from lib.storage_domains import dataset_parsed_path, dataset_raw_path
+from lib.storage_domains import (
+    dataset_active_marker_path,
+    dataset_parsed_path,
+    dataset_raw_path,
+)
 
 
 STARTUP_DATASET_SUBDIRS = (
@@ -62,7 +66,7 @@ def ensure_startup_dossier(
         for subdir in STARTUP_DATASET_SUBDIRS:
             storage.mkdir(f"{root}/{subdir}")
 
-    active_marker = f"{dataset_raw_path(dataset_slug, domain='startups')}/__active_dataset__"
+    active_marker = dataset_active_marker_path(dataset_slug, domain="startups")
     if activate and not storage.exists(active_marker):
         activate_dataset(dataset_slug)
     return dataset_slug

@@ -13,7 +13,7 @@ The AI and all skills must strictly adhere to the configured storage-domain layo
 
 *   `config/` — A folder structure filled with `.md` files containing prompts and settings. The `config_load` skill compiles these into a single JSON dictionary at runtime.
 *   `storage/startups/<dataset_name>/datasets/` — raw startup data rooms.
-    *   `__active_dataset__` — A blank marker file. If present, it signals to batch jobs (like `bulk_refresh`) that this startup should be actively processed.
+    *   `__active_dataset__.md` — A readable marker file. If present, it signals to batch jobs (like `bulk_refresh`) that this startup should be actively processed.
 *   `storage/startups/<dataset_name>/insights/` — generated startup AI reports and profiles.
 *   `storage/community/<dataset_name>/datasets/` — raw community/member datasets and derived searchable datasets, such as member profiles used by ranking.
 *   `storage/community/<dataset_name>/insights/` — generated community AI reports and profiles.

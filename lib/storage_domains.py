@@ -22,7 +22,7 @@ class DatasetLocation:
     dataset_root: str
     parsed_root: str
     insights_root: str
-    active_marker: str = "__active_dataset__"
+    active_marker: str = "__active_dataset__.md"
 
     @property
     def raw_rel(self) -> str:
@@ -109,7 +109,7 @@ def dataset_location(dataset_name: str, *, domain: Optional[str] = None) -> Data
         dataset_root=dconf["dataset_root"].strip("/"),
         parsed_root=dconf["parsed_root"].strip("/"),
         insights_root=dconf["insights_root"].strip("/"),
-        active_marker=dconf.get("active_marker", "__active_dataset__"),
+        active_marker=dconf.get("active_marker", "__active_dataset__.md"),
     )
 
 

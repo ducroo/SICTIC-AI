@@ -10,7 +10,11 @@ from lib.adapters.dealum import DealumAdapter, DealumFileLink
 from lib.logger import get_logger
 from lib.startup_dossier import canonical_startup_slug, ensure_startup_dossier
 from lib.storage import get_storage
-from lib.storage_domains import dataset_parsed_path, dataset_raw_path
+from lib.storage_domains import (
+    dataset_active_marker_path,
+    dataset_parsed_path,
+    dataset_raw_path,
+)
 
 logger = get_logger(__name__)
 
@@ -68,7 +72,7 @@ def import_startup_from_dealum(
         )
 
     storage = get_storage()
-    active_marker = f"{dataset_raw_path(dataset_slug)}/__active_dataset__"
+    active_marker = dataset_active_marker_path(dataset_slug)
     dossier_paths = [
         f"{root}/{subdir}"
         for root in (dataset_raw_path(dataset_slug), dataset_parsed_path(dataset_slug))

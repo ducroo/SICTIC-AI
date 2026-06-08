@@ -101,7 +101,7 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     assert result.downloaded_files == 2
     assert storage.exists("storage/startups/avientus/datasets/dealum/application.md")
     assert storage.exists("storage/startups/avientus/datasets/dealum/documents/Avientus_Deck.pdf")
-    assert storage.exists("storage/startups/avientus/datasets/__active_dataset__")
+    assert storage.exists("storage/startups/avientus/datasets/__active_dataset__.md")
 
     manifest = json.loads(storage.read_text("storage/startups/avientus/datasets/dealum/manifest.json"))
     assert manifest["dealum_id"] == 491739

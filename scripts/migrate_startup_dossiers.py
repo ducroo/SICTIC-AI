@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import lib.env  # noqa: F401
-from lib.active_dataset import MARKER_MTIME, MARKER_TEXT
+from lib.active_dataset import ACTIVE_MARKER, ARCHIVED_MARKER, MARKER_TEXT
 from lib.env import get_env_var
 from lib.startup_dossier import (
     STARTUP_DATASET_SUBDIRS,
@@ -50,7 +50,7 @@ def _migrated_relative(relative: Path) -> Path:
         return relative
 
     child_parts = parts[1:]
-    if child_parts[0] in {"__active_dataset__", "__archived_dataset__"}:
+    if child_parts[0] in {ACTIVE_MARKER, ARCHIVED_MARKER}:
         return relative
     if child_parts[0] in STARTUP_DATASET_SUBDIRS:
         return relative
@@ -140,7 +140,7 @@ def _plan_tree(root: Path, *, create_active_marker: bool) -> tuple[list[Action],
                 )
             )
         if create_active_marker:
-            marker = datasets_root / "__active_dataset__"
+            marker = datasets_root / ACTIVE_MARKER
             actions.append(Action("activate", None, str(marker), "all migrated startups are active"))
 
     return actions, conflicts
@@ -184,8 +184,7 @@ def apply_plan(plan: dict) -> None:
         elif action == "activate":
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(MARKER_TEXT, encoding="utf-8")
-            os.utime(destination, (MARKER_MTIME, MARKER_MTIME))
-            archived = destination.parent / "__archived_dataset__"
+            archived = destination.parent / ARCHIVED_MARKER
             if archived.exists():
                 archived.unlink()
         elif action == "move":

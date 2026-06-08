@@ -40,7 +40,7 @@ def test_migration_routes_files_and_directories_in_both_trees(mock_env, tmp_path
 
     assert (
         mirror
-        / "storage/startups/example/datasets/__active_dataset__"
+        / "storage/startups/example/datasets/__active_dataset__.md"
     ).exists()
 
 

@@ -15,7 +15,7 @@ def test_ensure_startup_dossier_creates_raw_and_parsed_layout(mock_env):
     for root in (dataset_raw_path(slug), dataset_parsed_path(slug)):
         for subdir in STARTUP_DATASET_SUBDIRS:
             assert storage.is_dir(f"{root}/{subdir}")
-    assert storage.exists(f"{dataset_raw_path(slug)}/__active_dataset__")
+    assert storage.exists(f"{dataset_raw_path(slug)}/__active_dataset__.md")
 
 
 def test_canonical_startup_slug_uses_explicit_alias(mock_env):

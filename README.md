@@ -213,7 +213,7 @@ conda run -n sictic-env python -m lib.dataset_from_insight --insight-name invest
 ### 2. Overnight Refresh
 
 The `bulk_refresh` command can refresh a set of insights on a set of datasets.
-* If the datasets are not specified, it will refresh all skills with a `__active_dataset__` file in the dataset subfolder.
+* If the datasets are not specified, it will refresh all skills with a `__active_dataset__.md` file in the dataset subfolder.
 * If the insights are not specified, it will refresh all relevant skills.
 
 ```bash
