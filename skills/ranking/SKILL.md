@@ -1,5 +1,9 @@
 # Skill: Ranking
 
+`ranking_persons(...)` returns the human-readable Markdown report.
+`rank_person_rows(...)` returns structured rows for composing other workflows
+without parsing Markdown.
+
 **Description:**
 Core engine to rank entities (like SICTIC members) against a specific objective using an LLM-powered Swiss tournament algorithm. It acts as the unified backend for skills like `expert_search` and `potential_investors`.
 

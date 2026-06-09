@@ -52,15 +52,12 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     # 2. Call ranking_persons Engine
     logger.info(f"[{event_name_slug}] Invoking ranking_persons engine for advocates...")
     
-    clean_targets = [slugify(c) for c in target_members] if target_members else None
-    clean_excludes = [slugify(c) for c in exclude_members] if exclude_members else None
-    
     result = await ranking_persons(
         dataset_name=people_dataset,
         objective=objective,
         query=event_description,
-        candidates=clean_targets,
-        optout=clean_excludes,
+        candidates=target_members,
+        optout=exclude_members,
         top_k=top_k
     )
     

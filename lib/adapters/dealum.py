@@ -9,7 +9,6 @@ from urllib.parse import unquote, urlparse
 import requests
 
 from lib.logger import get_logger
-from lib.slugify import slugify
 
 logger = get_logger(__name__)
 
@@ -52,32 +51,18 @@ class DealumAdapter:
         if not self.dealroom_id:
             raise ValueError("DEALUM_DEALROOM_ID is not configured.")
         url = f"{self.base_url}/dealrooms/{self.dealroom_id}/applications"
+        logger.info("[dealum-api] Listing applications: dealroom_id=%s", self.dealroom_id)
         response = requests.get(url, headers=self._headers(), timeout=self.timeout)
         response.raise_for_status()
         data = response.json()
         if not isinstance(data, list):
             raise ValueError("Dealum applications response was not a list.")
+        logger.info(
+            "[dealum-api] Listed %d applications: dealroom_id=%s",
+            len(data),
+            self.dealroom_id,
+        )
         return data
-
-    def find_application(self, startup: str) -> Optional[dict[str, Any]]:
-        target_slug = slugify(startup)
-        target_lower = startup.strip().lower()
-        applications = self.list_applications()
-
-        for application in applications:
-            if slugify(str(application.get("name", ""))) == target_slug:
-                return application
-            if str(application.get("code", "")).strip().lower() == target_lower:
-                return application
-
-        for application in applications:
-            blob = " ".join(
-                str(application.get(key, ""))
-                for key in ("name", "code")
-            ).lower()
-            if target_lower and target_lower in blob:
-                return application
-        return None
 
     def extract_file_links(self, application: dict[str, Any]) -> list[DealumFileLink]:
         answers = application.get("answers") or {}

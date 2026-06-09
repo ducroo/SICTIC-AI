@@ -1,204 +1,248 @@
-from typing import List, Optional
+from pathlib import PurePosixPath
+from typing import Any, List, Optional
 
+from lib.insight_refresh import get_base_name
 from lib.logger import get_logger
-from lib.storage import get_storage
+from lib.models.person import Person, normalize_email_addresses
+from lib.slugify import slugify
 from skills.dataset_chat.dataset_search import dataset_search
+from skills.person_profile.persons_in_dataset import persons_in_dataset
 from skills.ranking.ranking_rationale import ranking_rationale
 from skills.ranking.ranking_top_k import ranking_top_k
 
-from rapidfuzz import process, fuzz
-
-from lib.slugify import slugify
-from lib.storage_domains import dataset_raw_path
-from lib.models.person import normalize_email_addresses
-
 logger = get_logger(__name__)
 
-# ==========================================
-# HELPER FUNCTIONS (Single Responsibility)
-# ==========================================
 
-def _resolve_candidates(dataset_name: str, candidates: Optional[List[str]], optout: Optional[List[str]]) -> List[str]:
-    """Determines the final list of candidates to rank by fuzzy-matching against available profiles."""
-    dataset_dir_rel = dataset_raw_path(dataset_name)
-    storage = get_storage()
-    available_profiles = []
-    
-    # Files look like "urs-gubser-gemma4-31b-nvfp4.md"
-    for filename in storage.list(dataset_dir_rel, suffix=".md"):
-        available_profiles.append(filename)
+def _person_reference(value: str, members: List[Person]) -> Person:
+    value = value.strip()
+    emails = normalize_email_addresses(value)
+    if emails:
+        return Person(email_addresses=emails)
 
-    if not available_profiles:
-        raise RuntimeError(f"No profile files found in {dataset_dir_rel}. Cannot rank candidates.")
-        
-    final_candidates = []
-    
+    normalized = slugify(value)
+    exact_linkedin = next(
+        (member for member in members if member.linkedin_id == normalized),
+        None,
+    )
+    if exact_linkedin:
+        return Person(linkedin_id=normalized)
+    return Person(full_name=value)
+
+
+def _resolve_person(
+    value: str,
+    members: List[Person],
+    *,
+    threshold: int = 85,
+) -> Optional[Person]:
+    reference = _person_reference(value, members)
+    return reference.find_best_match(members, threshold=threshold)
+
+
+def _resolve_members(
+    members: List[Person],
+    candidates: Optional[List[str]],
+    optout: Optional[List[str]],
+) -> List[Person]:
     if candidates:
+        selected: List[Person] = []
         missing_candidates = []
-        for c in candidates:
-            c_slug = slugify(c)
-            # Use partial_ratio because c_slug ("urs-gubser") is a substring of the filename ("urs-gubser-gemma4.md")
-            match = process.extractOne(c_slug, available_profiles, scorer=fuzz.partial_ratio)
-            if match and match[1] >= 90:
-                final_candidates.append(match[0])
-            else:
-                missing_candidates.append(c)
-                
+        for value in candidates:
+            matched = _resolve_person(value, members)
+            if matched is None:
+                missing_candidates.append(value)
+            elif matched not in selected:
+                selected.append(matched)
+
         if missing_candidates:
-            err_msg = f"The following requested candidates could not be found in the dataset: {', '.join(missing_candidates)}"
-            logger.error(err_msg)
-            raise ValueError(err_msg)
+            message = (
+                "The following requested candidates could not be matched to "
+                f"sictic-members: {', '.join(missing_candidates)}"
+            )
+            logger.error(message)
+            raise ValueError(message)
     else:
-        final_candidates = available_profiles.copy()
-        
+        selected = list(members)
+
     if optout:
+        excluded_identifiers = set()
         missing_optouts = []
-        optout_matches = set()
-        for o in optout:
-            o_slug = slugify(o)
-            match = process.extractOne(o_slug, available_profiles, scorer=fuzz.partial_ratio)
-            if match and match[1] >= 90:
-                optout_matches.add(match[0])
+        for value in optout:
+            matched = _resolve_person(value, members)
+            if matched is None:
+                missing_optouts.append(value)
             else:
-                missing_optouts.append(o)
-                
+                excluded_identifiers.add(matched.identifier)
+
         if missing_optouts:
-            logger.warning(f"The following optout candidates could not be found in the dataset: {', '.join(missing_optouts)}")
-            
-        final_candidates = [c for c in final_candidates if c not in optout_matches]
-        
-    return list(set(final_candidates))
+            logger.warning(
+                "The following opt-outs could not be matched to sictic-members: %s",
+                ", ".join(missing_optouts),
+            )
+        selected = [
+            person for person in selected
+            if person.identifier not in excluded_identifiers
+        ]
+
+    return selected
 
 
 def _markdown_table_cell(value: str) -> str:
     return value.replace("|", "\\|").replace("\n", " ").strip()
 
 
-def _extract_person_metadata(profile_id: str, text: str) -> dict:
-    metadata = {
-        "full_name": "",
-        "linkedin_id": "",
-        "email_addresses": [],
-    }
-
-    for line in text.splitlines():
-        key, _, value = line.partition(":")
-        normalized_key = key.strip().lower()
-        if normalized_key == "full-name":
-            metadata["full_name"] = value.strip()
-        elif normalized_key == "linkedin-id":
-            metadata["linkedin_id"] = value.strip().lower()
-        elif normalized_key == "email-addresses":
-            metadata["email_addresses"] = normalize_email_addresses(value)
-
-    if not metadata["linkedin_id"]:
-        metadata["linkedin_id"] = slugify(profile_id)
-    if not metadata["full_name"]:
-        metadata["full_name"] = metadata["linkedin_id"]
-
-    return metadata
-
-# ==========================================
-# MAIN ORCHESTRATOR
-# ==========================================
-
-async def ranking_persons(
-    dataset_name: str = "person_profile",
-    objective: str = "", 
-    query: str = "",
-    candidates: Optional[List[str]] = None, 
-    optout: Optional[List[str]] = None, 
-    top_k: int = 8
-) -> str:
-    """
-    Core engine to rank SICTIC members using pairwise comparisons.
-    Returns the generated markdown report as a string.
-    """
-    logger.info("Starting ranking_persons")
-    
-    # Ensure dataset name is safely slugified before traversing storage
-    dataset_name = slugify(dataset_name)
-
-    # 1. Resolve Candidates
-    final_candidates = _resolve_candidates(dataset_name, candidates, optout)
-
-    # 2. Semantic Search & Filtering
-    cutoff_m = top_k * 8
-    logger.info(f"Starting semantic search on dataset '{dataset_name}' with query: '{query[:50]}...'")
-    chunks = await dataset_search(
-        dataset_name=dataset_name, 
-        query=query, 
-        max_chunks=cutoff_m * 20
-    )
-    
-    if not chunks:
-        err_msg = f"No documents found in dataset {dataset_name} during semantic search."
-        logger.error(err_msg)
-        raise RuntimeError(err_msg)
-
-    id_to_text = {}
-    metadata_by_id = {}
-    
-    # Filter chunks based on the resolved candidates list
-    for c in chunks:
-        doc_name = c.document_name
-            
-        if doc_name in final_candidates:
-            metadata = _extract_person_metadata(doc_name, c.text)
-            person_id = metadata["linkedin_id"]
-            if person_id not in id_to_text:
-                id_to_text[person_id] = ""
-                metadata_by_id[person_id] = metadata
-            # Aggregate the chunks cleanly into the person's text block
-            id_to_text[person_id] += c.to_md() + "\n\n"
-            if len(id_to_text) >= cutoff_m:
-                break
-                
-    if not id_to_text:
-        err_msg = "No documents remained after filtering semantic search results against the candidate list."
-        logger.error(err_msg)
-        raise RuntimeError(err_msg)
-
-    # 3. Execute Find Top K
-    logger.info(f"Starting ranking_top_k with {len(id_to_text)} candidates (target top_k: {top_k}).")
-    ranked_items, actual_top_k = await ranking_top_k(
-        objective=objective,
-        all_profiles=id_to_text,
-        top_k=top_k
-    )
-
-    for item in ranked_items:
-        item.update(metadata_by_id.get(item["id"], {}))
-
-    # 4. Synthesize Final Rationales
-    logger.info(f"Starting ranking_rationale with top {actual_top_k} out of {len(ranked_items)} ranked candidates.")
-    augmented_items = await ranking_rationale(
-        ranked_items=ranked_items,
-        objective=objective
-    )
-
-    # 5. Build Markdown Table
+def render_person_ranking(rows: List[dict[str, Any]]) -> str:
     lines = [
         "## Top Candidates",
         "",
-        "| Rank | Full Name | LinkedIn ID | Email Addresses | Ranking Rationale |",
-        "| :--- | :--- | :--- | :--- | :--- |"
+        "| Rank | Full Name | Email Addresses | LinkedIn ID | Rationale |",
+        "| :--- | :--- | :--- | :--- | :--- |",
     ]
-    
-    for item in augmented_items:
-        full_name = item.get("full_name") or item["id"]
-        linkedin_id = item.get("linkedin_id") or item["id"]
-        email_addresses = ", ".join(item.get("email_addresses") or [])
-        clean_rationale = item.get("rationale", "").replace("\n", " ")
+    for row in rows:
         lines.append(
-            f"| {item.get('rank', '-')} | "
-            f"{_markdown_table_cell(full_name)} | "
-            f"{_markdown_table_cell(linkedin_id)} | "
-            f"{_markdown_table_cell(email_addresses)} | "
-            f"{_markdown_table_cell(clean_rationale)} |"
+            f"| {row['rank']} | "
+            f"{_markdown_table_cell(row['full_name'])} | "
+            f"{_markdown_table_cell(', '.join(row['email_addresses']))} | "
+            f"{_markdown_table_cell(row['linkedin_id'])} | "
+            f"{_markdown_table_cell(row['rationale'])} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+async def rank_person_rows(
+    dataset_name: str = "sictic-members-investor-profile",
+    objective: str = "",
+    query: str = "",
+    candidates: Optional[List[str]] = None,
+    optout: Optional[List[str]] = None,
+    top_k: int = 8,
+    member_dataset: str = "sictic-members",
+) -> List[dict[str, Any]]:
+    """Rank member profiles and return structured rows."""
+    dataset_name = slugify(dataset_name)
+    members = persons_in_dataset(member_dataset)
+    if not members:
+        raise RuntimeError(f"No persons found in member dataset '{member_dataset}'.")
+
+    selected_members = _resolve_members(members, candidates, optout)
+    members_by_linkedin = {
+        person.linkedin_id: person
+        for person in selected_members
+        if person.linkedin_id
+    }
+    skipped_without_linkedin = [
+        person.display_name
+        for person in selected_members
+        if not person.linkedin_id
+    ]
+    if skipped_without_linkedin:
+        logger.warning(
+            "Skipping %d selected members without LinkedIn IDs: %s",
+            len(skipped_without_linkedin),
+            ", ".join(skipped_without_linkedin),
+        )
+    if not members_by_linkedin:
+        raise RuntimeError("No selected members have LinkedIn IDs for profile ranking.")
+
+    cutoff_m = top_k * 8
+    logger.info(
+        "Starting semantic search on dataset '%s' across %d selected members.",
+        dataset_name,
+        len(members_by_linkedin),
+    )
+    chunks = await dataset_search(
+        dataset_name=dataset_name,
+        query=query,
+        max_chunks=cutoff_m * 20,
+    )
+    if not chunks:
+        raise RuntimeError(
+            f"No documents found in dataset {dataset_name} during semantic search."
         )
 
-    result = "\n".join(lines) + "\n"
+    profile_text_by_id: dict[str, str] = {}
+    for chunk in chunks:
+        filename = PurePosixPath(chunk.document_name).name
+        linkedin_id = get_base_name(filename)
+        if linkedin_id not in members_by_linkedin:
+            continue
+        profile_text_by_id.setdefault(linkedin_id, "")
+        profile_text_by_id[linkedin_id] += chunk.to_md() + "\n\n"
+        if len(profile_text_by_id) >= cutoff_m:
+            break
 
-    logger.info(f"[{dataset_name}] ranking_persons complete.")
+    if not profile_text_by_id:
+        raise RuntimeError(
+            "No profile documents remained after matching search results to "
+            "the selected sictic-members roster."
+        )
+
+    if candidates:
+        missing_profiles = [
+            person.display_name
+            for person in selected_members
+            if person.linkedin_id not in profile_text_by_id
+        ]
+        if missing_profiles:
+            raise ValueError(
+                "The following requested candidates have no searchable profile: "
+                + ", ".join(missing_profiles)
+            )
+
+    logger.info(
+        "Starting ranking_top_k with %d candidates (target top_k: %d).",
+        len(profile_text_by_id),
+        top_k,
+    )
+    ranked_items, actual_top_k = await ranking_top_k(
+        objective=objective,
+        all_profiles=profile_text_by_id,
+        top_k=top_k,
+    )
+    logger.info(
+        "Starting ranking_rationale with top %d out of %d ranked candidates.",
+        actual_top_k,
+        len(ranked_items),
+    )
+    augmented_items = await ranking_rationale(
+        ranked_items=ranked_items,
+        objective=objective,
+    )
+
+    rows = []
+    for item in augmented_items:
+        person = members_by_linkedin[item["id"]]
+        rows.append(
+            {
+                "rank": item.get("rank", len(rows) + 1),
+                "full_name": person.display_name,
+                "email_addresses": list(person.email_addresses),
+                "linkedin_id": person.linkedin_id,
+                "rationale": item.get("rationale", ""),
+            }
+        )
+    return rows
+
+
+async def ranking_persons(
+    dataset_name: str = "sictic-members-investor-profile",
+    objective: str = "",
+    query: str = "",
+    candidates: Optional[List[str]] = None,
+    optout: Optional[List[str]] = None,
+    top_k: int = 8,
+    member_dataset: str = "sictic-members",
+) -> str:
+    """Rank member profiles and return a Markdown report."""
+    rows = await rank_person_rows(
+        dataset_name=dataset_name,
+        objective=objective,
+        query=query,
+        candidates=candidates,
+        optout=optout,
+        top_k=top_k,
+        member_dataset=member_dataset,
+    )
+    result = render_person_ranking(rows)
+    logger.info("[%s] ranking_persons complete.", slugify(dataset_name))
     return result

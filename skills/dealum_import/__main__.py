@@ -2,6 +2,7 @@ import asyncio
 
 import typer
 
+from lib.dealum_import import DealumReconciliationError
 from skills.dealum_import.dealum_import import dealum_import
 
 app = typer.Typer(help="Import a startup application and linked documents from Dealum.")
@@ -17,6 +18,10 @@ def main(startup: str):
     for name in startups:
         try:
             result = asyncio.run(dealum_import(name))
+        except DealumReconciliationError as error:
+            typer.echo(f"Could not reconcile {name}: {error}", err=True)
+            failed = True
+            continue
         except Exception as error:
             typer.echo(f"Failed to import {name}: {error}", err=True)
             failed = True
@@ -36,6 +41,8 @@ def main(startup: str):
             typer.echo(f"APPLICATION_PATH: {result.application_path}")
         if result.manifest_path:
             typer.echo(f"MANIFEST_PATH: {result.manifest_path}")
+        if result.dealum_url:
+            typer.echo(f"DEALUM_URL: {result.dealum_url}")
 
     if failed:
         raise typer.Exit(code=1)

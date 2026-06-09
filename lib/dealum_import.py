@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from lib.adapters.dealum import DealumAdapter, DealumFileLink
 from lib.logger import get_logger
+from lib.slugify import slugify
 from lib.startup_dossier import canonical_startup_slug, ensure_startup_dossier
 from lib.storage import get_storage
 from lib.storage_domains import (
@@ -22,6 +23,7 @@ DEALUM_SUBDIR = "dealum"
 APPLICATION_MD = "application.md"
 APPLICATION_RAW_JSON = "application.raw.json"
 MANIFEST_JSON = "manifest.json"
+DEALUM_APP_URL = "https://app.dealum.com/#/dealroom/{dealroom_id}?application={application_id}"
 
 
 @dataclass(frozen=True)
@@ -31,12 +33,42 @@ class DealumImportResult:
     imported: bool
     changed: bool
     application_found: bool
+    dealum_name: Optional[str] = None
+    dealum_id: Any = None
+    dealum_url: Optional[str] = None
+    application_code: Optional[str] = None
+    match_method: Optional[str] = None
     manifest_path: Optional[str] = None
     application_path: Optional[str] = None
     downloaded_files: int = 0
     skipped_files: int = 0
     stale_files: int = 0
     step: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class DealumMatch:
+    requested_startup: str
+    matched_name: str
+    dataset_slug: str
+    dealum_id: Any
+    dealum_url: Optional[str]
+    application_code: Optional[str]
+    step: Optional[str]
+    match_method: str
+    application: dict[str, Any]
+
+
+class DealumReconciliationError(ValueError):
+    """Base error for startup-name reconciliation against Dealum."""
+
+
+class DealumApplicationNotFoundError(DealumReconciliationError):
+    """Raised when no exact Dealum name or application code matches."""
+
+
+class DealumApplicationAmbiguousError(DealumReconciliationError):
+    """Raised when an exact lookup identifies more than one application."""
 
 
 def dealum_dataset_rel(dataset_slug: str) -> str:
@@ -47,6 +79,152 @@ def dealum_manifest_path(dataset_slug: str) -> str:
     return f"{dealum_dataset_rel(dataset_slug)}/{MANIFEST_JSON}"
 
 
+def dealum_application_url(
+    dealroom_id: Optional[str],
+    application_id: Any,
+) -> Optional[str]:
+    if not dealroom_id or application_id in (None, ""):
+        return None
+    return DEALUM_APP_URL.format(
+        dealroom_id=dealroom_id,
+        application_id=application_id,
+    )
+
+
+def reconcile_dealum_startup(
+    startup: str,
+    *,
+    adapter: Optional[DealumAdapter] = None,
+) -> DealumMatch:
+    requested = startup.strip()
+    if not requested:
+        raise DealumReconciliationError("Provide a startup name or Dealum application code.")
+
+    adapter = adapter or DealumAdapter()
+    if not adapter.is_configured():
+        raise ValueError("Dealum is not configured. Set DEALUM_API_KEY and DEALUM_DEALROOM_ID.")
+
+    target_slug = slugify(requested)
+    target_code = requested.casefold()
+    logger.info(
+        "[dealum-reconcile] Starting reconciliation: requested=%r normalized=%r",
+        requested,
+        target_slug,
+    )
+
+    try:
+        applications = adapter.list_applications()
+    except Exception:
+        logger.exception(
+            "[dealum-reconcile] Failed to retrieve Dealum applications: requested=%r",
+            requested,
+        )
+        raise
+
+    logger.info(
+        "[dealum-reconcile] Retrieved %d Dealum applications for requested=%r",
+        len(applications),
+        requested,
+    )
+
+    name_matches = [
+        application
+        for application in applications
+        if slugify(str(application.get("name") or "")) == target_slug
+    ]
+    logger.debug(
+        "[dealum-reconcile] Normalized-name phase found %d matches: requested=%r normalized=%r",
+        len(name_matches),
+        requested,
+        target_slug,
+    )
+    if name_matches:
+        return _dealum_match(requested, name_matches, "normalized_name", adapter.dealroom_id)
+
+    code_matches = [
+        application
+        for application in applications
+        if str(application.get("code") or "").strip().casefold() == target_code
+    ]
+    logger.debug(
+        "[dealum-reconcile] Application-code phase found %d matches: requested=%r",
+        len(code_matches),
+        requested,
+    )
+    if code_matches:
+        return _dealum_match(requested, code_matches, "application_code", adapter.dealroom_id)
+
+    logger.warning(
+        "[dealum-reconcile] No exact match: requested=%r normalized=%r applications_checked=%d",
+        requested,
+        target_slug,
+        len(applications),
+    )
+    raise DealumApplicationNotFoundError(
+        f"No exact Dealum application match for '{requested}'. "
+        "Provide the startup name as shown in Dealum or its application code."
+    )
+
+
+def _dealum_match(
+    requested: str,
+    applications: list[dict[str, Any]],
+    match_method: str,
+    dealroom_id: Optional[str],
+) -> DealumMatch:
+    if len(applications) > 1:
+        candidates = [
+            {
+                "name": application.get("name"),
+                "id": application.get("id"),
+                "code": application.get("code"),
+                "step": application.get("step"),
+            }
+            for application in applications
+        ]
+        logger.error(
+            "[dealum-reconcile] Ambiguous exact match: requested=%r method=%s candidates=%s",
+            requested,
+            match_method,
+            candidates,
+        )
+        candidate_names = ", ".join(
+            f"{item.get('name') or 'unnamed'} ({item.get('code') or item.get('id') or 'no identifier'})"
+            for item in candidates
+        )
+        raise DealumApplicationAmbiguousError(
+            f"Multiple Dealum applications match '{requested}': {candidate_names}."
+        )
+
+    application = applications[0]
+    matched_name = str(application.get("name") or requested).strip()
+    dataset_slug = canonical_startup_slug(matched_name)
+    match = DealumMatch(
+        requested_startup=requested,
+        matched_name=matched_name,
+        dataset_slug=dataset_slug,
+        dealum_id=application.get("id"),
+        dealum_url=dealum_application_url(dealroom_id, application.get("id")),
+        application_code=application.get("code"),
+        step=application.get("step"),
+        match_method=match_method,
+        application=application,
+    )
+    logger.info(
+        "[dealum-reconcile] Matched requested=%r to name=%r id=%r code=%r step=%r "
+        "method=%s dataset_slug=%r url=%r",
+        requested,
+        match.matched_name,
+        match.dealum_id,
+        match.application_code,
+        match.step,
+        match.match_method,
+        match.dataset_slug,
+        match.dealum_url,
+    )
+    return match
+
+
 def import_startup_from_dealum(
     startup: str,
     *,
@@ -55,21 +233,17 @@ def import_startup_from_dealum(
     download_documents: bool = True,
 ) -> DealumImportResult:
     adapter = adapter or DealumAdapter()
-    if not adapter.is_configured():
-        raise ValueError("Dealum is not configured. Set DEALUM_API_KEY and DEALUM_DEALROOM_ID.")
-
-    application = adapter.find_application(startup)
-    dataset_slug = canonical_startup_slug(
-        application.get("name", startup) if application else startup
+    logger.info("[dealum-import] Starting import: requested=%r", startup)
+    match = reconcile_dealum_startup(startup, adapter=adapter)
+    application = match.application
+    dataset_slug = match.dataset_slug
+    logger.info(
+        "[dealum-import] Reconciliation complete: requested=%r matched=%r method=%s dataset_slug=%r",
+        startup,
+        match.matched_name,
+        match.match_method,
+        dataset_slug,
     )
-    if not application:
-        return DealumImportResult(
-            startup=startup,
-            dataset_slug=dataset_slug,
-            imported=False,
-            changed=False,
-            application_found=False,
-        )
 
     storage = get_storage()
     active_marker = dataset_active_marker_path(dataset_slug)
@@ -88,14 +262,26 @@ def import_startup_from_dealum(
     previous_manifest = _read_manifest(dataset_slug)
     answer_hash = _stable_hash(_application_content_for_hash(application))
     application_changed = answer_hash != previous_manifest.get("application_hash")
+    dealum_url_changed = match.dealum_url != previous_manifest.get("dealum_url")
 
     application_path = f"{dealum_rel}/{APPLICATION_MD}"
     raw_json_path = f"{dealum_rel}/{APPLICATION_RAW_JSON}"
     manifest_path = dealum_manifest_path(dataset_slug)
 
     changed = dossier_changed
-    if application_changed or not storage.exists(application_path):
-        storage.write_text(application_path, render_application_markdown(application))
+    if application_changed or dealum_url_changed or not storage.exists(application_path):
+        logger.info(
+            "[dealum-import] Writing Dealum application: dataset_slug=%r "
+            "application_changed=%s dealum_url_changed=%s path=%s",
+            dataset_slug,
+            application_changed,
+            dealum_url_changed,
+            application_path,
+        )
+        storage.write_text(
+            application_path,
+            render_application_markdown(application, dealum_url=match.dealum_url),
+        )
         storage.write_text(raw_json_path, _stable_json(application))
         changed = True
 
@@ -131,6 +317,12 @@ def import_startup_from_dealum(
                     logger.warning(f"[{dataset_slug}] Dealum file metadata check failed for {link.url}: {e}")
 
             if should_download:
+                logger.info(
+                    "[dealum-import] Downloading linked file: dataset_slug=%r field=%r target=%s",
+                    dataset_slug,
+                    link.field,
+                    target_rel,
+                )
                 content, download_metadata = adapter.download_file(link.url)
                 storage.write_bytes(target_rel, content)
                 metadata.update(download_metadata)
@@ -138,6 +330,11 @@ def import_startup_from_dealum(
                 downloaded_files += 1
                 changed = True
             else:
+                logger.debug(
+                    "[dealum-import] Linked file unchanged: dataset_slug=%r target=%s",
+                    dataset_slug,
+                    target_rel,
+                )
                 metadata.update({k: v for k, v in previous.items() if k not in metadata or metadata[k] is None})
                 skipped_files += 1
 
@@ -156,6 +353,7 @@ def import_startup_from_dealum(
         "startup": application.get("name") or startup,
         "dataset_slug": dataset_slug,
         "dealum_id": application.get("id"),
+        "dealum_url": match.dealum_url,
         "code": application.get("code"),
         "step": application.get("step"),
         "tags": application.get("tags") or [],
@@ -171,12 +369,29 @@ def import_startup_from_dealum(
         storage.write_text(manifest_path, _stable_json(manifest))
         changed = True
 
+    logger.info(
+        "[dealum-import] Completed import: requested=%r matched=%r dataset_slug=%r changed=%s "
+        "downloaded=%d skipped=%d stale=%d step=%r",
+        startup,
+        match.matched_name,
+        dataset_slug,
+        changed,
+        downloaded_files,
+        skipped_files,
+        stale_files,
+        match.step,
+    )
     return DealumImportResult(
         startup=startup,
         dataset_slug=dataset_slug,
         imported=True,
         changed=changed,
         application_found=True,
+        dealum_name=match.matched_name,
+        dealum_id=match.dealum_id,
+        dealum_url=match.dealum_url,
+        application_code=match.application_code,
+        match_method=match.match_method,
         manifest_path=manifest_path,
         application_path=application_path,
         downloaded_files=downloaded_files,
@@ -186,11 +401,16 @@ def import_startup_from_dealum(
     )
 
 
-def render_application_markdown(application: dict[str, Any]) -> str:
+def render_application_markdown(
+    application: dict[str, Any],
+    *,
+    dealum_url: Optional[str] = None,
+) -> str:
     name = application.get("name") or "Unknown startup"
     lines = [f"# Dealum Application: {name}", ""]
     lines.extend([
         f"- Dealum ID: {application.get('id', '')}",
+        f"- Dealum URL: {dealum_url or ''}",
         f"- Code: {application.get('code', '')}",
         f"- Step: {application.get('step', '')}",
         f"- Tags: {', '.join(application.get('tags') or [])}",

@@ -65,16 +65,12 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     # 3. Call ranking_persons Engine
     logger.info(f"[{startup_slug}] Invoking ranking_persons engine for expert search...")
     
-    # Ensure candidates and optouts are strictly slugified before passing down
-    clean_targets = [slugify(c) for c in target_experts] if target_experts else None
-    clean_excludes = [slugify(c) for c in exclude_experts] if exclude_experts else None
-    
     result = await ranking_persons(
         dataset_name=people_dataset,
         objective=objective,
         query=profile_content,
-        candidates=clean_targets,
-        optout=clean_excludes,
+        candidates=target_experts,
+        optout=exclude_experts,
         top_k=top_k
     )
     

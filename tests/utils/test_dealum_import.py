@@ -2,7 +2,12 @@ import json
 
 import pytest
 
-from lib.dealum_import import import_startup_from_dealum
+from lib.dealum_import import (
+    DealumApplicationAmbiguousError,
+    DealumApplicationNotFoundError,
+    import_startup_from_dealum,
+    reconcile_dealum_startup,
+)
 from lib.startup_data_sources import ensure_startup_dataset
 from lib.storage import get_storage
 from lib.storage import LocalStorage
@@ -30,15 +35,17 @@ APPLICATION = {
 
 
 class FakeDealumAdapter:
-    def __init__(self, application=APPLICATION):
+    def __init__(self, application=APPLICATION, applications=None):
         self.application = application
+        self.applications = applications if applications is not None else [application]
+        self.dealroom_id = "19180"
         self.downloads = 0
 
     def is_configured(self):
         return True
 
-    def find_application(self, startup):
-        return self.application
+    def list_applications(self):
+        return self.applications
 
     def extract_file_links(self, application):
         from lib.adapters.dealum import DealumAdapter
@@ -98,6 +105,13 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     assert result.imported is True
     assert result.changed is True
     assert result.dataset_slug == "avientus"
+    assert result.dealum_name == "Avientus"
+    assert result.dealum_id == 491739
+    assert result.dealum_url == (
+        "https://app.dealum.com/#/dealroom/19180?application=491739"
+    )
+    assert result.application_code == "JHXM-QZHJ-8684"
+    assert result.match_method == "normalized_name"
     assert result.downloaded_files == 2
     assert storage.exists("storage/startups/avientus/datasets/dealum/application.md")
     assert storage.exists("storage/startups/avientus/datasets/dealum/documents/Avientus_Deck.pdf")
@@ -105,8 +119,18 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
 
     manifest = json.loads(storage.read_text("storage/startups/avientus/datasets/dealum/manifest.json"))
     assert manifest["dealum_id"] == 491739
+    assert manifest["dealum_url"] == (
+        "https://app.dealum.com/#/dealroom/19180?application=491739"
+    )
     assert manifest["step"] == "Jury"
     assert len(manifest["files"]) == 2
+    application_md = storage.read_text(
+        "storage/startups/avientus/datasets/dealum/application.md"
+    )
+    assert (
+        "- Dealum URL: https://app.dealum.com/#/dealroom/19180?application=491739"
+        in application_md
+    )
 
 
 def test_dealum_import_unchanged_skips_rewrite_and_preserves_manual_files(mock_env):
@@ -164,3 +188,73 @@ async def test_ensure_startup_dataset_no_dealum_env_is_noop(mock_env):
     assert status.dealum_configured is False
     assert status.dataset_exists is False
     assert not get_storage().exists(dataset_raw_path("missingco"))
+
+
+def test_reconcile_dealum_startup_matches_normalized_name(mock_env, caplog):
+    novoviz = {
+        **APPLICATION,
+        "id": 991,
+        "name": "NovoViz",
+        "code": "NOVO-991",
+        "step": "Selected for pitching",
+    }
+
+    match = reconcile_dealum_startup(
+        "novoviz",
+        adapter=FakeDealumAdapter(novoviz),
+    )
+
+    assert match.matched_name == "NovoViz"
+    assert match.dataset_slug == "novoviz"
+    assert match.dealum_url == (
+        "https://app.dealum.com/#/dealroom/19180?application=991"
+    )
+    assert match.match_method == "normalized_name"
+    assert match.step == "Selected for pitching"
+    assert "Matched requested='novoviz' to name='NovoViz'" in caplog.text
+
+
+def test_reconcile_dealum_startup_matches_exact_application_code(mock_env):
+    novoviz = {
+        **APPLICATION,
+        "id": 991,
+        "name": "NovoViz",
+        "code": "NOVO-991",
+    }
+
+    match = reconcile_dealum_startup(
+        " novo-991 ",
+        adapter=FakeDealumAdapter(novoviz),
+    )
+
+    assert match.matched_name == "NovoViz"
+    assert match.match_method == "application_code"
+
+
+def test_reconcile_dealum_startup_rejects_substring_match(mock_env):
+    novoviz = {
+        **APPLICATION,
+        "name": "NovoViz Medical Imaging",
+        "code": "NOVO-991",
+    }
+
+    with pytest.raises(DealumApplicationNotFoundError, match="No exact Dealum application match"):
+        reconcile_dealum_startup(
+            "novoviz",
+            adapter=FakeDealumAdapter(novoviz),
+        )
+
+
+def test_reconcile_dealum_startup_rejects_ambiguous_exact_name(mock_env, caplog):
+    applications = [
+        {**APPLICATION, "id": 1, "name": "NovoViz", "code": "NOVO-1"},
+        {**APPLICATION, "id": 2, "name": "novoviz", "code": "NOVO-2"},
+    ]
+
+    with pytest.raises(DealumApplicationAmbiguousError, match="Multiple Dealum applications"):
+        reconcile_dealum_startup(
+            "novoviz",
+            adapter=FakeDealumAdapter(applications=applications),
+        )
+
+    assert "Ambiguous exact match" in caplog.text

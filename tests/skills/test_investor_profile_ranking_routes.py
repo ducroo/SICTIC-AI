@@ -79,3 +79,65 @@ async def test_ranking_skill_uses_investor_profile_dataset(
         source_dataset="sictic-members",
     )
     assert ranking.await_args.kwargs["dataset_name"] == "sictic-members-investor-profile"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "module,func_name,args,targets,excludes",
+    [
+        (
+            expert_search_module,
+            "expert_search",
+            ("example-startup",),
+            {"target_experts": ["Urs Gubser"]},
+            {"exclude_experts": ["jane@sictic.ch"]},
+        ),
+        (
+            potential_investors_module,
+            "potential_investors",
+            ("example-startup",),
+            {"target_investors": ["Urs Gubser"]},
+            {"exclude_investors": ["jane@sictic.ch"]},
+        ),
+        (
+            advocates_module,
+            "advocates",
+            ("example-event", "Event description"),
+            {"target_members": ["Urs Gubser"]},
+            {"exclude_members": ["jane@sictic.ch"]},
+        ),
+    ],
+)
+async def test_ranking_skills_pass_person_references_without_slugifying(
+    mock_env,
+    mocker,
+    module,
+    func_name,
+    args,
+    targets,
+    excludes,
+):
+    mocker.patch.object(module, "check_insight_refresh", return_value=(True, None, None))
+    if hasattr(module, "startup_profile"):
+        mocker.patch.object(module, "startup_profile", side_effect=_fake_startup_profile)
+    config_key = func_name
+    mocker.patch.object(
+        module,
+        "config_load",
+        return_value={
+            config_key: {
+                "objective": "Objective {{startup_profile}}{{overview_event}}"
+            }
+        },
+    )
+    mocker.patch.object(module, "dataset_from_insight")
+    ranking = mocker.patch.object(
+        module,
+        "ranking_persons",
+        side_effect=_fake_ranking_persons,
+    )
+
+    await getattr(module, func_name)(*args, **targets, **excludes)
+
+    assert ranking.await_args.kwargs["candidates"] == ["Urs Gubser"]
+    assert ranking.await_args.kwargs["optout"] == ["jane@sictic.ch"]

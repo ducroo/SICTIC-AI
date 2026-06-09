@@ -65,15 +65,12 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     # 3. Call ranking_persons Engine
     logger.info(f"[{startup_slug}] Invoking ranking_persons engine for potential investors...")
     
-    clean_targets = [slugify(c) for c in target_investors] if target_investors else None
-    clean_excludes = [slugify(c) for c in exclude_investors] if exclude_investors else None
-    
     result = await ranking_persons(
         dataset_name=people_dataset,
         objective=objective,
         query=profile_content,
-        candidates=clean_targets,
-        optout=clean_excludes,
+        candidates=target_investors,
+        optout=exclude_investors,
         top_k=top_k
     )
     
