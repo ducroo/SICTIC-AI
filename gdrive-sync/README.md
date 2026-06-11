@@ -42,6 +42,26 @@ Streaming pulls persist completed file and folder hashes immediately into a
 SQLite checkpoint table. The checkpoint is promoted to the successful baseline
 only after the full operation completes without failures.
 
+Pull behavior:
+
+- If no successful baseline and Drive start page token exist yet, `pull` performs
+  a full recursive bootstrap walk.
+- After a successful bootstrap, later `pull` runs use the Drive Changes API
+  (`changes.list`) from the stored page token and apply only changed, created,
+  moved, renamed, or deleted Drive entries.
+- If Drive reports that the stored change token expired, `pull` falls back to a
+  full recursive walk and writes a fresh baseline/token.
+
+Sync behavior:
+
+- If a successful baseline and Drive start page token exist, `sync` uses
+  `changes.list` for cloud-side changes and local-vs-baseline hashes for
+  local-side changes.
+- Local-only changes are uploaded to Drive. Cloud-only changes are applied
+  locally. If both sides changed the same path, `--conflict-policy` chooses the
+  winning side for the canonical path.
+- If no baseline/token exists, `sync` falls back to the full-scan planner.
+
 Logs rotate by default in:
 
 - `gdrive-sync/logs/gdrive-sync.log`

@@ -22,7 +22,7 @@ class LocalTree:
     def scan(self) -> dict[str, SnapshotEntry]:
         out: dict[str, SnapshotEntry] = {}
         for path in sorted(self.root.rglob("*")):
-            rel = path.relative_to(self.root).as_posix()
+            rel = clean_rel(path.relative_to(self.root).as_posix())
             if is_hidden_rel(rel) or is_excluded(rel, self.exclude):
                 continue
             if path.is_symlink():

@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import unicodedata
 from pathlib import Path, PurePosixPath
 
 
@@ -10,6 +11,7 @@ def clean_rel(path: str | os.PathLike | None) -> str:
     if path is None:
         return ""
     rel = str(path).replace("\\", "/").strip("/")
+    rel = unicodedata.normalize("NFC", rel)
     if rel in {"", "."}:
         return ""
     if rel.startswith("/"):

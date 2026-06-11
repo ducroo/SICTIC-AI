@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from .types import SnapshotEntry
+from .util import clean_rel
 
 
 def default_state_dir() -> Path:
@@ -71,7 +72,9 @@ class SyncState:
         out: dict[str, SnapshotEntry] = {}
         for row in rows:
             data = json.loads(row["entry_json"])
-            out[row["path"]] = SnapshotEntry(**data)
+            path = clean_rel(row["path"])
+            data["path"] = clean_rel(data.get("path") or path)
+            out[path] = SnapshotEntry(**data)
         return out
 
     def save_baseline(self, entries: dict[str, SnapshotEntry]) -> None:
@@ -79,8 +82,39 @@ class SyncState:
             con.execute("delete from baseline")
             con.executemany(
                 "insert into baseline(path, entry_json) values(?, ?)",
-                [(path, json.dumps(entry.__dict__, sort_keys=True)) for path, entry in entries.items()],
+                [
+                    (
+                        clean_rel(path),
+                        json.dumps({**entry.__dict__, "path": clean_rel(entry.path)}, sort_keys=True),
+                    )
+                    for path, entry in entries.items()
+                ],
             )
+
+    def baseline_by_drive_id(self) -> dict[str, SnapshotEntry]:
+        out: dict[str, SnapshotEntry] = {}
+        for entry in self.load_baseline().values():
+            if entry.drive_id:
+                out[entry.drive_id] = entry
+        return out
+
+    def upsert_baseline_entry(self, entry: SnapshotEntry) -> None:
+        path = clean_rel(entry.path)
+        with self._connect() as con:
+            con.execute(
+                """
+                insert into baseline(path, entry_json) values(?, ?)
+                on conflict(path) do update set entry_json = excluded.entry_json
+                """,
+                (path, json.dumps({**entry.__dict__, "path": path}, sort_keys=True)),
+            )
+
+    def delete_baseline_path(self, path: str, *, include_descendants: bool = False) -> None:
+        path = clean_rel(path)
+        with self._connect() as con:
+            con.execute("delete from baseline where path = ?", (path,))
+            if include_descendants:
+                con.execute("delete from baseline where path like ?", (f"{path}/%",))
 
     def clear_checkpoint(self, operation_id: str) -> None:
         with self._connect() as con:
@@ -95,10 +129,13 @@ class SyncState:
         out: dict[str, SnapshotEntry] = {}
         for row in rows:
             data = json.loads(row["entry_json"])
-            out[row["path"]] = SnapshotEntry(**data)
+            path = clean_rel(row["path"])
+            data["path"] = clean_rel(data.get("path") or path)
+            out[path] = SnapshotEntry(**data)
         return out
 
     def save_checkpoint_entry(self, operation_id: str, entry: SnapshotEntry) -> None:
+        path = clean_rel(entry.path)
         with self._connect() as con:
             con.execute(
                 """
@@ -108,7 +145,7 @@ class SyncState:
                     entry_json = excluded.entry_json,
                     completed_at = unixepoch('subsec')
                 """,
-                (operation_id, entry.path, json.dumps(entry.__dict__, sort_keys=True)),
+                (operation_id, path, json.dumps({**entry.__dict__, "path": path}, sort_keys=True)),
             )
 
     def promote_checkpoint_to_baseline(self, operation_id: str) -> None:

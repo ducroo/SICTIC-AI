@@ -296,3 +296,39 @@ Opt-in live smoke tests require local services and configured storage:
 ```bash
 SICTIC_RUN_LIVE_SMOKE=1 conda run -n sictic-env python -m pytest -q -m live
 ```
+
+#### Synchronizing the Hybrid Mirror
+
+The repo includes a CLI utility at `gdrive-sync/` for synchronizing the hybrid
+local mirror with the configured Google Drive root. After installing the repo
+editable in the active conda environment, the command is available from any
+working directory:
+
+```bash
+python -m pip install -e .
+gdrive-sync pull
+gdrive-sync sync --conflict-policy local-wins
+gdrive-sync sync --conflict-policy local-wins --dry-run
+```
+
+`gdrive-sync` reads the same `.env` values as the application:
+
+* `STORAGE_MIRROR_PATH`: local mirror root
+* `STORAGE_PATH`: Google Drive folder ID/root
+* `GDRIVE_CREDENTIALS`: OAuth Desktop-App credentials
+* `GDRIVE_TOKEN`: cached OAuth token
+
+The first successful `gdrive-sync pull` performs a full bootstrap walk of Drive,
+downloads ordinary files as binary files, exports Google Docs as local Markdown,
+and stores a repo-local SQLite baseline under `gdrive-sync/.state/`. Later pulls
+use the Google Drive Changes API (`changes.list`) and only apply changed,
+created, moved, renamed, or deleted Drive entries.
+
+For bidirectional work, `gdrive-sync sync --conflict-policy local-wins` compares
+local file hashes with the SQLite baseline and combines that with Drive
+`changes.list`. Local-only edits are uploaded to Drive; cloud-only edits are
+pulled locally; if both sides changed the same path, the conflict policy decides
+which side wins. Use `--dry-run` before a real sync when testing changes.
+
+Runtime logs are written to `gdrive-sync/logs/gdrive-sync.log`. See
+`gdrive-sync/README.md` for operational details and cron examples.
