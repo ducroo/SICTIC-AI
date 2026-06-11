@@ -30,8 +30,12 @@ dependencies = [
     "torchvision==0.25.0",
 ]
 
+[project.scripts]
+gdrive-sync = "gdrive_sync.cli:main"
+
 [project.optional-dependencies]
 test = ["pytest", "pytest-mock"]
 
 [tool.setuptools.packages.find]
-include = ["skills*", "lib*"]
+where = [".", "gdrive-sync"]
+include = ["skills*", "lib*", "gdrive_sync*"]
