@@ -12,9 +12,8 @@ def clean_gateway():
     
     gateway = ServicesGateway()
     # Reset internal limits for testing
-    gateway.MAX_CONCURRENT_EMBEDS = 2
-    gateway.MAX_CONCURRENT_LLMS = 1
-    gateway.MAX_CONCURRENT_DOCLING = 2
+    gateway.OLLAMA_NUM_PARALLEL = 2
+    gateway.DOCLING_NUM_PARALLEL = 2
     return gateway
 
 def read_state():
@@ -92,7 +91,7 @@ async def test_gateway_concurrency_limits(clean_gateway, mocker):
     async def mock_slow_embedding(**kwargs):
         # We check the state *while* the tasks are running inside litellm
         state = read_state()
-        assert len(state.get("active_embeds", [])) <= clean_gateway.MAX_CONCURRENT_EMBEDS
+        assert len(state.get("active_embeds", [])) <= clean_gateway.OLLAMA_NUM_PARALLEL
         await asyncio.sleep(0.2)
         return "Mock"
     

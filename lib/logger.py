@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 # Logs land in the repo's logs/ directory (gitignored). Resolved from this file's
@@ -19,15 +20,21 @@ def get_logger(name: str) -> logging.Logger:
     if not logger.handlers:
         logger.setLevel(logging.DEBUG)  # Capture everything at the logger level
 
-        # Create a file handler for all logs
-        file_handler = logging.FileHandler(LOG_FILE)
-        file_handler.setLevel(logging.DEBUG)
+        if os.environ.get("SICTIC_TESTING") == "1":
+            # Keep records available to pytest/caplog without polluting the
+            # operational log with mocked test activity.
+            logger.addHandler(logging.NullHandler())
+            return logger
 
         # Define a standard format including the log level
         formatter = logging.Formatter(
             '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
+
+        # Create a file handler for all logs
+        file_handler = logging.FileHandler(LOG_FILE)
+        file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         
         logger.addHandler(file_handler)

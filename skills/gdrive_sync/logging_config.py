@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
 def default_log_dir() -> Path:
-    return Path(__file__).resolve().parents[1] / "logs"
+    repo_root = os.environ.get("REPO_PATH")
+    if repo_root:
+        return Path(repo_root).expanduser() / "logs"
+    return Path(__file__).resolve().parents[2] / "logs"
 
 
 def configure_logging(log_dir: str | None = None, *, verbose: bool = False) -> None:
-    root = logging.getLogger("gdrive_sync")
+    root = logging.getLogger("skills.gdrive_sync")
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
     if any(isinstance(handler, RotatingFileHandler) for handler in root.handlers):
         return

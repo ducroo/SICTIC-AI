@@ -1,3 +1,4 @@
+import pytest
 from openpyxl import Workbook
 
 from lib.adapters.docling import (
@@ -11,6 +12,39 @@ def test_docling_sdk_import_available():
     from docling.document_converter import DocumentConverter
 
     assert DocumentConverter is not None
+
+
+def test_rtf_conversion_extracts_text_without_docling(tmp_path):
+    path = tmp_path / "readme.rtf"
+    path.write_text(
+        r"{\rtf1\ansi\ansicpg1252 This folder contains:\par Confidential caf\'e9.}",
+        encoding="latin-1",
+    )
+
+    markdown = DoclingAdapter._convert_rtf_sync(str(path))
+
+    assert markdown == "This folder contains:\nConfidential café.\n"
+
+
+@pytest.mark.asyncio
+async def test_rtf_processing_bypasses_docling_converter(monkeypatch, tmp_path):
+    path = tmp_path / "readme.rtf"
+    path.write_text(r"{\rtf1\ansi Plain text.}", encoding="latin-1")
+
+    async def acquire(_limit):
+        return None
+
+    monkeypatch.setattr("lib.services_gateway.gateway.acquire_docling_slot", acquire)
+    monkeypatch.setattr("lib.services_gateway.gateway.release_docling_slot", lambda: None)
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_sync",
+        staticmethod(lambda _path: pytest.fail("Docling converter should not handle RTF")),
+    )
+
+    text = await DoclingAdapter()._process_single_file(str(path), "readme.rtf")
+
+    assert text == "Plain text.\n"
 
 
 def test_spreadsheet_fallback_detects_excel_wide_merged_range(tmp_path):

@@ -38,6 +38,14 @@ def _is_md_path(rel: str) -> bool:
     return rel.lower().endswith(".md")
 
 
+def _sanitize_markdown_upload(content: bytes) -> bytes:
+    return bytes(
+        byte
+        for byte in content
+        if byte in {0x09, 0x0A, 0x0D} or byte >= 0x20
+    ).replace(b"\x7f", b"")
+
+
 def _parse_modtime(s: Optional[str]) -> float:
     if not s:
         return 0.0
@@ -449,6 +457,7 @@ class GoogleDriveStorage:
         service = self._ensure_service()
 
         if _is_md_path(rel):
+            content = _sanitize_markdown_upload(content)
             # Upload as markdown and let Drive convert to a Google Doc on import.
             # On update, the file ID is preserved so subsequent edits land in the
             # same gdoc and Drive records a new revision instead of creating a
@@ -463,7 +472,7 @@ class GoogleDriveStorage:
                         fileId=existing_id,
                         media_body=media,
                         supportsAllDrives=True,
-                    ).execute()
+                    ).execute(num_retries=5)
                 else:
                     created = service.files().create(
                         body={
@@ -474,7 +483,7 @@ class GoogleDriveStorage:
                         media_body=media,
                         fields="id",
                         supportsAllDrives=True,
-                    ).execute()
+                    ).execute(num_retries=5)
                     written_id = created["id"]
             self._delete_legacy_md_siblings(rel, same_name_files, written_id)
             self._invalidate(rel)
@@ -489,14 +498,14 @@ class GoogleDriveStorage:
                     fileId=existing_id,
                     media_body=media,
                     supportsAllDrives=True,
-                ).execute()
+                ).execute(num_retries=5)
             else:
                 service.files().create(
                     body={"name": name, "parents": [parent_id]},
                     media_body=media,
                     fields="id",
                     supportsAllDrives=True,
-                ).execute()
+                ).execute(num_retries=5)
         self._invalidate(rel)
 
     def write_text(self, rel: str, content: str, *, encoding: str = "utf-8") -> None:

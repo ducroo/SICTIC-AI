@@ -11,7 +11,7 @@ A robust support utility for interacting with Large Language Models (LLMs) via L
    - `LLM_API_KEY`: Optional endpoint API key. Leave blank for local Ollama.
    - `GEMINI_API_KEY`: Your Google Gemini API key.
    - `OLLAMA_HOST`: The host URL for Ollama (if using Ollama).
-   - `OLLAMA_NUM_CTX`: The baseline token context for Ollama.
+   - `OLLAMA_CONTEXT_LENGTH`: The baseline token context for Ollama.
 
 ## Usage
 
@@ -30,6 +30,6 @@ conda run -n sictic-env python -m skills.llm_chat "Summarize the risks." --model
 ## Features
 
 - **LiteLLM Integration:** Unified interface for hitting different providers (Gemini, Ollama, etc.).
-- **Ollama Context Management:** Automatically sizes the prompt context between `OLLAMA_NUM_CTX` and `OLLAMA_NUM_CTX_MAX`.
+- **Ollama Context Management:** Automatically sizes the prompt context between `OLLAMA_CONTEXT_LENGTH` and `OLLAMA_CONTEXT_LENGTH_MAX`.
 - **Rich Formatting:** Console outputs and markdown are beautifully rendered using the `Rich` library.
 - **Robust Error Handling:** Catches connection errors and missing model definitions gracefully.

@@ -16,11 +16,29 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import lib.env  # noqa: F401
 from lib.active_dataset import ACTIVE_MARKER, ARCHIVED_MARKER, MARKER_TEXT
 from lib.env import get_env_var
+from lib.storage_gdrive import GoogleDriveStorage
 
 LEGACY_MARKERS = {
     "__active_dataset__": ACTIVE_MARKER,
     "__archived_dataset__": ARCHIVED_MARKER,
 }
+
+
+def build_drive_storage() -> GoogleDriveStorage:
+    cloud_provider = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
+    if cloud_provider != "google":
+        raise ValueError("Drive marker migration requires CLOUD_PROVIDER=google")
+    return GoogleDriveStorage(
+        credentials_path=(
+            os.environ.get("GDRIVE_CREDENTIALS")
+            or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
+        ),
+        token_path=(
+            os.environ.get("GDRIVE_TOKEN")
+            or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
+        ),
+        root_folder_id=get_env_var("CLOUD_STORAGE_PATH"),
+    )
 
 
 def build_plan(mirror_root: Path) -> dict:
@@ -136,8 +154,8 @@ def main() -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(get_env_var("STORAGE_MIRROR_PATH")),
-        help="Local mirror root. Defaults to STORAGE_MIRROR_PATH.",
+        default=Path(get_env_var("LOCAL_STORAGE_PATH")),
+        help="Local mirror root. Defaults to LOCAL_STORAGE_PATH.",
     )
     parser.add_argument(
         "--target",
@@ -150,14 +168,7 @@ def main() -> int:
 
     drive = None
     if args.target == "drive":
-        from scripts.gdrive_sync import _build_sync_context
-
-        _, drive = _build_sync_context(
-            mirror_path=str(args.root),
-            root_folder_id=None,
-            credentials=None,
-            token=None,
-        )
+        drive = build_drive_storage()
         plan = build_drive_plan(args.root, drive)
     else:
         plan = build_plan(args.root)

@@ -19,7 +19,7 @@ def _fallback_trigger() -> str:
 
 def _context_budget_chars() -> int:
     try:
-        max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
+        max_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH_MAX"))
     except Exception:
         max_ctx = 8192
     return max(6_000, int(max_ctx * 3 * 0.72))

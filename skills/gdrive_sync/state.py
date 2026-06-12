@@ -10,7 +10,10 @@ from .util import clean_rel
 
 
 def default_state_dir() -> Path:
-    return Path(__file__).resolve().parents[1] / ".state"
+    repo_root = os.environ.get("REPO_PATH")
+    if repo_root:
+        return Path(repo_root).expanduser() / "gdrive_sync_state"
+    return Path(__file__).resolve().parents[2] / "gdrive_sync_state"
 
 
 class SyncState:
@@ -101,12 +104,51 @@ class SyncState:
     def upsert_baseline_entry(self, entry: SnapshotEntry) -> None:
         path = clean_rel(entry.path)
         with self._connect() as con:
+            row = con.execute(
+                "select entry_json from baseline where path = ?",
+                (path,),
+            ).fetchone()
+            data = {**entry.__dict__, "path": path}
+            if row is not None:
+                previous = json.loads(row["entry_json"])
+                for key in ("local_sha256", "local_size", "local_mtime_ns"):
+                    if data.get(key) is None:
+                        data[key] = previous.get(key)
             con.execute(
                 """
                 insert into baseline(path, entry_json) values(?, ?)
                 on conflict(path) do update set entry_json = excluded.entry_json
                 """,
-                (path, json.dumps({**entry.__dict__, "path": path}, sort_keys=True)),
+                (path, json.dumps(data, sort_keys=True)),
+            )
+
+    def update_local_cache(self, entries: dict[str, SnapshotEntry]) -> None:
+        with self._connect() as con:
+            rows = con.execute("select path, entry_json from baseline").fetchall()
+            updates = []
+            for row in rows:
+                path = clean_rel(row["path"])
+                local_entry = entries.get(path)
+                if local_entry is None or local_entry.type != "file":
+                    continue
+                data = json.loads(row["entry_json"])
+                cached = (
+                    data.get("local_sha256"),
+                    data.get("local_size"),
+                    data.get("local_mtime_ns"),
+                )
+                current = (
+                    local_entry.local_sha256,
+                    local_entry.local_size,
+                    local_entry.local_mtime_ns,
+                )
+                if cached == current:
+                    continue
+                data["local_sha256"], data["local_size"], data["local_mtime_ns"] = current
+                updates.append((json.dumps(data, sort_keys=True), path))
+            con.executemany(
+                "update baseline set entry_json = ? where path = ?",
+                updates,
             )
 
     def delete_baseline_path(self, path: str, *, include_descendants: bool = False) -> None:

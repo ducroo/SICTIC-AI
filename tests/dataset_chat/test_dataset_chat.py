@@ -92,7 +92,7 @@ async def test_dataset_chat_refuses_empty_context(mocker):
 async def test_dataset_chat_budgets_context_without_front_truncation(mocker, monkeypatch):
     from skills.dataset_chat.core.models import Chunk
 
-    monkeypatch.setenv("OLLAMA_NUM_CTX_MAX", "2048")
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "2048")
     chunks = [
         Chunk(
             chunk_id=str(i),

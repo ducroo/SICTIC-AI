@@ -142,7 +142,7 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
         f_data["local_path"] = storage.local_path(f"{raw_rel}/{f_data['filename']}")
 
     try:
-        max_concurrent = int(get_env_var("MAX_CONCURRENT_DOCLING"))
+        max_concurrent = int(get_env_var("DOCLING_NUM_PARALLEL"))
     except Exception:
         max_concurrent = 10
     docling = DoclingAdapter(concurrency_limit=max_concurrent)

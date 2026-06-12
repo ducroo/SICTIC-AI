@@ -1,4 +1,4 @@
-from gdrive_sync.drive import _local_rel_for_drive_item
+from skills.gdrive_sync.drive import _local_rel_for_drive_item
 
 
 def test_google_doc_without_md_suffix_maps_to_markdown_file():

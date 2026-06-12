@@ -3,8 +3,9 @@
 Dry-run is the default. Use --apply only after reviewing the JSON manifest.
 This script changes the local mirror only; push both migrated trees afterward:
 
-    python scripts/gdrive_sync.py push storage/startups
-    python scripts/gdrive_sync.py push storage/datasets2md/startups
+    python -m skills.gdrive_sync push
+
+The stateful sync skill operates on the complete configured storage tree.
 """
 from __future__ import annotations
 
@@ -228,7 +229,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    mirror_root = Path(get_env_var("STORAGE_MIRROR_PATH"))
+    mirror_root = Path(get_env_var("LOCAL_STORAGE_PATH"))
     plan = build_plan(mirror_root)
     manifest = Path(args.manifest)
     manifest.parent.mkdir(parents=True, exist_ok=True)

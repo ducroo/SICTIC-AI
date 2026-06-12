@@ -7,7 +7,7 @@ via text/markdown, import via text/markdown). This script is what flips the
 storage from raw markdown blobs to native gdocs.
 
 Usage:
-    # dry-run against the configured STORAGE_PATH root
+    # dry-run against the configured CLOUD_STORAGE_PATH root
     python scripts/convert_md_to_gdoc.py
 
     # dry-run against a specific test folder
@@ -92,7 +92,7 @@ def _resolve_root_folder(service, root_spec: str) -> str:
     """Resolve a root spec as a Drive ID, "root", or a folder path/name.
 
     This mirrors lib.storage_gdrive.GoogleDriveStorage so migration commands can
-    use the same human-friendly STORAGE_PATH values as the runtime.
+    use the same human-friendly CLOUD_STORAGE_PATH values as the runtime.
     """
     spec = (root_spec or "root").strip().strip("/")
     if not spec or spec == "root":
@@ -290,7 +290,12 @@ def main() -> int:
                         or os.path.expanduser("~/.openclaw/gdrive-ops-token.json"))
     args = parser.parse_args()
 
-    root_spec = args.root_folder or args.root_folder_id or os.environ.get("STORAGE_PATH") or "root"
+    root_spec = (
+        args.root_folder
+        or args.root_folder_id
+        or os.environ.get("CLOUD_STORAGE_PATH")
+        or "root"
+    )
     dry = not args.apply
 
     logger.info(f"Root folder: {root_spec}")

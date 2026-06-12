@@ -1,7 +1,8 @@
 """
 Smoke-test every Storage protocol method against the LIVE backend selected by
-GDRIVE_USE_API. With GDRIVE_USE_API=1 this exercises GoogleDriveStorage; without
-it, LocalStorage(REPO_PATH). Same assertions either way.
+STORAGE_PROVIDER. This exercises LocalStorage, GoogleDriveStorage, or
+MirrorStorage using the configured LOCAL_STORAGE_PATH and CLOUD_STORAGE_PATH.
+The same assertions apply to every backend.
 
 If every method passes here, then every skill that uses these methods (which is
 all of them, since the static scan confirmed no direct-FS) will be wired up
@@ -36,7 +37,10 @@ if pytest is not None:
     def s():
         reset_storage_singleton()
         inst = get_storage()
-        print(f"\n[storage backend: {type(inst).__name__}, GDRIVE_USE_API={os.environ.get('GDRIVE_USE_API')!r}]")
+        print(
+            f"\n[storage backend: {type(inst).__name__}, "
+            f"STORAGE_PROVIDER={os.environ.get('STORAGE_PROVIDER')!r}]"
+        )
         yield inst
         # cleanup
         try:
@@ -160,8 +164,11 @@ if __name__ == "__main__":
     # Allow running as a plain script (without pytest) for quick checks.
     import sys
     reset_storage_singleton()
-    inst = get_storage("repository_dir_mock")
-    print(f"backend: {type(inst).__name__}, GDRIVE_USE_API={os.environ.get('GDRIVE_USE_API')!r}")
+    inst = get_storage()
+    print(
+        f"backend: {type(inst).__name__}, "
+        f"STORAGE_PROVIDER={os.environ.get('STORAGE_PROVIDER')!r}"
+    )
     tests = [(n, fn) for n, fn in globals().items() if n.startswith("test_") and callable(fn)]
     fails = 0
     for name, fn in tests:

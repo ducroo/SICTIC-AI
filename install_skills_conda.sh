@@ -14,7 +14,8 @@
 # What it does:
 #   1. Ensures the conda env named in environment.yml exists. If not, creates it.
 #      If yes, updates it with --prune (removes deps no longer listed).
-#   2. Runs `pip install -e .` inside the conda environment.
+#   2. Registers the repository root in the environment's site-packages using
+#      a generated .pth file, without invoking project dependency resolution.
 #   3. Copies every skills/<name>/ that has a SKILL.md into <target>/<name>/.
 #      Existing files with the same name are overwritten; extra files already in
 #      the target are left alone.
@@ -64,10 +65,6 @@ TARGET="$(cd "$TARGET" && pwd)"
 
 if [ ! -d "$REPO_ROOT/skills" ]; then
     echo "install_skills_conda: $REPO_ROOT/skills not found." >&2
-    exit 1
-fi
-if [ ! -f "$REPO_ROOT/pyproject.toml" ]; then
-    echo "install_skills_conda: $REPO_ROOT/pyproject.toml not found." >&2
     exit 1
 fi
 if [ ! -f "$ENV_FILE" ]; then
@@ -143,7 +140,7 @@ echo "  env file: $ENV_FILE"
 echo
 
 # ---------------------------------------------------------------------------
-# Step 1+2: conda env bootstrap + editable install
+# Step 1+2: conda env bootstrap + repository import path
 # ---------------------------------------------------------------------------
 if [ "$SKIP_ENV" -eq 0 ]; then
     env_exists=0
@@ -199,8 +196,6 @@ if [ "$SKIP_ENV" -eq 0 ]; then
         exit 1
     fi
 
-    echo "[2/3] pip install -e . (inside conda env $ENV_NAME)..."
-    "$ENV_PY" -m pip install --quiet -e "$REPO_ROOT"
 else
     echo "[1+2/3] conda env: skipped (--skip-env)"
     ENV_PY=$(conda run -n "$ENV_NAME" --no-capture-output which python 2>/dev/null | tail -1 | tr -d '\r' || true)
@@ -209,6 +204,15 @@ else
         exit 1
     fi
 fi
+
+echo "[2/3] Registering repository import path in $ENV_NAME..."
+"$ENV_PY" -m pip uninstall --yes sictic-skills >/dev/null 2>&1 || true
+SITE_PACKAGES=$("$ENV_PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+if [ -z "$SITE_PACKAGES" ] || [ ! -d "$SITE_PACKAGES" ]; then
+    echo "install_skills_conda: could not resolve site-packages in '$ENV_NAME'." >&2
+    exit 1
+fi
+printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
 
 # ---------------------------------------------------------------------------
 # Step 3: copy skills
@@ -244,9 +248,9 @@ These skill directories are copied from \`$REPO_ROOT/skills/\` by:
 
     $REPO_ROOT/install_skills_conda.sh
 
-The Python runtime is installed editable in the \`$ENV_NAME\` conda environment,
-so harness commands execute the repository code even though these instruction
-folders are copied.
+The installer registers \`$REPO_ROOT\` in the \`$ENV_NAME\` conda environment,
+so harness commands execute repository code even though these instruction
+folders are copied. Runtime dependencies come only from \`environment.yml\`.
 
 ## Invocation
 
@@ -347,25 +351,22 @@ if [ "$INTERACTIVE" -eq 1 ]; then
 
     ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
     ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
-    while :; do
-        ask_env "STORAGE_PROVIDER" "Storage provider (local, google, hybrid)" "$(env_get STORAGE_PROVIDER || true)" 1 0
-        storage_provider=$(env_get STORAGE_PROVIDER || true)
-        case "$storage_provider" in
-            local|google|hybrid) break ;;
-            *) echo "  STORAGE_PROVIDER must be local, google, or hybrid." ;;
-        esac
-    done
-
-    if [ "$storage_provider" = "local" ]; then
-        ask_env "STORAGE_PATH" "Local storage path" "$REPO_ROOT/.storage" 1 0
-        ask_env "STORAGE_MIRROR_PATH" "Storage mirror path (blank for local mode)" "" 0 0
-    elif [ "$storage_provider" = "google" ]; then
-        ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-        ask_env "STORAGE_MIRROR_PATH" "Storage mirror path (blank for google mode)" "" 0 0
-    else
-        ask_env "STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-        ask_env "STORAGE_MIRROR_PATH" "Local mirror path" "$REPO_ROOT/.storage-mirror" 1 0
+    if [ -z "$(env_get STORAGE_PROVIDER || true)" ]; then
+        env_set "STORAGE_PROVIDER" "local"
     fi
+    ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
+    ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "google" 0 0
+    cloud_provider=$(env_get CLOUD_PROVIDER || true)
+    case "$(printf '%s' "$cloud_provider" | tr '[:upper:]' '[:lower:]')" in
+        "") ;;
+        google)
+            ask_env "CLOUD_STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
+            ;;
+        *)
+            echo "  CLOUD_PROVIDER must be blank or google." >&2
+            exit 1
+            ;;
+    esac
 
     ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
     ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_get OLLAMA_HOST || true)" 1 0
@@ -402,6 +403,7 @@ else
     echo "[4/4] .env prompts skipped (--non-interactive)."
     if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
     if [ -z "$(env_get WORKSPACE_PATH || true)" ]; then env_set "WORKSPACE_PATH" "$TARGET"; fi
+    if [ -z "$(env_get STORAGE_PROVIDER || true)" ]; then env_set "STORAGE_PROVIDER" "local"; fi
 fi
 
 echo

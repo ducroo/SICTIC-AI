@@ -29,6 +29,10 @@ async def _refresh_persons_in_dataset(dataset_name: str):
 
 
 SKILL_MAP = {
+    "startup-profile": {
+        "func": startup_profile,
+        "domains": ["startups"], "depends_on": []
+    },
     "persons-in-dataset": {
         "func": _refresh_persons_in_dataset,
         "domains": ["startups", "community"],
@@ -39,17 +43,41 @@ SKILL_MAP = {
         "domains": ["startups", "community"],
         "depends_on": ["persons-in-dataset"],
     },
-    "startup-profile": {"func": startup_profile, "domains": ["startups"], "depends_on": []},
-
-    "investor-profile": {"func": investor_profile, "domains": ["community"], "depends_on": ["person-profile"]},
-    "team-profile": {"func": team_profile, "domains": ["startups"], "depends_on": ["startup-profile"]},
-    "startup-traction": {"func": startup_traction, "domains": ["startups"], "depends_on": ["startup-profile"]},
-    "dd-checks": {"func": dd_checks, "domains": ["startups"], "depends_on": ["startup-profile"]},
-
-    "expert-search": {"func": expert_search, "domains": ["startups"], "depends_on": ["startup-profile", "investor-profile"]},
-    "potential-investors": {"func": potential_investors, "domains": ["startups"], "depends_on": ["startup-profile", "investor-profile"]},
-
-    "suggested-startups": {"func": suggested_startups, "domains": ["community"], "depends_on": ["startup-profile", "investor-profile"]}
+    "team-profile": {
+        "func": team_profile,
+        "domains": ["startups"],
+        "depends_on": ["startup-profile","person-profile"]
+    },
+    "startup-traction": {
+        "func": startup_traction,
+        "domains": ["startups"],
+        "depends_on": ["startup-profile"]
+    },
+    "dd-checks": {
+        "func": dd_checks,
+        "domains": ["startups"],
+        "depends_on": ["startup-profile"]
+    },
+    "investor-profile": {
+        "func": investor_profile,
+        "domains": ["community"],
+        "depends_on": ["person-profile"]
+    },
+    "expert-search": {
+        "func": expert_search,
+        "domains": ["startups"],
+        "depends_on": ["startup-profile", "investor-profile"]
+    },
+    "potential-investors": {
+        "func": potential_investors,
+        "domains": ["startups"],
+        "depends_on": ["startup-profile", "investor-profile"]
+    },
+    "suggested-startups": {
+        "func": suggested_startups,
+        "domains": ["community"],
+        "depends_on": ["startup-profile", "investor-profile"]
+    }
 }
 
 

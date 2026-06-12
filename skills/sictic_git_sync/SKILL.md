@@ -2,14 +2,15 @@
 
 ## Description
 This admin skill helps keep the SICTIC-AI toolbox updated and safely push contributions.
-The installer copies `SKILL.md` instruction folders into the target workspace, while
-the Python package is installed editable from the Git repository. Reinstall the skills
-after changing skill instructions so external harnesses receive the updated copies.
+The installer copies `SKILL.md` instruction folders into the target workspace and
+registers the Git repository in the Conda environment with a generated `.pth` file.
+Reinstall the skills after changing skill instructions so external harnesses receive
+the updated copies.
 
 ## Workspace Model
 1. **Source of truth:** The Git repository contains the Python package, scripts, tests, and canonical skill instructions.
 2. **Installed skill folders:** The installer copies each skill directory into the target workspace specified by `--target`.
-3. **Runtime code:** Harness commands execute the editable Python package from the Conda environment, not copied Python files from the target workspace.
+3. **Runtime code:** Harness commands execute repository Python code through the Conda environment's `.pth` registration, not copied Python files from the target workspace.
 
 ## The Architecture & Simplicity Framework
 Before executing a `push` action, you (the AI Agent) MUST review modified files against these rules. If a rule is violated, you must fix it before proceeding with the push.

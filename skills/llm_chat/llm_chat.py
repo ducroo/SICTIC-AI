@@ -18,8 +18,8 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
     default_model = endpoint.model
     is_ollama = default_model.startswith("ollama/")
 
-    min_ctx = int(get_env_var("OLLAMA_NUM_CTX"))
-    max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
+    min_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH"))
+    max_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH_MAX"))
     estimated_tokens = int(len(prompt) / 3)
 
     if estimated_tokens > max_ctx:

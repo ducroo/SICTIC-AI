@@ -1,5 +1,5 @@
-from gdrive_sync.planner import plan_push, plan_sync
-from gdrive_sync.types import SnapshotEntry
+from skills.gdrive_sync.planner import plan_push, plan_sync
+from skills.gdrive_sync.types import SnapshotEntry
 
 
 def file(path, digest):

@@ -127,7 +127,7 @@ async def person_profile(
             profiles_to_process.append(p)
 
     # 4. Generate profiles concurrently, bounded by the LLM gateway capacity.
-    concurrency = int(get_env_var("MAX_CONCURRENT_LLMS"))
+    concurrency = int(get_env_var("OLLAMA_NUM_PARALLEL"))
     semaphore = asyncio.Semaphore(concurrency)
 
     async def generate_with_logging(person: Person) -> None:

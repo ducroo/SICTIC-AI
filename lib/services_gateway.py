@@ -50,9 +50,8 @@ class ServicesGateway:
         if self._initialized:
             return
             
-        self.MAX_CONCURRENT_EMBEDS = int(os.getenv("MAX_CONCURRENT_EMBEDS", "16"))
-        self.MAX_CONCURRENT_LLMS = int(get_env_var("MAX_CONCURRENT_LLMS"))
-        self.MAX_CONCURRENT_DOCLING = int(os.getenv("MAX_CONCURRENT_DOCLING", "10"))
+        self.OLLAMA_NUM_PARALLEL = int(get_env_var("OLLAMA_NUM_PARALLEL"))
+        self.DOCLING_NUM_PARALLEL = int(get_env_var("DOCLING_NUM_PARALLEL"))
         
         # Ensure the state file exists with basic structure
         if not os.path.exists(GATEWAY_STATE_FILE):
@@ -157,7 +156,7 @@ class ServicesGateway:
 
     async def request_embedding(self, kwargs: Dict[str, Any], priority: Priority = Priority.STANDARD) -> Any:
         """Embeddings cannot run concurrently with LLMs or Docling."""
-        await self._acquire_slot("active_embeds", self.MAX_CONCURRENT_EMBEDS, exclusive_against=["active_llms", "active_docling"])
+        await self._acquire_slot("active_embeds", self.OLLAMA_NUM_PARALLEL, exclusive_against=["active_llms", "active_docling"])
         try:
             response = await litellm.aembedding(**kwargs)
             return response
@@ -166,7 +165,7 @@ class ServicesGateway:
 
     async def request_completion(self, kwargs: Dict[str, Any], priority: Priority = Priority.STANDARD) -> Any:
         """LLMs cannot run concurrently with Embeddings or Docling."""
-        await self._acquire_slot("active_llms", self.MAX_CONCURRENT_LLMS, exclusive_against=["active_embeds", "active_docling"])
+        await self._acquire_slot("active_llms", self.OLLAMA_NUM_PARALLEL, exclusive_against=["active_embeds", "active_docling"])
         try:
             response = await litellm.acompletion(**kwargs)
             return response

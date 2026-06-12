@@ -23,6 +23,7 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 _PASSTHROUGH_EXTS = (".json", ".txt", ".md")
+_RTF_EXTS = (".rtf",)
 _SPREADSHEET_EXTS = (".xlsx", ".xlsm")
 _EXCEL_MAX_COLUMNS = 16_384
 _WIDE_MERGE_FALLBACK_COLUMNS = 1_024
@@ -135,6 +136,8 @@ class DoclingAdapter:
             if filename.lower().endswith(_PASSTHROUGH_EXTS):
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                     return f.read()
+            if filename.lower().endswith(_RTF_EXTS):
+                return await asyncio.to_thread(self._convert_rtf_sync, filepath)
 
             try:
                 if filename.lower().endswith(_SPREADSHEET_EXTS) and await asyncio.to_thread(
@@ -177,6 +180,16 @@ class DoclingAdapter:
         with _convert_lock:
             result = converter.convert(filepath)
         return result.document.export_to_markdown()
+
+    @staticmethod
+    def _convert_rtf_sync(filepath: str) -> str:
+        """Extract searchable text from RTF, which Docling does not support."""
+        from striprtf.striprtf import rtf_to_text
+
+        with open(filepath, "r", encoding="latin-1") as handle:
+            rtf = handle.read()
+        text = rtf_to_text(rtf, errors="replace")
+        return text.strip() + "\n" if text.strip() else ""
 
     @staticmethod
     def _convert_repaired_pdf_sync(filepath: str) -> str:

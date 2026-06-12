@@ -37,8 +37,11 @@ class GDriveSync:
         verbose: bool = False,
     ):
         configure_logging(log_dir, verbose=verbose)
-        self.local_root = local_root or os.environ.get("STORAGE_MIRROR_PATH")
-        self.gdrive_root = gdrive_root or os.environ.get("STORAGE_PATH") or "root"
+        cloud_provider = os.environ.get("CLOUD_PROVIDER", "").strip().lower()
+        if cloud_provider != "google":
+            raise ValueError("skills.gdrive_sync requires CLOUD_PROVIDER=google")
+        self.local_root = local_root or os.environ.get("LOCAL_STORAGE_PATH")
+        self.gdrive_root = gdrive_root or os.environ.get("CLOUD_STORAGE_PATH") or "root"
         self.credentials_path = (
             credentials_path
             or os.environ.get("GDRIVE_CREDENTIALS")
@@ -50,7 +53,7 @@ class GDriveSync:
             or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
         )
         if not self.local_root:
-            raise ValueError("local_root is required or STORAGE_MIRROR_PATH must be set")
+            raise ValueError("local_root is required or LOCAL_STORAGE_PATH must be set")
         if not os.path.isabs(self.local_root):
             raise ValueError(f"local_root must be absolute: {self.local_root}")
         self.exclude = exclude or []
@@ -117,7 +120,8 @@ class GDriveSync:
                     if getattr(exc.resp, "status", None) == 410:
                         result = OperationResult(operation="sync", dry_run=dry_run)
                         result.failures.append(
-                            "Drive changes token expired; run `gdrive-sync pull` to refresh the baseline before incremental sync."
+                            "Drive changes token expired; run `python -m skills.gdrive_sync pull` "
+                            "to refresh the baseline before incremental sync."
                         )
                         raise SyncOperationFailed("incremental sync cannot continue", partial_result=result) from exc
                     raise
@@ -125,9 +129,15 @@ class GDriveSync:
             if active_operation_id:
                 result.failures.append(f"cannot sync while operation checkpoint is active: {active_operation_id}")
             elif not baseline:
-                result.failures.append("cannot incremental sync without a successful baseline; run `gdrive-sync pull` first")
+                result.failures.append(
+                    "cannot incremental sync without a successful baseline; "
+                    "run `python -m skills.gdrive_sync pull` first"
+                )
             elif not token:
-                result.failures.append("cannot incremental sync without a Drive changes token; run `gdrive-sync pull` first")
+                result.failures.append(
+                    "cannot incremental sync without a Drive changes token; "
+                    "run `python -m skills.gdrive_sync pull` first"
+                )
             else:
                 result.failures.append("cannot incremental sync; unknown prerequisite failure")
             raise SyncOperationFailed("incremental sync prerequisites missing", partial_result=result)
@@ -136,7 +146,9 @@ class GDriveSync:
         with PairingLock(self.lock_path, timeout=self.lock_timeout, operation=operation):
             baseline = self.state.load_baseline()
             logger.info("%s local scan started", operation)
-            local_snapshot = self.local.scan()
+            local_snapshot = self.local.scan(baseline)
+            if not dry_run:
+                self.state.update_local_cache(local_snapshot)
             logger.info("%s local scan finished: entries=%s", operation, len(local_snapshot))
             cloud_snapshot, warnings, failures = self.drive.scan()
             result.warnings.extend(warnings)
@@ -162,7 +174,7 @@ class GDriveSync:
                 elif operation == "push":
                     merged = dict(local_snapshot)
                 else:
-                    local_snapshot = self.local.scan()
+                    local_snapshot = self.local.scan(local_snapshot)
                     cloud_snapshot, warnings, failures = self.drive.scan()
                     result.warnings.extend(warnings)
                     result.failures.extend(failures)
@@ -181,6 +193,7 @@ class GDriveSync:
         start = time.monotonic()
         result = OperationResult(operation="pull", dry_run=dry_run)
         with PairingLock(self.lock_path, timeout=self.lock_timeout, operation="pull"):
+            baseline = self.state.load_baseline()
             active_operation_id = self.state.get_metadata("active_operation_id")
             if active_operation_id and active_operation_id.startswith("pull-"):
                 operation_id = active_operation_id
@@ -191,7 +204,9 @@ class GDriveSync:
             if not dry_run:
                 self.state.set_metadata("active_operation_id", operation_id)
             logger.info("pull local scan started")
-            local_snapshot = self.local.scan()
+            local_snapshot = self.local.scan(baseline)
+            if not dry_run:
+                self.state.update_local_cache(local_snapshot)
             logger.info("pull local scan finished: entries=%s", len(local_snapshot))
             checkpoint = self.state.load_checkpoint(operation_id) if not dry_run else {}
             if checkpoint:
@@ -274,7 +289,9 @@ class GDriveSync:
         result = OperationResult(operation="pull", dry_run=dry_run)
         with PairingLock(self.lock_path, timeout=self.lock_timeout, operation="pull"):
             logger.info("pull incremental changes.list started")
-            local_snapshot = self.local.scan()
+            local_snapshot = self.local.scan(baseline)
+            if not dry_run:
+                self.state.update_local_cache(local_snapshot)
             baseline_by_drive_id = {
                 entry.drive_id: entry for entry in baseline.values() if entry.drive_id
             }
@@ -367,7 +384,9 @@ class GDriveSync:
         result = OperationResult(operation="sync", dry_run=dry_run)
         with PairingLock(self.lock_path, timeout=self.lock_timeout, operation="sync"):
             logger.info("sync incremental local scan started")
-            local_snapshot = self.local.scan()
+            local_snapshot = self.local.scan(baseline)
+            if not dry_run:
+                self.state.update_local_cache(local_snapshot)
             logger.info("sync incremental local scan finished: entries=%s", len(local_snapshot))
             local_changed = {
                 path
@@ -461,6 +480,7 @@ class GDriveSync:
                         local_entry,
                         cloud_entries.get(path),
                         cloud_content.get(path),
+                        local_snapshot,
                         conflict_policy,
                         result,
                         dry_run=dry_run,
@@ -472,6 +492,7 @@ class GDriveSync:
                         path,
                         cloud_entries.get(path),
                         cloud_content.get(path),
+                        local_snapshot,
                         result,
                         dry_run=dry_run,
                     )
@@ -549,17 +570,19 @@ class GDriveSync:
         path: str,
         cloud_entry: SnapshotEntry | None,
         content: bytes | None,
+        local_snapshot: dict[str, SnapshotEntry],
         result: OperationResult,
         *,
         dry_run: bool,
     ) -> None:
         if cloud_entry is None:
             self._delete_local_from_pull(path, result, dry_run=dry_run)
+            local_snapshot.pop(path, None)
             return
         if cloud_entry.type == "folder":
-            self._apply_pull_folder(cloud_entry, self.local.scan(), result, dry_run=dry_run)
+            self._apply_pull_folder(cloud_entry, local_snapshot, result, dry_run=dry_run)
             return
-        self._apply_pull_file(cloud_entry, content, self.local.scan(), result, dry_run=dry_run)
+        self._apply_pull_file(cloud_entry, content, local_snapshot, result, dry_run=dry_run)
 
     def _apply_incremental_conflict(
         self,
@@ -568,6 +591,7 @@ class GDriveSync:
         local_entry: SnapshotEntry | None,
         cloud_entry: SnapshotEntry | None,
         cloud_content: bytes | None,
+        local_snapshot: dict[str, SnapshotEntry],
         conflict_policy: ConflictPolicy,
         result: OperationResult,
         *,
@@ -578,7 +602,14 @@ class GDriveSync:
         if conflict_policy == "local-wins":
             self._apply_local_change_to_cloud(path, local_entry, baseline_entry, result, dry_run=dry_run)
         else:
-            self._apply_cloud_change_to_local(path, cloud_entry, cloud_content, result, dry_run=dry_run)
+            self._apply_cloud_change_to_local(
+                path,
+                cloud_entry,
+                cloud_content,
+                local_snapshot,
+                result,
+                dry_run=dry_run,
+            )
 
     def _apply_incremental_entry(
         self,
