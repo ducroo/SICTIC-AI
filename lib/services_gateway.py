@@ -51,7 +51,6 @@ class ServicesGateway:
             return
             
         self.OLLAMA_NUM_PARALLEL = int(get_env_var("OLLAMA_NUM_PARALLEL"))
-        self.DOCLING_NUM_PARALLEL = int(get_env_var("DOCLING_NUM_PARALLEL"))
         
         # Ensure the state file exists with basic structure
         if not os.path.exists(GATEWAY_STATE_FILE):

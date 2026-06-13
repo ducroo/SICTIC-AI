@@ -29,6 +29,7 @@ dependencies:
   - rich
   - striprtf=0.0.29
   - typer
+  - xlrd
 
   # === Test deps ===
   - pytest

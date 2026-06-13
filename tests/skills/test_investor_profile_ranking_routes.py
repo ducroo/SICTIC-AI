@@ -1,6 +1,9 @@
 import pytest
 from importlib import import_module
 
+from lib.storage import get_storage
+from lib.storage_domains import dataset_location_for_domain
+
 advocates_module = import_module("skills.advocates.advocates")
 expert_search_module = import_module("skills.expert_search.expert_search")
 potential_investors_module = import_module(
@@ -14,6 +17,14 @@ async def _fake_startup_profile(*args, **kwargs):
 
 async def _fake_ranking_persons(*args, **kwargs):
     return "Ranked result"
+
+
+def _create_route_datasets(module):
+    if module is advocates_module:
+        location = dataset_location_for_domain("sictic-members", "community")
+    else:
+        location = dataset_location_for_domain("example-startup", "startups")
+    get_storage().mkdir(location.raw_rel)
 
 
 @pytest.mark.asyncio
@@ -48,6 +59,7 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     config_key,
     args,
 ):
+    _create_route_datasets(module)
     mocker.patch.object(
         module,
         "check_insight_refresh",
@@ -117,6 +129,7 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
     targets,
     excludes,
 ):
+    _create_route_datasets(module)
     mocker.patch.object(module, "check_insight_refresh", return_value=(True, None, None))
     if hasattr(module, "startup_profile"):
         mocker.patch.object(module, "startup_profile", side_effect=_fake_startup_profile)

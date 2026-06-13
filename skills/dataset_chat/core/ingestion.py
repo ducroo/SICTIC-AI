@@ -3,7 +3,11 @@ import time
 from typing import List
 
 from lib.adapters.qdrant import QdrantAdapter
-from lib.adapters.docling import DoclingAdapter
+from lib.adapters.docling import (
+    DoclingAdapter,
+    SPREADSHEET_MARKDOWN_MARKER,
+    is_spreadsheet_filename,
+)
 from lib.env import get_env_var
 from lib.storage import get_storage
 from lib.logger import get_logger
@@ -38,7 +42,6 @@ SYNC_CACHE_TTL = 60  # seconds
 async def sync_datasets(
     dataset_names: List[str],
     raise_on_error: bool = False,
-    domain: str | None = None,
     *,
     force: bool = False,
 ):
@@ -58,7 +61,7 @@ async def sync_datasets(
 
             logger.info(f"[{dataset_slug}] === Starting sync for dataset ===")
             try:
-                await _sync_single_dataset(dataset_slug, domain=domain)
+                await _sync_single_dataset(dataset_slug)
                 _last_sync_times[dataset_slug] = time.time()
             except Exception as e:
                 logger.error(f"[{name}] Failed to sync dataset: {e}")
@@ -68,18 +71,20 @@ async def sync_datasets(
     if errors and raise_on_error:
         raise RuntimeError("Dataset sync failed: " + "; ".join(errors))
 
-async def _sync_single_dataset(dataset_name: str, *, domain: str | None = None):
+async def _sync_single_dataset(dataset_name: str):
     """Main orchestrator: Syncs drive to disk (OCR), then disk to DB (Embed) for a single dataset."""
     dataset_slug = slugify(dataset_name)
     storage = get_storage()
-    raw_dataset_rel = dataset_raw_path(dataset_slug, domain=domain)
-    parsed_dataset_rel = dataset_parsed_path(dataset_slug, domain=domain)
+    raw_dataset_rel = dataset_raw_path(dataset_slug)
+    parsed_dataset_rel = dataset_parsed_path(dataset_slug)
 
     # Refresh storage caches (no-op for LocalStorage; invalidates Drive path cache).
     storage.refresh(raw_dataset_rel)
 
     if not storage.exists(raw_dataset_rel):
-        raise ValueError(f"Dataset '{dataset_slug}' does not exist on drive.")
+        raise ValueError(
+            f"Dataset '{dataset_slug}' does not exist in storage at '{raw_dataset_rel}'."
+        )
 
     # 1. OCR Phase: Sync original files to parsed markdown on disk
     await _sync_ocr_to_disk(dataset_slug, raw_dataset_rel, parsed_dataset_rel)
@@ -111,6 +116,16 @@ def _parsed_filepath(parsed_rel: str, filename: str) -> str:
     return f"{parsed_rel}/{filename}.md"
 
 
+def _spreadsheet_cache_is_current(storage, parsed_filepath: str, filename: str) -> bool:
+    if not is_spreadsheet_filename(filename) or not storage.exists(parsed_filepath):
+        return True
+    try:
+        return storage.read_text(parsed_filepath).startswith(SPREADSHEET_MARKDOWN_MARKER)
+    except Exception as exc:
+        logger.warning(f"Failed to inspect spreadsheet cache {parsed_filepath}: {exc}")
+        return False
+
+
 async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
     """Compare source mtimes against parsed mtimes; run Docling on the diff and write markdown back."""
     storage = get_storage()
@@ -120,7 +135,8 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
     for filename, drive_mtime in source_files:
         parsed_filepath = _parsed_filepath(parsed_rel, filename)
         parsed_mtime = storage.mtime(parsed_filepath) or 0.0
-        if drive_mtime > parsed_mtime:
+        cache_is_current = _spreadsheet_cache_is_current(storage, parsed_filepath, filename)
+        if drive_mtime > parsed_mtime or not cache_is_current:
             files_to_ocr.append({
                 "filename": filename,
                 "mod_time": drive_mtime,
@@ -142,7 +158,7 @@ async def _sync_ocr_to_disk(dataset_name: str, raw_rel: str, parsed_rel: str):
         f_data["local_path"] = storage.local_path(f"{raw_rel}/{f_data['filename']}")
 
     try:
-        max_concurrent = int(get_env_var("DOCLING_NUM_PARALLEL"))
+        max_concurrent = int(get_env_var("OLLAMA_NUM_PARALLEL"))
     except Exception:
         max_concurrent = 10
     docling = DoclingAdapter(concurrency_limit=max_concurrent)

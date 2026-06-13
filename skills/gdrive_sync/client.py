@@ -297,7 +297,7 @@ class GDriveSync:
             }
             changes, new_token = self.drive.list_changes(token)
             logger.info("pull incremental applying %s Drive changes", len(changes))
-            for change in changes:
+            for change_index, change in enumerate(changes, start=1):
                 file_id = change.get("fileId")
                 old_entry = baseline_by_drive_id.get(file_id)
                 removed = change.get("removed") or (change.get("file") or {}).get("trashed")
@@ -311,7 +311,10 @@ class GDriveSync:
                             )
                     continue
 
-                entry, content, warning, failure = self.drive.entry_for_change(change)
+                entry, content, warning, failure = self.drive.entry_for_change(
+                    change,
+                    inspection_label=f"pull inspect cloud {change_index}/{len(changes)}",
+                )
                 if warning:
                     result.warnings.append(warning)
                     logger.warning(warning)
@@ -404,7 +407,7 @@ class GDriveSync:
             cloud_deleted: set[str] = set()
             baseline_updates: dict[str, SnapshotEntry] = {}
 
-            for change in changes:
+            for change_index, change in enumerate(changes, start=1):
                 file_id = change.get("fileId")
                 old_entry = baseline_by_drive_id.get(file_id)
                 removed = change.get("removed") or (change.get("file") or {}).get("trashed")
@@ -413,7 +416,10 @@ class GDriveSync:
                         cloud_deleted.add(old_entry.path)
                     continue
 
-                entry, content, warning, failure = self.drive.entry_for_change(change)
+                entry, content, warning, failure = self.drive.entry_for_change(
+                    change,
+                    inspection_label=f"sync inspect cloud {change_index}/{len(changes)}",
+                )
                 if warning:
                     result.warnings.append(warning)
                     logger.warning(warning)
@@ -457,7 +463,14 @@ class GDriveSync:
                             if child_content is not None:
                                 cloud_content[child_entry.path] = child_content
 
-            affected_paths = sorted(local_changed | set(cloud_entries) | cloud_deleted)
+            cloud_changed_paths = set(cloud_entries) | cloud_deleted
+            affected_paths = self._collapse_local_folder_deletions(
+                local_changed | cloud_changed_paths,
+                local_changed=local_changed,
+                cloud_changed=cloud_changed_paths,
+                baseline=baseline,
+                local_snapshot=local_snapshot,
+            )
             logger.info(
                 "sync incremental applying paths=%s local_changes=%s cloud_changes=%s cloud_deletes=%s",
                 len(affected_paths),
@@ -466,8 +479,6 @@ class GDriveSync:
                 len(cloud_deleted),
             )
             for path in affected_paths:
-                if result.failures:
-                    break
                 base = baseline.get(path)
                 local_entry = local_snapshot.get(path)
                 has_local_change = path in local_changed
@@ -522,6 +533,38 @@ class GDriveSync:
             return False
         return current.sha256 != baseline.sha256
 
+    @staticmethod
+    def _collapse_local_folder_deletions(
+        paths: set[str],
+        *,
+        local_changed: set[str],
+        cloud_changed: set[str],
+        baseline: dict[str, SnapshotEntry],
+        local_snapshot: dict[str, SnapshotEntry],
+    ) -> list[str]:
+        deleted_roots: list[str] = []
+        for path in sorted(local_changed, key=lambda item: (item.count("/"), item)):
+            base = baseline.get(path)
+            if (
+                local_snapshot.get(path) is not None
+                or base is None
+                or base.type != "folder"
+                or any(
+                    changed == path or changed.startswith(f"{path}/")
+                    for changed in cloud_changed
+                )
+                or any(path.startswith(f"{root}/") for root in deleted_roots)
+            ):
+                continue
+            deleted_roots.append(path)
+
+        return sorted(
+            path
+            for path in paths
+            if path in cloud_changed
+            or not any(path.startswith(f"{root}/") for root in deleted_roots)
+        )
+
     def _apply_local_change_to_cloud(
         self,
         path: str,
@@ -557,8 +600,14 @@ class GDriveSync:
         if dry_run:
             result.skipped_entries.append(f"dry-run:upload:{path}")
         else:
-            self.drive.write_bytes(path, content)
-            self.state.upsert_baseline_entry(self.drive.entry_after_write(path, content))
+            try:
+                self.drive.write_bytes(path, content)
+                self.state.upsert_baseline_entry(self.drive.entry_after_write(path, content))
+            except Exception as exc:
+                message = f"{path}: {exc}"
+                logger.error(message)
+                result.failures.append(message)
+                return
         result.bytes_transferred += len(content)
         if baseline_entry is None:
             result.created_files.append(path)

@@ -10,7 +10,9 @@ Behavior:
     Google Docs are updated in-place so Drive keeps revision history.
   - remove/rmtree: local only. Destructive Drive changes still require explicit
     sync tooling.
-  - Paths whose first segment is in _LOCAL_PREFIXES skip Drive entirely.
+  - Paths whose first segment is in _LOCAL_PREFIXES skip Drive entirely when
+    MirrorStorage is used directly. The storage factory routes those paths to
+    repository-local storage before they reach this class.
 """
 from __future__ import annotations
 
@@ -21,9 +23,8 @@ from lib.storage import LocalStorage, _validate_rel
 from lib.storage_gdrive import GoogleDriveStorage
 
 
-# Path prefixes that must never trigger a Drive fallback or sync. Durable
-# converted Markdown lives under storage/datasets2md and should sync normally.
-_LOCAL_PREFIXES = ("cache",)
+# Path prefixes that must never trigger a Drive fallback or sync.
+_LOCAL_PREFIXES = ("cache", "docling_data")
 
 
 def _is_local_only(rel: str) -> bool:

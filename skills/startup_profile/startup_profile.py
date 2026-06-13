@@ -46,12 +46,17 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
         raise KeyError("startup_profile config missing")
     query = config['startup_profile']['query']
     llm_instructions = config['startup_profile']['llm_instructions']
+    questions = [line.strip() for line in query.splitlines() if line.strip()]
 
     dataset_name = startup_slug
     if files:
         dataset_name = await prepare_ephemeral_dataset(files, temp_name="temp_startup_profile")
 
-    profile_output = await dataset_chat(dataset_name=dataset_name, questions=query, llm_instructions=llm_instructions)
+    profile_output = await dataset_chat(
+        dataset_name=dataset_name,
+        questions=questions,
+        llm_instructions=llm_instructions,
+    )
 
     if profile_output is None:
         raise ValueError("LLM returned None for the profile output.")

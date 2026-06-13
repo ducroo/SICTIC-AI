@@ -6,7 +6,13 @@ import time
 from collections.abc import Iterator
 
 from googleapiclient.errors import HttpError
-from lib.storage_gdrive import GoogleDriveStorage, _FOLDER_MIME, _GDOC_MIME, _parse_modtime
+from lib.storage_gdrive import (
+    GoogleDriveStorage,
+    _FOLDER_MIME,
+    _GDOC_MIME,
+    _parse_modtime,
+    _sanitize_markdown_upload,
+)
 
 from .types import SnapshotEntry
 from .util import clean_rel, is_excluded, is_hidden_rel, sha256_bytes
@@ -19,6 +25,7 @@ UNSUPPORTED_MIMES = {
     "application/vnd.google-apps.form": "Google Forms",
 }
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
+GDOC_SAFE_MAX_CHARACTERS = 950_000
 logger = logging.getLogger(__name__)
 
 
@@ -128,7 +135,12 @@ class DriveTree:
         logger.info("Drive changes.list returned %s changes", len(changes))
         return changes, new_start_page_token
 
-    def entry_for_change(self, change: dict) -> tuple[SnapshotEntry | None, bytes | None, str | None, str | None]:
+    def entry_for_change(
+        self,
+        change: dict,
+        *,
+        inspection_label: str | None = None,
+    ) -> tuple[SnapshotEntry | None, bytes | None, str | None, str | None]:
         file_meta = change.get("file")
         file_id = change.get("fileId")
         if change.get("removed") or not file_meta or file_meta.get("trashed"):
@@ -147,6 +159,8 @@ class DriveTree:
             return None, None, None, f"{rel}: unsupported {UNSUPPORTED_MIMES[mime]}"
         if mime.startswith("application/vnd.google-apps.") and mime not in {_FOLDER_MIME, _GDOC_MIME}:
             return None, None, None, f"{rel}: unsupported Google native type {mime}"
+        if inspection_label:
+            logger.info("%s %s", inspection_label, rel)
         self.storage._path_to_id[rel] = file_id
         self.storage._path_to_mime[rel] = mime
         if mime == _FOLDER_MIME:
@@ -413,7 +427,19 @@ class DriveTree:
         return self.storage.read_bytes(clean_rel(rel))
 
     def write_bytes(self, rel: str, content: bytes) -> None:
-        self.storage.write_bytes(clean_rel(rel), content)
+        rel = clean_rel(rel)
+        if rel.lower().endswith(".md"):
+            sanitized = _sanitize_markdown_upload(content)
+            try:
+                character_count = len(sanitized.decode("utf-8"))
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"Markdown is not valid UTF-8: {exc}") from exc
+            if character_count > GDOC_SAFE_MAX_CHARACTERS:
+                raise ValueError(
+                    f"Markdown has {character_count:,} characters; Google Doc upload safety limit "
+                    f"is {GDOC_SAFE_MAX_CHARACTERS:,}"
+                )
+        self.storage.write_bytes(rel, content)
 
     def entry_after_write(self, rel: str, content: bytes) -> SnapshotEntry:
         rel = clean_rel(rel)

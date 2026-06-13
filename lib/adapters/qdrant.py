@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import os
 import uuid
@@ -17,6 +18,7 @@ from lib.slugify import slugify
 from lib.env import get_env_var
 from lib.logger import get_logger
 from lib.model_config import embedding_endpoint, embedding_model
+from lib.services_gateway import gateway
 
 logger = get_logger(__name__)
 
@@ -136,13 +138,12 @@ class QdrantAdapter:
             return False
 
     async def _get_embedding(self, text: str) -> List[float]:
-        import litellm
         endpoint = embedding_endpoint()
         kwargs = endpoint.litellm_kwargs()
         kwargs["input"] = [text]
             
         try:
-            response = await litellm.aembedding(**kwargs)
+            response = await gateway.request_embedding(kwargs)
             return response.data[0]["embedding"]
         except Exception as e:
             logger.error(f"Failed to generate embedding: {e}")
@@ -194,14 +195,17 @@ class QdrantAdapter:
         total = len(chunks)
         for start in range(0, total, batch_size):
             batch = chunks[start:start + batch_size]
-            points = []
-            for c in batch:
-                vector = await self._get_embedding(c.text)
-                points.append(PointStruct(
+            vectors = await asyncio.gather(
+                *(self._get_embedding(chunk.text) for chunk in batch)
+            )
+            points = [
+                PointStruct(
                     id=c.chunk_id,
                     vector=vector,
                     payload=c.model_dump()
-                ))
+                )
+                for c, vector in zip(batch, vectors)
+            ]
 
             try:
                 self.client.upsert(
@@ -216,34 +220,54 @@ class QdrantAdapter:
                 logger.error(f"Failed to upsert points: {e}")
                 raise RuntimeError(f"Upsert failed: {e}")
 
-    async def search(self, query: str | list[str], limit: int = 5, threshold_factor: float = 0.8) -> List[Chunk]:
-        if not query:
+    async def search(
+        self,
+        query: str | list[str],
+        max_chunks: int = 25,
+    ) -> List[Chunk]:
+        if isinstance(query, str):
+            queries = [query.strip()] if query.strip() else []
+        else:
+            queries = [item.strip() for item in query if item.strip()]
+
+        if not queries or max_chunks <= 0:
             logger.warning("Empty query provided to search.")
             return []
-            
-        if isinstance(query, list):
-            query = " ".join(query)
-            
-        vector = await self._get_embedding(query)
-        
+
         try:
-            # Qdrant client 1.18.0 deprecates .search() in favor of .query_points()
-            results = self.client.query_points(
-                collection_name=self.collection_name,
-                query=vector,
-                limit=limit,
-                with_payload=True
-            ).points
-            
-            if not results:
-                return []
-                
-            top_score = results[0].score
-            threshold = top_score * threshold_factor
-            
-            filtered_results = [r for r in results if r.score >= threshold]
-            
-            return [Chunk(**r.payload) for r in filtered_results]
+            vectors = await asyncio.gather(
+                *(self._get_embedding(item) for item in queries)
+            )
+            result_lists = [
+                self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=vector,
+                    limit=max_chunks,
+                    with_payload=True,
+                ).points
+                for vector in vectors
+            ]
+
+            chunks = []
+            seen_chunk_ids = set()
+            for index in range(max_chunks):
+                for results in result_lists:
+                    if index >= len(results):
+                        continue
+                    result = results[index]
+                    chunk_id = str(result.id)
+                    if chunk_id in seen_chunk_ids:
+                        continue
+                    seen_chunk_ids.add(chunk_id)
+                    payload = {
+                        **result.payload,
+                        "chunk_id": chunk_id,
+                        "score": result.score,
+                    }
+                    chunks.append(Chunk(**payload))
+                    if len(chunks) >= max_chunks:
+                        return chunks
+            return chunks
         except Exception as e:
             logger.error(f"Semantic search failed: {e}")
             return []

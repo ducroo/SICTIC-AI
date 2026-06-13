@@ -50,7 +50,7 @@ def storage_domain_config() -> Dict[str, Any]:
     path = _config_path()
     with path.open("r", encoding="utf-8") as f:
         config = json.load(f)
-    if "domains" not in config or "default_domain" not in config:
+    if "domains" not in config:
         raise ValueError(f"{path}: missing required storage domain keys.")
     return config
 
@@ -71,41 +71,26 @@ def _resolve_path_template(template: str, slug: str) -> str:
     return template.format(dataset=slug, slug=slug).strip("/")
 
 
-def _location_path(entry: Dict[str, Any], dconf: Dict[str, Any], key: str, slug: str) -> str:
-    legacy_path = entry.get("path") or slug
-    if key in entry:
-        return entry[key].strip("/")
-
+def _location_path(dconf: Dict[str, Any], key: str, slug: str) -> str:
     template_key = f"{key}_template"
-    if template_key in entry:
-        return _resolve_path_template(entry[template_key], slug)
     if template_key in dconf:
-        return _resolve_path_template(dconf[template_key], legacy_path.strip("/"))
+        return _resolve_path_template(dconf[template_key], slug)
 
-    return legacy_path.strip("/")
+    return slug
 
 
-def dataset_location(dataset_name: str, *, domain: Optional[str] = None) -> DatasetLocation:
-    config = storage_domain_config()
+def dataset_location_for_domain(dataset_name: str, domain: str) -> DatasetLocation:
+    """Construct a dataset location for creation in an explicit domain."""
     slug = slugify(dataset_name)
-
-    explicit = config.get("datasets", {}).get(slug)
-    derived = config.get("derived_datasets", {}).get(slug)
-    entry = explicit or derived or {}
-
-    resolved_domain = domain or entry.get("domain") or config["default_domain"]
-    dconf = _domain_config(resolved_domain)
-    dataset_path = _location_path(entry, dconf, "dataset_path", slug)
-    parsed_path = _location_path(entry, dconf, "parsed_path", slug)
-    insights_path = _location_path(entry, dconf, "insights_path", slug)
+    dconf = _domain_config(domain)
 
     return DatasetLocation(
         name=dataset_name,
         slug=slug,
-        domain=resolved_domain,
-        dataset_path=dataset_path,
-        parsed_path=parsed_path,
-        insights_path=insights_path,
+        domain=domain,
+        dataset_path=_location_path(dconf, "dataset_path", slug),
+        parsed_path=_location_path(dconf, "parsed_path", slug),
+        insights_path=_location_path(dconf, "insights_path", slug),
         dataset_root=dconf["dataset_root"].strip("/"),
         parsed_root=dconf["parsed_root"].strip("/"),
         insights_root=dconf["insights_root"].strip("/"),
@@ -113,20 +98,50 @@ def dataset_location(dataset_name: str, *, domain: Optional[str] = None) -> Data
     )
 
 
-def dataset_raw_path(dataset_name: str, *, domain: Optional[str] = None) -> str:
-    return dataset_location(dataset_name, domain=domain).raw_rel
+def find_dataset_location(dataset_name: str) -> Optional[DatasetLocation]:
+    """Find an existing dataset by its globally unique name."""
+    storage = get_storage()
+    matches = []
+    for domain in iter_domains():
+        location = dataset_location_for_domain(dataset_name, domain)
+        if storage.is_dir(location.raw_rel):
+            matches.append(location)
+
+    if len(matches) > 1:
+        locations = ", ".join(location.raw_rel for location in matches)
+        raise ValueError(
+            f"Dataset '{slugify(dataset_name)}' exists in multiple domains: {locations}"
+        )
+    return matches[0] if matches else None
 
 
-def dataset_parsed_path(dataset_name: str, *, domain: Optional[str] = None) -> str:
-    return dataset_location(dataset_name, domain=domain).parsed_rel
+def dataset_location(dataset_name: str) -> DatasetLocation:
+    location = find_dataset_location(dataset_name)
+    if location is None:
+        roots = ", ".join(
+            _domain_config(domain)["dataset_root"].strip("/")
+            for domain in iter_domains()
+        )
+        raise FileNotFoundError(
+            f"Dataset '{slugify(dataset_name)}' was not found under: {roots}"
+        )
+    return location
 
 
-def dataset_insights_path(dataset_name: str, *, domain: Optional[str] = None) -> str:
-    return dataset_location(dataset_name, domain=domain).insights_rel
+def dataset_raw_path(dataset_name: str) -> str:
+    return dataset_location(dataset_name).raw_rel
 
 
-def dataset_active_marker_path(dataset_name: str, *, domain: Optional[str] = None) -> str:
-    return dataset_location(dataset_name, domain=domain).active_marker_rel
+def dataset_parsed_path(dataset_name: str) -> str:
+    return dataset_location(dataset_name).parsed_rel
+
+
+def dataset_insights_path(dataset_name: str) -> str:
+    return dataset_location(dataset_name).insights_rel
+
+
+def dataset_active_marker_path(dataset_name: str) -> str:
+    return dataset_location(dataset_name).active_marker_rel
 
 
 def list_dataset_names(domain: str) -> list[str]:
@@ -138,7 +153,9 @@ def list_dataset_names(domain: str) -> list[str]:
     return [
         item
         for item in storage.list(root)
-        if storage.is_dir(f"{root}/{item}")
+        if storage.is_dir(
+            dataset_location_for_domain(item, domain).raw_rel
+        )
     ]
 
 

@@ -10,9 +10,7 @@ from lib.env import get_env_var
 from lib.slugify import slugify
 from lib.storage import Storage, get_storage
 from lib.storage_domains import (
-    dataset_active_marker_path,
-    dataset_parsed_path,
-    dataset_raw_path,
+    dataset_location_for_domain,
 )
 
 
@@ -57,16 +55,14 @@ def ensure_startup_dossier(
     """Create the standard raw and parsed startup dataset layout."""
     dataset_slug = canonical_startup_slug(startup)
     storage = storage or get_storage()
+    location = dataset_location_for_domain(dataset_slug, "startups")
 
-    for root in (
-        dataset_raw_path(dataset_slug, domain="startups"),
-        dataset_parsed_path(dataset_slug, domain="startups"),
-    ):
+    for root in (location.raw_rel, location.parsed_rel):
         storage.mkdir(root)
         for subdir in STARTUP_DATASET_SUBDIRS:
             storage.mkdir(f"{root}/{subdir}")
 
-    active_marker = dataset_active_marker_path(dataset_slug, domain="startups")
+    active_marker = location.active_marker_rel
     if activate and not storage.exists(active_marker):
         activate_dataset(dataset_slug)
     return dataset_slug

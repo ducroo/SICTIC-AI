@@ -11,6 +11,7 @@ SOUL.md
 TOOLS.md
 USER.md
 cache/
+docling_data/
 log/
 memory/
 test_runner.py

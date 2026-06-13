@@ -8,8 +8,8 @@ Two backends:
   - LocalStorage: reads/writes a local directory.
   - GoogleDriveStorage: Google Drive via the native Drive API.
 
-RoutedStorage dispatches by path prefix so caches always stay local even
-when the source/output backend is remote.
+RoutedStorage dispatches by path prefix so repository-local runtime data stays
+local even when the source/output backend is remote.
 """
 from __future__ import annotations
 
@@ -154,10 +154,9 @@ class MockStorage(LocalStorage):
 
 # ---------- Routing ----------
 
-# Paths whose first segment matches these always go to the local cache,
-# even when the main storage is remote. Durable converted Markdown lives under
-# storage/datasets2md and must not be routed here.
-_CACHE_PREFIXES = ("cache",)
+# Paths whose first segment matches these always go to repository-local storage,
+# even when canonical storage is remote or mirrored.
+_LOCAL_PREFIXES = ("cache", "docling_data")
 
 
 class RoutedStorage:
@@ -171,7 +170,7 @@ class RoutedStorage:
         """Normalize rel and select the backing storage. Returns (clean_rel, store)."""
         rel = _validate_rel(rel)
         head = rel.split("/", 1)[0]
-        store = self.cache if head in _CACHE_PREFIXES else self.drive
+        store = self.cache if head in _LOCAL_PREFIXES else self.drive
         return rel, store
 
     def read_text(self, rel: str, *, encoding: str = "utf-8") -> str:
@@ -252,14 +251,19 @@ def get_storage() -> Storage:
     """
     Returns the process-wide Storage instance based on .env configuration.
 
-    STORAGE_PROVIDER="local":  LocalStorage(LOCAL_STORAGE_PATH)
+    STORAGE_PROVIDER="local":  RoutedStorage with LocalStorage(LOCAL_STORAGE_PATH)
+                               for canonical storage and LocalStorage(LOCAL_DATA_PATH)
+                               for repository-local runtime data.
     STORAGE_PROVIDER="google": RoutedStorage with GoogleDriveStorage(CLOUD_STORAGE_PATH)
-                               for drive paths and LocalStorage($REPO_PATH/cache) for caches.
-    STORAGE_PROVIDER="hybrid": MirrorStorage — local mirror at LOCAL_STORAGE_PATH,
-                               Drive as read-fallback and explicit sync target.
+                               for drive paths and LocalStorage(LOCAL_DATA_PATH) for
+                               repository-local runtime data.
+    STORAGE_PROVIDER="hybrid": RoutedStorage with MirrorStorage at LOCAL_STORAGE_PATH
+                               for canonical storage and LocalStorage(LOCAL_DATA_PATH)
+                               for repository-local runtime data.
+                               The mirror uses Drive as read-fallback and explicit sync target.
                                Markdown writes go local first, then upload to
-                               Drive as Google Docs; cache/derived OCR paths
-                               stay local-only. CLOUD_STORAGE_PATH is the Drive root
+                               Drive as Google Docs; cache and Docling paths stay
+                               local-only. CLOUD_STORAGE_PATH is the Drive root
                                folder ID, "root", or folder path/name used for
                                read-fallback and Markdown upload.
     """
@@ -269,6 +273,16 @@ def get_storage() -> Storage:
 
     from lib.env import get_env_var
     provider = os.environ.get("STORAGE_PROVIDER", "local").lower()
+    repo_path = os.environ.get("REPO_PATH")
+    local_data_path = (
+        os.environ.get("LOCAL_DATA_PATH")
+        or repo_path
+        or os.path.expanduser("~/.local/share/sictic")
+    )
+    if not os.path.isabs(local_data_path):
+        raise ValueError(f"LOCAL_DATA_PATH must be an absolute path, got: {local_data_path}")
+    os.makedirs(local_data_path, exist_ok=True)
+    local_data = LocalStorage(local_data_path)
 
     if provider == "google":
         from lib.storage_gdrive import GoogleDriveStorage
@@ -283,10 +297,7 @@ def get_storage() -> Storage:
             token_path=token_path,
             root_folder_id=root_folder_id
         )
-        repo_path = os.environ.get("REPO_PATH")
-        cache_dir = os.path.join(repo_path, "cache") if repo_path else os.path.expanduser("~/.cache/sictic")
-        os.makedirs(cache_dir, exist_ok=True)
-        _storage_singleton = RoutedStorage(drive=drive, cache=LocalStorage(cache_dir))
+        _storage_singleton = RoutedStorage(drive=drive, cache=local_data)
     elif provider == "hybrid":
         from lib.storage_gdrive import GoogleDriveStorage
         from lib.storage_mirror import MirrorStorage
@@ -307,7 +318,8 @@ def get_storage() -> Storage:
             token_path=token_path,
             root_folder_id=root_folder_id,
         )
-        _storage_singleton = MirrorStorage(local=LocalStorage(mirror_path), drive=drive)
+        mirror = MirrorStorage(local=LocalStorage(mirror_path), drive=drive)
+        _storage_singleton = RoutedStorage(drive=mirror, cache=local_data)
     else:
         # Local mode requires an absolute path
         base_dir = get_env_var("LOCAL_STORAGE_PATH")
@@ -315,7 +327,10 @@ def get_storage() -> Storage:
             raise ValueError(
                 f"LOCAL_STORAGE_PATH must be an absolute path when provider is 'local', got: {base_dir}"
             )
-        _storage_singleton = LocalStorage(base_dir)
+        _storage_singleton = RoutedStorage(
+            drive=LocalStorage(base_dir),
+            cache=local_data,
+        )
 
     return _storage_singleton
 

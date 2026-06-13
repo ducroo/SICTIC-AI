@@ -7,7 +7,7 @@ from typing import Any, Optional
 from lib.dealum_import import dealum_manifest_path
 from lib.slugify import slugify
 from lib.storage import get_storage
-from lib.storage_domains import dataset_raw_path
+from lib.storage_domains import find_dataset_location
 
 
 @dataclass(frozen=True)
@@ -37,8 +37,9 @@ class StartupState:
 def get_startup_state(startup: str) -> StartupState:
     dataset_slug = slugify(startup)
     storage = get_storage()
-    raw_path = dataset_raw_path(dataset_slug)
-    manifest = _read_dealum_manifest(dataset_slug)
+    location = find_dataset_location(dataset_slug)
+    dataset_exists = location is not None
+    manifest = _read_dealum_manifest(dataset_slug) if dataset_exists else {}
     files = manifest.get("files", []) if isinstance(manifest.get("files"), list) else []
 
     has_pitch_deck = any(
@@ -56,7 +57,7 @@ def get_startup_state(startup: str) -> StartupState:
 
     return StartupState(
         dataset_slug=dataset_slug,
-        dataset_exists=storage.exists(raw_path),
+        dataset_exists=dataset_exists,
         source=manifest.get("source"),
         dealum_id=manifest.get("dealum_id"),
         step=manifest.get("step"),

@@ -3,6 +3,7 @@ from openpyxl import Workbook
 
 from lib.adapters.docling import (
     DoclingAdapter,
+    SPREADSHEET_MARKDOWN_MARKER,
     _chat_completions_model,
     _chat_completions_url,
 )
@@ -47,7 +48,7 @@ async def test_rtf_processing_bypasses_docling_converter(monkeypatch, tmp_path):
     assert text == "Plain text.\n"
 
 
-def test_spreadsheet_fallback_detects_excel_wide_merged_range(tmp_path):
+def test_spreadsheet_conversion_omits_formatting_only_cells(tmp_path):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "financial model"
@@ -58,10 +59,9 @@ def test_spreadsheet_fallback_detects_excel_wide_merged_range(tmp_path):
     path = tmp_path / "model.xlsx"
     workbook.save(path)
 
-    assert DoclingAdapter._spreadsheet_needs_compact_fallback(str(path)) is True
-
     markdown = DoclingAdapter._convert_spreadsheet_sync(str(path))
 
+    assert markdown.startswith(SPREADSHEET_MARKDOWN_MARKER)
     assert "## financial model" in markdown
     assert "Revenue" in markdown
     assert "1200" in markdown
@@ -69,18 +69,48 @@ def test_spreadsheet_fallback_detects_excel_wide_merged_range(tmp_path):
     assert "XFD" not in markdown
 
 
-def test_spreadsheet_fallback_ignores_normal_workbook(tmp_path):
+def test_spreadsheet_conversion_omits_formulas_without_cached_values(tmp_path):
     workbook = Workbook()
     sheet = workbook.active
     sheet["A1"] = "Name"
     sheet["B1"] = "Amount"
     sheet["A2"] = "Seed"
-    sheet["B2"] = 100
+    sheet["B2"] = "=40+60"
 
     path = tmp_path / "normal.xlsx"
     workbook.save(path)
 
-    assert DoclingAdapter._spreadsheet_needs_compact_fallback(str(path)) is False
+    markdown = DoclingAdapter._convert_spreadsheet_sync(str(path))
+
+    assert "Seed" in markdown
+    assert "=40+60" not in markdown
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("extension", [".xls", ".xlsx", ".xlsm"])
+async def test_spreadsheet_processing_bypasses_docling_converter(monkeypatch, tmp_path, extension):
+    path = tmp_path / f"model{extension}"
+    path.write_bytes(b"workbook")
+
+    async def acquire(_limit):
+        return None
+
+    monkeypatch.setattr("lib.services_gateway.gateway.acquire_docling_slot", acquire)
+    monkeypatch.setattr("lib.services_gateway.gateway.release_docling_slot", lambda: None)
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_spreadsheet_sync",
+        staticmethod(lambda _path: "compact values\n"),
+    )
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_sync",
+        staticmethod(lambda _path: pytest.fail("Docling converter should not handle spreadsheets")),
+    )
+
+    text = await DoclingAdapter()._process_single_file(str(path), path.name)
+
+    assert text == "compact values\n"
 
 
 def test_repaired_pdf_conversion_runs_ghostscript_then_docling(monkeypatch, tmp_path):

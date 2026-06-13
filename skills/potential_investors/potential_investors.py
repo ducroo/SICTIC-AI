@@ -33,8 +33,18 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         subdir=False
     )
 
+    people_dataset = "sictic-members-investor-profile"
+    logger.info(f"[{startup_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
+    await dataset_from_insight(
+        insight_name="investor_profile",
+        source_dataset="sictic-members",
+    )
+
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["investor_profile", startup_slug], out_path)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(
+        [people_dataset, startup_slug],
+        out_path,
+    )
     if not needs_refresh:
         logger.info(f"[{startup_slug}] Using cached potential investors from {matched_file}")
         return cached_content
@@ -56,11 +66,6 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         raise RuntimeError(f"Failed to load configuration: {e}")
 
     objective = objective_template.replace("{{startup_profile}}", profile_content)
-
-    # 2.5 Hydrate Target Dataset
-    people_dataset = "sictic-members-investor-profile"
-    logger.info(f"[{startup_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
-    await dataset_from_insight(insight_name="investor_profile", source_dataset="sictic-members")
 
     # 3. Call ranking_persons Engine
     logger.info(f"[{startup_slug}] Invoking ranking_persons engine for potential investors...")

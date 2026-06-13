@@ -8,10 +8,20 @@ from lib.active_dataset import (
     is_active_dataset,
 )
 from lib.storage import get_storage
-from lib.storage_domains import dataset_active_marker_path
+from lib.storage_domains import (
+    dataset_active_marker_path,
+    dataset_location_for_domain,
+)
+
+
+def _create_startup_dataset():
+    get_storage().mkdir(
+        dataset_location_for_domain("Avientus", "startups").raw_rel
+    )
 
 
 def test_activate_dataset_writes_current_active_marker(mock_env):
+    _create_startup_dataset()
     started_at = time.time()
     activate_dataset("Avientus")
 
@@ -27,6 +37,7 @@ def test_activate_dataset_writes_current_active_marker(mock_env):
 
 
 def test_archive_dataset_replaces_active_marker_with_archived_marker(mock_env):
+    _create_startup_dataset()
     activate_dataset("Avientus")
     archive_dataset("Avientus")
 
@@ -41,6 +52,7 @@ def test_archive_dataset_replaces_active_marker_with_archived_marker(mock_env):
 
 
 def test_activate_dataset_replaces_archived_marker_with_active_marker(mock_env):
+    _create_startup_dataset()
     archive_dataset("Avientus")
     activate_dataset("Avientus")
 
@@ -54,6 +66,7 @@ def test_activate_dataset_replaces_archived_marker_with_active_marker(mock_env):
 
 
 def test_archive_dataset_by_age_writes_archived_marker(mock_env):
+    _create_startup_dataset()
     activate_dataset("Avientus")
     storage = get_storage()
     active_marker = dataset_active_marker_path("Avientus")
@@ -67,6 +80,7 @@ def test_archive_dataset_by_age_writes_archived_marker(mock_env):
 
 
 def test_activate_dataset_does_not_touch_existing_marker(mock_env):
+    _create_startup_dataset()
     activate_dataset("Avientus")
     storage = get_storage()
     marker = dataset_active_marker_path("Avientus")

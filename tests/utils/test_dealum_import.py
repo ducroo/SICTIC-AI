@@ -9,6 +9,7 @@ from lib.dealum_import import (
     reconcile_dealum_startup,
 )
 from lib.startup_data_sources import ensure_startup_dataset
+from lib.storage_domains import dataset_location_for_domain
 from lib.storage import get_storage
 from lib.storage import LocalStorage
 from lib.storage_mirror import MirrorStorage
@@ -187,7 +188,9 @@ async def test_ensure_startup_dataset_no_dealum_env_is_noop(mock_env):
 
     assert status.dealum_configured is False
     assert status.dataset_exists is False
-    assert not get_storage().exists(dataset_raw_path("missingco"))
+    assert not get_storage().exists(
+        dataset_location_for_domain("missingco", "startups").raw_rel
+    )
 
 
 def test_reconcile_dealum_startup_matches_normalized_name(mock_env, caplog):

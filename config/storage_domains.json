@@ -1,10 +1,9 @@
 {
   "version": 1,
-  "default_domain": "startups",
   "domains": {
     "startups": {
       "dataset_root": "storage/startups",
-      "parsed_root": "storage/datasets2md/startups",
+      "parsed_root": "docling_data/datasets2md/startups",
       "insights_root": "storage/startups",
       "dataset_path_template": "{dataset}/datasets",
       "parsed_path_template": "{dataset}/datasets",
@@ -13,43 +12,21 @@
     },
     "community": {
       "dataset_root": "storage/community",
-      "parsed_root": "storage/datasets2md/community",
+      "parsed_root": "docling_data/datasets2md/community",
       "insights_root": "storage/community",
       "dataset_path_template": "{dataset}/datasets",
       "parsed_path_template": "{dataset}/datasets",
       "insights_path_template": "{dataset}/insights",
       "active_marker": "__active_dataset__.md"
     },
-    "derived": {
-      "dataset_root": "storage/community",
-      "parsed_root": "storage/datasets2md/community",
-      "insights_root": "storage/community",
+    "generated": {
+      "dataset_root": "storage/generated",
+      "parsed_root": "docling_data/datasets2md/generated",
+      "insights_root": "storage/generated",
       "dataset_path_template": "{dataset}/datasets",
       "parsed_path_template": "{dataset}/datasets",
       "insights_path_template": "{dataset}/insights",
       "active_marker": "__active_dataset__.md"
-    },
-    "ephemeral": {
-      "dataset_root": "cache/datasets/ephemeral",
-      "parsed_root": "cache/datasets2md/ephemeral",
-      "insights_root": "cache/insights/ephemeral",
-      "active_marker": "__active_dataset__.md"
-    }
-  },
-  "datasets": {
-    "sictic-members": {
-      "domain": "community",
-      "path": "sictic-members"
-    }
-  },
-  "derived_datasets": {
-    "person-profile": {
-      "domain": "derived",
-      "path": "person-profile"
-    },
-    "investor-profile": {
-      "domain": "derived",
-      "path": "investor-profile"
     }
   }
 }

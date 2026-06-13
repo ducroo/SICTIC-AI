@@ -1,4 +1,6 @@
-from skills.gdrive_sync.drive import _local_rel_for_drive_item
+import pytest
+
+from skills.gdrive_sync.drive import DriveTree, GDOC_SAFE_MAX_CHARACTERS, _local_rel_for_drive_item
 
 
 def test_google_doc_without_md_suffix_maps_to_markdown_file():
@@ -25,3 +27,33 @@ def test_binary_file_keeps_name():
     rel = _local_rel_for_drive_item("registry", "data.json", "application/json")
 
     assert rel == "registry/data.json"
+
+
+def test_markdown_over_google_doc_safety_limit_is_rejected_before_upload():
+    tree = DriveTree.__new__(DriveTree)
+    uploads = []
+    tree.storage = type(
+        "Storage",
+        (),
+        {"write_bytes": lambda self, rel, content: uploads.append((rel, content))},
+    )()
+
+    with pytest.raises(ValueError, match="Google Doc upload safety limit"):
+        tree.write_bytes("large.md", b"x" * (GDOC_SAFE_MAX_CHARACTERS + 1))
+
+    assert uploads == []
+
+
+def test_non_markdown_over_google_doc_safety_limit_still_uploads():
+    tree = DriveTree.__new__(DriveTree)
+    uploads = []
+    tree.storage = type(
+        "Storage",
+        (),
+        {"write_bytes": lambda self, rel, content: uploads.append((rel, content))},
+    )()
+    content = b"x" * (GDOC_SAFE_MAX_CHARACTERS + 1)
+
+    tree.write_bytes("large.pdf", content)
+
+    assert uploads == [("large.pdf", content)]

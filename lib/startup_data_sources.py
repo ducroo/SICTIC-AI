@@ -11,7 +11,9 @@ from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.startup_dossier import canonical_startup_slug
 from lib.storage import get_storage
-from lib.storage_domains import dataset_raw_path
+from lib.storage_domains import (
+    find_dataset_location,
+)
 
 logger = get_logger(__name__)
 
@@ -37,8 +39,8 @@ async def ensure_startup_dataset(
     """Optionally hydrate a startup dataset from Dealum without changing no-Dealum behavior."""
     dataset_slug = canonical_startup_slug(startup)
     storage = get_storage()
-    raw_path = dataset_raw_path(dataset_slug)
-    dataset_exists = storage.exists(raw_path)
+    existing_location = find_dataset_location(dataset_slug)
+    dataset_exists = existing_location is not None
     adapter = DealumAdapter()
 
     if not adapter.is_configured():
@@ -66,7 +68,7 @@ async def ensure_startup_dataset(
         return StartupDataStatus(
             startup=startup,
             dataset_slug=result.dataset_slug,
-            dataset_exists=storage.exists(dataset_raw_path(result.dataset_slug)),
+            dataset_exists=find_dataset_location(result.dataset_slug) is not None,
             dealum_configured=True,
             dealum_checked=True,
             dealum_imported=result.imported,

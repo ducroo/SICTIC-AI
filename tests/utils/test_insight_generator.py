@@ -1,10 +1,15 @@
 import pytest
 
 from lib.insight_generator import generate_dataset_insight
+from lib.storage import get_storage
+from lib.storage_domains import dataset_location_for_domain
 
 
 @pytest.mark.asyncio
 async def test_generate_dataset_insight_does_not_cache_insufficient_context(mock_env, mocker):
+    get_storage().mkdir(
+        dataset_location_for_domain("bewe", "startups").raw_rel
+    )
     mocker.patch("lib.insight_generator.check_insight_refresh", return_value=(True, None, None))
     mocker.patch(
         "lib.insight_generator.config_load",

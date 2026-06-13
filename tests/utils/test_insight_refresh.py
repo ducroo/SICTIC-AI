@@ -1,6 +1,12 @@
 from lib.insight_refresh import best_alternative, check_insight_refresh, ranked_alternatives
 from lib.storage import get_storage
-from lib.storage_domains import dataset_raw_path
+from lib.storage_domains import dataset_location_for_domain, dataset_raw_path
+
+
+def _create_avientus():
+    get_storage().mkdir(
+        dataset_location_for_domain("avientus", "startups").raw_rel
+    )
 
 
 def test_best_alternative_uses_ranked_llms_order(monkeypatch):
@@ -36,6 +42,7 @@ def test_ranked_alternatives_only_yields_ranked_models_without_provider(monkeypa
 def test_check_insight_refresh_returns_ranked_fresh_cache(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/qwen3:8b,ollama/gpt-5.4-mini")
     storage = get_storage()
+    _create_avientus()
 
     source_file = f"{dataset_raw_path('avientus')}/source.md"
     target_dir = "storage/startups/avientus/insights/person-profile"
@@ -60,6 +67,7 @@ def test_check_insight_refresh_returns_ranked_fresh_cache(mock_env, monkeypatch)
 def test_check_insight_refresh_ignores_unranked_fresh_cache(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/qwen3:8b")
     storage = get_storage()
+    _create_avientus()
 
     source_file = f"{dataset_raw_path('avientus')}/source.md"
     unranked_file = "storage/startups/avientus/insights/person-profile/jane-doe-gemma4-31b-nvfp4.md"
@@ -75,6 +83,7 @@ def test_check_insight_refresh_ignores_unranked_fresh_cache(mock_env, monkeypatc
 
 def test_check_insight_refresh_requests_refresh_when_cache_is_stale(mock_env):
     storage = get_storage()
+    _create_avientus()
 
     source_file = f"{dataset_raw_path('avientus')}/source.md"
     target_file = "storage/startups/avientus/insights/person-profile/jane-doe-gpt-5-4-mini.md"

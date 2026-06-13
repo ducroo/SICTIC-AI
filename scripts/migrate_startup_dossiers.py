@@ -148,9 +148,10 @@ def _plan_tree(root: Path, *, create_active_marker: bool) -> tuple[list[Action],
 
 
 def build_plan(mirror_root: Path) -> dict:
+    parsed_root = mirror_root.parent / "docling_data/datasets2md/startups"
     trees = [
         ("raw", mirror_root / "storage/startups", True),
-        ("parsed", mirror_root / "storage/datasets2md/startups", False),
+        ("parsed", parsed_root, False),
     ]
     all_actions: list[Action] = []
     all_conflicts: list[dict] = []
@@ -198,7 +199,7 @@ def apply_plan(plan: dict) -> None:
     mirror_root = Path(plan["mirror_root"])
     for root in (
         mirror_root / "storage/startups",
-        mirror_root / "storage/datasets2md/startups",
+        mirror_root.parent / "docling_data/datasets2md/startups",
     ):
         if not root.exists():
             continue

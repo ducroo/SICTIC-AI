@@ -13,7 +13,6 @@ def clean_gateway():
     gateway = ServicesGateway()
     # Reset internal limits for testing
     gateway.OLLAMA_NUM_PARALLEL = 2
-    gateway.DOCLING_NUM_PARALLEL = 2
     return gateway
 
 def read_state():

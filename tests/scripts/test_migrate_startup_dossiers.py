@@ -12,7 +12,7 @@ def test_migration_routes_files_and_directories_in_both_trees(mock_env, tmp_path
     mirror = tmp_path / "mirror"
     for prefix, suffix in (
         ("storage/startups", ""),
-        ("storage/datasets2md/startups", ".md"),
+        ("../docling_data/datasets2md/startups", ".md"),
     ):
         datasets = mirror / prefix / "example" / "datasets"
         _write(datasets / f"loose.pdf{suffix}", "loose")
@@ -27,7 +27,7 @@ def test_migration_routes_files_and_directories_in_both_trees(mock_env, tmp_path
 
     for prefix, suffix in (
         ("storage/startups", ""),
-        ("storage/datasets2md/startups", ".md"),
+        ("../docling_data/datasets2md/startups", ".md"),
     ):
         datasets = mirror / prefix / "example" / "datasets"
         assert (datasets / "snippets" / f"loose.pdf{suffix}").exists()

@@ -28,8 +28,18 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         subdir=True
     )
 
+    people_dataset = "sictic-members-investor-profile"
+    logger.info(f"[{event_name_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
+    await dataset_from_insight(
+        insight_name="investor_profile",
+        source_dataset="sictic-members",
+    )
+
     # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["investor_profile", "advocates", event_name_slug], out_path)
+    needs_refresh, cached_content, matched_file = check_insight_refresh(
+        [people_dataset],
+        out_path,
+    )
     if not needs_refresh:
         logger.info(f"[{event_name_slug}] Using cached advocates from {matched_file}")
         return cached_content
@@ -43,11 +53,6 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         raise RuntimeError(f"Failed to load configuration: {e}")
 
     objective = objective_template.replace("{{overview_event}}", event_description)
-
-    # 1.5 Hydrate Target Dataset
-    people_dataset = "sictic-members-investor-profile"
-    logger.info(f"[{event_name_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
-    await dataset_from_insight(insight_name="investor_profile", source_dataset="sictic-members")
 
     # 2. Call ranking_persons Engine
     logger.info(f"[{event_name_slug}] Invoking ranking_persons engine for advocates...")

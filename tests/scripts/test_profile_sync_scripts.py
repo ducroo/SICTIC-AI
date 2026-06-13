@@ -8,9 +8,16 @@ from typer.testing import CliRunner
 from lib.active_dataset import activate_dataset
 from lib.dataset_from_insight import DatasetFromInsightResult, dataset_from_insight
 from lib.storage import get_storage
+from lib.storage_domains import dataset_location_for_domain
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _create_dataset(name: str, domain: str):
+    location = dataset_location_for_domain(name, domain)
+    get_storage().mkdir(location.raw_rel)
+    return location
 
 
 def _load_script(name: str):
@@ -30,6 +37,7 @@ def _load_script(name: str):
 async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_file(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini,ollama/qwen3:8b")
     storage = get_storage()
+    _create_dataset("sictic-members", "community")
 
     storage.write_text(
         "storage/community/sictic-members/insights/person-profile/urs-gubser-qwen3-8b.md",
@@ -40,7 +48,7 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
         "preferred gpt profile",
     )
     storage.write_text(
-        "storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
+        "storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
@@ -52,22 +60,23 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
     assert result.selected == 1
     assert result.synced == 1
     assert result.removed == 1
-    assert storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
-    assert not storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
-    assert storage.read_text("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
+    assert storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert not storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
+    assert storage.read_text("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
 
 
 @pytest.mark.asyncio
 async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
     storage = get_storage()
+    _create_dataset("sictic-members", "community")
 
     storage.write_text(
         "storage/community/sictic-members/insights/person-profile/urs-gubser-gpt-5-4-mini.md",
         "preferred gpt profile",
     )
     storage.write_text(
-        "storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
+        "storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
@@ -80,14 +89,16 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     assert result.dry_run is True
     assert result.synced == 1
     assert result.removed == 1
-    assert not storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
-    assert storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
+    assert not storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
 
 
 @pytest.mark.asyncio
 async def test_dataset_from_insight_without_source_scans_active_datasets(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
     storage = get_storage()
+    _create_dataset("avientus", "startups")
+    _create_dataset("archived", "startups")
     activate_dataset("avientus")
 
     storage.write_text(
@@ -102,10 +113,10 @@ async def test_dataset_from_insight_without_source_scans_active_datasets(mock_en
     result = await dataset_from_insight("person_profile")
 
     assert result.target_dataset == "active-person-profile"
-    assert result.target_path == "storage/community/active-person-profile/datasets"
+    assert result.target_path == "storage/generated/active-person-profile/datasets"
     assert result.selected == 1
-    assert storage.exists("storage/community/active-person-profile/datasets/jane-doe-gpt-5-4-mini.md")
-    assert not storage.exists("storage/community/active-person-profile/datasets/john-doe-gpt-5-4-mini.md")
+    assert storage.exists("storage/generated/active-person-profile/datasets/jane-doe-gpt-5-4-mini.md")
+    assert not storage.exists("storage/generated/active-person-profile/datasets/john-doe-gpt-5-4-mini.md")
 
 
 @pytest.mark.asyncio
@@ -117,8 +128,8 @@ async def test_sync_datasets_force_bypasses_recent_sync_cache(mocker):
 
     calls = []
 
-    async def fake_sync(dataset_name, *, domain=None):
-        calls.append((dataset_name, domain))
+    async def fake_sync(dataset_name):
+        calls.append(dataset_name)
 
     mocker.patch.object(ingestion, "_sync_single_dataset", side_effect=fake_sync)
 
@@ -127,8 +138,8 @@ async def test_sync_datasets_force_bypasses_recent_sync_cache(mocker):
     await ingestion.sync_datasets(["person_profile"], raise_on_error=True, force=True)
 
     assert calls == [
-        ("person-profile", None),
-        ("person-profile", None),
+        "person-profile",
+        "person-profile",
     ]
 
 
@@ -137,7 +148,7 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
 
     expected = DatasetFromInsightResult(
         target_dataset="sictic-members-person-profile",
-        target_path="storage/community/sictic-members-person-profile/datasets",
+        target_path="storage/generated/sictic-members-person-profile/datasets",
         insight="person-profile",
         source_dataset="sictic-members",
         selected=2,
@@ -171,7 +182,7 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
             "dry_run": True,
         }
     ]
-    assert "Target path: storage/community/sictic-members-person-profile/datasets" in result.output
+    assert "Target path: storage/generated/sictic-members-person-profile/datasets" in result.output
 
 
 @pytest.mark.asyncio

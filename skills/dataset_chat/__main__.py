@@ -18,7 +18,7 @@ def search_cmd(
 ):
     try:
         import asyncio
-        chunks = asyncio.run(dataset_search(dataset_name, [query]))
+        chunks = asyncio.run(dataset_search(dataset_name, query))
         for c in chunks:
             print(f"[Source: {c.document_name}, Page: {c.page_number}]\n{c.text}\n")
     except typer.Exit:

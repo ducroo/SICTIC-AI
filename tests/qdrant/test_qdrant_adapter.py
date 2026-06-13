@@ -1,7 +1,9 @@
 import pytest
+import asyncio
 import os
 import uuid
 import hashlib
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 from lib.adapters.qdrant import QdrantAdapter, Chunker
 from skills.dataset_chat.core.models import Chunk
@@ -85,3 +87,170 @@ def test_chunker_split_markdown():
     expected_hash = hashlib.md5(expected_hash_str.encode('utf-8')).hexdigest()
     expected_uuid = str(uuid.UUID(hex=expected_hash))
     assert first_chunk.chunk_id == expected_uuid
+
+
+@pytest.mark.asyncio
+async def test_get_embedding_uses_services_gateway(mock_env, mocker):
+    adapter = object.__new__(QdrantAdapter)
+    request = mocker.patch(
+        "lib.adapters.qdrant.gateway.request_embedding",
+        return_value=SimpleNamespace(data=[{"embedding": [0.1, 0.2]}]),
+    )
+
+    vector = await adapter._get_embedding("chunk text")
+
+    assert vector == [0.1, 0.2]
+    request.assert_awaited_once()
+    assert request.await_args.args[0]["input"] == ["chunk text"]
+
+
+@pytest.mark.asyncio
+async def test_upsert_embeds_chunks_concurrently_and_preserves_order(mocker):
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+    active = 0
+    max_active = 0
+
+    async def fake_embedding(text):
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return [float(text)]
+
+    mocker.patch.object(adapter, "_get_embedding", side_effect=fake_embedding)
+    chunks = [
+        Chunk(
+            chunk_id=str(uuid.uuid4()),
+            document_name="document.md",
+            page_number=1,
+            last_modified=1.0,
+            text=str(index),
+        )
+        for index in range(6)
+    ]
+
+    await adapter.upsert(chunks)
+
+    assert max_active == 6
+    points = adapter.client.upsert.call_args.kwargs["points"]
+    assert [point.vector for point in points] == [
+        [float(index)] for index in range(6)
+    ]
+    assert [point.payload["text"] for point in points] == [
+        str(index) for index in range(6)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_upsert_does_not_write_partial_document_on_embedding_failure(mocker):
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+
+    async def fake_embedding(text):
+        if text == "bad":
+            raise RuntimeError("embedding failed")
+        await asyncio.sleep(0)
+        return [1.0]
+
+    mocker.patch.object(adapter, "_get_embedding", side_effect=fake_embedding)
+    chunks = [
+        Chunk(
+            chunk_id=str(uuid.uuid4()),
+            document_name="document.md",
+            page_number=1,
+            last_modified=1.0,
+            text=text,
+        )
+        for text in ("good", "bad", "also-good")
+    ]
+
+    with pytest.raises(RuntimeError, match="embedding failed"):
+        await adapter.upsert(chunks)
+
+    adapter.client.upsert.assert_not_called()
+
+
+def _query_result(chunk_id, score, text=None):
+    return SimpleNamespace(
+        id=chunk_id,
+        score=score,
+        payload={
+            "chunk_id": chunk_id,
+            "document_name": f"{chunk_id}.md",
+            "page_number": 1,
+            "last_modified": 1.0,
+            "text": text or chunk_id,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_runs_queries_separately_and_merges_round_robin(mocker):
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+    mocker.patch.object(
+        adapter,
+        "_get_embedding",
+        side_effect=lambda query: {
+            "technology": [1.0],
+            "business": [2.0],
+        }[query],
+    )
+    adapter.client.query_points.side_effect = [
+        SimpleNamespace(
+            points=[
+                _query_result("tech-1", 0.99),
+                _query_result("shared", 0.90),
+                _query_result("tech-3", 0.80),
+            ]
+        ),
+        SimpleNamespace(
+            points=[
+                _query_result("business-1", 0.98),
+                _query_result("shared", 0.95),
+                _query_result("business-3", 0.79),
+            ]
+        ),
+    ]
+
+    chunks = await adapter.search(
+        ["technology", "business"],
+        max_chunks=5,
+    )
+
+    assert [chunk.chunk_id for chunk in chunks] == [
+        "tech-1",
+        "business-1",
+        "shared",
+        "tech-3",
+        "business-3",
+    ]
+    assert adapter._get_embedding.await_count == 2
+    assert adapter.client.query_points.call_count == 2
+    assert all(
+        call.kwargs["limit"] == 5
+        for call in adapter.client.query_points.call_args_list
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_returns_all_available_unique_chunks_up_to_max(mocker):
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+    mocker.patch.object(adapter, "_get_embedding", return_value=[1.0])
+    adapter.client.query_points.return_value = SimpleNamespace(
+        points=[
+            _query_result("one", 0.9),
+            _query_result("two", 0.1),
+        ]
+    )
+
+    chunks = await adapter.search("query", max_chunks=25)
+
+    assert [chunk.chunk_id for chunk in chunks] == ["one", "two"]

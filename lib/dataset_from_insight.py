@@ -10,10 +10,14 @@ from lib.insight_refresh import get_base_name, best_alternative
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
-from lib.storage_domains import dataset_insights_path, dataset_raw_path, storage_domain_config
+from lib.storage_domains import (
+    dataset_insights_path,
+    dataset_location_for_domain,
+    storage_domain_config,
+)
 
 logger = get_logger(__name__)
-app = typer.Typer(help="Hydrate a derived dataset from existing insight markdown files.")
+app = typer.Typer(help="Hydrate a generated dataset from existing insight markdown files.")
 
 
 @dataclass(frozen=True)
@@ -106,7 +110,7 @@ async def dataset_from_insight(
         target_slug = slugify(f"{source_dataset}-{insight_slug}")
     else:
         target_slug = slugify(f"active-{insight_slug}")
-    target_rel = dataset_raw_path(target_slug, domain="derived")
+    target_rel = dataset_location_for_domain(target_slug, "generated").raw_rel
 
     logger.info(f"Hydrating dataset '{target_slug}' from insight '{insight_slug}'...")
 
@@ -195,7 +199,7 @@ async def dataset_from_insight(
             if dry_run:
                 logger.info(f"[dry-run] Would remove orphaned file {orphan_rel}")
             else:
-                # Orphans are individual derived markdown files. Use remove(),
+                # Orphans are individual generated markdown files. Use remove(),
                 # not rmtree(), otherwise LocalStorage leaves stale files behind
                 # and the next Qdrant sync cannot delete their old chunks.
                 storage.remove(orphan_rel)

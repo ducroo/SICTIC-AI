@@ -24,10 +24,8 @@ logger = get_logger(__name__)
 
 _PASSTHROUGH_EXTS = (".json", ".txt", ".md")
 _RTF_EXTS = (".rtf",)
-_SPREADSHEET_EXTS = (".xlsx", ".xlsm")
-_EXCEL_MAX_COLUMNS = 16_384
-_WIDE_MERGE_FALLBACK_COLUMNS = 1_024
-_WIDE_SHEET_FALLBACK_CELLS = 250_000
+_SPREADSHEET_EXTS = (".xls", ".xlsx", ".xlsm")
+SPREADSHEET_MARKDOWN_MARKER = "<!-- sictic-spreadsheet: compact-values-v1 -->"
 
 _converter = None
 _converter_init_lock = threading.Lock()
@@ -138,24 +136,12 @@ class DoclingAdapter:
                     return f.read()
             if filename.lower().endswith(_RTF_EXTS):
                 return await asyncio.to_thread(self._convert_rtf_sync, filepath)
+            if is_spreadsheet_filename(filename):
+                return await asyncio.to_thread(self._convert_spreadsheet_sync, filepath)
 
             try:
-                if filename.lower().endswith(_SPREADSHEET_EXTS) and await asyncio.to_thread(
-                    self._spreadsheet_needs_compact_fallback, filepath
-                ):
-                    logger.warning(
-                        f"Using compact spreadsheet conversion for {filename}: "
-                        "workbook contains very wide merged/formatted ranges."
-                    )
-                    return await asyncio.to_thread(self._convert_spreadsheet_sync, filepath)
                 return await asyncio.to_thread(self._convert_sync, filepath)
             except Exception as e:
-                if filename.lower().endswith(_SPREADSHEET_EXTS):
-                    logger.warning(
-                        f"Docling conversion failed for {filename}: {e}. "
-                        "Retrying with compact spreadsheet conversion."
-                    )
-                    return await asyncio.to_thread(self._convert_spreadsheet_sync, filepath)
                 if filename.lower().endswith(".pdf") and "page-dimensions" in str(e):
                     logger.warning(
                         f"Docling conversion failed for {filename}: could not resolve page dimensions. "
@@ -223,22 +209,34 @@ class DoclingAdapter:
 
     @staticmethod
     def _convert_spreadsheet_sync(filepath: str) -> str:
-        """Convert pathological spreadsheets without exporting formatted empty grid areas."""
+        """Convert spreadsheets to compact, value-only Markdown."""
+        if filepath.lower().endswith(".xls"):
+            return DoclingAdapter._convert_xls_sync(filepath)
+        return DoclingAdapter._convert_openpyxl_sync(filepath)
+
+    @staticmethod
+    def _convert_openpyxl_sync(filepath: str) -> str:
         from openpyxl import load_workbook
 
         values_wb = load_workbook(filepath, read_only=False, data_only=True)
         formulas_wb = load_workbook(filepath, read_only=False, data_only=False)
         sections = []
+        missing_cached_formulas = 0
 
         for values_ws, formulas_ws in zip(values_wb.worksheets, formulas_wb.worksheets):
             row_cells: dict[int, dict[int, str]] = {}
-            for row, col in set(values_ws._cells.keys()) | set(formulas_ws._cells.keys()):
+            for row, col in values_ws._cells:
                 value = values_ws.cell(row=row, column=col).value
-                if value in (None, ""):
-                    value = formulas_ws.cell(row=row, column=col).value
                 text = "" if value is None else str(value).replace("\n", " ").strip()
                 if text:
                     row_cells.setdefault(row, {})[col] = text
+            for row, col in formulas_ws._cells:
+                formula_cell = formulas_ws.cell(row=row, column=col)
+                if (
+                    formula_cell.data_type == "f"
+                    and values_ws.cell(row=row, column=col).value in (None, "")
+                ):
+                    missing_cached_formulas += 1
 
             if not row_cells:
                 continue
@@ -251,42 +249,68 @@ class DoclingAdapter:
                 sections.append("| " + " | ".join(_escape_markdown_cell(c) for c in row) + " |")
             sections.append("")
 
-        return "\n".join(sections).strip() + "\n"
+        values_wb.close()
+        formulas_wb.close()
+        if missing_cached_formulas:
+            logger.warning(
+                "Spreadsheet conversion omitted %s formula cells without cached values: %s",
+                missing_cached_formulas,
+                filepath,
+            )
+        return _render_spreadsheet_markdown(sections)
 
     @staticmethod
-    def _spreadsheet_needs_compact_fallback(filepath: str) -> bool:
-        """Detect Excel files that Docling expands to enormous mostly-empty tables.
+    def _convert_xls_sync(filepath: str) -> str:
+        import xlrd
 
-        Docling's Excel backend correctly ignores ordinary empty worksheet area, but it
-        treats merged ranges as real table bounds. Some financial models contain
-        cosmetic full-row merges such as A:XFD; exporting those through Docling can turn
-        a small workbook into tens of MB of markdown. Use the compact fallback only for
-        those pathological sheets so normal spreadsheets still use Docling.
-        """
-        from openpyxl import load_workbook
-
-        workbook = load_workbook(filepath, read_only=False, data_only=True)
-        for sheet in workbook.worksheets:
-            for merged_range in sheet.merged_cells.ranges:
-                if merged_range.max_col >= _EXCEL_MAX_COLUMNS:
-                    return True
-                if merged_range.max_col - merged_range.min_col + 1 >= _WIDE_MERGE_FALLBACK_COLUMNS:
-                    return True
-
-            if sheet.max_row * sheet.max_column >= _WIDE_SHEET_FALLBACK_CELLS:
-                value_cols = {
-                    cell.column
-                    for cell in sheet._cells.values()
-                    if cell.value not in (None, "")
-                }
-                if value_cols and sheet.max_column > max(value_cols) * 10:
-                    return True
-
-        return False
+        workbook = xlrd.open_workbook(filepath, on_demand=True)
+        sections = []
+        try:
+            for sheet in workbook.sheets():
+                rows = []
+                for row_idx in range(sheet.nrows):
+                    values = [
+                        _xls_cell_text(sheet.cell_value(row_idx, col_idx))
+                        for col_idx in range(sheet.ncols)
+                    ]
+                    while values and not values[-1]:
+                        values.pop()
+                    if any(values):
+                        rows.append(values)
+                if not rows:
+                    continue
+                sections.append(f"## {sheet.name}")
+                sections.extend(
+                    "| " + " | ".join(_escape_markdown_cell(value) for value in row) + " |"
+                    for row in rows
+                )
+                sections.append("")
+        finally:
+            workbook.release_resources()
+        return _render_spreadsheet_markdown(sections)
 
 
 def _escape_markdown_cell(value: str) -> str:
     return value.replace("|", "\\|")
+
+
+def is_spreadsheet_filename(filename: str) -> bool:
+    return filename.lower().endswith(_SPREADSHEET_EXTS)
+
+
+def _render_spreadsheet_markdown(sections: list[str]) -> str:
+    body = "\n".join(sections).strip()
+    if not body:
+        return f"{SPREADSHEET_MARKDOWN_MARKER}\n"
+    return f"{SPREADSHEET_MARKDOWN_MARKER}\n\n{body}\n"
+
+
+def _xls_cell_text(value) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return str(value).replace("\n", " ").strip()
 
 
 def _short_error(error: Exception, limit: int = 500) -> str:

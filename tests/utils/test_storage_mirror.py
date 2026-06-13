@@ -81,15 +81,15 @@ def test_hybrid_cache_markdown_stays_local_only(tmp_path):
     assert drive.writes == []
 
 
-def test_hybrid_storage_datasets2md_markdown_uploads(tmp_path):
+def test_hybrid_docling_data_markdown_stays_local_only(tmp_path):
     local = LocalStorage(tmp_path)
     drive = FakeDrive()
     storage = MirrorStorage(local=local, drive=drive)
 
-    storage.write_text("storage/datasets2md/startups/bewe/datasets/source.md", "# Parsed\n")
+    storage.write_text("docling_data/datasets2md/startups/bewe/datasets/source.md", "# Parsed\n")
 
-    assert (tmp_path / "storage/datasets2md/startups/bewe/datasets/source.md").read_text() == "# Parsed\n"
-    assert drive.writes == [("storage/datasets2md/startups/bewe/datasets/source.md", b"# Parsed\n")]
+    assert (tmp_path / "docling_data/datasets2md/startups/bewe/datasets/source.md").read_text() == "# Parsed\n"
+    assert drive.writes == []
 
 
 def test_hybrid_non_cache_binary_write_uploads_to_drive(tmp_path):

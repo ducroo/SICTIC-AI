@@ -17,6 +17,7 @@ os.environ["REPO_PATH"] = str(REPO_ROOT)
 os.environ["WORKSPACE_PATH"] = str(REPO_ROOT / "skills")
 os.environ["STORAGE_PROVIDER"] = "local"
 os.environ["LOCAL_STORAGE_PATH"] = str(REPO_ROOT / ".pytest-storage")
+os.environ["LOCAL_DATA_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["CLOUD_PROVIDER"] = "google"
 os.environ["CLOUD_STORAGE_PATH"] = "test-drive-root"
 os.environ["LLM_MODEL"] = "ollama/test_model:1b"
@@ -33,7 +34,6 @@ os.environ["QDRANT_HOST"] = "http://localhost:6333"
 os.environ["OLLAMA_CONTEXT_LENGTH"] = "4096"
 os.environ["OLLAMA_CONTEXT_LENGTH_MAX"] = "8192"
 os.environ["OLLAMA_NUM_PARALLEL"] = "10"
-os.environ["DOCLING_NUM_PARALLEL"] = "10"
 os.environ["APIFY_KEY"] = "test-apify-key"
 os.environ["DEALUM_API_KEY"] = ""
 os.environ["DEALUM_DEALROOM_ID"] = ""
@@ -84,6 +84,7 @@ def mock_env(monkeypatch, tmp_path):
     # Override environment variables
     monkeypatch.setenv("STORAGE_PROVIDER", "local")
     monkeypatch.setenv("LOCAL_STORAGE_PATH", str(repository_dir_mock))
+    monkeypatch.setenv("LOCAL_DATA_PATH", str(repository_dir_mock))
     monkeypatch.setenv("CLOUD_PROVIDER", "google")
     monkeypatch.setenv("CLOUD_STORAGE_PATH", "test-drive-root")
     monkeypatch.setenv("REPO_PATH", str(Path(__file__).resolve().parents[1]))
@@ -102,12 +103,19 @@ def mock_env(monkeypatch, tmp_path):
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "4096")
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "8192")
     monkeypatch.setenv("OLLAMA_NUM_PARALLEL", "10")
-    monkeypatch.setenv("DOCLING_NUM_PARALLEL", "10")
     monkeypatch.setenv("DEALUM_API_KEY", "")
     monkeypatch.setenv("DEALUM_DEALROOM_ID", "")
 
     from lib.storage import reset_storage_singleton
     reset_storage_singleton()
+
+    # Most person-oriented tests operate on the canonical community dataset.
+    # Create its dataset folder so name-based discovery has a real dataset to find.
+    from lib.storage import get_storage
+    from lib.storage_domains import dataset_location_for_domain
+
+    community = dataset_location_for_domain("sictic-members", "community")
+    get_storage().mkdir(community.raw_rel)
     
     return {
         "repository_dir": repository_dir_mock,

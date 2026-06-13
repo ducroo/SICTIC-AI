@@ -12,9 +12,8 @@ from lib.slugify import slugify
 from lib.startup_dossier import canonical_startup_slug, ensure_startup_dossier
 from lib.storage import get_storage
 from lib.storage_domains import (
-    dataset_active_marker_path,
-    dataset_parsed_path,
     dataset_raw_path,
+    dataset_location_for_domain,
 )
 
 logger = get_logger(__name__)
@@ -246,27 +245,27 @@ def import_startup_from_dealum(
     )
 
     storage = get_storage()
-    active_marker = dataset_active_marker_path(dataset_slug)
+    creation_location = dataset_location_for_domain(dataset_slug, "startups")
+    active_marker = creation_location.active_marker_rel
     dossier_paths = [
         f"{root}/{subdir}"
-        for root in (dataset_raw_path(dataset_slug), dataset_parsed_path(dataset_slug))
+        for root in (creation_location.raw_rel, creation_location.parsed_rel)
         for subdir in ("data-room", "linkedin", "dealum", "snippets", "post-deal")
     ]
     dossier_changed = (activate and not storage.exists(active_marker)) or any(
         not storage.exists(path) for path in dossier_paths
     )
     ensure_startup_dossier(dataset_slug, storage=storage, activate=activate)
-    raw_rel = dataset_raw_path(dataset_slug)
-    dealum_rel = dealum_dataset_rel(dataset_slug)
+    dealum_rel = f"{creation_location.raw_rel}/{DEALUM_SUBDIR}"
 
-    previous_manifest = _read_manifest(dataset_slug)
+    previous_manifest = _read_manifest(dataset_slug, dealum_rel=dealum_rel)
     answer_hash = _stable_hash(_application_content_for_hash(application))
     application_changed = answer_hash != previous_manifest.get("application_hash")
     dealum_url_changed = match.dealum_url != previous_manifest.get("dealum_url")
 
     application_path = f"{dealum_rel}/{APPLICATION_MD}"
     raw_json_path = f"{dealum_rel}/{APPLICATION_RAW_JSON}"
-    manifest_path = dealum_manifest_path(dataset_slug)
+    manifest_path = f"{dealum_rel}/{MANIFEST_JSON}"
 
     changed = dossier_changed
     if application_changed or dealum_url_changed or not storage.exists(application_path):
@@ -299,7 +298,7 @@ def import_startup_from_dealum(
     if download_documents:
         for link in file_links:
             previous = previous_files.get(link.url, {})
-            target_rel = _document_rel(dataset_slug, link)
+            target_rel = f"{dealum_rel}/documents/{link.filename}"
             should_download = not storage.exists(target_rel)
             metadata = {
                 "field": link.field,
@@ -481,9 +480,13 @@ def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
 
 
-def _read_manifest(dataset_slug: str) -> dict[str, Any]:
+def _read_manifest(
+    dataset_slug: str,
+    *,
+    dealum_rel: Optional[str] = None,
+) -> dict[str, Any]:
     storage = get_storage()
-    path = dealum_manifest_path(dataset_slug)
+    path = f"{dealum_rel}/{MANIFEST_JSON}" if dealum_rel else dealum_manifest_path(dataset_slug)
     if not storage.exists(path):
         return {}
     try:
@@ -492,10 +495,6 @@ def _read_manifest(dataset_slug: str) -> dict[str, Any]:
     except Exception as e:
         logger.warning(f"[{dataset_slug}] Could not read Dealum manifest: {e}")
         return {}
-
-
-def _document_rel(dataset_slug: str, link: DealumFileLink) -> str:
-    return f"{dealum_dataset_rel(dataset_slug)}/documents/{link.filename}"
 
 
 def _file_metadata_changed(previous: dict[str, Any], current: dict[str, Any]) -> bool:
