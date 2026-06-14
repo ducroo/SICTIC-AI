@@ -2,7 +2,10 @@ import typer
 from typing import Optional, List
 from skills.dataset_chat.dataset_chat import dataset_chat
 from skills.dataset_chat.dataset_search import dataset_search
-from skills.dataset_chat.dataset_delete import dataset_delete
+from skills.dataset_chat.dataset_delete import (
+    dataset_delete,
+    prune_orphaned_qdrant_collections,
+)
 from skills.dataset_chat.core.ingestion import sync_datasets
 from lib.adapters.qdrant import QdrantAdapter
 from lib.logger import get_logger
@@ -66,6 +69,34 @@ def delete_cmd(
     except Exception as e:
         logger.error(str(e))
         raise typer.Exit(code=1)
+
+
+@app.command("prune")
+def prune_cmd(
+    embeddings: Optional[str] = typer.Option(
+        None,
+        "--embeddings",
+        "-e",
+        help="Embedding model whose orphaned collections should be checked.",
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Delete orphaned collections. Without this flag, only list them.",
+    ),
+):
+    try:
+        orphans = prune_orphaned_qdrant_collections(embeddings, apply=apply)
+        if not orphans:
+            typer.echo("No orphaned Qdrant collections found.")
+            return
+        action = "Deleted" if apply else "Would delete"
+        for collection in orphans:
+            typer.echo(f"{action}: {collection}")
+    except Exception as e:
+        logger.error(str(e))
+        raise typer.Exit(code=1)
+
 
 if __name__ == "__main__":
     app()

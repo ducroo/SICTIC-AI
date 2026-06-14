@@ -211,6 +211,58 @@ async def test_upsert_does_not_write_partial_document_on_embedding_failure(mocke
     adapter.client.upsert.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_replace_document_embeds_before_deleting_existing_chunks(mocker):
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+    mocker.patch.object(adapter, "_get_embedding", return_value=[1.0])
+    delete_document = mocker.patch.object(adapter, "delete_document")
+    chunks = [
+        Chunk(
+            chunk_id=str(uuid.uuid4()),
+            document_name="document.md",
+            page_number=1,
+            last_modified=2.0,
+            text="replacement",
+        )
+    ]
+
+    await adapter.replace_document(chunks)
+
+    adapter._get_embedding.assert_awaited_once_with("replacement")
+    delete_document.assert_called_once_with("document.md", raise_on_error=True)
+    adapter.client.upsert.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_replace_document_keeps_existing_chunks_when_embedding_fails(mocker):
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+    mocker.patch.object(
+        adapter,
+        "_get_embedding",
+        side_effect=RuntimeError("embedding failed"),
+    )
+    delete_document = mocker.patch.object(adapter, "delete_document")
+    chunks = [
+        Chunk(
+            chunk_id=str(uuid.uuid4()),
+            document_name="document.md",
+            page_number=1,
+            last_modified=2.0,
+            text="replacement",
+        )
+    ]
+
+    with pytest.raises(RuntimeError, match="embedding failed"):
+        await adapter.replace_document(chunks)
+
+    delete_document.assert_not_called()
+    adapter.client.upsert.assert_not_called()
+
+
 def _query_result(chunk_id, score, text=None):
     return SimpleNamespace(
         id=chunk_id,

@@ -5,7 +5,8 @@ from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.adapters.qdrant import QdrantAdapter
-from lib.storage_domains import dataset_parsed_path
+from lib.model_config import embedding_model
+from lib.storage_domains import dataset_parsed_path, iter_domains, list_dataset_names
 
 configure_runtime_noise()
 
@@ -13,6 +14,44 @@ with suppress_native_stderr():
     from qdrant_client import QdrantClient
 
 logger = get_logger(__name__)
+
+
+def orphaned_qdrant_collections(embeddings: Optional[str] = None) -> list[str]:
+    """List collections for an embedding model whose datasets no longer exist."""
+    model = embeddings or embedding_model()
+    suffix = f"-{slugify(model.split('/')[-1])}"
+    present_datasets = {
+        slugify(name)
+        for domain in iter_domains()
+        for name in list_dataset_names(domain)
+    }
+
+    client = QdrantClient(url=get_env_var("QDRANT_HOST"), timeout=60.0)
+    collections = [col.name for col in client.get_collections().collections]
+    return sorted(
+        collection
+        for collection in collections
+        if collection.endswith(suffix)
+        and collection[:-len(suffix)] not in present_datasets
+    )
+
+
+def prune_orphaned_qdrant_collections(
+    embeddings: Optional[str] = None,
+    *,
+    apply: bool = False,
+) -> list[str]:
+    """Report or delete collections whose datasets are no longer present."""
+    orphans = orphaned_qdrant_collections(embeddings)
+    if not apply:
+        return orphans
+
+    client = QdrantClient(url=get_env_var("QDRANT_HOST"), timeout=60.0)
+    for collection in orphans:
+        client.delete_collection(collection)
+        logger.info(f"Deleted orphaned Qdrant collection: {collection}")
+    return orphans
+
 
 def dataset_delete(dataset: Optional[str] = None, embeddings: Optional[str] = None):
     if not dataset and not embeddings:

@@ -174,7 +174,7 @@ class QdrantAdapter:
             logger.warning(f"Failed to fetch document mtimes: {e}")
             return {}
 
-    def delete_document(self, document_name: str) -> None:
+    def delete_document(self, document_name: str, *, raise_on_error: bool = False) -> None:
         """Deletes all chunks belonging to a specific document."""
         try:
             self.client.delete(
@@ -186,11 +186,14 @@ class QdrantAdapter:
                             match=MatchValue(value=document_name)
                         )
                     ]
-                )
+                ),
+                wait=True,
             )
             logger.debug(f"Deleted old chunks for {document_name} from Qdrant.")
         except Exception as e:
             logger.error(f"Failed to delete {document_name} from Qdrant: {e}")
+            if raise_on_error:
+                raise RuntimeError(f"Failed to delete existing chunks for {document_name}: {e}") from e
 
     async def upsert(self, chunks: List[Chunk], batch_size: int = 50) -> None:
         if not chunks:
@@ -204,17 +207,57 @@ class QdrantAdapter:
             )
             points = [
                 PointStruct(
-                    id=c.chunk_id,
+                    id=chunk.chunk_id,
                     vector=vector,
-                    payload=c.model_dump()
+                    payload=chunk.model_dump()
                 )
-                for c, vector in zip(batch, vectors)
+                for chunk, vector in zip(batch, vectors)
             ]
-
             try:
                 self.client.upsert(
                     collection_name=self.collection_name,
                     points=points
+                )
+                logger.info(
+                    f"Upserted chunk batch {start + 1}-{start + len(batch)} "
+                    f"of {total} into {self.collection_name}."
+                )
+            except Exception as e:
+                logger.error(f"Failed to upsert points: {e}")
+                raise RuntimeError(f"Upsert failed: {e}")
+
+    async def replace_document(self, chunks: List[Chunk], batch_size: int = 50) -> None:
+        """Replace all stored chunks for one document after embeddings succeed."""
+        if not chunks:
+            return
+
+        document_names = {chunk.document_name for chunk in chunks}
+        if len(document_names) != 1:
+            raise ValueError("replace_document requires chunks from exactly one document.")
+
+        vectors = await asyncio.gather(
+            *(self._get_embedding(chunk.text) for chunk in chunks)
+        )
+        points = [
+            PointStruct(
+                id=chunk.chunk_id,
+                vector=vector,
+                payload=chunk.model_dump()
+            )
+            for chunk, vector in zip(chunks, vectors)
+        ]
+
+        self.delete_document(next(iter(document_names)), raise_on_error=True)
+        self._upsert_points(points, batch_size=batch_size)
+
+    def _upsert_points(self, points: List[PointStruct], batch_size: int = 50) -> None:
+        total = len(points)
+        for start in range(0, total, batch_size):
+            batch = points[start:start + batch_size]
+            try:
+                self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=batch
                 )
                 logger.info(
                     f"Upserted chunk batch {start + 1}-{start + len(batch)} "
