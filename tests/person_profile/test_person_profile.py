@@ -1,6 +1,10 @@
 import os
 import pytest
-from skills.person_profile.person_profile import person_profile, _ensure_profile_metadata_header
+from skills.person_profile.person_profile import (
+    _ensure_profile_metadata_header,
+    _generate_single_profile,
+    person_profile,
+)
 from lib.models.person import Person
 
 @pytest.mark.asyncio
@@ -75,12 +79,51 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     assert content == expected_content
     prompt = mock_llm.call_args.kwargs["prompt"]
     assert "Person metadata:\nFull-name: Jane Doe\nlinkedin-id: jane-doe\nEmail-addresses: jane@example.com" in prompt
+    assert "### DOSSIER DOCUMENTS" in prompt
+    assert "Jane has 10 years of experience." in prompt
+    assert "### LINKEDIN PROFILE" in prompt
+    mock_dossier.assert_awaited_once()
 
     # 5. Assert Cache Bypass
     # If we call it again, it should use the cache (llm_chat shouldn't be called twice)
     output_cached = await person_profile(dataset_name=dataset, names=name)
     assert len(output_cached) == 1 and output_cached[0].person_profile == expected_content
     mock_llm.assert_called_once()  # Asserts it was only called during the FIRST execution
+
+
+@pytest.mark.asyncio
+async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mocker, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
+    mocker.patch(
+        "skills.person_profile.person_profile.config_load",
+        return_value={
+            "person_profile": {
+                "query": "Who is {{name}}?",
+                "llm_instructions": "Be concise.",
+            }
+        },
+    )
+    mock_llm = mocker.patch(
+        "skills.person_profile.person_profile.llm_chat",
+        return_value="LinkedIn-only profile.",
+    )
+    mock_dossier = mocker.patch("skills.person_profile.person_profile.build_person_dossier")
+    person = Person(
+        full_name="Jane Doe",
+        linkedin_id="jane-doe",
+        linkedin_profile={"headline": "CEO at Test"},
+    )
+
+    await _generate_single_profile(
+        "sictic-members",
+        person,
+        include_dataset_context=False,
+    )
+
+    mock_dossier.assert_not_awaited()
+    prompt = mock_llm.call_args.kwargs["prompt"]
+    assert "### LINKEDIN PROFILE" in prompt
+    assert "### DOSSIER DOCUMENTS" not in prompt
 
 
 def test_ensure_profile_metadata_header_adds_header_to_legacy_cached_content():

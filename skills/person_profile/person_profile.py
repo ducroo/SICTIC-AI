@@ -162,14 +162,14 @@ async def _generate_single_profile(
         identifier=identifier,
         subdir=True
     )
-    cached_content = _read_valid_person_profile_cache(dataset_slug, person, output_file)
-    if cached_content is not None:
-        person.person_profile = _ensure_profile_metadata_header(person, cached_content)
-        return
-
-    if not person.linkedin_id:
+    if include_dataset_context:
         needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file)
         if not needs_refresh:
+            person.person_profile = _ensure_profile_metadata_header(person, cached_content)
+            return
+    else:
+        cached_content = _read_valid_person_profile_cache(dataset_slug, person, output_file)
+        if cached_content is not None:
             person.person_profile = _ensure_profile_metadata_header(person, cached_content)
             return
 
@@ -190,15 +190,7 @@ async def _generate_single_profile(
     # Context Building (Qdrant & Resumes)
     context_parts = []
 
-    use_dataset_context = include_dataset_context
-    if dataset_slug == "sictic-members" and person.linkedin_profile:
-        use_dataset_context = False
-        logger.info(
-            f"[{dataset_slug}] Skipping dataset RAG for '{display_name}'; "
-            "using resolved LinkedIn profile as direct source."
-        )
-
-    if use_dataset_context:
+    if include_dataset_context:
         dossier, mentions = await build_person_dossier(dataset_slug, display_name, query)
 
         if dossier:
