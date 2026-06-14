@@ -211,19 +211,15 @@ class LinkedInAdapter:
             linkedin_id = p.linkedin_id
                     
             sanitized_name = self._sanitize_name(raw_name)
-                
-            # Define placeholder Person
-            placeholder = Person(
-                full_name=sanitized_name or raw_name,
-                linkedin_id=linkedin_id,
-                email_addresses=p.email_addresses,
-            )
+            if sanitized_name:
+                p.full_name = sanitized_name
                 
             # --- STEP A: Cache Lookup ---
             
             # 1. Exact ID Match
             if linkedin_id and linkedin_id in self.cache:
-                result.append(self.cache[linkedin_id])
+                p.merge(self.cache[linkedin_id])
+                result.append(p)
                 continue
                 
             # 2. Fuzzy Name Match
@@ -238,7 +234,8 @@ class LinkedInAdapter:
                         
             if matched_id and matched_id in self.cache:
                 logger.info(f"Fuzzy matched '{sanitized_name}' to cache '{matched_id}' (score: {score})")
-                result.append(self.cache[matched_id])
+                p.merge(self.cache[matched_id])
+                result.append(p)
                 continue
                 
             # --- STEP B: Handle Misses (Registry & Web Search) ---
@@ -257,7 +254,7 @@ class LinkedInAdapter:
                     logger.info(f"Skipping {registry_key}: Permanently marked DO_NOT_SCRAPE.")
                 else:
                     logger.info(f"Skipping automated scrape for {registry_key}: Already in registry ({status}). Must be scraped manually.")
-                result.append(placeholder)
+                result.append(p)
                 continue
                 
             # If no ID exists, attempt Web Search to find it
@@ -267,7 +264,7 @@ class LinkedInAdapter:
                 if url:
                     linkedin_id = extract_linkedin_id(url)
                     registry_key = linkedin_id  # Upgrade registry key to the actual ID
-                    placeholder.linkedin_id = linkedin_id  # Update placeholder with new ID
+                    p.linkedin_id = linkedin_id
                 else:
                     logger.warning(f"URL not found via Web Search for '{sanitized_name}'.")
                     self.registry[registry_key] = {
@@ -277,7 +274,7 @@ class LinkedInAdapter:
                         "status": "URL_NOT_FOUND"
                     }
                     self._save_registry()
-                    result.append(placeholder)
+                    result.append(p)
                     continue
                     
             # Stage for Apify Scrape
@@ -292,8 +289,8 @@ class LinkedInAdapter:
             to_scrape_urls.append(target_url)
             to_scrape_ids.append(linkedin_id)
             
-            # Add the wrapper to the result set (will be updated if scrape succeeds)
-            result.append(placeholder)
+            # Add the input Person to the result set; scrape data enriches it below.
+            result.append(p)
             
         self._save_registry()
         
@@ -340,12 +337,10 @@ class LinkedInAdapter:
                         del self.registry[scraped_id]
                     scraped_ids.add(scraped_id)
                     
-                    # Patch the result placeholder with the actual scraped data
+                    # Enrich the existing Person with the actual scraped data.
                     for r in result:
                         if r.linkedin_id == scraped_id:
-                            r.linkedin_profile = cleaned
-                            r.full_name = wrapper.full_name
-                            r.email_addresses = wrapper.email_addresses
+                            r.merge(wrapper)
                             
                 # Mark Failures in Registry
                 for sid in to_scrape_ids:
