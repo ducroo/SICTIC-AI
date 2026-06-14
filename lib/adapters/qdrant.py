@@ -152,19 +152,23 @@ class QdrantAdapter:
     def get_document_mtimes(self) -> dict[str, float]:
         """Returns a dict of document_name -> newest last_modified timestamp in Qdrant."""
         try:
-            scroll_result = self.client.scroll(
-                collection_name=self.collection_name,
-                limit=10000,
-                with_payload=["document_name", "last_modified"],
-                with_vectors=False
-            )[0]
-            
             mtimes = {}
-            for point in scroll_result:
-                doc_name = point.payload["document_name"]
-                mtime = point.payload["last_modified"]
-                if doc_name not in mtimes or mtime > mtimes[doc_name]:
-                    mtimes[doc_name] = mtime
+            offset = None
+            while True:
+                points, offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=10000,
+                    offset=offset,
+                    with_payload=["document_name", "last_modified"],
+                    with_vectors=False
+                )
+                for point in points:
+                    doc_name = point.payload["document_name"]
+                    mtime = point.payload["last_modified"]
+                    if doc_name not in mtimes or mtime > mtimes[doc_name]:
+                        mtimes[doc_name] = mtime
+                if offset is None:
+                    break
             return mtimes
         except Exception as e:
             logger.warning(f"Failed to fetch document mtimes: {e}")

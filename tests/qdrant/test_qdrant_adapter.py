@@ -89,6 +89,43 @@ def test_chunker_split_markdown():
     assert first_chunk.chunk_id == expected_uuid
 
 
+def test_get_document_mtimes_scrolls_all_pages_and_keeps_newest_timestamp():
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = MagicMock()
+    adapter.collection_name = "test-collection"
+    adapter.client.scroll.side_effect = [
+        (
+            [
+                SimpleNamespace(
+                    payload={"document_name": "track-record/patrick.md", "last_modified": 1.0}
+                )
+            ],
+            "next-page",
+        ),
+        (
+            [
+                SimpleNamespace(
+                    payload={"document_name": "track-record/patrick.md", "last_modified": 2.0}
+                ),
+                SimpleNamespace(
+                    payload={"document_name": "resume.pdf", "last_modified": 3.0}
+                ),
+            ],
+            None,
+        ),
+    ]
+
+    mtimes = adapter.get_document_mtimes()
+
+    assert mtimes == {
+        "track-record/patrick.md": 2.0,
+        "resume.pdf": 3.0,
+    }
+    assert adapter.client.scroll.call_count == 2
+    assert adapter.client.scroll.call_args_list[0].kwargs["offset"] is None
+    assert adapter.client.scroll.call_args_list[1].kwargs["offset"] == "next-page"
+
+
 @pytest.mark.asyncio
 async def test_get_embedding_uses_services_gateway(mock_env, mocker):
     adapter = object.__new__(QdrantAdapter)
