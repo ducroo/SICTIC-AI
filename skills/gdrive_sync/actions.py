@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from .executor import TransferProgress
 from .types import ConflictPolicy, OperationResult, SnapshotEntry
+from .util import clean_rel, conflict_name
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +13,7 @@ logger = logging.getLogger(__name__)
 class IncrementalActions:
     def __init__(self, context):
         self.context = context
+        self.cloud_mutation_ids: set[str] = set()
 
     @property
     def local(self):
@@ -40,6 +43,8 @@ class IncrementalActions:
                 result.skipped_entries.append(f"dry-run:delete-cloud:{path}")
             else:
                 self.drive.remove(path)
+                if baseline_entry and baseline_entry.drive_id:
+                    self.cloud_mutation_ids.add(baseline_entry.drive_id)
                 self.state.delete_baseline_path(
                     path,
                     include_descendants=(
@@ -55,7 +60,10 @@ class IncrementalActions:
                 result.skipped_entries.append(f"dry-run:mkdir-cloud:{path}")
             else:
                 self.drive.mkdir(path)
-                self.state.upsert_baseline_entry(self.drive.entry_after_mkdir(path))
+                entry = self.drive.entry_after_mkdir(path)
+                self.state.upsert_baseline_entry(entry)
+                if entry.drive_id:
+                    self.cloud_mutation_ids.add(entry.drive_id)
             result.created_folders.append(path)
             return
 
@@ -66,9 +74,10 @@ class IncrementalActions:
         else:
             try:
                 self.drive.write_bytes(path, content)
-                self.state.upsert_baseline_entry(
-                    self.drive.entry_after_write(path, content)
-                )
+                entry = self.drive.entry_after_write(path, content)
+                self.state.upsert_baseline_entry(entry)
+                if entry.drive_id:
+                    self.cloud_mutation_ids.add(entry.drive_id)
             except Exception as error:
                 message = f"{path}: {error}"
                 logger.error(message)
@@ -123,11 +132,44 @@ class IncrementalActions:
         conflict_policy: ConflictPolicy,
         result: OperationResult,
         progress: TransferProgress,
+        existing_paths: set[str],
         *,
         dry_run: bool,
     ) -> None:
         logger.info("sync conflict %s policy=%s", path, conflict_policy)
         result.conflicts.append(path)
+        losing_entry = (
+            cloud_entry if conflict_policy == "local-wins" else local_entry
+        )
+        if losing_entry is not None and losing_entry.type == "file":
+            tag = (
+                "conflict-cloud"
+                if conflict_policy == "local-wins"
+                else "conflict-local"
+            )
+            conflict_path = conflict_name(path, tag, existing_paths)
+            try:
+                losing_content = (
+                    cloud_content
+                    if conflict_policy == "local-wins"
+                    else self.local.read_bytes(path)
+                )
+                if losing_content is None:
+                    raise ValueError("conflicting cloud file has no content")
+                self._preserve_conflict(
+                    path,
+                    conflict_path,
+                    losing_content,
+                    result,
+                    progress,
+                    dry_run=dry_run,
+                )
+            except Exception as error:
+                message = f"{path}: failed to preserve conflict: {error}"
+                logger.error(message)
+                result.failures.append(message)
+                return
+
         if conflict_policy == "local-wins":
             self.apply_local_change_to_cloud(
                 path,
@@ -147,6 +189,40 @@ class IncrementalActions:
                 progress,
                 dry_run=dry_run,
             )
+
+    def _preserve_conflict(
+        self,
+        path: str,
+        conflict_path: str,
+        content: bytes,
+        result: OperationResult,
+        progress: TransferProgress,
+        *,
+        dry_run: bool,
+    ) -> None:
+        logger.info("sync preserve conflict %s as %s", path, conflict_path)
+        progress.log("download", conflict_path, len(content))
+        progress.log("upload", conflict_path, len(content))
+        if dry_run:
+            result.skipped_entries.extend(
+                [
+                    f"dry-run:conflict-local:{conflict_path}",
+                    f"dry-run:conflict-cloud:{conflict_path}",
+                ]
+            )
+            return
+
+        self.local.write_bytes_atomic(conflict_path, content)
+        parent = str(Path(conflict_path).parent).replace("\\", "/")
+        if parent != ".":
+            self.drive.mkdir(clean_rel(parent))
+        self.drive.write_bytes(conflict_path, content)
+        entry = self.drive.entry_after_write(conflict_path, content)
+        self.state.upsert_baseline_entry(entry)
+        if entry.drive_id:
+            self.cloud_mutation_ids.add(entry.drive_id)
+        result.bytes_transferred += len(content) * 2
+        result.created_files.append(conflict_path)
 
     def apply_incremental_entry(
         self,

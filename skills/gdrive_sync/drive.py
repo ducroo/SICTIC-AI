@@ -188,6 +188,7 @@ class DriveTree:
         change: dict,
         *,
         inspection_label: str | None = None,
+        include_content: bool = True,
     ) -> tuple[SnapshotEntry | None, bytes | None, str | None, str | None]:
         file_meta = change.get("file")
         file_id = change.get("fileId")
@@ -224,6 +225,20 @@ class DriveTree:
                 None,
                 None,
             )
+        if not include_content:
+            return (
+                SnapshotEntry(
+                    path=rel,
+                    type="file",
+                    size=int(file_meta["size"]) if file_meta.get("size") else None,
+                    mtime=_parse_modtime(file_meta.get("modifiedTime")),
+                    drive_id=file_id,
+                    mime_type=mime,
+                ),
+                None,
+                None,
+                None,
+            )
         try:
             content = self.storage.read_bytes(rel)
         except Exception as exc:
@@ -250,11 +265,13 @@ class DriveTree:
         root_path: str,
         checkpoint: dict[str, SnapshotEntry] | None = None,
         local_snapshot: dict[str, SnapshotEntry] | None = None,
+        include_content: bool = True,
     ) -> Iterator[tuple[SnapshotEntry | None, bytes | None, str | None, str | None]]:
         yield from self._iter_entries_with_content_from(
             [(root_id, root_path)],
             checkpoint=checkpoint,
             local_snapshot=local_snapshot,
+            include_content=include_content,
             log_label=f"Drive subtree walk {root_path}",
         )
 
@@ -362,6 +379,7 @@ class DriveTree:
             [(self.storage.root_folder_id, "")],
             checkpoint=checkpoint,
             local_snapshot=local_snapshot,
+            include_content=True,
             log_label="Drive streaming walk",
         )
 
@@ -371,6 +389,7 @@ class DriveTree:
         *,
         checkpoint: dict[str, SnapshotEntry] | None = None,
         local_snapshot: dict[str, SnapshotEntry] | None = None,
+        include_content: bool,
         log_label: str,
     ) -> Iterator[tuple[SnapshotEntry | None, bytes | None, str | None, str | None]]:
         logger.info("%s started", log_label)
@@ -431,6 +450,21 @@ class DriveTree:
                         continue
                     self.storage._path_to_id[rel] = item["id"]
                     self.storage._path_to_mime[rel] = mime
+                    if not include_content:
+                        yield (
+                            SnapshotEntry(
+                                path=rel,
+                                type="file",
+                                size=int(item["size"]) if item.get("size") else None,
+                                mtime=_parse_modtime(item.get("modifiedTime")),
+                                drive_id=item["id"],
+                                mime_type=mime,
+                            ),
+                            None,
+                            None,
+                            None,
+                        )
+                        continue
                     completed = checkpoint.get(rel)
                     local_entry = local_snapshot.get(rel)
                     item_mtime = _parse_modtime(item.get("modifiedTime"))

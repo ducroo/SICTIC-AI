@@ -83,6 +83,13 @@ def incremental_transfer_count(
                 if conflict_policy == "local-wins"
                 else cloud_snapshot.get(path)
             )
+            loser = (
+                cloud_snapshot.get(path)
+                if conflict_policy == "local-wins"
+                else local_snapshot.get(path)
+            )
+            if loser is not None and loser.type == "file":
+                total += 2
         elif has_local_change:
             winner = local_snapshot.get(path)
         else:
@@ -115,7 +122,19 @@ def plan_incremental_changes(
             decisions.append(IncrementalDecision(path=path, source="local"))
         elif has_cloud_change:
             decisions.append(IncrementalDecision(path=path, source="cloud"))
-    return decisions
+    phase = {
+        ("local", False): 0,
+        ("local", True): 1,
+        ("cloud", True): 1,
+        ("cloud", False): 2,
+    }
+    return sorted(
+        decisions,
+        key=lambda decision: (
+            phase[(decision.source, decision.conflict)],
+            decision.path,
+        ),
+    )
 
 
 def _same(a: SnapshotEntry | None, b: SnapshotEntry | None) -> bool:

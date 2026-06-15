@@ -66,7 +66,7 @@ def test_incremental_planner_marks_conflict_and_selected_winner():
     )
 
     assert [(item.path, item.source, item.conflict) for item in decisions] == [
-        ("cloud.md", "cloud", False),
-        ("conflict.md", "cloud", True),
         ("local.md", "local", False),
+        ("conflict.md", "cloud", True),
+        ("cloud.md", "cloud", False),
     ]

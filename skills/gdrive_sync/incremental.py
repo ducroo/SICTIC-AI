@@ -18,8 +18,39 @@ from .types import (
     SnapshotEntry,
     SyncOperationFailed,
 )
+from .util import sha256_bytes
 
 logger = logging.getLogger(__name__)
+
+
+def _load_cloud_file(
+    context,
+    path: str,
+    cloud_entries: dict[str, SnapshotEntry],
+    cloud_content: dict[str, bytes],
+    result: OperationResult,
+) -> bool:
+    entry = cloud_entries.get(path)
+    if entry is None or entry.type != "file" or path in cloud_content:
+        return True
+    try:
+        content = context.drive.read_bytes(path)
+    except Exception as error:
+        message = f"{path}: failed to read Drive file: {error}"
+        logger.error(message)
+        result.failures.append(message)
+        return False
+    cloud_content[path] = content
+    cloud_entries[path] = SnapshotEntry(
+        path=entry.path,
+        type="file",
+        sha256=sha256_bytes(content),
+        size=len(content),
+        mtime=entry.mtime,
+        drive_id=entry.drive_id,
+        mime_type=entry.mime_type,
+    )
+    return True
 
 
 def run_incremental_pull(
@@ -199,11 +230,10 @@ def run_incremental_sync(
             for entry in baseline.values()
             if entry.drive_id
         }
-        changes, _new_token = context.drive.list_changes(token)
+        changes, new_token = context.drive.list_changes(token)
         cloud_entries: dict[str, SnapshotEntry] = {}
         cloud_content: dict[str, bytes] = {}
         cloud_deleted: set[str] = set()
-        baseline_updates: dict[str, SnapshotEntry] = {}
 
         for change_index, change in enumerate(changes, start=1):
             file_id = change.get("fileId")
@@ -221,6 +251,7 @@ def run_incremental_sync(
                 inspection_label=(
                     f"sync inspect cloud {change_index}/{len(changes)}"
                 ),
+                include_content=False,
             )
             if warning:
                 result.warnings.append(warning)
@@ -238,7 +269,6 @@ def run_incremental_sync(
                 cloud_deleted.add(old_entry.path)
 
             cloud_entries[entry.path] = entry
-            baseline_updates[entry.path] = entry
             if content is not None:
                 cloud_content[entry.path] = content
 
@@ -258,6 +288,7 @@ def run_incremental_sync(
                 root_id=entry.drive_id or "",
                 root_path=entry.path,
                 local_snapshot=local_snapshot,
+                include_content=False,
             ):
                 if child_warning:
                     result.warnings.append(child_warning)
@@ -270,7 +301,6 @@ def run_incremental_sync(
                 if child_entry is None:
                     continue
                 cloud_entries[child_entry.path] = child_entry
-                baseline_updates[child_entry.path] = child_entry
                 if child_content is not None:
                     cloud_content[child_entry.path] = child_content
 
@@ -306,12 +336,21 @@ def run_incremental_sync(
             cloud_changed=cloud_changed_paths,
             conflict_policy=conflict_policy,
         )
+        existing_paths = set(baseline) | set(local_snapshot) | set(cloud_entries)
         for decision in decisions:
             path = decision.path
             baseline_entry = baseline.get(path)
             local_entry = local_snapshot.get(path)
 
             if decision.conflict:
+                if not _load_cloud_file(
+                    context,
+                    path,
+                    cloud_entries,
+                    cloud_content,
+                    result,
+                ):
+                    continue
                 actions.apply_conflict(
                     path,
                     baseline_entry,
@@ -322,6 +361,7 @@ def run_incremental_sync(
                     conflict_policy,
                     result,
                     progress,
+                    existing_paths,
                     dry_run=dry_run,
                 )
             elif decision.source == "local":
@@ -334,6 +374,14 @@ def run_incremental_sync(
                     dry_run=dry_run,
                 )
             else:
+                if not _load_cloud_file(
+                    context,
+                    path,
+                    cloud_entries,
+                    cloud_content,
+                    result,
+                ):
+                    continue
                 actions.apply_cloud_change_to_local(
                     path,
                     cloud_entries.get(path),
@@ -345,21 +393,43 @@ def run_incremental_sync(
                 )
 
         if not dry_run and not result.failures:
-            for path in cloud_deleted:
-                baseline_entry = baseline.get(path) or SnapshotEntry(
-                    path,
-                    "file",
+            for decision in decisions:
+                if decision.source != "cloud":
+                    continue
+                entry = cloud_entries.get(decision.path)
+                if entry is None:
+                    baseline_entry = baseline.get(decision.path) or SnapshotEntry(
+                        decision.path,
+                        "file",
+                    )
+                    context.state.delete_baseline_path(
+                        decision.path,
+                        include_descendants=baseline_entry.type == "folder",
+                    )
+                else:
+                    context.state.upsert_baseline_entry(entry)
+
+            logger.info("sync incremental final changes.list started")
+            tail_changes, tail_token = context.drive.list_changes(new_token)
+            unexpected_ids = {
+                change.get("fileId")
+                for change in tail_changes
+                if change.get("fileId") not in actions.cloud_mutation_ids
+            }
+            unexpected_ids.discard(None)
+            checkpoint_token = tail_token
+            if unexpected_ids:
+                checkpoint_token = new_token
+                message = (
+                    "deferred "
+                    f"{len(unexpected_ids)} Drive changes that arrived during sync"
                 )
-                context.state.delete_baseline_path(
-                    path,
-                    include_descendants=baseline_entry.type == "folder",
-                )
-            for entry in baseline_updates.values():
-                context.state.upsert_baseline_entry(entry)
+                logger.warning(message)
+                result.warnings.append(message)
             CheckpointManager(
                 state=context.state,
                 drive=context.drive,
-            ).update_drive_token()
+            ).update_drive_token(checkpoint_token)
         result.elapsed_seconds = time.monotonic() - start
 
     if result.failures:
