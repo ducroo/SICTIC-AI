@@ -1,5 +1,6 @@
 import typer
-import asyncio
+
+from lib.cli import run_command
 from lib.logger import get_logger
 from skills.potential_investors.potential_investors import potential_investors
 
@@ -16,19 +17,17 @@ def main(
     parsed_includes = [name.strip() for name in include.split(",")] if include else None
     parsed_excludes = [name.strip() for name in exclude.split(",")] if exclude else None
     
-    try:
-        result = asyncio.run(potential_investors(
+    result = run_command(
+        lambda: potential_investors(
             startup_name=startup,
             target_investors=parsed_includes,
             exclude_investors=parsed_excludes,
             top_k=top_k
-        ))
-        print(result)
-    except Exception as e:
-        logger.error(f"Execution failed: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise typer.Exit(code=1)
+        ),
+        logger=logger,
+        error_prefix="Execution failed",
+    )
+    typer.echo(result)
 
 if __name__ == "__main__":
     app()

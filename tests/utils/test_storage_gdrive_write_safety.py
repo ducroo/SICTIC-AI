@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from lib.storage_gdrive import GoogleDriveStorage, _sanitize_markdown_upload
+from skills.gdrive_sync.drive_api import DriveApi, _sanitize_markdown_upload
 
 
 class _FakeListRequest:
@@ -63,7 +63,7 @@ class _FakeService:
 
 
 def _storage_with_files(files):
-    storage = GoogleDriveStorage.__new__(GoogleDriveStorage)
+    storage = DriveApi.__new__(DriveApi)
     storage._service_lock = threading.Lock()
     storage._path_to_id = {"": "root", "insights": "parent"}
     storage._path_to_mime = {"": "application/vnd.google-apps.folder"}
@@ -109,47 +109,35 @@ def test_gdrive_write_resolution_accepts_one_existing_file():
     assert storage._path_to_mime["insights/report.md"] == "application/vnd.google-apps.document"
 
 
-def test_gdrive_md_resolution_prefers_gdoc_over_legacy_markdown():
+def test_gdrive_md_resolution_rejects_binary_markdown():
     storage = _storage_with_files([
-        {"id": "legacy", "name": "report.md", "mimeType": "text/markdown"},
-        {"id": "gdoc", "name": "report.md", "mimeType": "application/vnd.google-apps.document"},
+        {"id": "binary", "name": "report.md", "mimeType": "text/markdown"},
     ])
 
-    assert storage._resolve("insights/report.md") == "gdoc"
-    assert storage._path_to_mime["insights/report.md"] == "application/vnd.google-apps.document"
+    with pytest.raises(RuntimeError, match="must be native Google Docs"):
+        storage._resolve("insights/report.md")
 
 
-def test_gdrive_md_write_converts_legacy_markdown_and_deletes_it():
+def test_gdrive_md_write_rejects_binary_markdown():
     storage = _storage_with_files([
-        {"id": "legacy", "name": "report.md", "mimeType": "text/markdown"},
-    ])
-    storage._resolve_root_folder = lambda: None
-    storage.mkdir = lambda *args, **kwargs: None
-    storage._resolve_or_raise = lambda rel: "parent" if rel == "insights" else rel
-
-    storage.write_bytes("insights/report.md", b"# Report\n")
-
-    files = storage._service.files()
-    assert len(files.created) == 1
-    assert files.created[0]["body"]["mimeType"] == "application/vnd.google-apps.document"
-    assert files.requests[0].num_retries == 5
-    assert files.deleted == ["legacy"]
-
-
-def test_gdrive_md_write_updates_gdoc_and_deletes_legacy_duplicate():
-    storage = _storage_with_files([
-        {"id": "gdoc", "name": "report.md", "mimeType": "application/vnd.google-apps.document"},
-        {"id": "legacy", "name": "report.md", "mimeType": "text/markdown"},
+        {"id": "binary", "name": "report.md", "mimeType": "text/markdown"},
     ])
     storage._resolve_root_folder = lambda: None
     storage.mkdir = lambda *args, **kwargs: None
     storage._resolve_or_raise = lambda rel: "parent" if rel == "insights" else rel
 
-    storage.write_bytes("insights/report.md", b"# Report\n")
+    with pytest.raises(RuntimeError, match="must be native Google Docs"):
+        storage.write_bytes("insights/report.md", b"# Report\n")
 
-    files = storage._service.files()
-    assert len(files.updated) == 1
-    assert files.updated[0]["fileId"] == "gdoc"
-    assert files.requests[0].num_retries == 5
-    assert files.created == []
-    assert files.deleted == ["legacy"]
+
+def test_gdrive_md_write_rejects_duplicate_same_name_files():
+    storage = _storage_with_files([
+        {"id": "gdoc", "name": "report.md", "mimeType": "application/vnd.google-apps.document"},
+        {"id": "duplicate", "name": "report.md", "mimeType": "application/vnd.google-apps.document"},
+    ])
+    storage._resolve_root_folder = lambda: None
+    storage.mkdir = lambda *args, **kwargs: None
+    storage._resolve_or_raise = lambda rel: "parent" if rel == "insights" else rel
+
+    with pytest.raises(RuntimeError, match="ambiguous Google Drive path"):
+        storage.write_bytes("insights/report.md", b"# Report\n")

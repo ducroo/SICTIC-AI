@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from lib.adapters.docling import SPREADSHEET_MARKDOWN_MARKER
-from skills.dataset_chat.core.ingestion import _spreadsheet_cache_is_current
+from lib.datasets.conversion import spreadsheet_cache_is_current
 
 
 def test_legacy_spreadsheet_cache_is_stale():
@@ -10,7 +10,7 @@ def test_legacy_spreadsheet_cache_is_stale():
         read_text=lambda _path: "| old Docling output |\n",
     )
 
-    assert _spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is False
+    assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is False
 
 
 def test_versioned_spreadsheet_cache_is_current():
@@ -19,7 +19,7 @@ def test_versioned_spreadsheet_cache_is_current():
         read_text=lambda _path: f"{SPREADSHEET_MARKDOWN_MARKER}\n\n## Sheet\n",
     )
 
-    assert _spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is True
+    assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is True
 
 
 def test_non_spreadsheet_cache_does_not_require_marker():
@@ -28,4 +28,4 @@ def test_non_spreadsheet_cache_does_not_require_marker():
         read_text=lambda _path: "| ordinary PDF markdown |\n",
     )
 
-    assert _spreadsheet_cache_is_current(storage, "report.pdf.md", "report.pdf") is True
+    assert spreadsheet_cache_is_current(storage, "report.pdf.md", "report.pdf") is True

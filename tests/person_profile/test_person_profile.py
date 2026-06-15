@@ -5,7 +5,10 @@ from skills.person_profile.person_profile import (
     _generate_single_profile,
     person_profile,
 )
-from lib.models.person import Person
+from lib.people.model import Person
+from lib.storage import get_storage
+from lib.datasets.paths import dataset_location
+from lib.datasets.manifest import IngestionManifest
 
 @pytest.mark.asyncio
 async def test_person_profile_generation(mock_env, mocker, monkeypatch):
@@ -20,7 +23,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
         return "This is a mocked profile for Jane Doe."
     mock_llm.side_effect = mock_llm_coro
 
-    from skills.dataset_chat.core.models import Chunk
+    from lib.datasets.models import Chunk
     mock_dossier = mocker.patch("skills.person_profile.person_profile.build_person_dossier")
     async def mock_dossier_coro(*args, **kwargs):
         d_chunk = Chunk(chunk_id="1", document_name="jane_resume.pdf", page_number="all", last_modified=0.0, text="Jane has 10 years of experience.", score=1.0)
@@ -36,7 +39,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
         }
     }
 
-    mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInAdapter")
+    mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInResolver")
     mock_linkedin_instance = mock_linkedin.return_value
     mock_linkedin_instance.get_profiles.return_value = [
         Person(
@@ -47,10 +50,16 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
         )
     ]
     mock_linkedin_instance.get_filename_for_profile.return_value = "jane-doe.json"
+    mocker.patch("skills.person_profile.person_profile.sync_datasets")
 
     # Clear the storage cache before executing to ensure we aren't picking up files from a previous run
     from lib.storage import get_storage
-    get_storage().rmtree("storage/community/sictic-members/insights/person-profile")
+    storage = get_storage()
+    storage.rmtree("storage/community/sictic-members/insights/person-profile")
+    location = dataset_location("sictic-members")
+    manifest = IngestionManifest(storage, location.parsed_rel)
+    manifest.indexed_dataset_revision = "test-revision"
+    manifest.save()
     
     # 2. Execute
     name = "Jane Doe"
@@ -72,8 +81,6 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     # 4. Assert File System
     expected_file = "storage/community/sictic-members/insights/person-profile/jane-doe-test-model-1b.md"
 
-    from lib.storage import get_storage
-    storage = get_storage()
     assert storage.exists(expected_file), f"Expected file {expected_file} was not created."
     content = storage.read_text(expected_file)
     assert content == expected_content
@@ -113,6 +120,10 @@ async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mock
         linkedin_id="jane-doe",
         linkedin_profile={"headline": "CEO at Test"},
     )
+    location = dataset_location("sictic-members")
+    manifest = IngestionManifest(get_storage(), location.parsed_rel)
+    manifest.indexed_dataset_revision = "revision"
+    manifest.save()
 
     await _generate_single_profile(
         "sictic-members",

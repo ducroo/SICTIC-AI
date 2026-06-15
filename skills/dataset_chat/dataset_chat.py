@@ -2,7 +2,7 @@ from typing import Optional
 from lib.env import get_env_var
 from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
-from skills.dataset_chat.dataset_search import dataset_search
+from lib.datasets.search import dataset_search
 from lib.logger import get_logger
 
 logger = get_logger(__name__)

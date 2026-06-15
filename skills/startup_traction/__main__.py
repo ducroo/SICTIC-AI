@@ -1,7 +1,8 @@
 import typer
-import asyncio
-from skills.startup_traction.startup_traction import startup_traction
+
+from lib.cli import run_command
 from lib.logger import get_logger
+from skills.startup_traction.startup_traction import startup_traction
 
 logger = get_logger(__name__)
 app = typer.Typer(help="CLI for startup_traction skill")
@@ -10,19 +11,12 @@ app = typer.Typer(help="CLI for startup_traction skill")
 def main(
     startup: str = typer.Option(..., "--startup", "-s", help="The name of the startup to analyze.")
 ):
-    try:
-        result = asyncio.run(startup_traction(startup))
-        print(result)
-    except ValueError as e:
-        logger.error(str(e))
-        print(f"Error: {e}")
-        raise typer.Exit(code=1)
-    except typer.Exit:
-        raise
-    except Exception as e:
-        logger.error(f"Execution failed: {e}")
-        print(f"Error: {e}")
-        raise typer.Exit(code=1)
+    result = run_command(
+        lambda: startup_traction(startup),
+        logger=logger,
+        error_prefix="Execution failed",
+    )
+    typer.echo(result)
 
 if __name__ == "__main__":
     app()

@@ -1,8 +1,10 @@
 import os
 import pytest
 from skills.potential_investors.potential_investors import potential_investors
+from lib.datasets.manifest import IngestionManifest
+from lib.datasets.paths import dataset_location
 from lib.storage import get_storage
-from lib.storage_domains import dataset_location_for_domain
+from lib.datasets.paths import dataset_location_for_domain
 
 @pytest.mark.asyncio
 async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
@@ -33,6 +35,19 @@ async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
     async def mock_ranking_coro(*args, **kwargs):
         return "| Investor A | 90 | Good match |\n| Investor B | 80 | Okay match |"
     mock_ranking.side_effect = mock_ranking_coro
+
+    async def fake_sync(dataset_names, **_kwargs):
+        storage = get_storage()
+        for dataset_name in dataset_names:
+            location = dataset_location(dataset_name)
+            manifest = IngestionManifest(storage, location.parsed_rel)
+            manifest.indexed_dataset_revision = f"{location.slug}-revision"
+            manifest.save()
+
+    mocker.patch(
+        "skills.potential_investors.potential_investors.sync_datasets",
+        side_effect=fake_sync,
+    )
 
     # Clear the storage cache before executing
     get_storage().rmtree("storage/startups/teststartup/insights")

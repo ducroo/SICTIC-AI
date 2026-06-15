@@ -2,18 +2,16 @@ import json
 
 import pytest
 
-from lib.dealum_import import (
+from lib.startups.dealum import (
     DealumApplicationAmbiguousError,
     DealumApplicationNotFoundError,
     import_startup_from_dealum,
     reconcile_dealum_startup,
 )
-from lib.startup_data_sources import ensure_startup_dataset
-from lib.storage_domains import dataset_location_for_domain
+from lib.startups.sources import ensure_startup_dataset
+from lib.datasets.paths import dataset_location_for_domain
 from lib.storage import get_storage
-from lib.storage import LocalStorage
-from lib.storage_mirror import MirrorStorage
-from lib.storage_domains import dataset_raw_path
+from lib.datasets.paths import dataset_raw_path
 
 
 APPLICATION = {
@@ -65,36 +63,6 @@ class FakeDealumAdapter:
     def download_file(self, url):
         self.downloads += 1
         return b"test", self.file_metadata(url)
-
-
-class FakeDrive:
-    def __init__(self):
-        self.writes = []
-        self.mtimes = {}
-
-    def write_bytes(self, rel, content):
-        self.writes.append((rel, content))
-
-    def exists(self, rel):
-        return rel in {"", "."}
-
-    def is_dir(self, rel):
-        return rel in {"", "."}
-
-    def list_with_mtime(self, rel, *, recursive=False):
-        return []
-
-    def read_bytes(self, rel):
-        raise FileNotFoundError(rel)
-
-    def mtime(self, rel):
-        return self.mtimes.get(rel)
-
-    def set_mtime(self, rel, timestamp):
-        self.mtimes[rel] = timestamp
-
-    def refresh(self, rel=""):
-        return None
 
 
 def test_dealum_import_creates_dataset_and_manifest(mock_env):
@@ -165,21 +133,6 @@ def test_dealum_import_marks_removed_file_stale(mock_env):
     stale = [item for item in manifest["files"] if item.get("stale")]
     assert len(stale) == 1
     assert stale[0]["filename"] == "financialplan.xlsx"
-
-
-def test_dealum_import_uploads_documents_in_hybrid_storage(mock_env, monkeypatch, tmp_path):
-    from lib import dealum_import as dealum_import_module
-
-    drive = FakeDrive()
-    storage = MirrorStorage(local=LocalStorage(tmp_path), drive=drive)
-    monkeypatch.setattr(dealum_import_module, "get_storage", lambda: storage)
-
-    import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(), activate=False)
-
-    written_paths = {path for path, _ in drive.writes}
-    assert "storage/startups/avientus/datasets/dealum/application.md" in written_paths
-    assert "storage/startups/avientus/datasets/dealum/documents/Avientus_Deck.pdf" in written_paths
-    assert "storage/startups/avientus/datasets/dealum/documents/financialplan.xlsx" in written_paths
 
 
 @pytest.mark.asyncio

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections.abc import Iterator
 
 from googleapiclient.errors import HttpError
-from lib.storage_gdrive import (
-    GoogleDriveStorage,
+from .drive_api import (
+    DriveApi,
     _FOLDER_MIME,
     _GDOC_MIME,
     _parse_modtime,
@@ -63,7 +62,7 @@ class DriveTree:
         token_path: str,
         exclude: list[str] | None = None,
     ):
-        self.storage = GoogleDriveStorage(
+        self.storage = DriveApi(
             credentials_path=credentials_path,
             token_path=token_path,
             root_folder_id=root_folder_id,
@@ -85,6 +84,55 @@ class DriveTree:
             if getattr(exc.resp, "status", None) == 404:
                 return None
             raise
+
+    def count_files(self) -> int:
+        """Count supported files under the configured root without downloading."""
+        self.storage._resolve_root_folder()
+        service = self.storage._ensure_service()
+        stack = [(self.storage.root_folder_id, "")]
+        total = 0
+        while stack:
+            parent_id, prefix = stack.pop()
+            page_token = None
+            seen_names: set[str] = set()
+            while True:
+                res = _execute_with_retries(
+                    service.files().list(
+                        q=f"'{parent_id}' in parents and trashed=false",
+                        fields="nextPageToken,files(id,name,mimeType)",
+                        pageSize=1000,
+                        pageToken=page_token,
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True,
+                    ),
+                    context=f"Drive count files {prefix or '/'}",
+                )
+                for item in res.get("files", []):
+                    name = item["name"]
+                    mime = item.get("mimeType", "")
+                    rel = _local_rel_for_drive_item(prefix, name, mime)
+                    if (
+                        is_hidden_rel(rel)
+                        or is_excluded(rel, self.exclude)
+                        or name in seen_names
+                    ):
+                        continue
+                    seen_names.add(name)
+                    if mime == _FOLDER_MIME:
+                        stack.append((item["id"], rel))
+                    elif (
+                        mime != SHORTCUT_MIME
+                        and mime not in UNSUPPORTED_MIMES
+                        and (
+                            not mime.startswith("application/vnd.google-apps.")
+                            or mime == _GDOC_MIME
+                        )
+                    ):
+                        total += 1
+                page_token = res.get("nextPageToken")
+                if not page_token:
+                    break
+        return total
 
     def _path_for_file(self, file_meta: dict) -> str | None:
         self.storage._resolve_root_folder()

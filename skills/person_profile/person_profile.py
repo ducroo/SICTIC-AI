@@ -1,45 +1,21 @@
-import os
 import json
 import asyncio
 from typing import List
-from rapidfuzz import process, fuzz
 
 from lib.model_config import llm_model
-from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
-from lib.insight_refresh import check_insight_refresh
-from lib.adapters.linkedin import LinkedInAdapter
+from lib.insights import InsightFile
+from lib.linkedin import LinkedInResolver
 from lib.logger import get_logger
+from lib.people.discovery import persons_in_dataset
+from lib.people.dossier import build_person_dossier
+from lib.people.model import Person
 from lib.slugify import slugify
-from lib.insight_filepath import get_insight_filepath
 from lib.env import get_env_var
-from lib.storage_domains import dataset_raw_path
-from skills.person_profile.persons_in_dataset import persons_in_dataset
-from skills.person_profile.person_dossier import build_person_dossier
-from lib.models.person import Person
+from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
-
-
-def _read_valid_person_profile_cache(dataset_slug: str, person: Person, output_file: str) -> str | None:
-    """Return cached profile when it is newer than the person's direct source file."""
-    storage = get_storage()
-    if not storage.exists(output_file):
-        return None
-
-    source_mtime = 0.0
-    if person.linkedin_id:
-        source_file = f"{dataset_raw_path(dataset_slug)}/linkedin/{person.linkedin_id}.json"
-        if storage.exists(source_file):
-            source_mtime = storage.mtime(source_file) or 0.0
-
-    output_mtime = storage.mtime(output_file) or 0.0
-    if output_mtime >= source_mtime:
-        logger.info(f"[{dataset_slug}] Using valid cached person profile: {output_file}")
-        return storage.read_text(output_file)
-
-    return None
 
 
 def _profile_metadata_header(person: Person) -> str:
@@ -113,8 +89,13 @@ async def person_profile(
 
     # 2. Batch Resolution
     logger.info(f"[{dataset_slug}] Resolving profiles for {len(target_persons)} entities...")
-    linkedin_adapter = LinkedInAdapter(dataset_slug)
-    all_profiles_raw = await asyncio.to_thread(linkedin_adapter.get_profiles, target_persons)
+    linkedin_resolver = LinkedInResolver(dataset_slug)
+    all_profiles_raw = await asyncio.to_thread(
+        linkedin_resolver.get_profiles,
+        target_persons,
+    )
+
+    await sync_datasets([dataset_slug], raise_on_error=True)
     
     # De-duplicate the resolved profiles using Person entity resolution
     profiles_to_process: List[Person] = []
@@ -153,27 +134,8 @@ async def _generate_single_profile(
     identifier = person.identifier
     display_name = person.display_name
 
-    # Paths & Refresh Check
     default_llm = llm_model()
-    output_file = get_insight_filepath(
-        dataset_name=dataset_slug,
-        skill_name="person_profile",
-        model=default_llm,
-        identifier=identifier,
-        subdir=True
-    )
-    if include_dataset_context:
-        needs_refresh, cached_content, matched_file = check_insight_refresh([dataset_slug], output_file)
-        if not needs_refresh:
-            person.person_profile = _ensure_profile_metadata_header(person, cached_content)
-            return
-    else:
-        cached_content = _read_valid_person_profile_cache(dataset_slug, person, output_file)
-        if cached_content is not None:
-            person.person_profile = _ensure_profile_metadata_header(person, cached_content)
-            return
 
-    # Load Configuration
     try:
         conf = config_load()
         query_template = conf['person_profile']['query']
@@ -184,6 +146,22 @@ async def _generate_single_profile(
             query = f"{query_template}\nPerson Name: {display_name}"
     except KeyError as e:
         raise ValueError(f"Missing configuration for person_profile: {e}")
+
+    insight = InsightFile(
+        dataset=dataset_slug,
+        skill="person_profile",
+        model=default_llm,
+        identifier=identifier,
+        subdir=True,
+        prompt_key=query + llm_instructions,
+    )
+    reusable = insight.find_reusable()
+    if reusable:
+        person.person_profile = _ensure_profile_metadata_header(
+            person,
+            reusable.content(),
+        )
+        return
 
     logger.info(f"[{dataset_slug}] Collating profile for '{display_name}'...")
 
@@ -229,7 +207,9 @@ async def _generate_single_profile(
     profile_output = _ensure_profile_metadata_header(person, profile_output)
 
     # Save and update object
-    storage = get_storage()
-    storage.write_text(output_file, profile_output)
+    insight.save(profile_output)
     person.person_profile = profile_output
-    logger.info(f"[{dataset_slug}] Successfully saved person profile for '{display_name}' to {output_file}")
+    logger.info(
+        f"[{dataset_slug}] Successfully saved person profile for "
+        f"'{display_name}' to {insight.path}"
+    )

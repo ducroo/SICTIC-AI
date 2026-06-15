@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -10,7 +12,9 @@ from .types import SnapshotEntry
 from .util import clean_rel, is_excluded, is_hidden_rel, sha256_file
 
 
+logger = logging.getLogger(__name__)
 _HASH_WORKERS = min(8, os.cpu_count() or 4)
+_HASH_PROGRESS_INTERVAL = 500
 
 
 def _hashed_entry(item: tuple[str, Path, os.stat_result]) -> tuple[str, SnapshotEntry]:
@@ -22,9 +26,6 @@ def _hashed_entry(item: tuple[str, Path, os.stat_result]) -> tuple[str, Snapshot
         sha256=digest,
         size=stat.st_size,
         mtime=stat.st_mtime,
-        local_sha256=digest,
-        local_size=stat.st_size,
-        local_mtime_ns=stat.st_mtime_ns,
     )
 
 
@@ -38,11 +39,7 @@ class LocalTree:
         rel = clean_rel(rel)
         return self.root / rel
 
-    def scan(
-        self,
-        baseline: dict[str, SnapshotEntry] | None = None,
-    ) -> dict[str, SnapshotEntry]:
-        baseline = baseline or {}
+    def scan(self) -> dict[str, SnapshotEntry]:
         out: dict[str, SnapshotEntry] = {}
         to_hash: list[tuple[str, Path, os.stat_result]] = []
         for path in sorted(self.root.rglob("*")):
@@ -55,32 +52,29 @@ class LocalTree:
                 out[rel] = SnapshotEntry(path=rel, type="folder", mtime=path.stat().st_mtime)
             elif path.is_file():
                 stat = path.stat()
-                previous = baseline.get(rel)
-                if (
-                    previous is not None
-                    and previous.type == "file"
-                    and previous.local_sha256 is not None
-                    and previous.local_size == stat.st_size
-                    and previous.local_mtime_ns == stat.st_mtime_ns
-                ):
-                    digest = previous.local_sha256
-                    out[rel] = SnapshotEntry(
-                        path=rel,
-                        type="file",
-                        sha256=digest,
-                        size=stat.st_size,
-                        mtime=stat.st_mtime,
-                        local_sha256=digest,
-                        local_size=stat.st_size,
-                        local_mtime_ns=stat.st_mtime_ns,
-                    )
-                else:
-                    to_hash.append((rel, path, stat))
+                to_hash.append((rel, path, stat))
 
         if to_hash:
+            started = time.monotonic()
+            total = len(to_hash)
+            logger.info(
+                "Hashing %s local files with %s workers.",
+                total,
+                _HASH_WORKERS,
+            )
             with ThreadPoolExecutor(max_workers=_HASH_WORKERS) as executor:
-                for rel, entry in executor.map(_hashed_entry, to_hash):
+                for index, (rel, entry) in enumerate(
+                    executor.map(_hashed_entry, to_hash),
+                    start=1,
+                ):
                     out[rel] = entry
+                    if index % _HASH_PROGRESS_INTERVAL == 0 or index == total:
+                        logger.info("Hashed local files %s/%s.", index, total)
+            logger.info(
+                "Hashed %s local files in %.2fs.",
+                total,
+                time.monotonic() - started,
+            )
         return out
 
     def read_bytes(self, rel: str) -> bytes:

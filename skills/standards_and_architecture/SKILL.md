@@ -10,9 +10,9 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
 ## Data Storage Layout (`LOCAL_STORAGE_PATH`)
 
 The AI and all skills must strictly adhere to the configured storage-domain
-layout. The local root is defined by `LOCAL_STORAGE_PATH`. When cloud storage is
-configured, `CLOUD_PROVIDER` identifies the backend and `CLOUD_STORAGE_PATH`
-identifies its root. The domain roots are defined in
+layout. The local root is defined by `LOCAL_STORAGE_PATH`. Google Drive access
+is isolated in `skills.gdrive_sync`; general application storage is always
+local. The domain roots are defined in
 `config/storage_domains.json`; code must use `lib.storage_domains` rather than
 hardcoding storage paths.
 
@@ -42,12 +42,12 @@ hardcoding storage paths.
   * If you write or use temporary Python scripts to test or verify functionality in the codebase, you must always ask the user afterwards if that script should be converted into a formal `pytest` unit/integration test.
 * **Environment:** All code is executed via the `sictic-env` Conda environment, bootstrapped from `environment.yml` by `install_skills_conda.sh`.
 * **Python Path:** The installer writes the repository root to a `.pth` file in the Conda environment, so `import skills.<SKILL_NAME>.<SCRIPT_NAME>` and `import lib.<MODULE>` resolve from any CWD without setting `PYTHONPATH`.
-* **Imports:** User-facing skill code lives under `skills.<SKILL_NAME>.<SCRIPT_NAME>`. Shared infrastructure lives under `lib.<MODULE>` (logger, env, adapters, slugify, etc.). Internal library skills (e.g., `batch_audit`) live under `lib.<SKILL_NAME>`.
+* **Imports:** User-facing skill code lives under `skills.<SKILL_NAME>.<SCRIPT_NAME>`. Shared infrastructure lives under `lib.<MODULE>` (logger, env, adapters, slugify, etc.).
 * **Naming Conventions:** 
   * All skill directory names must only contain underscores (`_`). **Never** hyphens (`-`).
   * All Python files (`.py`) must be strictly lowercase with underscores (snake_case). No uppercase letters (e.g., `config_load.py`, not `Config_Load.py`).
   * Dataset names are always strictly `lowercase`.
-* **Data Structures (Person Wrapper):** Whenever passing person data across adapters (especially the `LinkedInAdapter`) and downstream skills, you must use the standard Person Wrapper dictionary:
+* **Data Structures (Person Wrapper):** Whenever passing person data through LinkedIn resolution and downstream skills, use the standard Person Wrapper dictionary:
   ```python
   {
       "full_name": str,          # Sanitized: Latin characters preserved, emojis/symbols stripped
@@ -85,8 +85,7 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 
 ### `lib/` — shared infrastructure
 
-* `api_client.py`: Shared API client helper logic.
-* `dataset_from_insight.py`: Utility to generate synthetic datasets from insights.
+* `lib/insights/hydration.py`: Generates synthetic datasets from insights.
 * `env.py`: Exposes the `get_env_var` script to fetch environment variables with built-in error handling. Auto-loads `.env`.
 * `ephemeral_dataset.py`: Utility to prepare temporary datasets in Qdrant.
 * `ranking_top_k.py`: Core algorithms for ranking profiles.
@@ -94,18 +93,18 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
 * `insight_refresh.py`: Caching mechanism utility.
 * `json_parser.py`: JSON parsing helper utility.
 * `logger.py`: Centralized logger configuration. Writes to `logs/sictic-ai.log`.
-* `member_profile.py`: Centralized profile builder for SICTIC members.
 * `ranking_rationale.py`: Utility to generate concise ranking rationales for ranked LLM results.
 * `slugify.py`: Filename slugification utility.
 * `services_gateway.py`: IPC gateway for concurrency control across LLM/embed/docling calls.
-* `storage.py` / `storage_gdrive.py`: Storage abstraction (local directory or native Drive API).
+* `storage.py`: Local filesystem storage abstraction.
+* `linkedin/`: Shared LinkedIn identity, cache, registry, payload, and resolution library.
 * **lib.adapters/** - Centralized integration modules.
   * `apify.py`: Apify platform integration adapter.
   * `docling.py`: Exposes the `Docling` class for document ingestion.
-  * `linkedin.py`: Adapter for LinkedIn profile fetching/parsing.
+  * `linkedin.py`: Temporary compatibility exports for `lib.linkedin`.
   * `qdrant.py`: Exposes the Qdrant vector DB connection class.
   * `web_search.py`: Adapter utilizing Apify google-search-scraper.
-* `batch_audit.py`: Support module providing core batch-processing logic for due diligence checks and other external scripts.
+* `batch_audit`: User-facing checklist audit skill used by due diligence checks.
 
 ### `skills/` — user-facing CLI skills
 
@@ -113,12 +112,23 @@ Two top-level Python packages: `skills/` (user-facing CLI skills, each with `SKI
   * `advocates.py`: Logic entry point to find and rank potential advocates for a given event.
 * **bulk_refresh**
   * `bulk_refresh.py`: Logic entry point to batch-run a skill across multiple datasets.
+* **gdrive_sync**
+  * `client.py`: Synchronization workflow and durable-state orchestration.
+  * `drive_api.py`: Private Google Drive API implementation used only by this skill.
+  * `drive.py`: Drive tree and change-feed projection.
+  * `planner.py`: Pure synchronization decisions.
+  * `executor.py`: Local and Drive mutation execution.
 * **config_load**
   * `config_load.py`: Entry point to read and load `config.json` configuration trees dynamically.
 * **dataset_chat**
   * `dataset_chat.py`: API facade/Logic entry point for dataset chatting.
-  * `dataset_delete.py`: Logic entry point for dataset deletion.
   * `dataset_search.py`: Logic entry point for dataset searching.
+  * `core/ingestion.py`: Source-document synchronization, replacement, and orphan decisions.
+  * `core/embeddings.py`: Embedding generation for ingestion and search.
+* **dataset_maintenance**
+  * `maintenance.py`: Qdrant pruning, deletion, and diagnostics. Destructive pruning defaults to dry-run.
+* **linkedin_maintenance**
+  * `maintenance.py`: Human-in-the-loop missing-profile listing, imports, and registry diagnostics.
 * **dd_checks**
   * `dd_checks.py`: Core logic entry point to perform a comprehensive M&A-style due diligence review of a startup's data room.
 * **expert_search**
@@ -152,7 +162,7 @@ Every skill must strictly adhere to the following Python package structure. Cust
 
 ```text
 {{REPO_ROOT}}/
-├── lib/                        # GLOBAL: Shared infrastructure (env, logger, adapters, batch_audit, …)
+├── lib/                        # GLOBAL: Shared infrastructure (env, logger, adapters, …)
 │
 ├── skills/
 │   └── <SKILL_NAME>/           # The individual skill package

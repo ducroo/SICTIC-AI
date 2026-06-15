@@ -1,4 +1,3 @@
-import json
 from apify_client import ApifyClient
 from lib.env import get_env_var
 from lib.logger import get_logger

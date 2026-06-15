@@ -18,9 +18,6 @@ class SnapshotEntry:
     mtime: float | None = None
     drive_id: str | None = None
     mime_type: str | None = None
-    local_sha256: str | None = None
-    local_size: int | None = None
-    local_mtime_ns: int | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +28,13 @@ class PlannedAction:
     target: Side | None = None
     conflict_path: str | None = None
     message: str | None = None
+
+
+@dataclass(frozen=True)
+class IncrementalDecision:
+    path: str
+    source: Side
+    conflict: bool = False
 
 
 @dataclass

@@ -11,7 +11,7 @@ async def test_person_profile_routing_and_fuzzy_match():
     
     dataset_name = "test_dataset"
     
-    from lib.models.person import Person
+    from lib.people.model import Person
     # Mock data to return from the adapter
     mock_profiles = [
         Person(linkedin_id="johannes-aicher", full_name="Johannes Aicher", linkedin_profile={}),
@@ -20,7 +20,8 @@ async def test_person_profile_routing_and_fuzzy_match():
     ]
 
     with patch('skills.person_profile.person_profile.persons_in_dataset') as mock_discover, \
-         patch('skills.person_profile.person_profile.LinkedInAdapter') as mock_adapter_cls, \
+         patch('skills.person_profile.person_profile.LinkedInResolver') as mock_adapter_cls, \
+         patch('skills.person_profile.person_profile.sync_datasets'), \
          patch('skills.person_profile.person_profile._generate_single_profile') as mock_generate:
         
         # Setup mocks

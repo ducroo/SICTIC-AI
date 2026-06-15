@@ -1,4 +1,3 @@
-import requests
 from lib.logger import get_logger
 from lib.adapters.apify import ApifyAdapter
 

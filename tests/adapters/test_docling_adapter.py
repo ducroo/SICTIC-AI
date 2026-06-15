@@ -1,12 +1,18 @@
 import pytest
 from openpyxl import Workbook
+from contextlib import asynccontextmanager
 
 from lib.adapters.docling import (
+    ConversionStatus,
     DoclingAdapter,
     SPREADSHEET_MARKDOWN_MARKER,
     _chat_completions_model,
     _chat_completions_url,
 )
+
+
+async def _conversion_results(adapter, files):
+    return [result async for result in adapter.extract_documents(files)]
 
 
 def test_docling_sdk_import_available():
@@ -32,11 +38,11 @@ async def test_rtf_processing_bypasses_docling_converter(monkeypatch, tmp_path):
     path = tmp_path / "readme.rtf"
     path.write_text(r"{\rtf1\ansi Plain text.}", encoding="latin-1")
 
-    async def acquire(_limit):
-        return None
+    @asynccontextmanager
+    async def slot(*_args, **_kwargs):
+        yield None
 
-    monkeypatch.setattr("lib.services_gateway.gateway.acquire_docling_slot", acquire)
-    monkeypatch.setattr("lib.services_gateway.gateway.release_docling_slot", lambda: None)
+    monkeypatch.setattr("lib.services_gateway.gateway.slot", slot)
     monkeypatch.setattr(
         DoclingAdapter,
         "_convert_sync",
@@ -46,6 +52,50 @@ async def test_rtf_processing_bypasses_docling_converter(monkeypatch, tmp_path):
     text = await DoclingAdapter()._process_single_file(str(path), "readme.rtf")
 
     assert text == "Plain text.\n"
+
+
+@pytest.mark.asyncio
+async def test_extract_documents_ignores_nonempty_files_without_text(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "image-only.pdf"
+    path.write_bytes(b"%PDF image-only")
+
+    async def no_text(*_args, **_kwargs):
+        return ""
+
+    monkeypatch.setattr(DoclingAdapter, "_process_single_file", no_text)
+
+    results = await _conversion_results(
+        DoclingAdapter(),
+        [{"filename": path.name, "local_path": path}],
+    )
+
+    assert results[0].status is ConversionStatus.IGNORED_EMPTY
+    assert results[0].reason == "no_extractable_text"
+
+
+@pytest.mark.asyncio
+async def test_extract_documents_keeps_conversion_exceptions_fatal(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "broken.pdf"
+    path.write_bytes(b"%PDF broken")
+
+    async def fail(*_args, **_kwargs):
+        raise RuntimeError("converter unavailable")
+
+    monkeypatch.setattr(DoclingAdapter, "_process_single_file", fail)
+
+    results = await _conversion_results(
+        DoclingAdapter(),
+        [{"filename": path.name, "local_path": path}],
+    )
+
+    assert results[0].status is ConversionStatus.FAILED
+    assert "converter unavailable" in results[0].error
 
 
 def test_spreadsheet_conversion_omits_formatting_only_cells(tmp_path):
@@ -92,11 +142,11 @@ async def test_spreadsheet_processing_bypasses_docling_converter(monkeypatch, tm
     path = tmp_path / f"model{extension}"
     path.write_bytes(b"workbook")
 
-    async def acquire(_limit):
-        return None
+    @asynccontextmanager
+    async def slot(*_args, **_kwargs):
+        yield None
 
-    monkeypatch.setattr("lib.services_gateway.gateway.acquire_docling_slot", acquire)
-    monkeypatch.setattr("lib.services_gateway.gateway.release_docling_slot", lambda: None)
+    monkeypatch.setattr("lib.services_gateway.gateway.slot", slot)
     monkeypatch.setattr(
         DoclingAdapter,
         "_convert_spreadsheet_sync",
@@ -118,7 +168,10 @@ def test_repaired_pdf_conversion_runs_ghostscript_then_docling(monkeypatch, tmp_
     source.write_bytes(b"%PDF-1.4\n%%EOF\n")
     calls = {}
 
-    monkeypatch.setattr("lib.adapters.docling.shutil.which", lambda name: "/usr/bin/gs")
+    monkeypatch.setattr(
+        "lib.adapters.docling.pdf.shutil.which",
+        lambda name: "/usr/bin/gs",
+    )
 
     def fake_run(cmd, check, stdout, stderr):
         calls["cmd"] = cmd
@@ -128,7 +181,7 @@ def test_repaired_pdf_conversion_runs_ghostscript_then_docling(monkeypatch, tmp_
         with open(repaired, "wb") as f:
             f.write(b"%PDF-1.4 repaired\n%%EOF\n")
 
-    monkeypatch.setattr("lib.adapters.docling.subprocess.run", fake_run)
+    monkeypatch.setattr("lib.adapters.docling.pdf.subprocess.run", fake_run)
     monkeypatch.setattr(
         DoclingAdapter,
         "_convert_sync",

@@ -1,7 +1,7 @@
 import pytest
 
 from lib.storage import get_storage
-from lib.storage_domains import dataset_location_for_domain
+from lib.datasets.paths import dataset_location_for_domain
 from skills.bulk_refresh import bulk_refresh as bulk_refresh_module
 from skills.skill_registry import (
     SKILL_REGISTRY,

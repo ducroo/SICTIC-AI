@@ -1,4 +1,8 @@
-from skills.gdrive_sync.planner import plan_push, plan_sync
+from skills.gdrive_sync.planner import (
+    plan_incremental_changes,
+    plan_push,
+    plan_sync,
+)
 from skills.gdrive_sync.types import SnapshotEntry
 
 
@@ -51,3 +55,18 @@ def test_sync_content_conflict_local_wins_preserves_cloud_copy():
     assert copy_as[0].conflict_path == "a.conflict-cloud.md"
     assert canonical[0].source == "local"
     assert canonical[0].target == "cloud"
+
+
+def test_incremental_planner_marks_conflict_and_selected_winner():
+    decisions = plan_incremental_changes(
+        ["cloud.md", "conflict.md", "local.md"],
+        local_changed={"conflict.md", "local.md"},
+        cloud_changed={"cloud.md", "conflict.md"},
+        conflict_policy="cloud-wins",
+    )
+
+    assert [(item.path, item.source, item.conflict) for item in decisions] == [
+        ("cloud.md", "cloud", False),
+        ("conflict.md", "cloud", True),
+        ("local.md", "local", False),
+    ]

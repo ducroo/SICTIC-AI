@@ -1,12 +1,12 @@
 from pathlib import PurePosixPath
 from typing import Any, List, Optional
 
-from lib.insight_refresh import get_base_name
+from lib.insights import insight_base_name
 from lib.logger import get_logger
-from lib.models.person import Person, normalize_email_addresses
+from lib.people.discovery import persons_in_dataset
+from lib.people.model import Person, normalize_email_addresses
+from lib.datasets.search import dataset_search
 from lib.slugify import slugify
-from skills.dataset_chat.dataset_search import dataset_search
-from skills.person_profile.persons_in_dataset import persons_in_dataset
 from skills.ranking.ranking_rationale import ranking_rationale
 from skills.ranking.ranking_top_k import ranking_top_k
 
@@ -163,7 +163,7 @@ async def rank_person_rows(
     profile_text_by_id: dict[str, str] = {}
     for chunk in chunks:
         filename = PurePosixPath(chunk.document_name).name
-        linkedin_id = get_base_name(filename)
+        linkedin_id = insight_base_name(filename)
         if linkedin_id not in members_by_linkedin:
             continue
         profile_text_by_id.setdefault(linkedin_id, "")

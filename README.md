@@ -153,7 +153,7 @@ Qdrant and Ollama, and pulls the Ollama models referenced by `LLM_MODEL`,
 ./launch.sh stop    # shut down local background services
 ```
 
-### Step 5: Run a Skill in the harness
+### Step 5: Run a Skill
 
 You are ready to go. Execute user-facing skills either through the lightweight
 slash-command harness or directly:
@@ -171,6 +171,21 @@ conda run -n sictic-env python -m skills.harness
 
 Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and `/dd_checks <startup>`.
 
+### Command interfaces
+
+Use these supported entry points:
+
+| Interface | Purpose | Example |
+|---|---|---|
+| Harness | User-facing interactive skills | `conda run -n sictic-env python -m skills.harness /startup_profile SpaceX` |
+| Skill module | Direct execution of one skill | `conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex --skill startup_profile` |
+| Dataset maintenance | Maintained operational utility | `conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members` |
+| Script | Maintenance or migration operation documented by that script | `conda run -n sictic-env python scripts/generate_member_profiles.py --help` |
+
+User-facing skills live under `skills` and should be invoked as
+`python -m skills.<skill_name>`. The slash-command harness remains the preferred
+interface when it exposes the requested skill.
+
 ## Using it in practice
 
 ### 1. Community management
@@ -180,7 +195,7 @@ Communities can be large, so it is useful to do some preparation overnight.
 To make an inventory of all persons mentioned in `community/sictic-members/datasets/`, run:
 
 ```bash
-conda run -n sictic-env python -m person_profile.persons_in_dataset --dataset sictic.members
+conda run -n sictic-env python -c "from skills.person_profile.persons_in_dataset import persons_in_dataset; persons_in_dataset('sictic-members')"
 ```
 
 It will generate a draft of all members in `community/sictic-members/insights/persons-in-dataset-sictic-members-manual.md`. Probably it is quite incomplete and you want to edit it manually. From there on, the system will use that list of members.
@@ -188,7 +203,7 @@ It will generate a draft of all members in `community/sictic-members/insights/pe
 Next you want to create a comprehensive profile of each member combining their LinkedIn profile, their resumes and other credentials. For this you use:
 
 ```bash
-conda run -n sictic-env python -m person_profile --dataset sictic.members
+conda run -n sictic-env python -m skills.person_profile --dataset sictic-members
 ```
 
 The resulting profiles are in:
@@ -197,9 +212,16 @@ The resulting profiles are in:
 storage/community/sictic-members/insights/person-profile/
 ```
 
-It may complain that it cannot fetch LinkedIn profiles. From `lib/adapters/linkedin.py`, you can use:
-* `linkedin_missing_profiles` to get a list of missing LinkedIn profiles.
-* `linkedin_bulk_upload` to upload a JSON with those profiles into the system. It knows which dataset each profile belongs to.
+It may report LinkedIn profiles that require manual scraping. Use:
+
+```bash
+python -m skills.linkedin_maintenance missing
+python -m skills.linkedin_maintenance import profiles.json
+python -m skills.linkedin_maintenance diagnose
+```
+
+The import command uses the pending registry to route each profile to its
+dataset. An explicit `--dataset` may be supplied as an additional target.
 
 The matching skills `expert_search`, `potential_investors`, and `advocates`
 search a derived `sictic-members-investor-profile` dataset for the best fit. Its
@@ -208,7 +230,7 @@ preferences.
 
 ```bash
 conda run -n sictic-env python -m skills.investor_profile
-conda run -n sictic-env python -m lib.dataset_from_insight --insight-name investor_profile --source-dataset sictic-members
+conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members
 ```
 
 ### 2. Overnight Refresh
@@ -218,14 +240,14 @@ The `bulk_refresh` command can refresh a set of insights on a set of datasets.
 * If the insights are not specified, it will refresh all relevant skills.
 
 ```bash
-# refresh the person_profile on spaceX
-conda run -n sictic-env python -m bulk_refresh/ --insight-name "person_profile" --dataset spaceX
+# refresh the person_profile on spacex
+conda run -n sictic-env python -m skills.bulk_refresh --skill person_profile --dataset spacex
 # refresh all insights on spacex
-conda run -n sictic-env python -m bulk_refresh/ --dataset spacex
+conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex
 # refresh all the person_profile for all active dataset
-conda run -n sictic-env python -m bulk_refresh/ --insight-name "person_profile"
+conda run -n sictic-env python -m skills.bulk_refresh --skill person_profile
 # refresh all insights on all active dataset
-conda run -n sictic-env python -m bulk_refresh/
+conda run -n sictic-env python -m skills.bulk_refresh
 
 ```
 
@@ -281,17 +303,15 @@ SICTIC_RUN_LIVE_SMOKE=1 conda run -n sictic-env python -m pytest -q -m live
 Live tests may require running Qdrant and Ollama services and specific test
 datasets. Tests whose required datasets are unavailable are skipped.
 
-## Google Drive Integration (Production Mode)
+## Google Drive Integration
 
-(You read this far, so you're serious about this.) By default
-(`STORAGE_PROVIDER="local"`), all datasets and generated insights are written to
-the local file system path provided in `LOCAL_STORAGE_PATH`. `STORAGE_PROVIDER`
-is retained temporarily and is planned for removal.
+All skills read and write the local filesystem path configured by
+`LOCAL_STORAGE_PATH`. Google Drive access is isolated in the `gdrive_sync`
+administrative skill; normal application storage never accesses Drive.
 
-In production at SICTIC, we use Google Drive to share datasets and insights
-with Deal Leads. `CLOUD_PROVIDER=google` selects Google Drive and
-`CLOUD_STORAGE_PATH` identifies its root. When `STORAGE_PROVIDER="google"`, the
-skills read and write directly through the native API.
+In production at SICTIC, Google Drive is used to share datasets and insights
+with Deal Leads. `CLOUD_PROVIDER=google` enables synchronization and
+`CLOUD_STORAGE_PATH` identifies the Drive root.
 
 **Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you (We did it with Openclaw)
 
@@ -346,3 +366,18 @@ Ask a chatbot for help; Gemini was used to configure the current installation.
 The durable baseline and Drive changes token are stored under
 `gdrive_sync_state/<pairing-id>/`. Do not delete this directory as cache.
 Runtime logs are written to `logs/gdrive-sync.log`.
+
+## Dataset Maintenance
+
+Dataset ingestion owns document replacement and removal decisions. Qdrant
+adapters perform database operations only. Collection diagnostics and pruning
+are exposed separately:
+
+```bash
+python -m skills.dataset_maintenance diagnose
+python -m skills.dataset_maintenance prune
+python -m skills.dataset_maintenance prune --apply
+python -m skills.dataset_maintenance migrate-startup-dossiers
+```
+
+Pruning is dry-run by default.

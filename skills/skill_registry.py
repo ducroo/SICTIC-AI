@@ -6,7 +6,7 @@ from skills.dd_checks.dd_checks import dd_checks
 from skills.expert_search.expert_search import expert_search
 from skills.investor_profile.investor_profile import investor_profile
 from skills.person_profile.person_profile import person_profile
-from skills.person_profile.persons_in_dataset import persons_in_dataset
+from lib.people.discovery import persons_in_dataset
 from skills.potential_investors.potential_investors import potential_investors
 from skills.startup_profile.startup_profile import startup_profile
 from skills.startup_traction.startup_traction import startup_traction

@@ -8,7 +8,7 @@ async def test_dataset_chat_basic(mocker):
     and returns a response from llm_chat.
     """
     # Mock dataset_search
-    from skills.dataset_chat.core.models import Chunk
+    from lib.datasets.models import Chunk
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
     
     # Since dataset_search is an async function, we must mock it to return a coroutine
@@ -33,7 +33,7 @@ async def test_dataset_chat_basic(mocker):
 
 @pytest.mark.asyncio
 async def test_dataset_chat_uses_list_as_multi_query_and_prompt(mocker):
-    from skills.dataset_chat.core.models import Chunk
+    from lib.datasets.models import Chunk
 
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
     mock_search.return_value = [
@@ -84,7 +84,7 @@ async def test_dataset_chat_refuses_empty_context(mocker):
 
 @pytest.mark.asyncio
 async def test_dataset_chat_budgets_context_without_front_truncation(mocker, monkeypatch):
-    from skills.dataset_chat.core.models import Chunk
+    from lib.datasets.models import Chunk
 
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "2048")
     chunks = [

@@ -3,7 +3,7 @@ import pytest
 from pathlib import Path
 from lib.env import get_env_var
 from skills.startup_profile.startup_profile import startup_profile
-from skills.dataset_chat.dataset_search import dataset_search
+from lib.datasets.search import dataset_search
 from skills.expert_search.expert_search import expert_search
 from lib.slugify import slugify
 

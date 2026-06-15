@@ -3,10 +3,25 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from dataclasses import fields
 from pathlib import Path
 
 from .types import SnapshotEntry
 from .util import clean_rel
+
+
+_SNAPSHOT_ENTRY_FIELDS = {field.name for field in fields(SnapshotEntry)}
+
+
+def _snapshot_entry(data: dict, *, path: str) -> SnapshotEntry:
+    """Load current entries while ignoring fields from older state schemas."""
+    normalized = {
+        key: value
+        for key, value in data.items()
+        if key in _SNAPSHOT_ENTRY_FIELDS
+    }
+    normalized["path"] = clean_rel(normalized.get("path") or path)
+    return SnapshotEntry(**normalized)
 
 
 def default_state_dir() -> Path:
@@ -76,8 +91,7 @@ class SyncState:
         for row in rows:
             data = json.loads(row["entry_json"])
             path = clean_rel(row["path"])
-            data["path"] = clean_rel(data.get("path") or path)
-            out[path] = SnapshotEntry(**data)
+            out[path] = _snapshot_entry(data, path=path)
         return out
 
     def save_baseline(self, entries: dict[str, SnapshotEntry]) -> None:
@@ -104,51 +118,13 @@ class SyncState:
     def upsert_baseline_entry(self, entry: SnapshotEntry) -> None:
         path = clean_rel(entry.path)
         with self._connect() as con:
-            row = con.execute(
-                "select entry_json from baseline where path = ?",
-                (path,),
-            ).fetchone()
             data = {**entry.__dict__, "path": path}
-            if row is not None:
-                previous = json.loads(row["entry_json"])
-                for key in ("local_sha256", "local_size", "local_mtime_ns"):
-                    if data.get(key) is None:
-                        data[key] = previous.get(key)
             con.execute(
                 """
                 insert into baseline(path, entry_json) values(?, ?)
                 on conflict(path) do update set entry_json = excluded.entry_json
                 """,
                 (path, json.dumps(data, sort_keys=True)),
-            )
-
-    def update_local_cache(self, entries: dict[str, SnapshotEntry]) -> None:
-        with self._connect() as con:
-            rows = con.execute("select path, entry_json from baseline").fetchall()
-            updates = []
-            for row in rows:
-                path = clean_rel(row["path"])
-                local_entry = entries.get(path)
-                if local_entry is None or local_entry.type != "file":
-                    continue
-                data = json.loads(row["entry_json"])
-                cached = (
-                    data.get("local_sha256"),
-                    data.get("local_size"),
-                    data.get("local_mtime_ns"),
-                )
-                current = (
-                    local_entry.local_sha256,
-                    local_entry.local_size,
-                    local_entry.local_mtime_ns,
-                )
-                if cached == current:
-                    continue
-                data["local_sha256"], data["local_size"], data["local_mtime_ns"] = current
-                updates.append((json.dumps(data, sort_keys=True), path))
-            con.executemany(
-                "update baseline set entry_json = ? where path = ?",
-                updates,
             )
 
     def delete_baseline_path(self, path: str, *, include_descendants: bool = False) -> None:
@@ -172,8 +148,7 @@ class SyncState:
         for row in rows:
             data = json.loads(row["entry_json"])
             path = clean_rel(row["path"])
-            data["path"] = clean_rel(data.get("path") or path)
-            out[path] = SnapshotEntry(**data)
+            out[path] = _snapshot_entry(data, path=path)
         return out
 
     def save_checkpoint_entry(self, operation_id: str, entry: SnapshotEntry) -> None:

@@ -1,10 +1,11 @@
 import pytest
 
 from lib.storage import get_storage
-from lib.storage_domains import (
+from lib.datasets.paths import (
     dataset_insights_path,
     dataset_location,
     dataset_location_for_domain,
+    list_all_dataset_names,
     dataset_parsed_path,
     dataset_raw_path,
 )
@@ -59,3 +60,10 @@ def test_duplicate_dataset_name_is_rejected(mock_env):
 
     with pytest.raises(ValueError, match="multiple domains"):
         dataset_location("duplicate")
+
+
+def test_all_dataset_names_are_discovered_across_domains(mock_env):
+    _create_dataset("Avientus", "startups")
+    _create_dataset("sictic_members", "community")
+
+    assert list_all_dataset_names() == ["avientus", "sictic-members"]

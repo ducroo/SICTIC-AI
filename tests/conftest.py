@@ -15,7 +15,6 @@ import lib.env  # noqa: E402,F401
 
 os.environ["REPO_PATH"] = str(REPO_ROOT)
 os.environ["WORKSPACE_PATH"] = str(REPO_ROOT / "skills")
-os.environ["STORAGE_PROVIDER"] = "local"
 os.environ["LOCAL_STORAGE_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["LOCAL_DATA_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["CLOUD_PROVIDER"] = "google"
@@ -82,7 +81,6 @@ def mock_env(monkeypatch, tmp_path):
     workspace_mock.mkdir()
     
     # Override environment variables
-    monkeypatch.setenv("STORAGE_PROVIDER", "local")
     monkeypatch.setenv("LOCAL_STORAGE_PATH", str(repository_dir_mock))
     monkeypatch.setenv("LOCAL_DATA_PATH", str(repository_dir_mock))
     monkeypatch.setenv("CLOUD_PROVIDER", "google")
@@ -112,7 +110,7 @@ def mock_env(monkeypatch, tmp_path):
     # Most person-oriented tests operate on the canonical community dataset.
     # Create its dataset folder so name-based discovery has a real dataset to find.
     from lib.storage import get_storage
-    from lib.storage_domains import dataset_location_for_domain
+    from lib.datasets.paths import dataset_location_for_domain
 
     community = dataset_location_for_domain("sictic-members", "community")
     get_storage().mkdir(community.raw_rel)

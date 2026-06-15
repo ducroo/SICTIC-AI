@@ -1,11 +1,11 @@
 import os
 from typing import List
 
-from skills.dataset_chat.core.ingestion import sync_datasets
+from lib.datasets.ingestion import sync_datasets
 from lib.adapters.qdrant import QdrantAdapter
 from lib.logger import get_logger
 from lib.storage import get_storage
-from lib.storage_domains import dataset_location_for_domain
+from lib.datasets.paths import dataset_location_for_domain
 
 logger = get_logger(__name__)
 

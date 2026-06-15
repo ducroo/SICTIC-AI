@@ -30,6 +30,9 @@ Optional overrides include `--local-root`, `--cloud-root`,
 `--credentials-path`, `--token-path`, `--state-dir`, `--log-dir`,
 `--exclude`, `--lock-timeout`, and `--verbose`.
 
+File transfers are logged with operation progress, for example
+`upload 5/37 path/to/file.md` or `download 6/37 path/to/file.pdf`.
+
 ## Operational State
 
 The incremental baseline and Drive changes token are durable operational state,

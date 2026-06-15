@@ -1,4 +1,4 @@
-from lib.models.person import Person, extract_email_addresses
+from lib.people.model import Person, extract_email_addresses
 
 
 def test_person_linkedin_id_is_hard_identity_boundary():

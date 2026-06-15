@@ -1,10 +1,7 @@
-from lib.startup_dossier import (
-    STARTUP_DATASET_SUBDIRS,
-    canonical_startup_slug,
-    ensure_startup_dossier,
-)
+from lib.startups.dossier import STARTUP_DATASET_SUBDIRS, ensure_startup_dossier
+from lib.startups.identity import canonical_startup_slug
 from lib.storage import get_storage
-from lib.storage_domains import dataset_parsed_path, dataset_raw_path
+from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
 
 
 def test_ensure_startup_dossier_creates_raw_and_parsed_layout(mock_env):

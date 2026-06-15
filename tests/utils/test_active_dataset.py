@@ -1,6 +1,6 @@
 import time
 
-from lib.active_dataset import (
+from lib.datasets.state import (
     MARKER_TEXT,
     activate_dataset,
     archive_dataset,
@@ -8,7 +8,7 @@ from lib.active_dataset import (
     is_active_dataset,
 )
 from lib.storage import get_storage
-from lib.storage_domains import (
+from lib.datasets.paths import (
     dataset_active_marker_path,
     dataset_location_for_domain,
 )

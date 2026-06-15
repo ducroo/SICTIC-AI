@@ -4,9 +4,8 @@ from lib.runtime_noise import configure_runtime_noise
 
 configure_runtime_noise()
 
-import litellm
 from litellm.exceptions import APIConnectionError
-from lib.services_gateway import gateway, Priority
+from lib.services_gateway import gateway
 from lib.env import get_env_var
 from lib.logger import get_logger
 from lib.model_config import llm_endpoint
@@ -50,7 +49,7 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
     
     logger.info(f"Sending request to {default_model} with context {ctx} (estimated tokens: {estimated_tokens})...")
     try:
-        response = await gateway.request_completion(kwargs, priority=Priority.STANDARD)
+        response = await gateway.request_completion(kwargs)
         content = response.choices[0].message.content
         if not content:
             logger.warning("Received an empty response from the model.")

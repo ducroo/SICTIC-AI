@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from skills.gdrive_sync.client import GDriveSync
+from skills.gdrive_sync.planner import collapse_local_folder_deletions
 from skills.gdrive_sync.types import SnapshotEntry, SyncOperationFailed
 
 
@@ -26,7 +27,7 @@ def test_incremental_upload_failure_does_not_stop_following_file(monkeypatch):
 
     syncer.local = SimpleNamespace(
         read_bytes=lambda path: contents[path],
-        scan=lambda _baseline: local_snapshot,
+        scan=lambda: local_snapshot,
     )
 
     def write_bytes(path, content):
@@ -44,7 +45,6 @@ def test_incremental_upload_failure_does_not_stop_following_file(monkeypatch):
         ),
     )
     syncer.state = SimpleNamespace(
-        update_local_cache=lambda _snapshot: None,
         upsert_baseline_entry=baselined.append,
     )
     syncer.lock_path = "unused"
@@ -92,7 +92,7 @@ def test_local_folder_delete_collapses_unchanged_descendants():
         "keep.md",
     }
 
-    paths = GDriveSync._collapse_local_folder_deletions(
+    paths = collapse_local_folder_deletions(
         set(local_changed),
         local_changed=local_changed,
         cloud_changed=set(),
@@ -109,7 +109,7 @@ def test_remote_change_under_deleted_folder_is_not_collapsed():
         "folder/changed.md": SnapshotEntry(path="folder/changed.md", type="file"),
     }
 
-    paths = GDriveSync._collapse_local_folder_deletions(
+    paths = collapse_local_folder_deletions(
         {"folder", "folder/changed.md"},
         local_changed={"folder", "folder/changed.md"},
         cloud_changed={"folder/changed.md"},

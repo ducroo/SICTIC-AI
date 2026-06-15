@@ -23,7 +23,7 @@ description: Rank a provided list of startups against a list of investors by mat
 
 2. **Investor Loop:** For each name in the `investors` list: 
  
- * **Data Retrieval:** Instantiate the `LinkedInAdapter` pointing its cache directory to the `sictic_members` dataset on the Google Drive mount. Call `get_profiles([{"name": investor_name}])` to fetch the investor's profile. The adapter's built-in tokenization natively handles multi-word names by matching slugified tokens against the dataset filenames. 
+ * **Data Retrieval:** Use `LinkedInResolver` for the `sictic-members` dataset when cached LinkedIn identities are required. General storage remains local; Google Drive synchronization is handled separately.
  * **Self-Correction (Fallback):** Check the returned JSON. If the profile is sparse, empty, or missing entirely, inject a hardcoded **"General Interest"** fallback string (e.g., *"No detailed profile available. Assume General Interest in broad tech trends and standard investment criteria."*) as their profile data.
 
  

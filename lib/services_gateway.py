@@ -1,183 +1,430 @@
+from __future__ import annotations
+
 import asyncio
-import os
-import json
 import fcntl
+import hashlib
+import json
+import os
+import platform
+import subprocess
 import time
-from typing import Any, Dict, List
-from lib.runtime_noise import configure_runtime_noise
-
-configure_runtime_noise()
-
-import litellm
-from enum import Enum
-from dotenv import load_dotenv
+import uuid
+from contextlib import asynccontextmanager
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, AsyncIterator
 
 from lib.logger import get_logger
-from lib.env import get_env_var
-
-load_dotenv()
 
 logger = get_logger(__name__)
 
-# CLI commands are short-lived. LiteLLM's aiohttp transport can leave process-global
-# sessions open at interpreter shutdown, which prints noisy warnings after successful
-# one-shot harness commands. Use httpx transport instead so clients close cleanly.
-litellm.disable_aiohttp_transport = True
+_RESOURCE_KEYS = ("docling", "embedding", "llm")
+_EXCLUSIVE_WITH = {
+    "docling": ("embedding", "llm"),
+    "embedding": ("docling", "llm"),
+    "llm": ("docling", "embedding"),
+}
+_DEFAULT_WAIT_TIMEOUT = 3600.0
+_POLL_INTERVAL = 0.5
 
-class Priority(Enum):
-    USER = 0      # Live user chats
-    STANDARD = 1  # Normal background tasks
-    BULK = 2      # Overnight/Bulk jobs
 
-GATEWAY_STATE_FILE = "/tmp/sictic_gateway.json"
+class GatewayTimeoutError(TimeoutError):
+    pass
+
+
+@dataclass(frozen=True)
+class ServiceLease:
+    lease_id: str
+    resource: str
+    pid: int
+    process_start: str
+    acquired_at: float
+
+
+@dataclass(frozen=True)
+class ServiceRequest:
+    request_id: str
+    resource: str
+    pid: int
+    process_start: str
+    requested_at: float
+
+
+def _repo_identity() -> str:
+    repo_root = Path(
+        os.environ.get("REPO_PATH") or Path(__file__).resolve().parents[1]
+    ).expanduser().resolve()
+    return hashlib.sha256(str(repo_root).encode("utf-8")).hexdigest()[:16]
+
+
+def default_gateway_state_path() -> Path:
+    """Return a machine-local state path for macOS, Linux, and WSL2."""
+    if platform.system() == "Darwin":
+        cache_root = Path.home() / "Library" / "Caches"
+    else:
+        runtime_root = os.environ.get("XDG_RUNTIME_DIR")
+        if runtime_root:
+            cache_root = Path(runtime_root)
+        else:
+            cache_root = Path(
+                os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
+            )
+    return (
+        cache_root
+        / "sictic-ai"
+        / _repo_identity()
+        / "services-gateway.json"
+    )
+
+
+def _process_start_token(pid: int) -> str | None:
+    """Identify a process instance, not merely a reusable PID."""
+    proc_stat = Path(f"/proc/{pid}/stat")
+    if proc_stat.exists():
+        try:
+            fields = proc_stat.read_text(encoding="utf-8").split()
+            return fields[21]
+        except (OSError, IndexError):
+            return None
+    try:
+        completed = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(pid)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    token = completed.stdout.strip()
+    return token or None
+
 
 class ServicesGateway:
-    """
-    A serverless IPC gateway using OS-level file locking.
-    It manages concurrency across multiple Python scripts by tracking PIDs.
-    If a script crashes, its PIDs are automatically garbage-collected by the next script
-    that performs an OS health check (os.kill(pid, 0)).
-    """
-    _instance = None
+    """Coordinate local service capacity across independent CLI processes."""
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(ServicesGateway, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+    def __init__(
+        self,
+        *,
+        state_path: str | os.PathLike | None = None,
+        ollama_num_parallel: int | None = None,
+        wait_timeout: float = _DEFAULT_WAIT_TIMEOUT,
+        poll_interval: float = _POLL_INTERVAL,
+    ):
+        self.state_path = Path(
+            state_path or default_gateway_state_path()
+        ).expanduser()
+        self.ollama_num_parallel = (
+            ollama_num_parallel
+            if ollama_num_parallel is not None
+            else int(os.environ.get("OLLAMA_NUM_PARALLEL", "1"))
+        )
+        self.wait_timeout = wait_timeout
+        self.poll_interval = poll_interval
+        self._process_start = _process_start_token(os.getpid()) or str(
+            time.time_ns()
+        )
+
+    def _empty_state(self) -> dict:
+        return {
+            "version": 3,
+            "leases": {resource: [] for resource in _RESOURCE_KEYS},
+            "requests": {resource: [] for resource in _RESOURCE_KEYS},
+        }
+
+    def _ensure_parent(self) -> None:
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _lease_is_alive(self, lease: dict) -> bool:
+        try:
+            pid = int(lease["pid"])
+            expected_start = str(lease["process_start"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        if pid == os.getpid():
+            return expected_start == self._process_start
+        actual_start = _process_start_token(pid)
+        return actual_start is not None and actual_start == expected_start
+
+    def _read_state(self, handle) -> dict:
+        handle.seek(0)
+        content = handle.read()
+        if not content:
+            return self._empty_state()
+        try:
+            state = json.loads(content)
+        except (TypeError, json.JSONDecodeError) as error:
+            logger.warning(
+                "Resetting invalid services gateway state at %s: %s",
+                self.state_path,
+                error,
+            )
+            return self._empty_state()
+
+        leases = state.get("leases")
+        requests = state.get("requests", {})
+        if not isinstance(leases, dict) or not isinstance(requests, dict):
+            return self._empty_state()
+        cleaned = self._empty_state()
+        process_alive: dict[tuple[int, str], bool] = {}
+
+        def entry_is_alive(entry: dict) -> bool:
+            try:
+                identity = (
+                    int(entry["pid"]),
+                    str(entry["process_start"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                return False
+            if identity not in process_alive:
+                process_alive[identity] = self._lease_is_alive(entry)
+            return process_alive[identity]
+
+        for resource in _RESOURCE_KEYS:
+            pool = leases.get(resource, [])
+            if isinstance(pool, list):
+                cleaned["leases"][resource] = [
+                    lease
+                    for lease in pool
+                    if isinstance(lease, dict) and entry_is_alive(lease)
+                ]
+            queue = requests.get(resource, [])
+            if isinstance(queue, list):
+                cleaned["requests"][resource] = [
+                    request
+                    for request in queue
+                    if isinstance(request, dict)
+                    and entry_is_alive(request)
+                ]
+        return cleaned
+
+    def _write_state(self, handle, state: dict) -> None:
+        handle.seek(0)
+        handle.truncate()
+        json.dump(state, handle, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+    def _with_locked_state(self, action):
+        self._ensure_parent()
+        with self.state_path.open("a+", encoding="utf-8") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            try:
+                state = self._read_state(handle)
+                result = action(state)
+                self._write_state(handle, state)
+                return result
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+    @staticmethod
+    def _counts(state: dict) -> dict[str, dict[str, int]]:
+        return {
+            resource: {
+                "running": len(state["leases"][resource]),
+                "waiting": len(state["requests"][resource]),
+            }
+            for resource in _RESOURCE_KEYS
+        }
+
+    @staticmethod
+    def _format_counts(counts: dict[str, dict[str, int]]) -> str:
+        labels = {"docling": "docling", "embedding": "embedding", "llm": "LLM"}
+        return " | ".join(
+            f"{labels[resource]} {counts[resource]['running']} running, "
+            f"{counts[resource]['waiting']} waiting"
+            for resource in ("llm", "embedding", "docling")
+        )
+
+    def _register_request(
+        self,
+        resource: str,
+    ) -> tuple[ServiceRequest, dict[str, dict[str, int]]]:
+        request = ServiceRequest(
+            request_id=uuid.uuid4().hex,
+            resource=resource,
+            pid=os.getpid(),
+            process_start=self._process_start,
+            requested_at=time.time(),
+        )
+
+        def register(state):
+            state["requests"][resource].append(asdict(request))
+            return request, self._counts(state)
+
+        return self._with_locked_state(register)
+
+    def _try_acquire(
+        self,
+        request: ServiceRequest,
+        *,
+        max_concurrent: int,
+    ) -> tuple[ServiceLease | None, dict[str, dict[str, int]] | None]:
+        resource = request.resource
+        lease = ServiceLease(
+            lease_id=uuid.uuid4().hex,
+            resource=resource,
+            pid=os.getpid(),
+            process_start=self._process_start,
+            acquired_at=time.time(),
+        )
+
+        def acquire(state):
+            leases = state["leases"]
+            queue = state["requests"][resource]
+            request_index = next(
+                (
+                    index
+                    for index, item in enumerate(queue)
+                    if item.get("request_id") == request.request_id
+                ),
+                None,
+            )
+            available = max_concurrent - len(leases[resource])
+            if request_index is None or request_index >= available:
+                return None, None
+            blocked = any(
+                leases[other]
+                for other in _EXCLUSIVE_WITH[resource]
+            )
+            if blocked or len(leases[resource]) >= max_concurrent:
+                return None, None
+            state["requests"][resource] = [
+                item
+                for item in queue
+                if item.get("request_id") != request.request_id
+            ]
+            leases[resource].append(asdict(lease))
+            return lease, self._counts(state)
+
+        return self._with_locked_state(acquire)
+
+    def _remove_request(self, request: ServiceRequest) -> None:
+        def remove(state):
+            queue = state["requests"][request.resource]
+            state["requests"][request.resource] = [
+                item
+                for item in queue
+                if item.get("request_id") != request.request_id
+            ]
+
+        self._with_locked_state(remove)
+
+    def _release(self, lease: ServiceLease) -> None:
+        def release(state):
+            pool = state["leases"][lease.resource]
+            state["leases"][lease.resource] = [
+                item
+                for item in pool
+                if item.get("lease_id") != lease.lease_id
+            ]
+
+        self._with_locked_state(release)
+
+    def snapshot(self) -> dict:
+        """Return cleaned gateway state for diagnostics and tests."""
+        return self._with_locked_state(lambda state: state)
+
+    @asynccontextmanager
+    async def slot(
+        self,
+        resource: str,
+        *,
+        max_concurrent: int | None = None,
+        timeout: float | None = None,
+    ) -> AsyncIterator[ServiceLease]:
+        if resource not in _RESOURCE_KEYS:
+            raise ValueError(f"Unknown gateway resource: {resource}")
+        capacity = max_concurrent or self.ollama_num_parallel
+        if capacity < 1:
+            raise ValueError("max_concurrent must be at least 1")
+        wait_timeout = self.wait_timeout if timeout is None else timeout
+        started = time.monotonic()
+        request, counts = await asyncio.to_thread(
+            self._register_request,
+            resource,
+        )
+        logger.info(
+            "Gateway request received: %s",
+            self._format_counts(counts),
+        )
+        lease = None
+
+        try:
+            while True:
+                lease, counts = await asyncio.to_thread(
+                    self._try_acquire,
+                    request,
+                    max_concurrent=capacity,
+                )
+                if lease is not None:
+                    break
+                elapsed = time.monotonic() - started
+                if elapsed >= wait_timeout:
+                    state = await asyncio.to_thread(self.snapshot)
+                    occupancy = {
+                        name: len(items)
+                        for name, items in state["leases"].items()
+                    }
+                    raise GatewayTimeoutError(
+                        f"Timed out after {elapsed:.1f}s waiting for "
+                        f"{resource}; active leases: {occupancy}"
+                    )
+                await asyncio.sleep(self.poll_interval)
+
+            if counts is not None:
+                logger.info(
+                    "Gateway job started: %s",
+                    self._format_counts(counts),
+                )
+            yield lease
+        finally:
+            if lease is None:
+                await asyncio.to_thread(self._remove_request, request)
+            else:
+                await asyncio.to_thread(self._release, lease)
+
+    async def request_embedding(
+        self,
+        kwargs: dict[str, Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """Embeddings cannot run concurrently with LLMs or Docling."""
+        import litellm
+
+        litellm.disable_aiohttp_transport = True
+        async with self.slot("embedding", timeout=timeout):
+            return await litellm.aembedding(**kwargs)
+
+    async def request_completion(
+        self,
+        kwargs: dict[str, Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """LLMs cannot run concurrently with embeddings or Docling."""
+        import litellm
+
+        litellm.disable_aiohttp_transport = True
+        async with self.slot("llm", timeout=timeout):
+            return await litellm.acompletion(**kwargs)
+
+
+class _DefaultGateway:
+    """Delay environment and path resolution until the first gateway call."""
 
     def __init__(self):
-        if self._initialized:
-            return
-            
-        self.OLLAMA_NUM_PARALLEL = int(get_env_var("OLLAMA_NUM_PARALLEL"))
-        
-        # Ensure the state file exists with basic structure
-        if not os.path.exists(GATEWAY_STATE_FILE):
-            try:
-                with open(GATEWAY_STATE_FILE, "w") as f:
-                    json.dump({"active_docling": [], "active_embeds": [], "active_llms": []}, f)
-            except Exception:
-                pass
-                
-        self._initialized = True
+        self._instance: ServicesGateway | None = None
 
-    def _clean_pids(self, pids: List[int]) -> List[int]:
-        """Returns only the PIDs that are still alive."""
-        alive = []
-        for pid in pids:
-            try:
-                os.kill(pid, 0)
-                alive.append(pid)
-            except OSError:
-                pass
-        return alive
+    def _get(self) -> ServicesGateway:
+        if self._instance is None:
+            self._instance = ServicesGateway()
+        return self._instance
 
-    def _read_and_clean_state(self, f) -> Dict[str, List[int]]:
-        try:
-            f.seek(0)
-            content = f.read()
-            if not content:
-                state = {"active_docling": [], "active_embeds": [], "active_llms": []}
-            else:
-                state = json.loads(content)
-                
-            # Clean dead processes automatically
-            state["active_docling"] = self._clean_pids(state.get("active_docling", []))
-            state["active_embeds"] = self._clean_pids(state.get("active_embeds", []))
-            state["active_llms"] = self._clean_pids(state.get("active_llms", []))
-            return state
-        except Exception as e:
-            logger.error(f"Error parsing gateway state: {e}")
-            return {"active_docling": [], "active_embeds": [], "active_llms": []}
+    def __getattr__(self, name: str):
+        return getattr(self._get(), name)
 
-    def _write_state(self, f, state: Dict[str, List[int]]):
-        f.seek(0)
-        f.truncate()
-        json.dump(state, f)
-        f.flush()
 
-    async def _acquire_slot(self, resource_type: str, max_concurrent: int, exclusive_against: List[str] = None):
-        """
-        Polls the OS-locked file until a slot is available.
-        Adds the current script's PID to the resource pool.
-        """
-        pid = os.getpid()
-        exclusive_against = exclusive_against or []
-        
-        while True:
-            # We use a blocking open/flock in a thread (or just briefly block the loop since it's local I/O)
-            # To be strictly safe in asyncio, we could use run_in_executor, but for a fast local /tmp file, it's fine.
-            acquired = False
-            with open(GATEWAY_STATE_FILE, "a+") as f:
-                fcntl.flock(f, fcntl.LOCK_EX)
-                try:
-                    state = self._read_and_clean_state(f)
-                    
-                    # Check exclusivity rules
-                    can_acquire = True
-                    for ex in exclusive_against:
-                        if len(state.get(ex, [])) > 0:
-                            can_acquire = False
-                            break
-                            
-                    # Check capacity
-                    if can_acquire and len(state.get(resource_type, [])) < max_concurrent:
-                        state.setdefault(resource_type, []).append(pid)
-                        self._write_state(f, state)
-                        acquired = True
-                    else:
-                        # Write the cleaned state anyway, saving future readers time
-                        self._write_state(f, state)
-                finally:
-                    fcntl.flock(f, fcntl.LOCK_UN)
-
-            if acquired:
-                return
-                
-            # Wait and poll again
-            await asyncio.sleep(0.5)
-
-    def _release_slot(self, resource_type: str):
-        """Removes exactly one instance of the current script's PID from the resource pool."""
-        pid = os.getpid()
-        with open(GATEWAY_STATE_FILE, "a+") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            try:
-                state = self._read_and_clean_state(f)
-                pool = state.get(resource_type, [])
-                if pid in pool:
-                    pool.remove(pid) # Removes only the first matching occurrence
-                    state[resource_type] = pool
-                    self._write_state(f, state)
-            finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
-
-    async def request_embedding(self, kwargs: Dict[str, Any], priority: Priority = Priority.STANDARD) -> Any:
-        """Embeddings cannot run concurrently with LLMs or Docling."""
-        await self._acquire_slot("active_embeds", self.OLLAMA_NUM_PARALLEL, exclusive_against=["active_llms", "active_docling"])
-        try:
-            response = await litellm.aembedding(**kwargs)
-            return response
-        finally:
-            self._release_slot("active_embeds")
-
-    async def request_completion(self, kwargs: Dict[str, Any], priority: Priority = Priority.STANDARD) -> Any:
-        """LLMs cannot run concurrently with Embeddings or Docling."""
-        await self._acquire_slot("active_llms", self.OLLAMA_NUM_PARALLEL, exclusive_against=["active_embeds", "active_docling"])
-        try:
-            response = await litellm.acompletion(**kwargs)
-            return response
-        finally:
-            self._release_slot("active_llms")
-
-    async def acquire_docling_slot(self, max_concurrent: int):
-        """Docling cannot run concurrently with LLMs or Embeddings."""
-        await self._acquire_slot("active_docling", max_concurrent, exclusive_against=["active_embeds", "active_llms"])
-
-    def release_docling_slot(self):
-        """Releases the global Docling slot."""
-        self._release_slot("active_docling")
-
-# Expose a global instance
-gateway = ServicesGateway()
+# Independent CLI processes each create one local coordinator on first use.
+gateway = _DefaultGateway()

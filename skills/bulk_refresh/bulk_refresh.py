@@ -2,12 +2,12 @@ from typing import Optional
 
 from lib.logger import get_logger
 from skills.config_load.config_load import config_load
-from skills.dataset_chat.core.ingestion import sync_datasets
+from lib.datasets.ingestion import sync_datasets
 from skills.skill_registry import SKILL_REGISTRY, expand_skill_dependencies
 
 from lib.slugify import slugify
-from lib.active_dataset import is_active_dataset
-from lib.storage_domains import dataset_location, iter_domains, list_dataset_names
+from lib.datasets.paths import dataset_location, list_all_dataset_names
+from lib.datasets.state import is_active_dataset
 
 logger = get_logger(__name__)
 
@@ -44,23 +44,21 @@ async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optio
         # Discover datasets from configured storage domains.
         all_datasets = []
         dataset_domains = {}
-        for domain_name in iter_domains():
-            for item in list_dataset_names(domain_name):
-                item_slug = slugify(item)
-                if item_slug in ignore_datasets:
-                    continue
-                
-                if not is_active_dataset(item_slug):
-                    continue
-                    
-                all_datasets.append(item_slug)
-                dataset_domains[item_slug] = domain_name
+        for item in list_all_dataset_names():
+            item_slug = slugify(item)
+            if item_slug in ignore_datasets:
+                continue
+            if not is_active_dataset(item_slug):
+                continue
+            location = dataset_location(item_slug)
+            all_datasets.append(item_slug)
+            dataset_domains[item_slug] = location.domain
 
     if not all_datasets:
         logger.warning("No valid datasets found to process.")
         return
 
-    from lib.startup_data_sources import ensure_startup_dataset
+    from lib.startups.sources import ensure_startup_dataset
 
     resolved_datasets = []
     resolved_domains = {}

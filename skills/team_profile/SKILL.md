@@ -18,8 +18,8 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
  - "CXO" logic: Captures any C-level role (CEO, CTO, COO, CMO, CFO, etc.).
 
 3. **Data Reconciliation:** 
- - Scrapes LinkedIn via Apify for the Founder bucket (`client.actor("dev_fusion/Linkedin-Profile-Scraper")`).
- - Strips unnecessary links and caches JSONs in `datasets/<STARTUP_NAME>/linkedin`.
+ - Resolves LinkedIn profiles through `lib.linkedin.LinkedInResolver`.
+ - Caches normalized JSON profiles under the dataset's `linkedin` source folder.
  - Compares LinkedIn data against Data Room resumes, treating LinkedIn as the source of truth for dates and titles; discrepancies are flagged as "Integrity/Flexibility" notes.
 
 4. **Output Generation:** 

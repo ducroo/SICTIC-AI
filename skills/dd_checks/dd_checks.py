@@ -1,14 +1,15 @@
 import re
 
 from lib.model_config import llm_model
+from lib.insights import InsightFile
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
-from lib.batch_audit import batch_audit
+from skills.batch_audit.batch_audit import batch_audit
 from skills.dataset_chat.dataset_chat import dataset_chat
-from lib.adapters.qdrant import QdrantAdapter
 from lib.slugify import slugify
 from lib.logger import get_logger
-from lib.storage_domains import dataset_raw_path
+from lib.datasets.ingestion import sync_datasets
+from lib.datasets.paths import dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -30,18 +31,6 @@ def parse_industry_type(response: str, allowed_industry_types: set[str]) -> str:
     return allowed_by_lower.get("general", "general")
 
 
-def initialize_report_file(startup_name_lower: str, startup: str) -> str:
-    from lib.insight_filepath import get_insight_filepath
-    default_llm = llm_model()
-    output_file = get_insight_filepath(
-        dataset_name=startup_name_lower,
-        skill_name="dd_checks",
-        model=default_llm,
-        subdir=False
-    )
-    get_storage().write_text(output_file, f"# M&A Due Diligence Checks for {startup}\n\n")
-    return output_file
-
 async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_industry_types: set) -> str:
     industry_prompt = dd_config['industry_type_query']
     industry_instructions = dd_config['industry_type_llm_instructions']
@@ -50,8 +39,14 @@ async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_i
     logger.info(f"[{startup_name_lower}] Raw Industry Type LLM Response: {industry_response}")
     return parse_industry_type(industry_response or "", allowed_industry_types)
 
-async def chapter_by_chapter(startup_name_lower: str, sorted_chapters: list, industry_type: str, dd_config: dict, output_file: str):
+async def chapter_by_chapter(
+    startup_name_lower: str,
+    sorted_chapters: list,
+    industry_type: str,
+    dd_config: dict,
+) -> list[str]:
     checklists = dd_config['checklists']
+    sections = []
     for chapter in sorted_chapters:
         target_key = f"{chapter}_{industry_type}"
         fallback_key = f"{chapter}_general"
@@ -60,22 +55,22 @@ async def chapter_by_chapter(startup_name_lower: str, sorted_chapters: list, ind
             continue
             
         checklist_string = checklists[checklist_key]
-        storage = get_storage()
         try:
             chapter_output = await batch_audit(dataset_name=startup_name_lower, checklist_string=checklist_string)
-            existing = storage.read_text(output_file)
-            storage.write_text(output_file, existing + f"## Chapter: {chapter}\n\n{chapter_output}\n\n")
+            sections.append(f"## Chapter: {chapter}\n\n{chapter_output}\n")
         except Exception as e:
-            existing = storage.read_text(output_file)
-            storage.write_text(output_file, existing + f"## Chapter: {chapter}\n\n**Error:** Failed to process chapter due to: {e}\n\n")
+            sections.append(
+                f"## Chapter: {chapter}\n\n"
+                f"**Error:** Failed to process chapter due to: {e}\n"
+            )
+    return sections
 
 async def dd_checks(startup: str) -> str:
     """
     Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, industry-aware checklists. It automatically identifies the startup's industry, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
     """
-    from lib.slugify import slugify
     startup_slug = slugify(startup)
-    from lib.startup_data_sources import ensure_startup_dataset
+    from lib.startups.sources import ensure_startup_dataset
 
     status = await ensure_startup_dataset(startup_slug)
     startup_slug = status.dataset_slug
@@ -83,8 +78,8 @@ async def dd_checks(startup: str) -> str:
     raw_path = dataset_raw_path(startup_slug)
     if not storage.exists(raw_path):
         raise ValueError(f"Dataset for {startup_slug} not found at {raw_path}.")
+    await sync_datasets([startup_slug], raise_on_error=True)
         
-    output_file = initialize_report_file(startup_slug, startup)
     config = config_load()
     dd_config = config['dd_checks']
     checklists = dd_config['checklists']
@@ -101,5 +96,30 @@ async def dd_checks(startup: str) -> str:
         raise ValueError("No valid chapters found in the configuration.")
 
     industry_type = await find_industry_type(startup_slug, dd_config, allowed_industry_types)
-    await chapter_by_chapter(startup_slug, sorted_chapters, industry_type, dd_config, output_file)
-    return output_file
+    sections = await chapter_by_chapter(
+        startup_slug,
+        sorted_chapters,
+        industry_type,
+        dd_config,
+    )
+    prompt_key = (
+        dd_config["industry_type_query"]
+        + dd_config["industry_type_llm_instructions"]
+        + "\n".join(
+            f"{key}:{value}"
+            for key, value in sorted(checklists.items())
+        )
+    )
+    insight = InsightFile(
+        dataset=startup_slug,
+        skill="dd_checks",
+        model=llm_model(),
+        prompt_key=prompt_key,
+    )
+    report = (
+        f"# M&A Due Diligence Checks for {startup}\n\n"
+        + "\n\n".join(sections)
+        + "\n"
+    )
+    insight.save(report)
+    return insight.path

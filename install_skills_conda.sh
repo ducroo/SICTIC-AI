@@ -351,9 +351,6 @@ if [ "$INTERACTIVE" -eq 1 ]; then
 
     ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
     ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
-    if [ -z "$(env_get STORAGE_PROVIDER || true)" ]; then
-        env_set "STORAGE_PROVIDER" "local"
-    fi
     ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
     ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "google" 0 0
     cloud_provider=$(env_get CLOUD_PROVIDER || true)
@@ -403,7 +400,6 @@ else
     echo "[4/4] .env prompts skipped (--non-interactive)."
     if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
     if [ -z "$(env_get WORKSPACE_PATH || true)" ]; then env_set "WORKSPACE_PATH" "$TARGET"; fi
-    if [ -z "$(env_get STORAGE_PROVIDER || true)" ]; then env_set "STORAGE_PROVIDER" "local"; fi
 fi
 
 echo

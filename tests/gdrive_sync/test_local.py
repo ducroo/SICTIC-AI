@@ -1,8 +1,6 @@
 import os
 import threading
 
-import pytest
-
 from skills.gdrive_sync.local import LocalTree
 
 
@@ -19,63 +17,41 @@ def test_local_scan_ignores_hidden_files_dirs_and_exclusions(tmp_path):
     assert set(tree.scan()) == {"visible.md"}
 
 
-def test_local_scan_reuses_hash_when_size_and_timestamp_match(tmp_path, monkeypatch):
+def test_local_scan_always_rehashes_files(tmp_path, monkeypatch):
     path = tmp_path / "visible.md"
     path.write_text("unchanged")
     tree = LocalTree(tmp_path)
-    baseline = tree.scan()
+    tree.scan()
+    calls = []
 
     monkeypatch.setattr(
         "skills.gdrive_sync.local.sha256_file",
-        lambda _path: pytest.fail("unchanged file should not be rehashed"),
+        lambda hashed_path: calls.append(hashed_path) or "fresh-hash",
     )
 
-    current = tree.scan(baseline)
+    current = tree.scan()
 
-    assert current["visible.md"].sha256 == baseline["visible.md"].sha256
+    assert current["visible.md"].sha256 == "fresh-hash"
+    assert calls == [path]
 
 
-def test_local_scan_rehashes_when_size_changes(tmp_path, monkeypatch):
+def test_local_scan_detects_change_with_preserved_size_and_timestamp(tmp_path):
     path = tmp_path / "visible.md"
     path.write_text("old")
     tree = LocalTree(tmp_path)
     baseline = tree.scan()
-    path.write_text("different size")
-    calls = []
-
-    monkeypatch.setattr(
-        "skills.gdrive_sync.local.sha256_file",
-        lambda changed_path: calls.append(changed_path) or "new-hash",
-    )
-
-    current = tree.scan(baseline)
-
-    assert current["visible.md"].sha256 == "new-hash"
-    assert calls == [path]
-
-
-def test_local_scan_rehashes_when_timestamp_changes(tmp_path, monkeypatch):
-    path = tmp_path / "visible.md"
-    path.write_text("first")
-    tree = LocalTree(tmp_path)
-    baseline = tree.scan()
     previous_stat = path.stat()
-    path.write_text("other")
+    path.write_text("new")
     os.utime(
         path,
-        ns=(previous_stat.st_atime_ns, previous_stat.st_mtime_ns + 1_000_000),
-    )
-    calls = []
-
-    monkeypatch.setattr(
-        "skills.gdrive_sync.local.sha256_file",
-        lambda changed_path: calls.append(changed_path) or "new-hash",
+        ns=(previous_stat.st_atime_ns, previous_stat.st_mtime_ns),
     )
 
-    current = tree.scan(baseline)
+    current = tree.scan()
 
-    assert current["visible.md"].sha256 == "new-hash"
-    assert calls == [path]
+    assert current["visible.md"].size == baseline["visible.md"].size
+    assert path.stat().st_mtime_ns == previous_stat.st_mtime_ns
+    assert current["visible.md"].sha256 != baseline["visible.md"].sha256
 
 
 def test_local_scan_hashes_candidates_in_parallel(tmp_path, monkeypatch):

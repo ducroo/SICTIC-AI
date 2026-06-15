@@ -1,15 +1,12 @@
 """
-Storage abstraction for skills that read/write data.
+Local storage abstraction for skills that read/write data.
 
-Skills should call `get_storage().write_text("insights/foo/bar.md", content)`
-instead of passing absolute paths.
+Skills should use domain helpers such as `InsightFile` for managed artifacts,
+and pass relative paths to Storage for ordinary local data.
 
-Two backends:
-  - LocalStorage: reads/writes a local directory.
-  - GoogleDriveStorage: Google Drive via the native Drive API.
-
-RoutedStorage dispatches by path prefix so repository-local runtime data stays
-local even when the source/output backend is remote.
+RoutedStorage dispatches between the configured application-storage directory
+and repository-local runtime data. Google Drive synchronization is owned
+exclusively by skills.gdrive_sync and is not a Storage backend.
 """
 from __future__ import annotations
 
@@ -140,16 +137,9 @@ class LocalStorage:
         return
 
     # --- escape hatch ---
-    # Some callers (docling upload, LinkedInAdapter) need a real OS path.
-    # In LocalStorage this is trivial; GoogleDriveStorage materializes to a temp dir.
+    # Some callers, such as Docling, need a real OS path.
     def local_path(self, rel: str) -> Path:
         return self._full(rel)
-
-
-class MockStorage(LocalStorage):
-    """Identical to LocalStorage; explicit name signals 'this is for tests'."""
-
-    pass
 
 
 # ---------- Routing ----------
@@ -160,17 +150,17 @@ _LOCAL_PREFIXES = ("cache", "docling_data")
 
 
 class RoutedStorage:
-    """Dispatches Storage operations to drive vs cache based on the path prefix."""
+    """Dispatch Storage paths between two local filesystem roots."""
 
-    def __init__(self, drive: Storage, cache: Storage):
-        self.drive = drive
+    def __init__(self, primary: Storage, cache: Storage):
+        self.primary = primary
         self.cache = cache
 
     def _pick(self, rel: str) -> Tuple[str, Storage]:
         """Normalize rel and select the backing storage. Returns (clean_rel, store)."""
         rel = _validate_rel(rel)
         head = rel.split("/", 1)[0]
-        store = self.cache if head in _LOCAL_PREFIXES else self.drive
+        store = self.cache if head in _LOCAL_PREFIXES else self.primary
         return rel, store
 
     def read_text(self, rel: str, *, encoding: str = "utf-8") -> str:
@@ -230,7 +220,7 @@ class RoutedStorage:
     def refresh(self, rel: str = "") -> None:
         # If rel is empty, refresh both backends. Otherwise route by prefix.
         if not rel:
-            self.drive.refresh("")
+            self.primary.refresh("")
             self.cache.refresh("")
             return
         rel, store = self._pick(rel)
@@ -249,30 +239,16 @@ _storage_singleton: Optional[Storage] = None
 
 def get_storage() -> Storage:
     """
-    Returns the process-wide Storage instance based on .env configuration.
+    Return the process-wide local Storage instance.
 
-    STORAGE_PROVIDER="local":  RoutedStorage with LocalStorage(LOCAL_STORAGE_PATH)
-                               for canonical storage and LocalStorage(LOCAL_DATA_PATH)
-                               for repository-local runtime data.
-    STORAGE_PROVIDER="google": RoutedStorage with GoogleDriveStorage(CLOUD_STORAGE_PATH)
-                               for drive paths and LocalStorage(LOCAL_DATA_PATH) for
-                               repository-local runtime data.
-    STORAGE_PROVIDER="hybrid": RoutedStorage with MirrorStorage at LOCAL_STORAGE_PATH
-                               for canonical storage and LocalStorage(LOCAL_DATA_PATH)
-                               for repository-local runtime data.
-                               The mirror uses Drive as read-fallback and explicit sync target.
-                               Markdown writes go local first, then upload to
-                               Drive as Google Docs; cache and Docling paths stay
-                               local-only. CLOUD_STORAGE_PATH is the Drive root
-                               folder ID, "root", or folder path/name used for
-                               read-fallback and Markdown upload.
+    Application data uses LOCAL_STORAGE_PATH. Repository-local runtime data
+    under cache/ and docling_data/ uses LOCAL_DATA_PATH.
     """
     global _storage_singleton
     if _storage_singleton is not None:
         return _storage_singleton
 
     from lib.env import get_env_var
-    provider = os.environ.get("STORAGE_PROVIDER", "local").lower()
     repo_path = os.environ.get("REPO_PATH")
     local_data_path = (
         os.environ.get("LOCAL_DATA_PATH")
@@ -284,53 +260,16 @@ def get_storage() -> Storage:
     os.makedirs(local_data_path, exist_ok=True)
     local_data = LocalStorage(local_data_path)
 
-    if provider == "google":
-        from lib.storage_gdrive import GoogleDriveStorage
-
-        credentials_path = os.environ.get("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
-        token_path = os.environ.get("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
-
-        root_folder_id = get_env_var("CLOUD_STORAGE_PATH") or "root"
-
-        drive: Storage = GoogleDriveStorage(
-            credentials_path=credentials_path,
-            token_path=token_path,
-            root_folder_id=root_folder_id
+    base_dir = get_env_var("LOCAL_STORAGE_PATH")
+    if not base_dir.startswith("/"):
+        raise ValueError(
+            f"LOCAL_STORAGE_PATH must be an absolute path, got: {base_dir}"
         )
-        _storage_singleton = RoutedStorage(drive=drive, cache=local_data)
-    elif provider == "hybrid":
-        from lib.storage_gdrive import GoogleDriveStorage
-        from lib.storage_mirror import MirrorStorage
-
-        mirror_path = get_env_var("LOCAL_STORAGE_PATH")
-        if not mirror_path.startswith("/"):
-            raise ValueError(
-                f"LOCAL_STORAGE_PATH must be an absolute path, got: {mirror_path}"
-            )
-        os.makedirs(mirror_path, exist_ok=True)
-
-        credentials_path = os.environ.get("GDRIVE_CREDENTIALS") or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
-        token_path = os.environ.get("GDRIVE_TOKEN") or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
-        root_folder_id = os.environ.get("CLOUD_STORAGE_PATH") or "root"
-
-        drive = GoogleDriveStorage(
-            credentials_path=credentials_path,
-            token_path=token_path,
-            root_folder_id=root_folder_id,
-        )
-        mirror = MirrorStorage(local=LocalStorage(mirror_path), drive=drive)
-        _storage_singleton = RoutedStorage(drive=mirror, cache=local_data)
-    else:
-        # Local mode requires an absolute path
-        base_dir = get_env_var("LOCAL_STORAGE_PATH")
-        if not base_dir.startswith("/"):
-            raise ValueError(
-                f"LOCAL_STORAGE_PATH must be an absolute path when provider is 'local', got: {base_dir}"
-            )
-        _storage_singleton = RoutedStorage(
-            drive=LocalStorage(base_dir),
-            cache=local_data,
-        )
+    os.makedirs(base_dir, exist_ok=True)
+    _storage_singleton = RoutedStorage(
+        primary=LocalStorage(base_dir),
+        cache=local_data,
+    )
 
     return _storage_singleton
 
