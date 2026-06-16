@@ -20,7 +20,6 @@ conda run -n sictic-env python -m skills.gdrive_sync pull
 The complete command surface is:
 
 ```bash
-conda run -n sictic-env python -m skills.gdrive_sync push
 conda run -n sictic-env python -m skills.gdrive_sync pull
 conda run -n sictic-env python -m skills.gdrive_sync sync --local-wins
 conda run -n sictic-env python -m skills.gdrive_sync sync --cloud-wins --dry-run --json

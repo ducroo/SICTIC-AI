@@ -3,8 +3,13 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from .executor import TransferProgress
-from .types import ConflictPolicy, OperationResult, SnapshotEntry
+from .types import (
+    CloudMutations,
+    ConflictPolicy,
+    OperationResult,
+    SnapshotEntry,
+    TransferProgress,
+)
 from .util import clean_rel, conflict_name
 
 logger = logging.getLogger(__name__)
@@ -13,7 +18,7 @@ logger = logging.getLogger(__name__)
 class IncrementalActions:
     def __init__(self, context):
         self.context = context
-        self.cloud_mutation_ids: set[str] = set()
+        self.cloud_mutations = CloudMutations()
 
     @property
     def local(self):
@@ -44,7 +49,9 @@ class IncrementalActions:
             else:
                 self.drive.remove(path)
                 if baseline_entry and baseline_entry.drive_id:
-                    self.cloud_mutation_ids.add(baseline_entry.drive_id)
+                    self.cloud_mutations.add(path, baseline_entry.drive_id)
+                else:
+                    self.cloud_mutations.add(path)
                 self.state.delete_baseline_path(
                     path,
                     include_descendants=(
@@ -62,8 +69,7 @@ class IncrementalActions:
                 self.drive.mkdir(path)
                 entry = self.drive.entry_after_mkdir(path)
                 self.state.upsert_baseline_entry(entry)
-                if entry.drive_id:
-                    self.cloud_mutation_ids.add(entry.drive_id)
+                self.cloud_mutations.add(entry.path, entry.drive_id)
             result.created_folders.append(path)
             return
 
@@ -76,8 +82,7 @@ class IncrementalActions:
                 self.drive.write_bytes(path, content)
                 entry = self.drive.entry_after_write(path, content)
                 self.state.upsert_baseline_entry(entry)
-                if entry.drive_id:
-                    self.cloud_mutation_ids.add(entry.drive_id)
+                self.cloud_mutations.add(entry.path, entry.drive_id)
             except Exception as error:
                 message = f"{path}: {error}"
                 logger.error(message)
@@ -219,8 +224,7 @@ class IncrementalActions:
         self.drive.write_bytes(conflict_path, content)
         entry = self.drive.entry_after_write(conflict_path, content)
         self.state.upsert_baseline_entry(entry)
-        if entry.drive_id:
-            self.cloud_mutation_ids.add(entry.drive_id)
+        self.cloud_mutations.add(entry.path, entry.drive_id)
         result.bytes_transferred += len(content) * 2
         result.created_files.append(conflict_path)
 

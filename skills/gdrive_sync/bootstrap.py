@@ -3,97 +3,14 @@ from __future__ import annotations
 import logging
 import time
 
-from .checkpoint import CheckpointManager, merged_baseline
-from .executor import TransferProgress
-from .planner import plan_pull, plan_push, plan_sync
-from .types import (
-    ConflictPolicy,
-    OperationResult,
-    SnapshotEntry,
-    SyncOperationFailed,
-)
+from .checkpoint import CheckpointManager
+from .types import OperationResult, SnapshotEntry, SyncOperationFailed, TransferProgress
 
 logger = logging.getLogger(__name__)
 
 
-def run_full_operation(
-    context,
-    operation: str,
-    *,
-    conflict_policy: ConflictPolicy,
-    dry_run: bool,
-) -> OperationResult:
-    start = time.monotonic()
-    result = OperationResult(operation=operation, dry_run=dry_run)
-    with context.lock_factory(
-        context.lock_path,
-        timeout=context.lock_timeout,
-        operation=operation,
-    ):
-        baseline = context.state.load_baseline()
-        logger.info("%s local scan started", operation)
-        local_snapshot = context.local.scan()
-        logger.info(
-            "%s local scan finished: entries=%s",
-            operation,
-            len(local_snapshot),
-        )
-        cloud_snapshot, warnings, failures = context.drive.scan()
-        result.warnings.extend(warnings)
-        result.failures.extend(failures)
-
-        if operation == "push":
-            actions = plan_push(local_snapshot, cloud_snapshot)
-        elif operation == "pull":
-            actions = plan_pull(local_snapshot, cloud_snapshot)
-        else:
-            actions = plan_sync(
-                baseline,
-                local_snapshot,
-                cloud_snapshot,
-                conflict_policy=conflict_policy,
-            )
-
-        logger.info("%s planned %s actions", operation, len(actions))
-        progress = TransferProgress(
-            total=sum(action.action in {"copy", "copy_as"} for action in actions)
-        )
-        for action in actions:
-            context.executor.apply(
-                action,
-                result,
-                dry_run=dry_run,
-                progress=progress,
-            )
-
-        if not dry_run and not result.failures:
-            logger.info("%s committing baseline", operation)
-            if operation == "pull":
-                final_baseline = dict(cloud_snapshot)
-            elif operation == "push":
-                final_baseline = dict(local_snapshot)
-            else:
-                local_snapshot = context.local.scan()
-                cloud_snapshot, warnings, failures = context.drive.scan()
-                result.warnings.extend(warnings)
-                result.failures.extend(failures)
-                final_baseline = merged_baseline(local_snapshot, cloud_snapshot)
-            if not result.failures:
-                CheckpointManager(
-                    state=context.state,
-                    drive=context.drive,
-                ).commit_full_baseline(final_baseline)
-        result.elapsed_seconds = time.monotonic() - start
-
-    if result.failures:
-        raise SyncOperationFailed(
-            f"{operation} completed with failures",
-            partial_result=result,
-        )
-    return result
-
-
-def run_streaming_pull(context, *, dry_run: bool) -> OperationResult:
+def run_bootstrap_pull(context, *, dry_run: bool) -> OperationResult:
+    """Force the local mirror to match Drive and establish a baseline."""
     start = time.monotonic()
     result = OperationResult(operation="pull", dry_run=dry_run)
     checkpoints = CheckpointManager(state=context.state, drive=context.drive)

@@ -9,10 +9,9 @@ from googleapiclient.errors import HttpError
 
 import lib.env  # noqa: F401 - load repo .env regardless of cwd
 
+from .bootstrap import run_bootstrap_pull
 from .context import SyncContext
 from .drive import DriveTree
-from .executor import SyncExecutor
-from .full_sync import run_full_operation, run_streaming_pull
 from .incremental import run_incremental_pull, run_incremental_sync
 from .local import LocalTree
 from .lock import PairingLock
@@ -85,7 +84,6 @@ class GDriveSync:
             token_path=self.token_path,
             exclude=self.exclude,
         )
-        self.executor = SyncExecutor(local=self.local, drive=self.drive)
         self.identity = self._pairing_identity()
         root_state_dir = (
             Path(state_dir).expanduser()
@@ -96,11 +94,28 @@ class GDriveSync:
         self.state = SyncState(self.pairing_dir / "state.sqlite3")
         self.lock_path = self.pairing_dir / "pairing.lock"
 
-    def push(self, dry_run: bool = False) -> OperationResult:
-        return self._run("push", dry_run=dry_run)
-
     def pull(self, dry_run: bool = False) -> OperationResult:
-        return self._run("pull", dry_run=dry_run)
+        active_operation_id = self.state.get_metadata(
+            "active_operation_id"
+        )
+        baseline = self.state.load_baseline()
+        token = self.state.get_metadata("drive_start_page_token")
+        if token and baseline and not active_operation_id:
+            try:
+                return self._run_pull_incremental(
+                    token=token,
+                    baseline=baseline,
+                    dry_run=dry_run,
+                )
+            except HttpError as error:
+                if getattr(error.resp, "status", None) == 410:
+                    logger.warning(
+                        "Drive changes token expired; "
+                        "falling back to full pull"
+                    )
+                else:
+                    raise
+        return self._run_pull_streaming(dry_run=dry_run)
 
     def sync(
         self,
@@ -108,8 +123,7 @@ class GDriveSync:
         conflict_policy: ConflictPolicy = "local-wins",
         dry_run: bool = False,
     ) -> OperationResult:
-        return self._run(
-            "sync",
+        return self._dispatch_incremental_sync(
             conflict_policy=conflict_policy,
             dry_run=dry_run,
         )
@@ -125,54 +139,10 @@ class GDriveSync:
         return SyncContext(
             local=self.local,
             drive=self.drive,
-            executor=getattr(self, "executor", None),
             state=self.state,
             lock_path=self.lock_path,
             lock_timeout=self.lock_timeout,
             lock_factory=PairingLock,
-        )
-
-    def _run(
-        self,
-        operation: str,
-        *,
-        conflict_policy: ConflictPolicy = "local-wins",
-        dry_run: bool,
-    ) -> OperationResult:
-        if operation == "pull":
-            active_operation_id = self.state.get_metadata(
-                "active_operation_id"
-            )
-            baseline = self.state.load_baseline()
-            token = self.state.get_metadata("drive_start_page_token")
-            if token and baseline and not active_operation_id:
-                try:
-                    return self._run_pull_incremental(
-                        token=token,
-                        baseline=baseline,
-                        dry_run=dry_run,
-                    )
-                except HttpError as error:
-                    if getattr(error.resp, "status", None) == 410:
-                        logger.warning(
-                            "Drive changes token expired; "
-                            "falling back to full pull"
-                        )
-                    else:
-                        raise
-            return self._run_pull_streaming(dry_run=dry_run)
-
-        if operation == "sync":
-            return self._dispatch_incremental_sync(
-                conflict_policy=conflict_policy,
-                dry_run=dry_run,
-            )
-
-        return run_full_operation(
-            self._context(),
-            operation,
-            conflict_policy=conflict_policy,
-            dry_run=dry_run,
         )
 
     def _dispatch_incremental_sync(
@@ -234,10 +204,8 @@ class GDriveSync:
             partial_result=result,
         )
 
-    # Compatibility delegates keep the established test and extension surface
-    # while workflow implementation lives in focused modules.
     def _run_pull_streaming(self, *, dry_run: bool) -> OperationResult:
-        return run_streaming_pull(self._context(), dry_run=dry_run)
+        return run_bootstrap_pull(self._context(), dry_run=dry_run)
 
     def _run_pull_incremental(
         self,

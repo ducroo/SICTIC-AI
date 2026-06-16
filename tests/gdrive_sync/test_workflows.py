@@ -2,14 +2,13 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 
 from skills.gdrive_sync.actions import IncrementalActions
-from skills.gdrive_sync.executor import TransferProgress
-from skills.gdrive_sync.full_sync import run_full_operation
+from skills.gdrive_sync.bootstrap import run_bootstrap_pull
 from skills.gdrive_sync.incremental import (
     run_incremental_pull,
     run_incremental_sync,
 )
 from skills.gdrive_sync.local import LocalTree
-from skills.gdrive_sync.types import OperationResult, SnapshotEntry
+from skills.gdrive_sync.types import OperationResult, SnapshotEntry, TransferProgress
 from skills.gdrive_sync.util import sha256_bytes
 
 
@@ -25,8 +24,20 @@ class _State:
     def save_baseline(self, entries):
         self.saved_baseline = entries
 
+    def get_metadata(self, key):
+        return self.metadata.get(key)
+
     def set_metadata(self, key, value):
         self.metadata[key] = value
+
+    def load_checkpoint(self, _operation_id):
+        return {}
+
+    def save_checkpoint_entry(self, operation_id, entry):
+        self.baseline[entry.path] = entry
+
+    def promote_checkpoint_to_baseline(self, _operation_id):
+        self.saved_baseline = dict(self.baseline)
 
     def upsert_baseline_entry(self, entry):
         self.baseline[entry.path] = entry
@@ -39,52 +50,46 @@ class _State:
                     self.baseline.pop(child)
 
 
-def _context(*, local, drive, state, executor=None):
+def _context(*, local, drive, state):
     return SimpleNamespace(
         local=local,
         drive=drive,
         state=state,
-        executor=executor,
         lock_path="unused",
         lock_timeout=1,
         lock_factory=lambda *_args, **_kwargs: nullcontext(),
     )
 
 
-def test_full_push_commits_local_snapshot_and_drive_token():
-    local_snapshot = {
-        "file.md": SnapshotEntry(
-            path="file.md",
-            type="file",
-            sha256="local",
-        )
-    }
-    applied = []
+def test_bootstrap_pull_commits_cloud_snapshot_and_drive_token(tmp_path):
+    local = LocalTree(tmp_path)
     state = _State()
+    cloud_entry = SnapshotEntry(
+        path="file.md",
+        type="file",
+        sha256=sha256_bytes(b"cloud"),
+        drive_id="drive-id",
+    )
     context = _context(
-        local=SimpleNamespace(scan=lambda: local_snapshot),
+        local=local,
         drive=SimpleNamespace(
-            scan=lambda: ({}, [], []),
+            count_files=lambda: 1,
+            iter_entries_with_content=lambda **_kwargs: iter(
+                [(cloud_entry, b"cloud", None, None)]
+            ),
             start_page_token=lambda: "token-2",
         ),
         state=state,
-        executor=SimpleNamespace(
-            apply=lambda action, *_args, **_kwargs: applied.append(action)
-        ),
     )
 
-    result = run_full_operation(
+    result = run_bootstrap_pull(
         context,
-        "push",
-        conflict_policy="local-wins",
         dry_run=False,
     )
 
     assert result.ok
-    assert [(action.action, action.path) for action in applied] == [
-        ("copy", "file.md")
-    ]
-    assert state.saved_baseline == local_snapshot
+    assert local.read_bytes("file.md") == b"cloud"
+    assert state.saved_baseline == {"file.md": cloud_entry}
     assert state.metadata["drive_start_page_token"] == "token-2"
 
 
@@ -193,15 +198,18 @@ def test_incremental_sync_orders_phases_and_mirrors_conflict(tmp_path):
                 ],
                 "token-2",
             )
-        assert token == "token-2"
-        return (
-            [
-                {"fileId": "local-id"},
-                {"fileId": "conflict-copy-id"},
-                {"fileId": "conflict-id"},
-            ],
-            "token-3",
-        )
+        if list_calls == 2:
+            assert token == "token-2"
+            return (
+                [
+                    {"fileId": "local-id"},
+                    {"fileId": "conflict-copy-id"},
+                    {"fileId": "conflict-id"},
+                ],
+                "token-3",
+            )
+        assert token == "token-3"
+        return ([], "token-4")
 
     def write_cloud(path, content):
         operations.append(("cloud-write", path))
@@ -243,18 +251,17 @@ def test_incremental_sync_orders_phases_and_mirrors_conflict(tmp_path):
     assert result.ok
     assert operations == [
         ("cloud-write", "local.md"),
-        ("cloud-read", "conflict.md"),
         ("local-write", "conflict.conflict-cloud.md"),
         ("cloud-write", "conflict.conflict-cloud.md"),
         ("cloud-write", "conflict.md"),
-        ("cloud-read", "cloud.md"),
         ("local-write", "cloud.md"),
     ]
     assert local.read_bytes("conflict.conflict-cloud.md") == b"cloud-loser"
     assert cloud_content["conflict.conflict-cloud.md"] == b"cloud-loser"
     assert cloud_content["conflict.md"] == b"local-winner"
     assert local.read_bytes("cloud.md") == b"cloud-new"
-    assert state.metadata["drive_start_page_token"] == "token-3"
+    assert result.self_generated_drive_changes == 3
+    assert state.metadata["drive_start_page_token"] == "token-4"
 
 
 def test_incremental_sync_does_not_skip_concurrent_cloud_change(tmp_path):
@@ -268,14 +275,18 @@ def test_incremental_sync_does_not_skip_concurrent_cloud_change(tmp_path):
             drive_id="local-id",
         )
     }
-    calls = iter(
-        [
-            ([], "token-2"),
-            ([{"fileId": "external-id"}], "token-3"),
-        ]
-    )
+    seen_tokens = []
+
+    def list_changes(token):
+        seen_tokens.append(token)
+        if token == "token-1":
+            return ([], "token-2")
+        assert token == "token-fresh"
+        return ([{"fileId": "external-id"}], "token-3")
+
     drive = SimpleNamespace(
-        list_changes=lambda _token: next(calls),
+        list_changes=list_changes,
+        start_page_token=lambda: "token-fresh",
         write_bytes=lambda _path, _content: None,
         entry_after_write=lambda path, content: SnapshotEntry(
             path,
@@ -295,7 +306,8 @@ def test_incremental_sync_does_not_skip_concurrent_cloud_change(tmp_path):
     )
 
     assert result.ok
-    assert state.metadata["drive_start_page_token"] == "token-2"
+    assert seen_tokens == ["token-1", "token-fresh"]
+    assert state.metadata["drive_start_page_token"] == "token-fresh"
     assert result.warnings == [
         "deferred 1 Drive changes that arrived during sync"
     ]

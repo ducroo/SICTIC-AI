@@ -11,8 +11,8 @@ from .state import SyncState
 class SyncContext:
     local: object
     drive: object
-    executor: object
     state: SyncState
     lock_path: Path | str
     lock_timeout: float
     lock_factory: Callable
+    quiet_wait_seconds: float = 5.0

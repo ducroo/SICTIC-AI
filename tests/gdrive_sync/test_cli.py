@@ -28,6 +28,12 @@ def test_conflict_winner_flags_only_apply_to_sync():
     assert result.exit_code == 2
 
 
+def test_push_command_is_not_supported():
+    result = runner.invoke(cli.app, ["push"])
+
+    assert result.exit_code == 2
+
+
 def test_legacy_conflict_policy_flag_is_rejected():
     result = runner.invoke(
         cli.app,

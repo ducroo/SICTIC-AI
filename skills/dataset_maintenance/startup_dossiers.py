@@ -1,9 +1,9 @@
 """Reorganize startup raw and parsed datasets into the standard folder layout.
 
 Dry-run is the default. Use --apply only after reviewing the JSON manifest.
-This script changes the local mirror only; push both migrated trees afterward:
+This script changes the local mirror only; sync both migrated trees afterward:
 
-    python -m skills.gdrive_sync push
+    python -m skills.gdrive_sync sync --local-wins
 
 The stateful sync skill operates on the complete configured storage tree.
 """

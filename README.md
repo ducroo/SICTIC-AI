@@ -335,7 +335,6 @@ operation.
 | Command | Description |
 |---|---|
 | `python -m skills.gdrive_sync pull` | Make local storage match Google Drive. Cloud is authoritative. Use this to create the initial local copy and synchronization baseline. |
-| `python -m skills.gdrive_sync push` | Make Google Drive match local storage. Local storage is authoritative. |
 | `python -m skills.gdrive_sync sync --local-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the local version as canonical. |
 | `python -m skills.gdrive_sync sync --cloud-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the cloud version as canonical. |
 

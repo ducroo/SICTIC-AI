@@ -34,20 +34,3 @@ class CheckpointManager:
         self.state.promote_checkpoint_to_baseline(operation_id)
         self.update_drive_token()
         self.state.set_metadata("active_operation_id", "")
-
-    def commit_full_baseline(
-        self,
-        entries: dict[str, SnapshotEntry],
-    ) -> None:
-        self.state.save_baseline(entries)
-        self.update_drive_token()
-
-
-def merged_baseline(
-    local_snapshot: dict[str, SnapshotEntry],
-    cloud_snapshot: dict[str, SnapshotEntry],
-) -> dict[str, SnapshotEntry]:
-    merged = dict(local_snapshot)
-    for path, entry in cloud_snapshot.items():
-        merged.setdefault(path, entry)
-    return merged
