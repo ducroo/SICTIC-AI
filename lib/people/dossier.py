@@ -1,5 +1,7 @@
 """Assemble dedicated documents and incidental mentions for a person."""
 
+import re
+from pathlib import PurePath
 from typing import List, Tuple
 
 from lib.datasets.models import Chunk
@@ -10,6 +12,53 @@ from lib.slugify import slugify
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
+
+MAX_FULL_DOCUMENT_CHARACTERS = 20_000
+_PERSONAL_DOCUMENT_PATTERNS = (
+    re.compile(r"\bcvs?\b"),
+    re.compile(r"\bcurriculum vitae\b"),
+    re.compile(r"\bresumes?\b"),
+    re.compile(r"\bpassports?\b"),
+    re.compile(r"\b(?:id|identity) cards?\b"),
+    re.compile(r"\bcriminal records?\b"),
+    re.compile(r"\bemployment records?\b"),
+    re.compile(r"\breference letters?\b"),
+    re.compile(r"\brecommendation letters?\b"),
+)
+
+
+def _filename_tokens(filename: str) -> list[str]:
+    basename = PurePath(filename.replace("\\", "/")).name
+    return slugify(basename).split("-")
+
+
+def person_in_filename(filename: str, person_name: str) -> bool:
+    """Return whether the filename identifies the person without substrings."""
+    filename_tokens = _filename_tokens(filename)
+    name_tokens = slugify(person_name).split("-")
+    if not filename_tokens or not name_tokens:
+        return False
+
+    name_length = len(name_tokens)
+    if any(
+        filename_tokens[index:index + name_length] == name_tokens
+        for index in range(len(filename_tokens) - name_length + 1)
+    ):
+        return True
+
+    if len(name_tokens) < 2:
+        return False
+    first_name, surname = name_tokens[0], name_tokens[-1]
+    if surname not in filename_tokens:
+        return False
+    return first_name in filename_tokens or first_name[0] in filename_tokens
+
+
+def is_personal_document(filename: str) -> bool:
+    """Return whether the filename describes a personal-record document."""
+    normalized = " ".join(_filename_tokens(filename))
+    return any(pattern.search(normalized) for pattern in _PERSONAL_DOCUMENT_PATTERNS)
+
 
 async def get_filtered_chunks(dataset_name: str, name: str, query: str) -> list:
     """
@@ -36,35 +85,6 @@ async def get_filtered_chunks(dataset_name: str, name: str, query: str) -> list:
             content_filtered.append(chunk)
 
     return content_filtered
-
-def is_dossier_document(doc_name: str, person_name: str) -> bool:
-    """
-    Determines if a document is a dedicated dossier file for a person based on keywords or name matching.
-    """
-    doc_lower = doc_name.lower()
-    
-    # 1. Keyword matching
-    dossier_keywords = [
-        "cv", "resume", "passport", "id_card", "identity", "certificate", 
-        "criminal", "medical", "employment", "contract", "background", "reference"
-    ]
-    if any(keyword in doc_lower for keyword in dossier_keywords):
-        return True
-        
-    # 2. Name anchoring
-    name_parts = [p.lower() for p in person_name.split() if p.strip()]
-    if name_parts:
-        # Check if any significant part of the name is in the filename
-        # E.g., "Gubser", "Urs"
-        if any(part in doc_lower for part in name_parts if len(part) > 2):
-             return True
-             
-    # Also check slugified name
-    slugged_name = slugify(person_name)
-    if slugged_name and slugged_name in doc_lower:
-        return True
-        
-    return False
 
 async def build_person_dossier(dataset_name: str, person_name: str, query: str) -> Tuple[List[Chunk], List[Chunk]]:
     """
@@ -100,22 +120,28 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
         if doc_name in seen_dossier_docs:
             continue
             
-        is_dossier = is_dossier_document(doc_name, person_name)
+        should_expand = (
+            person_in_filename(doc_name, person_name)
+            or is_personal_document(doc_name)
+        )
         # Qdrant stores the original document name. The Markdown parser appends .md
         full_md_path = f"{parsed_root}/{doc_name}.md"
         
-        if is_dossier and storage.exists(full_md_path):
+        if should_expand and storage.exists(full_md_path):
             full_text = storage.read_text(full_md_path)
-            full_chunk = Chunk(
-                chunk_id=f"{doc_name}-all",
-                document_name=doc_name,
-                page_number="all",
-                last_modified=c.last_modified,
-                text=full_text,
-                score=c.score
-            )
-            dossier.append(full_chunk)
-            seen_dossier_docs.add(doc_name)
+            if len(full_text) <= MAX_FULL_DOCUMENT_CHARACTERS:
+                full_chunk = Chunk(
+                    chunk_id=f"{doc_name}-all",
+                    document_name=doc_name,
+                    page_number="all",
+                    last_modified=c.last_modified,
+                    text=full_text,
+                    score=c.score
+                )
+                dossier.append(full_chunk)
+                seen_dossier_docs.add(doc_name)
+            else:
+                mentions.append(c)
         else:
             mentions.append(c)
             
