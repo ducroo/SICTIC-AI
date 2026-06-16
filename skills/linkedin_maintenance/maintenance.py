@@ -22,6 +22,17 @@ logger = get_logger(__name__)
 ACTIONABLE_STATUSES = {"PENDING", "URL_NOT_FOUND", "SCRAPE_FAILED"}
 
 
+def missing_profile_urls(entries: list[dict]) -> list[str]:
+    """Return LinkedIn profile URLs for actionable missing-profile entries."""
+    urls = []
+    for entry in entries:
+        linkedin_id = entry.get("linkedin_id", "").strip().strip("/")
+        if not linkedin_id:
+            continue
+        urls.append(f"https://www.linkedin.com/in/{linkedin_id}/")
+    return sorted(dict.fromkeys(urls))
+
+
 def missing_profiles() -> list[dict]:
     for dataset in list_all_dataset_names(("startups", "community")):
         if not is_active_dataset(dataset):

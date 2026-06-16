@@ -10,6 +10,7 @@ from lib.logger import get_logger
 from skills.linkedin_maintenance.maintenance import (
     diagnose_registry,
     import_profiles,
+    missing_profile_urls,
     missing_profiles,
 )
 
@@ -23,7 +24,7 @@ app = typer.Typer(
 @app.command()
 def missing() -> None:
     result = run_command(missing_profiles, logger=logger)
-    typer.echo(json.dumps(result, indent=2))
+    typer.echo("\n".join(missing_profile_urls(result)))
 
 
 @app.command("import")
