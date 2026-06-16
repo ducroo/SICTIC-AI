@@ -1,10 +1,15 @@
+---
+name: llm_chat
+description: Ask the configured LLM_MODEL a question using user-provided context, questions, and answer instructions. Use when a task needs a direct LLM response over supplied context, typically context gathered from semantic search, with explicit rules or restrictions for the answer.
+---
+
 # LLM Chat Skill
 
 A robust support utility for interacting with Large Language Models (LLMs) via LiteLLM.
 
 ## Setup
 
-1. All runtime dependencies (`typer`, `python-dotenv`, `rich`, `litellm`) are installed in `the Conda environment ` by `{{REPO_ROOT}}/install_skills.sh`.
+1. All runtime dependencies (`typer`, `python-dotenv`, `rich`, `litellm`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install_skills_conda.sh`.
 2. The `.env` file at `{{REPO_ROOT}}/.env` must define:
    - `LLM_MODEL`: The default text-generation model to use (e.g., `gemini/gemini-1.5-pro`, `ollama/llama3`).
    - `LLM_BASE_URL`: Optional endpoint base URL. Use `http://localhost:11434` for local Ollama.

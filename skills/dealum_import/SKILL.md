@@ -1,3 +1,8 @@
+---
+name: dealum_import
+description: Import startup applications and linked Dealum documents into the standard SICTIC-AI startup dataset folder. Use when a user asks to import, ingest, or reconcile one or more startups from Dealum by startup name or application code.
+---
+
 # Dealum Import
 
 Use this skill to import a startup application and linked Dealum documents into

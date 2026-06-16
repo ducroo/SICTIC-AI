@@ -16,14 +16,15 @@
 #      If yes, updates it with --prune (removes deps no longer listed).
 #   2. Registers the repository root in the environment's site-packages using
 #      a generated .pth file, without invoking project dependency resolution.
-#   3. Copies every skills/<name>/ that has a SKILL.md into <target>/<name>/.
-#      Existing files with the same name are overwritten; extra files already in
-#      the target are left alone.
+#   3. Creates every <target>/<name>/ as a real directory, then symlinks the
+#      contents back to skills/<name>/. Existing copied skill directories are
+#      preserved under <target>/.skill-copy-backups/ before migration.
 #
 # Usage:
 #   ./install_skills_conda.sh --target /path/to/openclaw/skill/dir   # required
 #   ./install_skills_conda.sh --target ... --rebuild-env             # force a fresh conda env
-#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2 (copy only)
+#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2
+#   ./install_skills_conda.sh --target ... --copy                    # copy instead of symlink
 #   ./install_skills_conda.sh --target ... --non-interactive          # do not prompt for .env values
 
 set -eu
@@ -34,6 +35,7 @@ ENV_FILE="$REPO_ROOT/environment.yml"
 REBUILD_ENV=0
 SKIP_ENV=0
 INTERACTIVE=1
+INSTALL_MODE="symlink"
 
 usage() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -43,11 +45,12 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --target) TARGET="$2"; shift 2 ;;
         --source) REPO_ROOT="$(cd "$2" && pwd)"; ENV_FILE="$REPO_ROOT/environment.yml"; shift 2 ;;
-        --prune) shift ;; # Kept for backwards compatibility; copy installs do not prune.
+        --prune) shift ;; # Kept for backwards compatibility; install mode handles files.
         --rebuild-env) REBUILD_ENV=1; shift ;;
         --skip-env) SKIP_ENV=1; shift ;;
+        --copy) INSTALL_MODE="copy"; shift ;;
         --non-interactive) INTERACTIVE=0; shift ;;
-        --symlink) shift ;; # Kept for backwards compatibility; installs now copy skill files.
+        --symlink) INSTALL_MODE="symlink"; shift ;; # Kept for backwards compatibility.
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
     esac
@@ -132,11 +135,90 @@ copy_skill_dir() {
     )
 }
 
+BACKUP_ROOT=""
+
+backup_existing_skill() {
+    dst="$1"
+    backup_name=$(basename "$dst")
+
+    if [ -z "$BACKUP_ROOT" ]; then
+        BACKUP_ROOT="$TARGET/.skill-copy-backups/$(date +%Y%m%d-%H%M%S)"
+        mkdir -p "$BACKUP_ROOT"
+    fi
+
+    backup_path="$BACKUP_ROOT/$backup_name"
+    counter=1
+    while [ -e "$backup_path" ] || [ -L "$backup_path" ]; do
+        backup_path="$BACKUP_ROOT/$backup_name-$counter"
+        counter=$((counter + 1))
+    done
+
+    mv "$dst" "$backup_path"
+    echo "       ~ preserved existing $backup_name at $backup_path"
+}
+
+is_managed_link_dir() {
+    dst_dir="$1"
+    src_dir="$2"
+    marker="$dst_dir/.sictic-symlink-dir"
+
+    [ -d "$dst_dir" ] && [ ! -L "$dst_dir" ] && [ -f "$marker" ] && [ "$(cat "$marker")" = "$src_dir" ]
+}
+
+clear_managed_link_dir() {
+    dst_dir="$1"
+
+    for item in "$dst_dir"/* "$dst_dir"/.[!.]* "$dst_dir"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        [ "$(basename "$item")" = ".sictic-symlink-dir" ] && continue
+        if [ -L "$item" ]; then
+            unlink "$item"
+        else
+            return 1
+        fi
+    done
+    return 0
+}
+
+symlink_skill_dir() {
+    src_dir="$1"
+    dst_dir="$2"
+
+    if is_managed_link_dir "$dst_dir" "$src_dir"; then
+        if ! clear_managed_link_dir "$dst_dir"; then
+            backup_existing_skill "$dst_dir"
+            mkdir -p "$dst_dir"
+        fi
+    elif [ -L "$dst_dir" ]; then
+        current_target=$(readlink "$dst_dir")
+        if [ "$current_target" = "$src_dir" ]; then
+            backup_existing_skill "$dst_dir"
+        else
+            backup_existing_skill "$dst_dir"
+        fi
+    elif [ -e "$dst_dir" ]; then
+        backup_existing_skill "$dst_dir"
+    fi
+
+    mkdir -p "$dst_dir"
+    printf '%s\n' "$src_dir" > "$dst_dir/.sictic-symlink-dir"
+
+    for item in "$src_dir"/* "$src_dir"/.[!.]* "$src_dir"/..?*; do
+        [ -e "$item" ] || [ -L "$item" ] || continue
+        entry_name=$(basename "$item")
+        case "$entry_name" in
+            __pycache__|.DS_Store|*.pyc) continue ;;
+        esac
+        ln -s "$item" "$dst_dir/$entry_name"
+    done
+}
+
 echo "Installing SICTIC-AI (conda variant)"
 echo "  source:   $REPO_ROOT"
 echo "  target:   $TARGET"
 echo "  env name: $ENV_NAME"
 echo "  env file: $ENV_FILE"
+echo "  skills:   $INSTALL_MODE"
 echo
 
 # ---------------------------------------------------------------------------
@@ -215,9 +297,13 @@ fi
 printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
 
 # ---------------------------------------------------------------------------
-# Step 3: copy skills
+# Step 3: install skills
 # ---------------------------------------------------------------------------
-echo "[3/3] Copying skills into $TARGET ..."
+if [ "$INSTALL_MODE" = "copy" ]; then
+    echo "[3/3] Copying skills into $TARGET ..."
+else
+    echo "[3/3] Linking skills into $TARGET ..."
+fi
 
 INSTALLED_LIST=""
 installed_count=0
@@ -229,12 +315,14 @@ for src in "$REPO_ROOT/skills"/*/; do
 
     dst="$TARGET/$name"
 
-    if [ -L "$dst" ]; then
-        echo "       ! Skipping $name (target is a symlink; delete it manually before reinstalling)"
-        continue
+    if [ "$INSTALL_MODE" = "copy" ]; then
+        if [ -L "$dst" ]; then
+            backup_existing_skill "$dst"
+        fi
+        copy_skill_dir "$src" "$dst"
+    else
+        symlink_skill_dir "$src" "$dst"
     fi
-
-    copy_skill_dir "$src" "$dst"
 
     INSTALLED_LIST="$INSTALLED_LIST $name "
     installed_count=$((installed_count + 1))
@@ -244,13 +332,17 @@ done
 cat > "$TARGET/_SICTIC_AI.md" <<EOF
 # SICTIC-AI skills
 
-These skill directories are copied from \`$REPO_ROOT/skills/\` by:
+These skill directories are installed from \`$REPO_ROOT/skills/\` by:
 
     $REPO_ROOT/install_skills_conda.sh
 
+Default installs real workspace skill directories whose contents are symlinked
+to the repository, so skill discovery works while the repository remains the
+single source of truth. Use \`--copy\` only for a portable snapshot install.
+
 The installer registers \`$REPO_ROOT\` in the \`$ENV_NAME\` conda environment,
-so harness commands execute repository code even though these instruction
-folders are copied. Runtime dependencies come only from \`environment.yml\`.
+so harness commands execute repository code. Runtime dependencies come only
+from \`environment.yml\`.
 
 ## Invocation
 

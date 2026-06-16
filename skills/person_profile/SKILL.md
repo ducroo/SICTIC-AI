@@ -13,10 +13,10 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 **Procedure:**
 
-1. **Filename Generation & Caching:** 
-   * Sanitize the input `name` into a safe string.
-   * Construct the output file path: `<REPO_PATH>/insights/<dataset_name>/profile_<sanitized_name>_<model_name>.md`.
-   * Check if this file already exists using the `check_insight_refresh` utility. If it does, read and return its contents immediately, bypassing the LLM.
+1. **Insight File & Caching:**
+   * Resolve the person to its canonical identifier through the standard person-resolution flow.
+   * Construct the profile insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="person_profile", model=<model>, identifier=<person_identifier>, subdir=True, prompt_key=<query_and_instructions>)`.
+   * Use `insight.find_reusable()` and `insight.content()` to reuse a fresh existing profile when available; otherwise generate the profile and persist it with `insight.save(...)`. Do not hardcode `<REPO_PATH>/insights/...` paths.
 
 2. **Data Retrieval & Synthesis:**
    * If the cache misses, dynamically load the following from `config.json` via `config_load()`:

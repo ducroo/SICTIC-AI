@@ -8,49 +8,31 @@ description: This skill aims to find potential investors in the target startup. 
 **Objective:** Match a specific startup against the SICTIC investor base, leveraging investor profiles that combine professional experience with investment track records and preferences.
 
 **Inputs:**
-* `startup_name` (Required): The name of the startup to match. 
-* `target_investors` (Optional): A list of specific investor names to limit the search to. If empty/None, defaults to all SICTIC members (via `all_members.py`). 
-* `exclude_investors` (Optional): A list of investor names to exclude from the final results. 
-* `max_investors` (Optional, Default=20): The final number of ranked investors to return.
+* `startup_name` (Required): The startup to match.
+* `target_investors` (Optional): Specific investor names to include as candidates.
+* `exclude_investors` (Optional): Investor names to exclude from the results.
+* `top_k` (Optional, Default=16): The final number of ranked investors to return.
 
 **Procedure:**
 
-1. **Fetch data:** 
-   * Fetch the `startup_profile` for the given `startup_name`. If it does not exist, throw an error. The full text of this profile will act as our semantic query. 
-   * Compile the list of `target_investors`. If none are provided, load all members. Remove any names present in `exclude_investors`.
-   * Read the investor profile for all `target_investors`. Each profile combines the person profile with the manually maintained investment track record and preferences.
+1. **Dataset Preparation:**
+   * Convert `startup_name` to a dataset slug with `slugify(...)`.
+   * Resolve the startup dataset with `ensure_startup_dataset(...)`.
+   * Hydrate the generated `sictic-members-investor-profile` dataset from `investor_profile` insights using `hydrate_dataset_from_insights(insight_name="investor_profile", source_dataset="sictic-members")`.
+   * Run `sync_datasets([people_dataset, startup_slug], raise_on_error=True)` so startup and investor-profile indexes are current.
 
-2. **Semantic Search (Investor Profile Level):**
-   * Perform semantic search against the investor-profile dataset using the full `startup_profile` text as the query.
-   * Ensure `return_full_docs=True` and retrieve a large initial pool (e.g., `max_chunks=200`). 
-   * **Filtering:** Iterate through the semantic results. 
-     * Extract the investor name from the `document_name`. 
-     * Drop any matches not present in the finalized `target_investors` list. 
-   * **Truncation:** Keep at most the top `(max_investors * 2)` investors from the filtered list for the next phase.
+2. **Configuration & Insight Cache:**
+   * Load `objective_template = config_load()["potential_investors"]["objective"]`.
+   * Construct the output insight with `lib.insights.InsightFile(dataset=startup_slug, skill="potential_investors", model=llm_model(), source_datasets=[people_dataset, startup_slug], prompt_key=objective_template)`.
+   * Use `insight.find_reusable()` and `insight.content()` to reuse fresh cached results when available.
 
-3. **LLM Deep-Dive Ranking (Person Profile Level):** 
-   * Check the configured `LLM_MODEL` to determine the routing strategy:
-   
-   * **Strategy A: Local Model (e.g., Ollama)** 
-     * Take the top `max_investors * 2` candidates. 
-     * Due to context limits, perform an **iterative scoring loop**. For each of these investors individually: 
-       * Prompt the LLM with the `startup_profile` and the single `person_profile`. 
-       * Request a strict JSON output containing: `{"score": <0-100>, "rationale": "<3-bullet explanation>"}`. 
-       * If JSON parsing fails, throw an error.
-       * Parse the JSON, sort the investors descending by their LLM `score`.
+3. **Startup Profile & Ranking:**
+   * Fetch or generate `startup_profile(startup_name)` and use the profile text as both the semantic query and the basis for the ranking objective.
+   * Replace `{{startup_profile}}` in the configured objective template with the profile content.
+   * Call `ranking_persons(dataset_name=people_dataset, objective=objective, query=profile_content, candidates=target_investors, optout=exclude_investors, top_k=top_k)`.
 
-   * **Strategy B: Cloud Model (e.g., OpenAI / Gemini / Anthropic)** 
-     * Take the top `max_investors * 2` candidates. 
-     * Leverage the massive context window by passing the `startup_profile` and *all* candidate `person_profile` texts in a single monolithic prompt. 
-     * Instruct the LLM to rank them relative to each other and output a structured JSON array of objects: `[{"investor_name": "...", "score": <0-100>, "rationale": "..."}]`. 
-     * Parse the JSON and sort descending by score. 
-
-   * For both strategies, keep only the top `max_investors` candidates.
-
-4. **Output Generation:** 
-   * Construct a final Markdown string containing a table of the ranked results: `| Investor Name | Score | Rationale |`. 
-   * Save this Markdown table to: `<REPO_PATH>/insights/<startup_name>/<startup_name>_potential_investors_<model_name>.md`. 
-   * Return the Markdown string.
+4. **Output Generation:**
+   * Save the Markdown ranking result with `insight.save(result)`, log `insight.path`, and return the Markdown string. Do not hardcode `<REPO_PATH>/insights/...` paths.
 
 **CLI Interface:**
 * Expose this skill through the shared slash-command harness.

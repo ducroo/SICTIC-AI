@@ -9,43 +9,39 @@ description: Rank a provided list of startups against a list of investors by mat
 
 **Inputs:**
 
-* `startups`: A list of startup names (e.g., `["avientus", "fabas"]`). 
-* `investors`: A list of investor names (e.g., `["Lucas du Croo de Jongh", "John Doe"]`).
+* `dataset_name` (Optional, Default=`"sictic_members"`): Community dataset containing investors.
+* `startups` (Optional): Startup names to consider. If omitted, discover startup datasets dynamically.
+* `investors` (Optional): Investor names to process. If omitted, resolve all persons from the dataset with `LinkedInResolver`.
+* `max_startups` (Optional, Default=5): Maximum suggested startups per investor.
 
 **Procedure:**
 
-1. **Startup Profiling:** 
- 
- * For every startup in the input list, execute `startup_profile(<STARTUP_NAME>)`. 
- * Capture the resulting 5-bullet point Markdown string (the first element of the returned tuple).
+1. **Input Resolution:**
+   * Slugify `dataset_name`.
+   * If `investors` is empty, resolve all persons with `LinkedInResolver(dataset_slug).get_all_persons()`.
+   * If `startups` is empty, discover startup datasets with `list_dataset_names("startups")`, excluding configured community and ignored datasets from `config_load()["bulk_refresh"]`.
 
- 
+2. **Configuration & Sync:**
+   * Load `prompt_template = config_load()["suggested_startups"]["suggested_startups_prompt"]`.
+   * Build `datasets_to_check = [dataset_slug] + [slugify(startup) for startup in startups]`.
+   * Run `sync_datasets(datasets_to_check, raise_on_error=True)` so investor and startup indexes are current.
 
-2. **Investor Loop:** For each name in the `investors` list: 
- 
- * **Data Retrieval:** Use `LinkedInResolver` for the `sictic-members` dataset when cached LinkedIn identities are required. General storage remains local; Google Drive synchronization is handled separately.
- * **Self-Correction (Fallback):** Check the returned JSON. If the profile is sparse, empty, or missing entirely, inject a hardcoded **"General Interest"** fallback string (e.g., *"No detailed profile available. Assume General Interest in broad tech trends and standard investment criteria."*) as their profile data.
+3. **Per-Investor Insight Cache:**
+   * For each investor, construct `lib.insights.InsightFile(dataset=dataset_slug, skill="suggested_startups", model=llm_model(), identifier=investor, subdir=True, source_datasets=datasets_to_check, prompt_key=prompt_template)`.
+   * Use `insight.find_reusable()` to skip investors whose suggested-startups report is already fresh.
 
- 
+4. **Startup and Investor Profile Preparation:**
+   * Compile startup profiles in memory with `compile_startup_profiles(startups)`, which calls `startup_profile(startup)` for each selected startup and combines the profile text into a single prompt context.
+   * Refresh investor profiles with `investor_profile(source_dataset=dataset_slug)`.
+   * Load the selected investors' reusable investor profiles with `read_investor_profiles(dataset_slug, names_to_process)`. These profiles combine person profiles with investment track records and preferences.
 
-3. **Ranking Logic:** 
- 
- * For each investor, call the `llm_chat()` utility. 
- * **Context Provided:** Inject the prompt found dynamically via `config_load()` at `conf['suggested_startups']['suggested_startups_prompt']`. Pass the investor’s retrieved LinkedIn profile (or fallback string) and the full compiled list of startup profiles with the startup\_name added on top of each. All profiles should be clearly separated 
- * **Output Format:** Instruct the LLM to return a strict **JSON object** containing: 
- * `startup_name` 
- * `rank` (1 to N) 
- * `rationale` (A brief explanation of why this is a fit).
+5. **Per-Investor Startup Selection:**
+   * For each investor with an available investor profile, call `process_single_investor(investor, profile_text, compiled_startups, prompt_template, max_startups)`.
+   * `process_single_investor` calls `llm_chat`, parses the JSON-like ranking response with `repair_json_payload`, sorts by rank, and keeps the top `max_startups`.
 
- 
-
-4. **Data Assembly:** Aggregate the parsed JSON results into a Markdown table with the following structure: 
- 
- | Investor Name | Suggested Startups | Rank | Rationale | 
- 
- | :--- | :--- | :--- | :--- | 
- 
-5. **Output Generation:** Save the final Markdown table to the following path: `<REPO_PATH>/insights/sictic_members/suggested_startups_<model_name>.md`
+6. **Output Generation:**
+   * Save one Markdown table per investor with `insight.save(content)`.
+   * Log `insight.path` and return a newline-separated processing summary. Do not hardcode `<REPO_PATH>/insights/...` paths.
 
 ## Usage
 

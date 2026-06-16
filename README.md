@@ -108,11 +108,11 @@ Qdrant is required for semantic search. You do not need to install it manually:
 ### Step 2: Install the Environment
 
 Run the provided installer. This creates a self-contained Python environment
-(`sictic-env`) and copies the skill instruction folders into your AI workspace.
+(`sictic-env`) and symlinks the skill folder contents into your AI workspace.
 The installer registers the repository root in the Conda environment, so
-harness commands execute the current repo code while the target directory
-contains portable `SKILL.md` instructions for your agent. All runtime
-dependencies are defined in `environment.yml`.
+harness commands execute the current repo code and the target workspace points
+at the same canonical skill instructions. All runtime dependencies are defined
+in `environment.yml`.
 
 ```bash
 # Same for macOS, Linux, and WSL2

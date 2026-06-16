@@ -1,16 +1,21 @@
+---
+name: sictic_git_sync
+description: Synchronize the SICTIC-AI toolbox Git repository and safely publish local changes. Use when updating from upstream, checking repository status, reinstalling changed skill instructions, or pushing contributions after the architecture and simplicity gatekeeper review.
+---
+
 # SICTIC-AI Git Sync & Simplicity Gatekeeper
 
 ## Description
 This admin skill helps keep the SICTIC-AI toolbox updated and safely push contributions.
-The installer copies `SKILL.md` instruction folders into the target workspace and
-registers the Git repository in the Conda environment with a generated `.pth` file.
-Reinstall the skills after changing skill instructions so external harnesses receive
-the updated copies.
+The installer creates real skill folders in the target workspace, symlinks their
+contents back to the Git repository, and registers the Git repository in the
+Conda environment with a generated `.pth` file. The Git repository remains the
+single source of truth for skill instructions and runtime code.
 
 ## Workspace Model
 1. **Source of truth:** The Git repository contains the Python package, scripts, tests, and canonical skill instructions.
-2. **Installed skill folders:** The installer copies each skill directory into the target workspace specified by `--target`.
-3. **Runtime code:** Harness commands execute repository Python code through the Conda environment's `.pth` registration, not copied Python files from the target workspace.
+2. **Installed skill folders:** The installer creates each target skill directory and symlinks its contents from the repository skill directory.
+3. **Runtime code:** Harness commands execute repository Python code through the Conda environment's `.pth` registration.
 
 ## The Architecture & Simplicity Framework
 Before executing a `push` action, you (the AI Agent) MUST review modified files against these rules. If a rule is violated, you must fix it before proceeding with the push.
@@ -28,7 +33,7 @@ Before executing a `push` action, you (the AI Agent) MUST review modified files 
 
 ### Scenario A: Safely Updating the Toolbox
 1. Run `conda run -n sictic-env python -m skills.sictic_git_sync --action pull`.
-2. Re-run `./install_skills_conda.sh --target <SKILLS_TARGET> --skip-env` if skill instruction files changed.
+2. Re-run `./install_skills_conda.sh --target <SKILLS_TARGET> --skip-env` if new skill directories were added or removed.
 3. Summarize the changes for the user.
 
 ### Scenario B: Contributing Changes & New Skills
