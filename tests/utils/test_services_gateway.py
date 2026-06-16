@@ -17,6 +17,7 @@ def clean_gateway(tmp_path):
     return ServicesGateway(
         state_path=tmp_path / "gateway.json",
         ollama_num_parallel=2,
+        ollama_max_loaded_models=2,
         wait_timeout=1,
         poll_interval=0.01,
     )
@@ -44,7 +45,7 @@ def test_gateway_initialization_has_no_file_side_effect(clean_gateway):
     state = clean_gateway.snapshot()
 
     assert state == {
-        "version": 3,
+        "version": 4,
         "leases": {"docling": [], "embedding": [], "llm": []},
         "requests": {"docling": [], "embedding": [], "llm": []},
     }
@@ -118,11 +119,11 @@ async def test_available_capacity_does_not_wait_for_each_queue_head(
     clean_gateway,
 ):
     requests = [
-        clean_gateway._register_request("embedding")[0]
+        clean_gateway._register_request("embedding", "embedding-model")[0]
         for _ in range(2)
     ]
 
-    second_lease, _ = clean_gateway._try_acquire(
+    second_lease, _, _ = clean_gateway._try_acquire(
         requests[1],
         max_concurrent=2,
     )
@@ -134,7 +135,7 @@ async def test_available_capacity_does_not_wait_for_each_queue_head(
 
 def test_state_checks_each_process_identity_once(clean_gateway, mocker):
     requests = [
-        clean_gateway._register_request("embedding")[0]
+        clean_gateway._register_request("embedding", "embedding-model")[0]
         for _ in range(3)
     ]
     process_check = mocker.patch.object(
@@ -208,12 +209,52 @@ async def test_gateway_logs_counts_when_request_arrives_and_starts(
 
     assert (
         "Gateway request received: LLM 0 running, 1 waiting | "
-        "embedding 0 running, 0 waiting | docling 0 running, 0 waiting"
+        "embedding 0 running, 0 waiting | docling 0 running, 0 waiting | "
+        "models 0/2 loaded"
     ) in caplog.text
     assert (
         "Gateway job started: LLM 1 running, 0 waiting | "
-        "embedding 0 running, 0 waiting | docling 0 running, 0 waiting"
+        "embedding 0 running, 0 waiting | docling 0 running, 0 waiting | "
+        "models 1/2 loaded"
     ) in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_same_model_requests_share_loaded_model_slot(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=1,
+        wait_timeout=1,
+        poll_interval=0.01,
+    )
+
+    async with gateway.slot("llm", model="ollama/same", max_concurrent=2):
+        async with gateway.slot("llm", model="ollama/same", max_concurrent=2):
+            leases = _leases(gateway, "llm")
+            assert len(leases) == 2
+            assert {lease["model"] for lease in leases} == {"ollama/same"}
+
+
+@pytest.mark.asyncio
+async def test_different_model_waits_when_loaded_model_slots_are_full(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=1,
+        wait_timeout=1,
+        poll_interval=0.01,
+    )
+
+    async with gateway.slot("llm", model="ollama/first", max_concurrent=2):
+        with pytest.raises(GatewayTimeoutError):
+            async with gateway.slot(
+                "llm",
+                model="ollama/second",
+                max_concurrent=2,
+                timeout=0.03,
+            ):
+                pass
 
 
 def test_dead_or_reused_pid_lease_is_cleaned(clean_gateway):
@@ -229,6 +270,7 @@ def test_dead_or_reused_pid_lease_is_cleaned(clean_gateway):
                         {
                             "lease_id": "stale",
                             "resource": "llm",
+                            "model": "llm",
                             "pid": os.getpid(),
                             "process_start": "wrong-process-instance",
                             "acquired_at": time.time(),
@@ -241,6 +283,7 @@ def test_dead_or_reused_pid_lease_is_cleaned(clean_gateway):
                         {
                             "request_id": "stale-request",
                             "resource": "embedding",
+                            "model": "embedding",
                             "pid": os.getpid(),
                             "process_start": "wrong-process-instance",
                             "requested_at": time.time(),

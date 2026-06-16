@@ -84,6 +84,7 @@ class DoclingAdapter:
         async with gateway.slot(
             "docling",
             max_concurrent=self.concurrency_limit,
+            model=os.environ.get("VLM_MODEL") or "docling",
         ):
             if not os.path.isfile(filepath):
                 logger.warning("Skipping %s, not a valid local file.", filepath)

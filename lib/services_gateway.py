@@ -36,6 +36,7 @@ class GatewayTimeoutError(TimeoutError):
 class ServiceLease:
     lease_id: str
     resource: str
+    model: str
     pid: int
     process_start: str
     acquired_at: float
@@ -45,6 +46,7 @@ class ServiceLease:
 class ServiceRequest:
     request_id: str
     resource: str
+    model: str
     pid: int
     process_start: str
     requested_at: float
@@ -108,6 +110,7 @@ class ServicesGateway:
         *,
         state_path: str | os.PathLike | None = None,
         ollama_num_parallel: int | None = None,
+        ollama_max_loaded_models: int | None = None,
         wait_timeout: float = _DEFAULT_WAIT_TIMEOUT,
         poll_interval: float = _POLL_INTERVAL,
     ):
@@ -119,6 +122,11 @@ class ServicesGateway:
             if ollama_num_parallel is not None
             else int(os.environ.get("OLLAMA_NUM_PARALLEL", "1"))
         )
+        self.ollama_max_loaded_models = (
+            ollama_max_loaded_models
+            if ollama_max_loaded_models is not None
+            else int(os.environ.get("OLLAMA_MAX_LOADED_MODELS", "1"))
+        )
         self.wait_timeout = wait_timeout
         self.poll_interval = poll_interval
         self._process_start = _process_start_token(os.getpid()) or str(
@@ -127,7 +135,7 @@ class ServicesGateway:
 
     def _empty_state(self) -> dict:
         return {
-            "version": 3,
+            "version": 4,
             "leases": {resource: [] for resource in _RESOURCE_KEYS},
             "requests": {resource: [] for resource in _RESOURCE_KEYS},
         }
@@ -228,21 +236,43 @@ class ServicesGateway:
         }
 
     @staticmethod
-    def _format_counts(counts: dict[str, dict[str, int]]) -> str:
+    def _active_models(state: dict) -> set[str]:
+        models: set[str] = set()
+        for leases in state["leases"].values():
+            models.update(
+                str(lease.get("model") or lease.get("resource"))
+                for lease in leases
+            )
+        return models
+
+    def _format_counts(
+        self,
+        counts: dict[str, dict[str, int]],
+        *,
+        active_models: set[str] | None = None,
+    ) -> str:
         labels = {"docling": "docling", "embedding": "embedding", "llm": "LLM"}
-        return " | ".join(
+        summary = " | ".join(
             f"{labels[resource]} {counts[resource]['running']} running, "
             f"{counts[resource]['waiting']} waiting"
             for resource in ("llm", "embedding", "docling")
         )
+        if active_models is not None:
+            summary = (
+                f"{summary} | models {len(active_models)}/"
+                f"{self.ollama_max_loaded_models} loaded"
+            )
+        return summary
 
     def _register_request(
         self,
         resource: str,
-    ) -> tuple[ServiceRequest, dict[str, dict[str, int]]]:
+        model: str,
+    ) -> tuple[ServiceRequest, dict[str, dict[str, int]], set[str]]:
         request = ServiceRequest(
             request_id=uuid.uuid4().hex,
             resource=resource,
+            model=model,
             pid=os.getpid(),
             process_start=self._process_start,
             requested_at=time.time(),
@@ -250,7 +280,7 @@ class ServicesGateway:
 
         def register(state):
             state["requests"][resource].append(asdict(request))
-            return request, self._counts(state)
+            return request, self._counts(state), self._active_models(state)
 
         return self._with_locked_state(register)
 
@@ -259,11 +289,16 @@ class ServicesGateway:
         request: ServiceRequest,
         *,
         max_concurrent: int,
-    ) -> tuple[ServiceLease | None, dict[str, dict[str, int]] | None]:
+    ) -> tuple[
+        ServiceLease | None,
+        dict[str, dict[str, int]] | None,
+        set[str] | None,
+    ]:
         resource = request.resource
         lease = ServiceLease(
             lease_id=uuid.uuid4().hex,
             resource=resource,
+            model=request.model,
             pid=os.getpid(),
             process_start=self._process_start,
             acquired_at=time.time(),
@@ -282,20 +317,28 @@ class ServicesGateway:
             )
             available = max_concurrent - len(leases[resource])
             if request_index is None or request_index >= available:
-                return None, None
+                return None, None, None
             blocked = any(
                 leases[other]
                 for other in _EXCLUSIVE_WITH[resource]
             )
+            active_models = self._active_models(state)
+            model_already_loaded = request.model in active_models
+            model_capacity_available = (
+                model_already_loaded
+                or len(active_models) < self.ollama_max_loaded_models
+            )
             if blocked or len(leases[resource]) >= max_concurrent:
-                return None, None
+                return None, None, None
+            if not model_capacity_available:
+                return None, None, None
             state["requests"][resource] = [
                 item
                 for item in queue
                 if item.get("request_id") != request.request_id
             ]
             leases[resource].append(asdict(lease))
-            return lease, self._counts(state)
+            return lease, self._counts(state), self._active_models(state)
 
         return self._with_locked_state(acquire)
 
@@ -331,6 +374,7 @@ class ServicesGateway:
         resource: str,
         *,
         max_concurrent: int | None = None,
+        model: str | None = None,
         timeout: float | None = None,
     ) -> AsyncIterator[ServiceLease]:
         if resource not in _RESOURCE_KEYS:
@@ -338,21 +382,25 @@ class ServicesGateway:
         capacity = max_concurrent or self.ollama_num_parallel
         if capacity < 1:
             raise ValueError("max_concurrent must be at least 1")
+        if self.ollama_max_loaded_models < 1:
+            raise ValueError("OLLAMA_MAX_LOADED_MODELS must be at least 1")
+        model_key = model or resource
         wait_timeout = self.wait_timeout if timeout is None else timeout
         started = time.monotonic()
-        request, counts = await asyncio.to_thread(
+        request, counts, active_models = await asyncio.to_thread(
             self._register_request,
             resource,
+            model_key,
         )
         logger.info(
             "Gateway request received: %s",
-            self._format_counts(counts),
+            self._format_counts(counts, active_models=active_models),
         )
         lease = None
 
         try:
             while True:
-                lease, counts = await asyncio.to_thread(
+                lease, counts, active_models = await asyncio.to_thread(
                     self._try_acquire,
                     request,
                     max_concurrent=capacity,
@@ -375,7 +423,7 @@ class ServicesGateway:
             if counts is not None:
                 logger.info(
                     "Gateway job started: %s",
-                    self._format_counts(counts),
+                    self._format_counts(counts, active_models=active_models),
                 )
             yield lease
         finally:
@@ -394,7 +442,11 @@ class ServicesGateway:
         import litellm
 
         litellm.disable_aiohttp_transport = True
-        async with self.slot("embedding", timeout=timeout):
+        async with self.slot(
+            "embedding",
+            model=str(kwargs.get("model") or "embedding"),
+            timeout=timeout,
+        ):
             return await litellm.aembedding(**kwargs)
 
     async def request_completion(
@@ -407,7 +459,11 @@ class ServicesGateway:
         import litellm
 
         litellm.disable_aiohttp_transport = True
-        async with self.slot("llm", timeout=timeout):
+        async with self.slot(
+            "llm",
+            model=str(kwargs.get("model") or "llm"),
+            timeout=timeout,
+        ):
             return await litellm.acompletion(**kwargs)
 
 
