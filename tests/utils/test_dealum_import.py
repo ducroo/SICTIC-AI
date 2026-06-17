@@ -9,6 +9,7 @@ from lib.startups.dealum import (
     reconcile_dealum_startup,
 )
 from lib.startups.sources import ensure_startup_dataset
+from lib.datasets.state import archive_dataset, dataset_archived_marker_path
 from lib.datasets.paths import dataset_location_for_domain
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_raw_path
@@ -144,6 +145,31 @@ async def test_ensure_startup_dataset_no_dealum_env_is_noop(mock_env):
     assert not get_storage().exists(
         dataset_location_for_domain("missingco", "startups").raw_rel
     )
+
+
+@pytest.mark.asyncio
+async def test_ensure_startup_dataset_dealum_preflight_preserves_archive_state(
+    mock_env,
+    mocker,
+):
+    storage = get_storage()
+    location = dataset_location_for_domain("avientus", "startups")
+    storage.mkdir(location.raw_rel)
+    archive_dataset("avientus")
+    mocker.patch(
+        "lib.startups.sources.DealumAdapter",
+        return_value=FakeDealumAdapter(),
+    )
+
+    status = await ensure_startup_dataset(
+        "Avientus",
+        refresh_dealum=True,
+        sync_after_import=False,
+    )
+
+    assert status.dealum_imported is True
+    assert not storage.exists(location.active_marker_rel)
+    assert storage.exists(dataset_archived_marker_path("avientus"))
 
 
 def test_reconcile_dealum_startup_matches_normalized_name(mock_env, caplog):

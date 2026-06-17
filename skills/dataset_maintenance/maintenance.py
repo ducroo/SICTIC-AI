@@ -9,6 +9,7 @@ from lib.model_config import embedding_model
 from lib.slugify import slugify
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_parsed_path, list_all_dataset_names
+from lib.datasets.state import activate_dataset, archive_dataset
 
 logger = get_logger(__name__)
 
@@ -126,3 +127,17 @@ def delete_dataset_index(
     for collection in deleted:
         admin.delete_collection(collection)
     return deleted
+
+
+def activate_dataset_marker(dataset: str) -> str:
+    if not dataset:
+        raise ValueError("Must provide --dataset/-d.")
+    activate_dataset(dataset)
+    return slugify(dataset)
+
+
+def archive_dataset_marker(dataset: str) -> str:
+    if not dataset:
+        raise ValueError("Must provide --dataset/-d.")
+    archive_dataset(dataset)
+    return slugify(dataset)

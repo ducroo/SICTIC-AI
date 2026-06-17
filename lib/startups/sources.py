@@ -59,7 +59,11 @@ async def ensure_startup_dataset(
         )
 
     try:
-        result = import_startup_from_dealum(startup, adapter=adapter)
+        result = import_startup_from_dealum(
+            startup,
+            adapter=adapter,
+            activate=False,
+        )
         if result.imported and result.changed and sync_after_import:
             from lib.datasets.ingestion import sync_datasets
 

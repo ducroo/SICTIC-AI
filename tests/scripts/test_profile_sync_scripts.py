@@ -217,6 +217,38 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
     assert "Target path: storage/generated/sictic-members-person-profile/datasets" in result.output
 
 
+def test_dataset_maintenance_lifecycle_cli_uses_dataset_option(mocker):
+    from skills.dataset_maintenance import __main__ as module
+
+    calls = []
+
+    mocker.patch.object(
+        module,
+        "activate_dataset_marker",
+        side_effect=lambda dataset: calls.append(("activate", dataset)) or dataset,
+    )
+    mocker.patch.object(
+        module,
+        "archive_dataset_marker",
+        side_effect=lambda dataset: calls.append(("archive", dataset)) or dataset,
+    )
+
+    activate_result = CliRunner().invoke(
+        module.app,
+        ["activate", "--dataset", "Avientus"],
+    )
+    archive_result = CliRunner().invoke(
+        module.app,
+        ["archive", "-d", "Avientus"],
+    )
+
+    assert activate_result.exit_code == 0
+    assert archive_result.exit_code == 0
+    assert calls == [("activate", "Avientus"), ("archive", "Avientus")]
+    assert "Activated: Avientus" in activate_result.output
+    assert "Archived: Avientus" in archive_result.output
+
+
 @pytest.mark.asyncio
 async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
     from lib.people.model import Person

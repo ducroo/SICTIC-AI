@@ -16,6 +16,8 @@ python -m skills.dataset_maintenance diagnose
 python -m skills.dataset_maintenance prune
 python -m skills.dataset_maintenance prune --apply
 python -m skills.dataset_maintenance delete --dataset avientus
+python -m skills.dataset_maintenance activate --dataset avientus
+python -m skills.dataset_maintenance archive --dataset avientus
 python -m skills.dataset_maintenance delete --embeddings nomic-embed-text
 python -m skills.dataset_maintenance from-insight --insight person_profile
 python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members

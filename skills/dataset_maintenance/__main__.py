@@ -11,6 +11,8 @@ from skills.dataset_maintenance.dataset_from_insight import (
     print_hydration_result,
 )
 from skills.dataset_maintenance.maintenance import (
+    activate_dataset_marker,
+    archive_dataset_marker,
     delete_dataset_index,
     diagnose_qdrant_collections,
     prune_orphaned_qdrant_collections,
@@ -69,6 +71,28 @@ def delete_command(
     )
     for collection in collections:
         typer.echo(f"Deleted: {collection}")
+
+
+@app.command("activate")
+def activate_command(
+    dataset: str = typer.Option(..., "--dataset", "-d"),
+) -> None:
+    slug = run_command(
+        lambda: activate_dataset_marker(dataset),
+        logger=logger,
+    )
+    typer.echo(f"Activated: {slug}")
+
+
+@app.command("archive")
+def archive_command(
+    dataset: str = typer.Option(..., "--dataset", "-d"),
+) -> None:
+    slug = run_command(
+        lambda: archive_dataset_marker(dataset),
+        logger=logger,
+    )
+    typer.echo(f"Archived: {slug}")
 
 
 @app.command("migrate-startup-dossiers")
