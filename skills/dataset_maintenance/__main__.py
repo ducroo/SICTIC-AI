@@ -27,6 +27,10 @@ app = typer.Typer(
 )
 
 
+def _parse_datasets(dataset: str) -> list[str]:
+    return [item.strip() for item in dataset.split(",") if item.strip()]
+
+
 @app.command()
 def diagnose(
     embeddings: Optional[str] = typer.Option(None, "--embeddings", "-e"),
@@ -77,22 +81,24 @@ def delete_command(
 def activate_command(
     dataset: str = typer.Option(..., "--dataset", "-d"),
 ) -> None:
-    slug = run_command(
-        lambda: activate_dataset_marker(dataset),
+    slugs = run_command(
+        lambda: [activate_dataset_marker(item) for item in _parse_datasets(dataset)],
         logger=logger,
     )
-    typer.echo(f"Activated: {slug}")
+    for slug in slugs:
+        typer.echo(f"Activated: {slug}")
 
 
 @app.command("archive")
 def archive_command(
     dataset: str = typer.Option(..., "--dataset", "-d"),
 ) -> None:
-    slug = run_command(
-        lambda: archive_dataset_marker(dataset),
+    slugs = run_command(
+        lambda: [archive_dataset_marker(item) for item in _parse_datasets(dataset)],
         logger=logger,
     )
-    typer.echo(f"Archived: {slug}")
+    for slug in slugs:
+        typer.echo(f"Archived: {slug}")
 
 
 @app.command("migrate-startup-dossiers")

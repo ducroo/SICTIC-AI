@@ -235,18 +235,25 @@ def test_dataset_maintenance_lifecycle_cli_uses_dataset_option(mocker):
 
     activate_result = CliRunner().invoke(
         module.app,
-        ["activate", "--dataset", "Avientus"],
+        ["activate", "--dataset", "Avientus, Scanvio"],
     )
     archive_result = CliRunner().invoke(
         module.app,
-        ["archive", "-d", "Avientus"],
+        ["archive", "-d", "Avientus, Scanvio"],
     )
 
     assert activate_result.exit_code == 0
     assert archive_result.exit_code == 0
-    assert calls == [("activate", "Avientus"), ("archive", "Avientus")]
+    assert calls == [
+        ("activate", "Avientus"),
+        ("activate", "Scanvio"),
+        ("archive", "Avientus"),
+        ("archive", "Scanvio"),
+    ]
     assert "Activated: Avientus" in activate_result.output
+    assert "Activated: Scanvio" in activate_result.output
     assert "Archived: Avientus" in archive_result.output
+    assert "Archived: Scanvio" in archive_result.output
 
 
 @pytest.mark.asyncio
