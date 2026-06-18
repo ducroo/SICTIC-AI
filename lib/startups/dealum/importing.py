@@ -39,7 +39,9 @@ class DealumImportResult:
     dealum_id: Any = None
     dealum_url: str | None = None
     application_code: str | None = None
+    application_date: str | None = None
     match_method: str | None = None
+    selection_method: str | None = None
     manifest_path: str | None = None
     application_path: str | None = None
     downloaded_files: int = 0
@@ -181,6 +183,8 @@ def import_startup_from_dealum(
         "dealum_id": application.get("id"),
         "dealum_url": match.dealum_url,
         "code": application.get("code"),
+        "application_date": match.application_date,
+        "selection_method": match.selection_method,
         "step": application.get("step"),
         "tags": application.get("tags") or [],
         "application_hash": answer_hash,
@@ -217,7 +221,9 @@ def import_startup_from_dealum(
         dealum_id=match.dealum_id,
         dealum_url=match.dealum_url,
         application_code=match.application_code,
+        application_date=match.application_date,
         match_method=match.match_method,
+        selection_method=match.selection_method,
         manifest_path=manifest_path,
         application_path=application_path,
         downloaded_files=downloaded_files,

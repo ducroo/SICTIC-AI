@@ -227,16 +227,107 @@ def test_reconcile_dealum_startup_rejects_substring_match(mock_env):
         )
 
 
-def test_reconcile_dealum_startup_rejects_ambiguous_exact_name(mock_env, caplog):
+def test_reconcile_dealum_startup_selects_latest_duplicate_name(mock_env, caplog):
+    applications = [
+        {
+            **APPLICATION,
+            "id": 1,
+            "name": "NovoViz",
+            "code": "NOVO-1",
+            "applicationDate": "2026-01-15T09:00:00Z",
+        },
+        {
+            **APPLICATION,
+            "id": 2,
+            "name": "novoviz",
+            "code": "NOVO-2",
+            "applicationDate": "2026-04-20T09:00:00Z",
+        },
+    ]
+
+    match = reconcile_dealum_startup(
+        "novoviz",
+        adapter=FakeDealumAdapter(applications=applications),
+    )
+
+    assert match.dealum_id == 2
+    assert match.application_code == "NOVO-2"
+    assert match.application_date == "2026-04-20T09:00:00Z"
+    assert match.selection_method == "latest_application_date"
+    assert "selected latest application id=2" in caplog.text
+
+
+def test_reconcile_dealum_startup_selects_latest_duplicate_create_date_millis(mock_env):
+    applications = [
+        {
+            **APPLICATION,
+            "id": 1,
+            "name": "NovoViz",
+            "code": "NOVO-1",
+            "createDate": 1774170000000,
+        },
+        {
+            **APPLICATION,
+            "id": 2,
+            "name": "novoviz",
+            "code": "NOVO-2",
+            "createDate": 1776770000000,
+        },
+    ]
+
+    match = reconcile_dealum_startup(
+        "novoviz",
+        adapter=FakeDealumAdapter(applications=applications),
+    )
+
+    assert match.dealum_id == 2
+    assert match.application_code == "NOVO-2"
+    assert match.application_date == "1776770000000"
+    assert match.selection_method == "latest_application_date"
+
+
+def test_reconcile_dealum_startup_rejects_duplicate_name_without_dates(mock_env, caplog):
     applications = [
         {**APPLICATION, "id": 1, "name": "NovoViz", "code": "NOVO-1"},
         {**APPLICATION, "id": 2, "name": "novoviz", "code": "NOVO-2"},
     ]
 
-    with pytest.raises(DealumApplicationAmbiguousError, match="Multiple Dealum applications"):
+    with pytest.raises(DealumApplicationAmbiguousError, match="latest cannot be determined"):
         reconcile_dealum_startup(
             "novoviz",
             adapter=FakeDealumAdapter(applications=applications),
         )
 
     assert "Ambiguous exact match" in caplog.text
+
+
+def test_dealum_import_manifest_records_selected_application_date(mock_env):
+    applications = [
+        {
+            **APPLICATION,
+            "id": 1,
+            "name": "Avientus",
+            "code": "OLD",
+            "applicationDate": "2026-01-15T09:00:00Z",
+        },
+        {
+            **APPLICATION,
+            "id": 2,
+            "name": "Avientus",
+            "code": "NEW",
+            "applicationDate": "2026-04-20T09:00:00Z",
+        },
+    ]
+
+    result = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(applications=applications),
+    )
+
+    manifest = json.loads(get_storage().read_text(result.manifest_path))
+    assert result.dealum_id == 2
+    assert result.application_date == "2026-04-20T09:00:00Z"
+    assert result.selection_method == "latest_application_date"
+    assert manifest["dealum_id"] == 2
+    assert manifest["application_date"] == "2026-04-20T09:00:00Z"
+    assert manifest["selection_method"] == "latest_application_date"
