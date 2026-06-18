@@ -17,6 +17,7 @@ from skills.dataset_maintenance.maintenance import (
     diagnose_qdrant_collections,
     prune_orphaned_qdrant_collections,
 )
+from lib.startups.dossier import ensure_startup_dossier
 from skills.dataset_maintenance.startup_dossiers import migrate_startup_dossiers
 from skills.dataset_maintenance.insight_manifests import migrate_insight_manifests
 
@@ -99,6 +100,18 @@ def archive_command(
     )
     for slug in slugs:
         typer.echo(f"Archived: {slug}")
+
+
+@app.command("create")
+def create_command(
+    startup_name: str = typer.Argument(..., help="Startup name for the new dossier."),
+) -> None:
+    slug = run_command(
+        lambda: ensure_startup_dossier(startup_name),
+        logger=logger,
+        error_prefix="Create failed",
+    )
+    typer.echo(f"Created startup dossier: {slug}")
 
 
 @app.command("migrate-startup-dossiers")

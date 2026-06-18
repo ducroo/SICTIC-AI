@@ -18,6 +18,7 @@ python -m skills.dataset_maintenance prune --apply
 python -m skills.dataset_maintenance delete --dataset avientus
 python -m skills.dataset_maintenance activate --dataset avientus
 python -m skills.dataset_maintenance archive --dataset avientus
+python -m skills.dataset_maintenance create "Example Startup"
 python -m skills.dataset_maintenance delete --embeddings nomic-embed-text
 python -m skills.dataset_maintenance from-insight --insight person_profile
 python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members
@@ -27,5 +28,8 @@ python -m skills.dataset_maintenance migrate-insight-manifests --apply
 ```
 
 `prune` is dry-run by default. Pass `--apply` to delete orphaned collections.
+`create` initializes a startup dossier under the configured storage layout. It
+creates raw and parsed startup dataset folders with `data-room`, `linkedin`,
+`dealum`, `snippets`, and `post-deal` subfolders, then marks the startup active.
 The startup-dossier migration is also dry-run by default and writes a JSON
 manifest before any optional `--apply`.

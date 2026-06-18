@@ -66,6 +66,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.sictic_git_sync.__main__",
         "skills.startup_profile.__main__",
         "skills.startup_traction.__main__",
+        "skills.startup_website_import.__main__",
         "skills.suggested_startups.__main__",
         "skills.team_profile.__main__",
     ],

@@ -41,6 +41,7 @@ This toolkit serves four audiences:
 | `gdrive_sync` | ✅ | Synchronizes local storage with Google Drive |
 | `bulk_refresh` | ✅ | Refreshes one or more insights across one or more datasets |
 | `dataset_maintenance` | ✅ | Diagnoses, migrates, prunes, and repairs datasets and Qdrant collections |
+| `startup_website_import` | ✅ | Imports startup public websites into dataset website folders |
 | `linkedin_maintenance` | ✅ | Lists missing LinkedIn profiles, imports manually scraped profiles, and diagnoses registry issues |
 | `sictic_git_sync` | ✅ | Synchronizes repository changes and acts as an architectural gatekeeper |
 

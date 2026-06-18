@@ -256,6 +256,30 @@ def test_dataset_maintenance_lifecycle_cli_uses_dataset_option(mocker):
     assert "Archived: Scanvio" in archive_result.output
 
 
+def test_dataset_maintenance_create_cli_initializes_startup_dossier(mock_env):
+    from skills.dataset_maintenance import __main__ as module
+    from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
+    from lib.startups.dossier import STARTUP_DATASET_SUBDIRS
+
+    result = CliRunner().invoke(
+        module.app,
+        ["create", "Example Startup"],
+    )
+
+    assert result.exit_code == 0
+    assert "Created startup dossier: example-startup" in result.output
+    storage = get_storage()
+    for root in (
+        dataset_raw_path("example-startup"),
+        dataset_parsed_path("example-startup"),
+    ):
+        for subdir in STARTUP_DATASET_SUBDIRS:
+            assert storage.is_dir(f"{root}/{subdir}")
+    assert storage.exists(
+        f"{dataset_raw_path('example-startup')}/__active_dataset__.md"
+    )
+
+
 @pytest.mark.asyncio
 async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
     from lib.people.model import Person

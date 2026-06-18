@@ -43,9 +43,7 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
             kwargs["response_format"] = response_format
 
     if is_ollama:
-        # Only pass num_ctx if it's larger than the baseline daemon config
-        if ctx > min_ctx:
-            kwargs["num_ctx"] = ctx
+        kwargs["num_ctx"] = ctx
     
     logger.info(f"Sending request to {default_model} with context {ctx} (estimated tokens: {estimated_tokens})...")
     try:
