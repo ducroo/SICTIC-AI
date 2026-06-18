@@ -5,7 +5,7 @@ import unicodedata
 
 from rapidfuzz import fuzz
 
-from lib.people.model import Person
+from lib.linkedin_ids import normalize_linkedin_id
 from lib.slugify import slugify
 
 
@@ -18,7 +18,8 @@ def extract_linkedin_id(value: str) -> str:
         clean,
         re.IGNORECASE,
     )
-    return match.group(1).lower() if match else slugify(clean)
+    identifier = match.group(1).lower() if match else slugify(clean)
+    return normalize_linkedin_id(identifier)
 
 
 def sanitize_name(name: str) -> str:

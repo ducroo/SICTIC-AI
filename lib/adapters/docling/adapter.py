@@ -23,10 +23,11 @@ logger = get_logger(__name__)
 
 _PASSTHROUGH_EXTENSIONS = (".json", ".txt", ".md")
 _RTF_EXTENSIONS = (".rtf",)
+_UNSUPPORTED_EXTENSIONS = (".ai", ".eps")
 
 
 class DoclingAdapter:
-    def __init__(self, concurrency_limit: int = 10):
+    def __init__(self, concurrency_limit: int | None = None):
         self.concurrency_limit = concurrency_limit
 
     async def extract_documents(self, files_to_process: List[dict]):
@@ -36,6 +37,12 @@ class DoclingAdapter:
             filepath = str(file_data["local_path"])
 
             async def run(fname=filename, path=filepath):
+                if fname.lower().endswith(_UNSUPPORTED_EXTENSIONS):
+                    return DocumentConversionResult(
+                        filename=fname,
+                        status=ConversionStatus.IGNORED_EMPTY,
+                        reason="unsupported_format",
+                    )
                 try:
                     text = await self._process_single_file(
                         path,
@@ -61,6 +68,12 @@ class DoclingAdapter:
                         reason=reason,
                     )
                 except Exception as error:
+                    if _is_unsupported_format_error(error):
+                        return DocumentConversionResult(
+                            filename=fname,
+                            status=ConversionStatus.IGNORED_EMPTY,
+                            reason="unsupported_format",
+                        )
                     return DocumentConversionResult(
                         filename=fname,
                         status=ConversionStatus.FAILED,
@@ -81,11 +94,10 @@ class DoclingAdapter:
     ) -> str:
         from lib.services_gateway import gateway
 
-        async with gateway.slot(
-            "docling",
-            max_concurrent=self.concurrency_limit,
-            model=os.environ.get("VLM_MODEL") or "docling",
-        ):
+        slot_kwargs = {"model": os.environ.get("VLM_MODEL") or "docling"}
+        if self.concurrency_limit is not None:
+            slot_kwargs["max_concurrent"] = self.concurrency_limit
+        async with gateway.slot("docling", **slot_kwargs):
             if not os.path.isfile(filepath):
                 logger.warning("Skipping %s, not a valid local file.", filepath)
                 if raise_on_error:
@@ -187,3 +199,11 @@ def _short_error(error: Exception, limit: int = 500) -> str:
     if len(text) > limit:
         return text[:limit].rstrip() + "..."
     return text
+
+
+def _is_unsupported_format_error(error: Exception) -> bool:
+    text = str(error)
+    return (
+        "File format not allowed" in text
+        or "does not match any allowed format" in text
+    )

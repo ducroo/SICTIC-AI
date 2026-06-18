@@ -5,6 +5,7 @@ import json
 from lib.logger import get_logger
 from lib.people.model import Person, extract_email_addresses
 from lib.linkedin.identity import sanitize_name
+from lib.linkedin_ids import normalize_linkedin_id
 
 logger = get_logger(__name__)
 
@@ -30,7 +31,7 @@ class LinkedInCache:
                     exc,
                 )
                 continue
-            linkedin_id = filename.removesuffix(".json").lower()
+            linkedin_id = normalize_linkedin_id(filename.removesuffix(".json"))
             raw_name = payload.get("fullName", "")
             if not raw_name:
                 raw_name = " ".join(
@@ -54,6 +55,6 @@ class LinkedInCache:
             raise ValueError("LinkedIn cache writes require a canonical LinkedIn ID")
         self.storage.mkdir(self.cache_rel)
         self.storage.write_text(
-            f"{self.cache_rel}/{linkedin_id.lower()}.json",
+            f"{self.cache_rel}/{normalize_linkedin_id(linkedin_id)}.json",
             json.dumps(payload, indent=2),
         )

@@ -52,10 +52,14 @@ def test_gateway_initialization_has_no_file_side_effect(clean_gateway):
 
 
 @pytest.mark.asyncio
-async def test_gateway_mode_switching(clean_gateway, mocker):
+async def test_gateway_allows_distinct_models_to_run_together(
+    clean_gateway,
+    mocker,
+):
     llm_started = asyncio.Event()
     release_llm = asyncio.Event()
     embedding_started = asyncio.Event()
+    release_embedding = asyncio.Event()
 
     async def mock_llm_completion(**kwargs):
         llm_started.set()
@@ -64,32 +68,35 @@ async def test_gateway_mode_switching(clean_gateway, mocker):
 
     async def mock_embedding(**kwargs):
         embedding_started.set()
+        await release_embedding.wait()
         return "Mocked Embedding"
 
     mocker.patch("litellm.acompletion", side_effect=mock_llm_completion)
     mocker.patch("litellm.aembedding", side_effect=mock_embedding)
 
-    llm_task = asyncio.create_task(clean_gateway.request_completion({}))
+    llm_task = asyncio.create_task(
+        clean_gateway.request_completion({"model": "ollama/llm"})
+    )
     await llm_started.wait()
     assert len(_leases(clean_gateway, "llm")) == 1
 
-    embed_task = asyncio.create_task(clean_gateway.request_embedding({}))
-    await asyncio.sleep(0.05)
-    assert not embedding_started.is_set()
-    assert _leases(clean_gateway, "embedding") == []
-    assert len(_requests(clean_gateway, "embedding")) == 1
+    embed_task = asyncio.create_task(
+        clean_gateway.request_embedding({"model": "ollama/embed"})
+    )
+    await embedding_started.wait()
+    assert len(_leases(clean_gateway, "embedding")) == 1
 
     release_llm.set()
+    release_embedding.set()
     await llm_task
     await embed_task
 
     assert _leases(clean_gateway, "llm") == []
     assert _leases(clean_gateway, "embedding") == []
-    assert _requests(clean_gateway, "embedding") == []
 
 
 @pytest.mark.asyncio
-async def test_gateway_concurrency_limits(clean_gateway, mocker):
+async def test_gateway_concurrency_limits_are_per_model(clean_gateway, mocker):
     active = 0
     maximum_active = 0
     active_lock = asyncio.Lock()
@@ -107,7 +114,10 @@ async def test_gateway_concurrency_limits(clean_gateway, mocker):
     mocker.patch("litellm.aembedding", side_effect=mock_slow_embedding)
 
     await asyncio.gather(
-        *(clean_gateway.request_embedding({}) for _ in range(4))
+        *(
+            clean_gateway.request_embedding({"model": "ollama/embed"})
+            for _ in range(4)
+        )
     )
 
     assert maximum_active == 2
@@ -115,22 +125,98 @@ async def test_gateway_concurrency_limits(clean_gateway, mocker):
 
 
 @pytest.mark.asyncio
-async def test_available_capacity_does_not_wait_for_each_queue_head(
+async def test_first_runnable_request_wins_globally(
     clean_gateway,
 ):
-    requests = [
-        clean_gateway._register_request("embedding", "embedding-model")[0]
-        for _ in range(2)
-    ]
+    first = clean_gateway._register_request("llm", "first-model")[0]
+    second = clean_gateway._register_request("embedding", "second-model")[0]
 
     second_lease, _, _ = clean_gateway._try_acquire(
-        requests[1],
+        second,
         max_concurrent=2,
     )
 
-    assert second_lease is not None
-    clean_gateway._remove_request(requests[0])
-    clean_gateway._release(second_lease)
+    assert second_lease is None
+
+    first_lease, _, _ = clean_gateway._try_acquire(first, max_concurrent=2)
+
+    assert first_lease is not None
+    clean_gateway._remove_request(second)
+    clean_gateway._release(first_lease)
+
+
+@pytest.mark.asyncio
+async def test_blocked_request_does_not_cause_head_of_line_blocking(
+    tmp_path,
+):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=1,
+        wait_timeout=1,
+        poll_interval=0.01,
+    )
+    active = gateway._register_request("llm", "loaded-model")[0]
+    active_lease, _, _ = gateway._try_acquire(active, max_concurrent=2)
+    assert active_lease is not None
+
+    blocked = gateway._register_request("embedding", "blocked-model")[0]
+    runnable = gateway._register_request("llm", "loaded-model")[0]
+
+    runnable_lease, _, _ = gateway._try_acquire(
+        runnable,
+        max_concurrent=2,
+    )
+
+    assert runnable_lease is not None
+    gateway._remove_request(blocked)
+    gateway._release(runnable_lease)
+    gateway._release(active_lease)
+
+
+@pytest.mark.asyncio
+async def test_same_resource_different_models_have_independent_capacity(
+    clean_gateway,
+):
+    requests = [
+        clean_gateway._register_request("llm", model)[0]
+        for model in ("model-a", "model-a", "model-b", "model-b")
+    ]
+    leases = [
+        clean_gateway._try_acquire(request, max_concurrent=2)[0]
+        for request in requests
+    ]
+
+    assert all(lease is not None for lease in leases)
+    assert len(_leases(clean_gateway, "llm")) == 4
+    for lease in leases:
+        clean_gateway._release(lease)
+
+
+@pytest.mark.asyncio
+async def test_same_model_respects_per_model_capacity(
+    clean_gateway,
+):
+    requests = [
+        clean_gateway._register_request("llm", "same-model")[0]
+        for _ in range(2)
+    ]
+    waiting = clean_gateway._register_request("embedding", "same-model")[0]
+
+    leases = [
+        clean_gateway._try_acquire(request, max_concurrent=2)[0]
+        for request in requests
+    ]
+    blocked_lease, _, _ = clean_gateway._try_acquire(
+        waiting,
+        max_concurrent=2,
+    )
+
+    assert all(lease is not None for lease in leases)
+    assert blocked_lease is None
+    clean_gateway._remove_request(waiting)
+    for lease in leases:
+        clean_gateway._release(lease)
 
 
 def test_state_checks_each_process_identity_once(clean_gateway, mocker):
@@ -172,17 +258,27 @@ async def test_slot_releases_lease_after_cancellation(clean_gateway):
 
 
 @pytest.mark.asyncio
-async def test_slot_removes_waiting_request_after_cancellation(clean_gateway):
-    async with clean_gateway.slot("llm"):
-        waiting = asyncio.create_task(clean_gateway.slot("embedding").__aenter__())
+async def test_slot_removes_waiting_request_after_cancellation(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=1,
+        wait_timeout=1,
+        poll_interval=0.01,
+    )
+
+    async with gateway.slot("llm", model="loaded"):
+        waiting = asyncio.create_task(
+            gateway.slot("embedding", model="blocked").__aenter__()
+        )
         await asyncio.sleep(0.05)
-        assert len(_requests(clean_gateway, "embedding")) == 1
+        assert len(_requests(gateway, "embedding")) == 1
 
         waiting.cancel()
         with pytest.raises(asyncio.CancelledError):
             await waiting
 
-        assert _requests(clean_gateway, "embedding") == []
+        assert _requests(gateway, "embedding") == []
 
 
 @pytest.mark.asyncio
@@ -255,6 +351,29 @@ async def test_different_model_waits_when_loaded_model_slots_are_full(tmp_path):
                 timeout=0.03,
             ):
                 pass
+
+
+@pytest.mark.asyncio
+async def test_three_services_share_model_slots_equally(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=3,
+        wait_timeout=1,
+        poll_interval=0.01,
+    )
+
+    async with gateway.slot("llm", model="llm-model"):
+        async with gateway.slot("embedding", model="embedding-model"):
+            async with gateway.slot("docling", model="docling-model"):
+                assert len(gateway.snapshot()["leases"]["llm"]) == 1
+                assert len(gateway.snapshot()["leases"]["embedding"]) == 1
+                assert len(gateway.snapshot()["leases"]["docling"]) == 1
+                assert gateway._active_models(gateway.snapshot()) == {
+                    "llm-model",
+                    "embedding-model",
+                    "docling-model",
+                }
 
 
 def test_dead_or_reused_pid_lease_is_cleaned(clean_gateway):

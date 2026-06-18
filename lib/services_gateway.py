@@ -19,11 +19,6 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 _RESOURCE_KEYS = ("docling", "embedding", "llm")
-_EXCLUSIVE_WITH = {
-    "docling": ("embedding", "llm"),
-    "embedding": ("docling", "llm"),
-    "llm": ("docling", "embedding"),
-}
 _DEFAULT_WAIT_TIMEOUT = 3600.0
 _POLL_INTERVAL = 0.5
 
@@ -245,6 +240,41 @@ class ServicesGateway:
             )
         return models
 
+    @staticmethod
+    def _model_lease_count(state: dict, model: str) -> int:
+        return sum(
+            1
+            for leases in state["leases"].values()
+            for lease in leases
+            if str(lease.get("model") or lease.get("resource")) == model
+        )
+
+    @staticmethod
+    def _pending_requests(state: dict) -> list[dict]:
+        pending = [
+            request
+            for queue in state["requests"].values()
+            for request in queue
+        ]
+        return sorted(pending, key=lambda item: item.get("requested_at", 0))
+
+    def _request_is_admissible(
+        self,
+        state: dict,
+        request: dict,
+        *,
+        max_concurrent: int,
+    ) -> bool:
+        model = str(request.get("model") or request.get("resource"))
+        active_models = self._active_models(state)
+        model_already_loaded = model in active_models
+        if (
+            not model_already_loaded
+            and len(active_models) >= self.ollama_max_loaded_models
+        ):
+            return False
+        return self._model_lease_count(state, model) < max_concurrent
+
     def _format_counts(
         self,
         counts: dict[str, dict[str, int]],
@@ -307,30 +337,39 @@ class ServicesGateway:
         def acquire(state):
             leases = state["leases"]
             queue = state["requests"][resource]
-            request_index = next(
+            queued_request = next(
                 (
-                    index
-                    for index, item in enumerate(queue)
+                    item
+                    for item in queue
                     if item.get("request_id") == request.request_id
                 ),
                 None,
             )
-            available = max_concurrent - len(leases[resource])
-            if request_index is None or request_index >= available:
+            if queued_request is None:
                 return None, None, None
-            blocked = any(
-                leases[other]
-                for other in _EXCLUSIVE_WITH[resource]
+
+            first_admissible = next(
+                (
+                    item
+                    for item in self._pending_requests(state)
+                    if self._request_is_admissible(
+                        state,
+                        item,
+                        max_concurrent=max_concurrent,
+                    )
+                ),
+                None,
             )
-            active_models = self._active_models(state)
-            model_already_loaded = request.model in active_models
-            model_capacity_available = (
-                model_already_loaded
-                or len(active_models) < self.ollama_max_loaded_models
-            )
-            if blocked or len(leases[resource]) >= max_concurrent:
+            if (
+                first_admissible is None
+                or first_admissible.get("request_id") != request.request_id
+            ):
                 return None, None, None
-            if not model_capacity_available:
+            if not self._request_is_admissible(
+                state,
+                queued_request,
+                max_concurrent=max_concurrent,
+            ):
                 return None, None, None
             state["requests"][resource] = [
                 item
@@ -438,7 +477,7 @@ class ServicesGateway:
         *,
         timeout: float | None = None,
     ) -> Any:
-        """Embeddings cannot run concurrently with LLMs or Docling."""
+        """Coordinate embeddings by model slots and per-model parallelism."""
         import litellm
 
         litellm.disable_aiohttp_transport = True
@@ -455,7 +494,7 @@ class ServicesGateway:
         *,
         timeout: float | None = None,
     ) -> Any:
-        """LLMs cannot run concurrently with embeddings or Docling."""
+        """Coordinate completions by model slots and per-model parallelism."""
         import litellm
 
         litellm.disable_aiohttp_transport = True

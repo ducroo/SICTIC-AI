@@ -98,6 +98,50 @@ async def test_extract_documents_keeps_conversion_exceptions_fatal(
     assert "converter unavailable" in results[0].error
 
 
+@pytest.mark.asyncio
+async def test_extract_documents_ignores_unsupported_formats(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "logo.eps"
+    path.write_bytes(b"%!PS-Adobe EPSF")
+
+    async def unsupported(*_args, **_kwargs):
+        raise RuntimeError("File format not allowed: logo.eps")
+
+    monkeypatch.setattr(DoclingAdapter, "_process_single_file", unsupported)
+
+    results = await _conversion_results(
+        DoclingAdapter(),
+        [{"filename": path.name, "local_path": path}],
+    )
+
+    assert results[0].status is ConversionStatus.IGNORED_EMPTY
+    assert results[0].reason == "unsupported_format"
+
+
+@pytest.mark.asyncio
+async def test_extract_documents_skips_known_unsupported_extensions(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "logo.eps"
+    path.write_bytes(b"%!PS-Adobe EPSF")
+
+    async def unexpected_convert(*_args, **_kwargs):
+        raise AssertionError("unsupported extension should be skipped")
+
+    monkeypatch.setattr(DoclingAdapter, "_process_single_file", unexpected_convert)
+
+    results = await _conversion_results(
+        DoclingAdapter(),
+        [{"filename": path.name, "local_path": path}],
+    )
+
+    assert results[0].status is ConversionStatus.IGNORED_EMPTY
+    assert results[0].reason == "unsupported_format"
+
+
 def test_spreadsheet_conversion_omits_formatting_only_cells(tmp_path):
     workbook = Workbook()
     sheet = workbook.active

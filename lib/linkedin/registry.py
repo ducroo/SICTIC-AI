@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from lib.env import get_env_var
+from lib.linkedin_ids import normalize_linkedin_id
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -110,8 +111,16 @@ class LinkedInRegistry:
         entries = self.load()
         if key in entries:
             return key, entries[key]
+        normalized_key = normalize_linkedin_id(key)
+        normalized_linkedin_id = normalize_linkedin_id(linkedin_id)
         for entry_key, entry in entries.items():
-            if linkedin_id and entry.get("linkedin_id") == linkedin_id:
+            if normalized_key and normalize_linkedin_id(entry_key) == normalized_key:
+                return entry_key, entry
+            if (
+                normalized_linkedin_id
+                and normalize_linkedin_id(entry.get("linkedin_id", ""))
+                == normalized_linkedin_id
+            ):
                 return entry_key, entry
             if (
                 full_name
@@ -145,20 +154,31 @@ class LinkedInRegistry:
         self.update(mutate)
 
     def remove_identity(self, linkedin_id: str) -> None:
+        normalized_linkedin_id = normalize_linkedin_id(linkedin_id)
+
         def mutate(entries):
             for key in list(entries):
-                if key == linkedin_id or entries[key].get("linkedin_id") == linkedin_id:
+                if (
+                    normalize_linkedin_id(key) == normalized_linkedin_id
+                    or normalize_linkedin_id(entries[key].get("linkedin_id", ""))
+                    == normalized_linkedin_id
+                ):
                     del entries[key]
 
         self.update(mutate)
 
     def mark_status(self, linkedin_id: str, status: str) -> bool:
         changed = False
+        normalized_linkedin_id = normalize_linkedin_id(linkedin_id)
 
         def mutate(entries):
             nonlocal changed
             for key, entry in entries.items():
-                if key == linkedin_id or entry.get("linkedin_id") == linkedin_id:
+                if (
+                    normalize_linkedin_id(key) == normalized_linkedin_id
+                    or normalize_linkedin_id(entry.get("linkedin_id", ""))
+                    == normalized_linkedin_id
+                ):
                     entry["status"] = status
                     changed = True
 

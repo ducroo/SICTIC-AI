@@ -188,7 +188,7 @@ class LinkedInResolver:
         try:
             payloads = self._apify_factory().run_actor(
                 actor_id=LINKEDIN_PROFILE_ACTOR,
-                run_input={"urls": urls},
+                run_input={"profileUrls": urls},
             )
         except Exception as exc:
             logger.error("Apify LinkedIn batch scrape failed: %s", exc)

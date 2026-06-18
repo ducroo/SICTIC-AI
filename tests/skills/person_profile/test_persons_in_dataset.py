@@ -160,3 +160,22 @@ def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env,
             "",
         ]
     )
+
+
+def test_persons_in_dataset_rediscovers_when_manual_insight_is_empty(
+    mock_env,
+    mocker,
+):
+    storage = get_storage()
+    manual_path = _manual_path("sictic-members")
+    storage.write_text(manual_path, "")
+
+    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
+    adapter_cls.return_value.get_cached_persons.return_value = [
+        Person(full_name="Urs Gubser", linkedin_id="urs-gubser")
+    ]
+
+    persons = persons_in_dataset("sictic_members")
+
+    assert persons == [Person(full_name="Urs Gubser", linkedin_id="urs-gubser")]
+    assert "| Urs Gubser | urs-gubser |  |" in storage.read_text(manual_path)

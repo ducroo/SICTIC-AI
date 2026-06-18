@@ -6,6 +6,7 @@ from typing import Dict, List, Any, Iterable
 from rapidfuzz import fuzz
 from lib.slugify import slugify
 from lib.datasets.models import Chunk
+from lib.linkedin_ids import normalize_linkedin_id
 
 EMAIL_PATTERN = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 
@@ -72,7 +73,7 @@ class Person:
     person_profile: str = ""
 
     def __post_init__(self) -> None:
-        self.linkedin_id = self.linkedin_id.strip().lower()
+        self.linkedin_id = normalize_linkedin_id(self.linkedin_id)
         self.email_addresses = normalize_email_addresses(self.email_addresses)
 
     @property
