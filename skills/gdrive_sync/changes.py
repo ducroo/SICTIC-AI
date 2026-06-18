@@ -169,7 +169,7 @@ def wait_for_drive_quiet(
     baseline: dict[str, SnapshotEntry],
     mutations: CloudMutations,
     result: OperationResult,
-    wait_seconds: float = 5.0,
+    wait_seconds: float = 15.0,
 ) -> str:
     safe_token = start_token
     token = start_token

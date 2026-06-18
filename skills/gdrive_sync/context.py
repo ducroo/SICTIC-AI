@@ -15,4 +15,4 @@ class SyncContext:
     lock_path: Path | str
     lock_timeout: float
     lock_factory: Callable
-    quiet_wait_seconds: float = 5.0
+    quiet_wait_seconds: float = 15.0
