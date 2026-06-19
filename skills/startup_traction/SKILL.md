@@ -16,29 +16,24 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
 
 ## Workflow
 
-1. **Filename Generation & Caching:** 
-   * Convert `startup_name` to lowercase. 
-   * Determine the current model suffix (e.g., `qwen3.5_9b`). 
-   * Construct the output file path: `<REPO_PATH>/insights/<startup_name>/<startup_name>_traction_<model_name>.md`. 
-   * Call `check_insight_refresh([startup_name], "<startup_name>_traction_<model_suffix>.md")`. If it returns `False` (no refresh needed), read the existing file from disk and return its contents immediately.
+1. **Dataset Preparation:**
+   * Convert `startup_name` to a dataset slug with `slugify(...)`.
+   * Resolve and prepare the startup dataset with `ensure_startup_dataset(...)`.
+   * Run `sync_datasets([dataset_slug], raise_on_error=True)` so OCR and embeddings are current before analysis.
 
-2. **Configuration Loading:** 
-   * If a refresh is needed, call `config_load()` and extract: 
-     * `query = config['traction']['query']` 
-     * `llm_instructions = config['traction']['llm_instructions']`
+2. **Configuration Loading:**
+   * Call `config_load()` and extract:
+     * `query = config["startup_traction"]["query"]`
+     * `llm_instructions = config["startup_traction"]["llm_instructions"]`
 
-3. **Data Retrieval & Synthesis:** 
-   * Invoke `dataset_chat` with the following parameters: 
-     * `dataset_name = startup_name.lower()` 
-     * `questions = query` 
-     * `llm_instructions = llm_instructions` 
-   * *Note:* Ensure `dataset_chat` returns the raw Markdown string directly, as we expect a combined table and synthesis rather than a strictly parsed JSON object.
+3. **Insight File & Caching:**
+   * Construct the traction insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="startup_traction", model=llm_model(), prompt_key=query + llm_instructions)`.
+   * Use `insight.find_reusable()` and `insight.content()` to reuse a fresh existing traction report when available.
 
-4. **Output Generation:** 
-   * Ensure the output directory `<REPO_PATH>/insights/<startup_name>/` exists. 
-   * Write the returned Markdown string to the constructed output file path. 
-   * Log success using the centralized `logger`. 
-   * Return the raw Markdown string to the user/CLI.
+4. **Data Retrieval, Synthesis & Output:**
+   * Invoke `dataset_chat(dataset_name=dataset_slug, questions=query, llm_instructions=llm_instructions, max_chunks=100, strict_insufficient_context=False)`.
+   * If there is insufficient indexed context, raise an error and do not save an insight.
+   * Save the Markdown result with `insight.save(result)`, log `insight.path`, and return the raw Markdown string.
 
 ## Architecture Constraints
 * **Entry Point:** Must have a `__main__.py` containing a Typer CLI that accepts `startup_name` as an argument. The CLI must contain zero business logic. 

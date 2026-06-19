@@ -1,16 +1,15 @@
-from lib.insight_filepath import get_insight_filepath
-from lib.models.person import Person
+from lib.insights import InsightFile
+from lib.people.discovery import persons_in_dataset
+from lib.people.model import Person
 from lib.storage import get_storage
-from skills.person_profile.persons_in_dataset import persons_in_dataset
 
 
 def _manual_path(dataset: str) -> str:
-    return get_insight_filepath(
-        dataset_name=dataset,
-        skill_name="persons_in_dataset",
+    return InsightFile(
+        dataset=dataset,
+        skill="persons_in_dataset",
         model="manual",
-        subdir=False,
-    )
+    ).path
 
 
 def test_persons_in_dataset_reads_manual_insight_table(mock_env):
@@ -119,7 +118,7 @@ def test_persons_in_dataset_reads_legacy_manual_table_headers(mock_env, mocker):
         )
         + "\n",
     )
-    adapter_cls = mocker.patch("skills.person_profile.persons_in_dataset.LinkedInAdapter")
+    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
     adapter_cls.return_value.get_cached_persons.return_value = [
         Person(full_name="Patrick Schuler", linkedin_id="schulerp", email_addresses=["patrick@example.com"])
     ]
@@ -135,7 +134,7 @@ def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env,
     storage = get_storage()
     manual_path = _manual_path("sictic-members")
 
-    adapter_cls = mocker.patch("skills.person_profile.persons_in_dataset.LinkedInAdapter")
+    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
     adapter_cls.return_value.get_cached_persons.return_value = [
         Person(full_name="Urs Gubser", linkedin_id="urs-gubser", email_addresses=["urs@gubser.ch"]),
         Person(full_name="", linkedin_id="jane-doe"),
@@ -161,3 +160,22 @@ def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env,
             "",
         ]
     )
+
+
+def test_persons_in_dataset_rediscovers_when_manual_insight_is_empty(
+    mock_env,
+    mocker,
+):
+    storage = get_storage()
+    manual_path = _manual_path("sictic-members")
+    storage.write_text(manual_path, "")
+
+    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
+    adapter_cls.return_value.get_cached_persons.return_value = [
+        Person(full_name="Urs Gubser", linkedin_id="urs-gubser")
+    ]
+
+    persons = persons_in_dataset("sictic_members")
+
+    assert persons == [Person(full_name="Urs Gubser", linkedin_id="urs-gubser")]
+    assert "| Urs Gubser | urs-gubser |  |" in storage.read_text(manual_path)

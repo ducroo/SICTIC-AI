@@ -1,5 +1,8 @@
-from gdrive_sync.state import SyncState
-from gdrive_sync.types import SnapshotEntry
+import json
+import sqlite3
+
+from skills.gdrive_sync.state import SyncState
+from skills.gdrive_sync.types import SnapshotEntry
 
 
 def test_baseline_drive_id_lookup_and_upsert(tmp_path):
@@ -42,3 +45,26 @@ def test_delete_baseline_path_can_remove_descendants(tmp_path):
     state.delete_baseline_path("folder", include_descendants=True)
 
     assert set(state.load_baseline()) == {"other.md"}
+
+
+def test_load_baseline_ignores_legacy_local_hash_cache_fields(tmp_path):
+    state = SyncState(tmp_path / "state.sqlite3")
+    legacy = {
+        "path": "file.md",
+        "type": "file",
+        "sha256": "canonical-hash",
+        "drive_id": "drive-1",
+        "local_sha256": "cached-local-hash",
+        "local_size": 42,
+        "local_mtime_ns": 123,
+    }
+    with sqlite3.connect(state.path) as connection:
+        connection.execute(
+            "insert into baseline(path, entry_json) values(?, ?)",
+            ("file.md", json.dumps(legacy)),
+        )
+
+    entry = state.load_baseline()["file.md"]
+    assert entry.sha256 == "canonical-hash"
+    assert entry.drive_id == "drive-1"
+    assert not hasattr(entry, "local_sha256")

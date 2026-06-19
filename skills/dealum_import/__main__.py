@@ -2,7 +2,7 @@ import asyncio
 
 import typer
 
-from lib.dealum_import import DealumReconciliationError
+from lib.startups.dealum import DealumReconciliationError
 from skills.dealum_import.dealum_import import dealum_import
 
 app = typer.Typer(help="Import a startup application and linked documents from Dealum.")

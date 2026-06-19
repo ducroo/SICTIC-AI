@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import re
+
+from lib.env import get_env_var
+from lib.insights.manifest import prompt_hash
+from lib.insights.paths import model_slug
+from lib.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def ranked_models() -> list[tuple[str, str]]:
+    return [
+        (model.strip(), model_slug(model.strip()))
+        for model in get_env_var("RANKED_LLMS").split(",")
+        if model.strip()
+    ]
+
+
+def find_reusable(insight):
+    manual = insight._candidate("manual")
+    if manual.exists():
+        logger.info("Using manual insight: %s", manual.path)
+        return manual
+
+    manifest = insight._load_manifest()
+    expected_revisions = insight._dataset_revisions()
+    if expected_revisions is None:
+        return None
+    expected_prompt_hash = prompt_hash(insight.prompt_key)
+
+    for model, ranked_model_slug in ranked_models():
+        candidate = insight._candidate(model)
+        if not candidate.exists():
+            continue
+        entry = manifest["entries"].get(candidate.path)
+        if (
+            isinstance(entry, dict)
+            and entry.get("model") == ranked_model_slug
+            and entry.get("dataset_revisions") == expected_revisions
+            and entry.get("prompt_sha256") == expected_prompt_hash
+        ):
+            logger.info("Using reusable insight: %s", candidate.path)
+            return candidate
+    return None
+
+
+def find_any(insight):
+    from lib.storage import get_storage
+
+    available = set(get_storage().list(insight.directory, suffix=".md"))
+    manual = insight._candidate("manual")
+    if manual.filename in available:
+        return manual
+
+    seen = {manual.filename}
+    for model, _ranked_model_slug in ranked_models():
+        candidate = insight._candidate(model)
+        seen.add(candidate.filename)
+        if candidate.filename in available:
+            return candidate
+
+    prefix = f"{insight._base_name}-"
+    remaining = [
+        filename
+        for filename in available - seen
+        if filename.startswith(prefix) and filename.endswith(".md")
+    ]
+    if not remaining:
+        return None
+    remaining.sort(key=fallback_sort_key, reverse=True)
+    return insight._candidate_from_filename(remaining[0])
+
+
+def fallback_sort_key(filename: str) -> tuple[int, str]:
+    digits = [int(value) for value in re.findall(r"\d+", filename)]
+    return (max(digits) if digits else 0, filename)

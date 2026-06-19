@@ -1,7 +1,8 @@
 import typer
-from typing import List, Optional
-from skills.team_profile.team_profile import team_profile
+
+from lib.cli import run_command
 from lib.logger import get_logger
+from skills.team_profile.team_profile import team_profile
 
 logger = get_logger(__name__)
 
@@ -11,24 +12,16 @@ app = typer.Typer(help="Performs deep-dive due diligence on a startup's leadersh
 def profile_team(
     startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup")
 ):
-    try:
-        import asyncio
-        logger.info(f"Starting team profile generation for startup: {startup}")
-        profile_output, output_file = asyncio.run(team_profile(startup))
-        
-        print("\n--- Team Profile Output ---\n")
-        print(profile_output)
-        print("\n---------------------------\n")
-        logger.info(f"Successfully saved team profile to {output_file}")
-        
-    except ValueError as ve:
-        logger.error(f"Validation error: {ve}")
-        print(f"Error: {ve}")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        logger.error(f"Execution failed: {e}")
-        print(f"Execution failed: {e}")
-        raise typer.Exit(code=1)
+    logger.info("Starting team profile generation for startup: %s", startup)
+    profile_output, output_file = run_command(
+        lambda: team_profile(startup),
+        logger=logger,
+        error_prefix="Execution failed",
+    )
+    typer.echo("\n--- Team Profile Output ---\n")
+    typer.echo(profile_output)
+    typer.echo("\n---------------------------\n")
+    logger.info("Successfully saved team profile to %s", output_file)
 
 if __name__ == "__main__":
     app()

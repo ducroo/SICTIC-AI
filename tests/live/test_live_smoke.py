@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from lib.storage_domains import (
+from lib.datasets.paths import (
     dataset_active_marker_path,
     dataset_raw_path,
     list_dataset_names,

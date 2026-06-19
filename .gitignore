@@ -11,6 +11,7 @@ SOUL.md
 TOOLS.md
 USER.md
 cache/
+docling_data/
 log/
 memory/
 test_runner.py
@@ -22,6 +23,7 @@ __pycache__/
 .storage/
 .storage-mirror/
 gdrive-mirror/
+gdrive_sync_state/
 
 venv/
 logs/
@@ -30,7 +32,7 @@ qdrant/
 qdrant_data/
 .qdrant-initialized
 
-# editable-install / packaging artifacts
+# packaging artifacts
 *.egg-info/
 build/
 dist/

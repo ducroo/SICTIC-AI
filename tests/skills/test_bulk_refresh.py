@@ -1,23 +1,30 @@
 import pytest
 
+from lib.storage import get_storage
+from lib.datasets.paths import dataset_location_for_domain
 from skills.bulk_refresh import bulk_refresh as bulk_refresh_module
+from skills.skill_registry import (
+    SKILL_REGISTRY,
+    SkillSpec,
+    expand_skill_dependencies,
+)
 
 
 def test_person_profile_dependency_includes_persons_in_dataset():
-    assert bulk_refresh_module._expand_skill_dependencies(["person-profile"]) == [
+    assert expand_skill_dependencies(["person-profile"]) == [
         "persons-in-dataset",
         "person-profile",
     ]
 
 
 def test_persons_in_dataset_can_be_selected_directly():
-    assert bulk_refresh_module._expand_skill_dependencies(
-        ["persons-in-dataset"]
-    ) == ["persons-in-dataset"]
+    assert expand_skill_dependencies(["persons-in-dataset"]) == [
+        "persons-in-dataset"
+    ]
 
 
 def test_nested_dependencies_are_expanded_in_registry_order():
-    assert bulk_refresh_module._expand_skill_dependencies(["investor-profile"]) == [
+    assert expand_skill_dependencies(["investor-profile"]) == [
         "persons-in-dataset",
         "person-profile",
         "investor-profile",
@@ -29,34 +36,26 @@ def test_nested_dependencies_are_expanded_in_registry_order():
     ["expert-search", "potential-investors", "suggested-startups"],
 )
 def test_member_matching_skills_depend_on_investor_profile(skill_name):
-    dependencies = bulk_refresh_module._expand_skill_dependencies([skill_name])
+    dependencies = expand_skill_dependencies([skill_name])
 
     assert "persons-in-dataset" in dependencies
     assert "person-profile" in dependencies
     assert "investor-profile" in dependencies
 
 
-@pytest.mark.parametrize(
-    "dataset_name",
-    [
-        "person-profile",
-        "active-person-profile",
-        "sictic-members-person-profile",
-        "avientus-startup-profile",
-        "active-investor-profile",
-    ],
-)
-def test_insight_derived_dataset_names_are_detected(dataset_name):
-    assert bulk_refresh_module._is_insight_derived_dataset(dataset_name)
-
-
-def test_normal_dataset_names_are_not_treated_as_derived():
-    assert not bulk_refresh_module._is_insight_derived_dataset("avientus")
-    assert not bulk_refresh_module._is_insight_derived_dataset("sictic-members")
+def test_registry_declares_domain_applicability():
+    assert SKILL_REGISTRY["startup-profile"].domains == frozenset({"startups"})
+    assert SKILL_REGISTRY["person-profile"].domains == frozenset(
+        {"startups", "community"}
+    )
+    assert all(
+        "generated" not in skill.domains
+        for skill in SKILL_REGISTRY.values()
+    )
 
 
 @pytest.mark.asyncio
-async def test_person_profile_runs_persons_dependency_first(mocker):
+async def test_person_profile_runs_persons_dependency_first(mock_env, mocker):
     calls = []
 
     async def fake_sync(datasets):
@@ -68,14 +67,22 @@ async def test_person_profile_runs_persons_dependency_first(mocker):
     async def fake_profile(dataset_name):
         calls.append(("person-profile", dataset_name))
 
+    location = dataset_location_for_domain("sictic-members", "community")
+    get_storage().mkdir(location.raw_rel)
     mocker.patch.object(bulk_refresh_module, "sync_datasets", side_effect=fake_sync)
     mocker.patch.dict(
-        bulk_refresh_module.SKILL_MAP["persons-in-dataset"],
-        {"func": fake_persons},
-    )
-    mocker.patch.dict(
-        bulk_refresh_module.SKILL_MAP["person-profile"],
-        {"func": fake_profile},
+        bulk_refresh_module.SKILL_REGISTRY,
+        {
+            "persons-in-dataset": SkillSpec(
+                func=fake_persons,
+                domains=frozenset({"startups", "community"}),
+            ),
+            "person-profile": SkillSpec(
+                func=fake_profile,
+                domains=frozenset({"startups", "community"}),
+                depends_on=("persons-in-dataset",),
+            ),
+        },
     )
 
     await bulk_refresh_module.bulk_refresh(
@@ -91,11 +98,25 @@ async def test_person_profile_runs_persons_dependency_first(mocker):
 
 
 @pytest.mark.asyncio
-async def test_explicit_insight_derived_dataset_is_skipped(mocker):
+async def test_generated_dataset_is_ingested_but_has_no_applicable_skills(
+    mock_env,
+    mocker,
+):
+    location = dataset_location_for_domain(
+        "sictic-members-person-profile",
+        "generated",
+    )
+    get_storage().mkdir(location.raw_rel)
     sync = mocker.patch.object(bulk_refresh_module, "sync_datasets")
-    persons = mocker.patch.object(
-        bulk_refresh_module,
-        "_refresh_persons_in_dataset",
+    persons = mocker.AsyncMock()
+    mocker.patch.dict(
+        bulk_refresh_module.SKILL_REGISTRY,
+        {
+            "persons-in-dataset": SkillSpec(
+                func=persons,
+                domains=frozenset({"startups", "community"}),
+            )
+        },
     )
 
     await bulk_refresh_module.bulk_refresh(
@@ -103,5 +124,5 @@ async def test_explicit_insight_derived_dataset_is_skipped(mocker):
         target_skill="persons-in-dataset",
     )
 
-    sync.assert_not_called()
+    sync.assert_awaited_once_with(["sictic-members-person-profile"])
     persons.assert_not_called()

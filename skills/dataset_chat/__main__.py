@@ -1,11 +1,11 @@
 import typer
 from typing import Optional, List
-from skills.dataset_chat.dataset_chat import dataset_chat
-from skills.dataset_chat.dataset_search import dataset_search
-from skills.dataset_chat.dataset_delete import dataset_delete
-from skills.dataset_chat.core.ingestion import sync_datasets
-from lib.adapters.qdrant import QdrantAdapter
+
+from lib.cli import run_command
 from lib.logger import get_logger
+from lib.datasets.ingestion import sync_datasets
+from skills.dataset_chat.dataset_chat import dataset_chat
+from lib.datasets.search import dataset_search
 
 logger = get_logger(__name__)
 
@@ -16,16 +16,15 @@ def search_cmd(
     dataset_name: str = typer.Argument(..., help="Name of the dataset/collection to search."),
     query: str = typer.Argument("", help="The query/question to search for.")
 ):
-    try:
-        import asyncio
-        chunks = asyncio.run(dataset_search(dataset_name, [query]))
-        for c in chunks:
-            print(f"[Source: {c.document_name}, Page: {c.page_number}]\n{c.text}\n")
-    except typer.Exit:
-        raise
-    except Exception as e:
-        logger.error(str(e))
-        raise typer.Exit(code=1)
+    chunks = run_command(
+        lambda: dataset_search(dataset_name, query),
+        logger=logger,
+    )
+    for chunk in chunks:
+        typer.echo(
+            f"[Source: {chunk.document_name}, Page: {chunk.page_number}]\n"
+            f"{chunk.text}\n"
+        )
 
 @app.command("chat")
 def chat_cmd(
@@ -33,39 +32,22 @@ def chat_cmd(
     questions: str = typer.Argument(..., help="The query/question to ask."),
     llm_instructions: Optional[str] = typer.Argument(None, help="Optional formatting/anti-hallucination instructions.")
 ):
-    try:
-        import asyncio
-        response = asyncio.run(dataset_chat(dataset_name, questions, llm_instructions))
-        if response:
-            print(response)
-    except typer.Exit:
-        raise
-    except Exception as e:
-        logger.error(str(e))
-        raise typer.Exit(code=1)
+    response = run_command(
+        lambda: dataset_chat(dataset_name, questions, llm_instructions),
+        logger=logger,
+    )
+    if response:
+        typer.echo(response)
 
 @app.command("sync")
 def sync_cmd(
     dataset_names: List[str] = typer.Argument(..., help="Names of the datasets/collections to sync. Can pass multiple separated by spaces."),
     force: bool = typer.Option(False, "--force", help="Bypass the short in-process sync cache.")
 ):
-    try:
-        import asyncio
-        asyncio.run(sync_datasets(dataset_names, raise_on_error=True, force=force))
-    except Exception as e:
-        logger.error(str(e))
-        raise typer.Exit(code=1)
-
-@app.command("delete")
-def delete_cmd(
-    dataset: Optional[str] = typer.Option(None, "--dataset", "-d", help="Name of the dataset/collection to delete."),
-    embeddings: Optional[str] = typer.Option(None, "--embeddings", "-e", help="Target embedding model to delete.")
-):
-    try:
-        dataset_delete(dataset, embeddings)
-    except Exception as e:
-        logger.error(str(e))
-        raise typer.Exit(code=1)
+    run_command(
+        lambda: sync_datasets(dataset_names, raise_on_error=True, force=force),
+        logger=logger,
+    )
 
 if __name__ == "__main__":
     app()

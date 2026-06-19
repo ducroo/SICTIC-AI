@@ -1,176 +1,233 @@
-import sys
-import os
-import uuid
-import hashlib
-from typing import List, Optional
+from __future__ import annotations
 
+from typing import Optional
+
+from lib.env import get_env_var
+from lib.logger import get_logger
+from lib.model_config import embedding_model
 from lib.runtime_noise import configure_runtime_noise, suppress_native_stderr
+from lib.slugify import slugify
 
 configure_runtime_noise()
 
 with suppress_native_stderr():
     from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
-from skills.dataset_chat.core.models import Chunk
-from langchain_text_splitters import MarkdownTextSplitter
-from lib.slugify import slugify
-from lib.env import get_env_var
-from lib.logger import get_logger
-from lib.model_config import embedding_endpoint, embedding_model
+    from qdrant_client.models import (
+        Distance,
+        FieldCondition,
+        Filter,
+        MatchValue,
+        PointIdsList,
+        PointStruct,
+        VectorParams,
+    )
 
 logger = get_logger(__name__)
 
-class Chunker:
-    @staticmethod
-    def split_markdown(text: str, filename: str, mod_time: float) -> List[Chunk]:
-        splitter = MarkdownTextSplitter(chunk_size=1000, chunk_overlap=100)
-        docs = splitter.create_documents([text])
-        chunks = []
-        for i, doc in enumerate(docs):
-            content = doc.page_content
-            hash_str = f"{filename}_{content}"
-            chunk_hash = hashlib.md5(hash_str.encode('utf-8')).hexdigest()
-            chunk_id = str(uuid.UUID(hex=chunk_hash))
-            
-            chunks.append(Chunk(
-                chunk_id=chunk_id,
-                document_name=filename,
-                page_number=(i // 5) + 1,
-                last_modified=mod_time,
-                text=content
-            ))
-        return chunks
+
+class QdrantAdmin:
+    """Database administration operations not tied to one dataset."""
+
+    def __init__(self):
+        self.client = QdrantClient(
+            url=get_env_var("QDRANT_HOST"),
+            timeout=60.0,
+        )
+
+    def list_collections(self) -> list[str]:
+        return [
+            collection.name
+            for collection in self.client.get_collections().collections
+        ]
+
+    def delete_collection(self, collection_name: str) -> None:
+        self.client.delete_collection(collection_name)
+
 
 class QdrantAdapter:
-    """Manages the connection and semantic operations with Qdrant."""
+    """Database-only operations for one Qdrant collection."""
+
     @staticmethod
-    def collection_for(collection_name: str, embeddings_model: Optional[str] = None) -> str:
+    def collection_for(
+        collection_name: str,
+        embeddings_model: Optional[str] = None,
+    ) -> str:
         model = embeddings_model or embedding_model()
         clean_model = model.split("/")[-1]
         return slugify(f"{collection_name}-{clean_model}")
 
-    def __init__(self, collection_name: str):
-        # Suppress litellm boot warnings
-        import litellm
-        litellm.suppress_debug_info = True
-        litellm.disable_aiohttp_transport = True
-
+    def __init__(
+        self,
+        collection_name: str,
+        *,
+        vector_size: int | None = None,
+    ):
         self.client = QdrantClient(url=get_env_var("QDRANT_HOST"))
-        model = embedding_model()
-        self.collection_name = self.collection_for(collection_name, model)
+        self.collection_name = self.collection_for(collection_name)
+        if vector_size is not None:
+            self.ensure_collection(vector_size)
 
-        collections = self.client.get_collections().collections
-        collection_exists = any(c.name == self.collection_name for c in collections)
-        vector_size = self._detect_vector_size(model)
+    def list_collections(self) -> list[str]:
+        return [
+            collection.name
+            for collection in self.client.get_collections().collections
+        ]
 
-        if collection_exists:
-            existing_size = self._collection_vector_size()
+    def collection_exists(self) -> bool:
+        return self.collection_name in self.list_collections()
+
+    def ensure_collection(self, vector_size: int) -> None:
+        if self.collection_exists():
+            existing_size = self.collection_vector_size()
             if existing_size is not None and existing_size != vector_size:
-                points_count = self._collection_points_count()
+                points_count = self.collection_points_count()
                 if points_count == 0:
                     logger.warning(
-                        f"Recreating empty Qdrant collection {self.collection_name}: "
-                        f"stored vector size {existing_size}, current model size {vector_size}."
+                        "Recreating empty Qdrant collection %s: stored vector "
+                        "size %s, current model size %s.",
+                        self.collection_name,
+                        existing_size,
+                        vector_size,
                     )
-                    self.client.delete_collection(self.collection_name)
-                    collection_exists = False
+                    self.delete_collection()
                 else:
                     raise RuntimeError(
-                        f"Qdrant collection {self.collection_name} has vector size {existing_size}, "
-                        f"but {model} returns {vector_size}. Delete/rebuild the collection before rerunning."
+                        f"Qdrant collection {self.collection_name} has vector "
+                        f"size {existing_size}, but the configured embedding "
+                        f"model returns {vector_size}. Delete/rebuild the "
+                        "collection before rerunning."
                     )
+            else:
+                return
+        logger.info("Creating new Qdrant collection: %s", self.collection_name)
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            vectors_config=VectorParams(
+                size=vector_size,
+                distance=Distance.COSINE,
+            ),
+        )
 
-        if not collection_exists:
-            logger.info(f"Creating new Qdrant collection: {self.collection_name}")
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
-            )
-
-    def _detect_vector_size(self, model: str) -> int:
-        """Returns the embedding dimension for the configured model."""
-        import litellm
-
-        dummy_kwargs = embedding_endpoint().litellm_kwargs()
-        dummy_kwargs["model"] = model
-        dummy_kwargs["input"] = ["test"]
-
-        try:
-            dummy_response = litellm.embedding(**dummy_kwargs)
-            vector_size = len(dummy_response.data[0]["embedding"])
-            logger.info(f"Dynamically determined vector size: {vector_size} for model {model}")
-            return vector_size
-        except Exception as e:
-            logger.error(f"Failed to determine vector size dynamically: {e}")
-            raise RuntimeError(f"Could not determine embedding vector size for {model}: {e}")
-
-    def _collection_info(self):
+    def collection_info(self):
         try:
             return self.client.get_collection(self.collection_name)
-        except Exception as e:
-            logger.warning(f"Failed to inspect Qdrant collection {self.collection_name}: {e}")
+        except Exception as exc:
+            logger.warning(
+                "Failed to inspect Qdrant collection %s: %s",
+                self.collection_name,
+                exc,
+            )
             return None
 
-    def _collection_vector_size(self) -> int | None:
-        info = self._collection_info()
+    def collection_vector_size(self) -> int | None:
+        info = self.collection_info()
         if not info:
             return None
         vectors = getattr(getattr(info, "config", None), "params", None)
         vectors = getattr(vectors, "vectors", None)
         return getattr(vectors, "size", None)
 
-    def _collection_points_count(self) -> int:
-        info = self._collection_info()
+    def collection_points_count(self) -> int:
+        info = self.collection_info()
         return int(getattr(info, "points_count", 0) or 0) if info else 0
 
     def dataset_available(self) -> bool:
-        """Returns True when the collection exists and contains at least one point."""
         try:
             count = self.client.count(
                 collection_name=self.collection_name,
                 exact=False,
             )
             return count.count > 0
-        except Exception as e:
-            logger.warning(f"Failed to check Qdrant dataset availability for {self.collection_name}: {e}")
+        except Exception as exc:
+            logger.warning(
+                "Failed to check Qdrant dataset availability for %s: %s",
+                self.collection_name,
+                exc,
+            )
             return False
 
-    async def _get_embedding(self, text: str) -> List[float]:
-        import litellm
-        endpoint = embedding_endpoint()
-        kwargs = endpoint.litellm_kwargs()
-        kwargs["input"] = [text]
-            
+    def get_document_mtimes(
+        self,
+        *,
+        raise_on_error: bool = False,
+    ) -> dict[str, float]:
+        mtimes: dict[str, float] = {}
+        offset = None
         try:
-            response = await litellm.aembedding(**kwargs)
-            return response.data[0]["embedding"]
-        except Exception as e:
-            logger.error(f"Failed to generate embedding: {e}")
-            raise RuntimeError(f"Embedding failed: {e}")
-
-    def get_document_mtimes(self) -> dict[str, float]:
-        """Returns a dict of document_name -> newest last_modified timestamp in Qdrant."""
-        try:
-            scroll_result = self.client.scroll(
-                collection_name=self.collection_name,
-                limit=10000,
-                with_payload=["document_name", "last_modified"],
-                with_vectors=False
-            )[0]
-            
-            mtimes = {}
-            for point in scroll_result:
-                doc_name = point.payload["document_name"]
-                mtime = point.payload["last_modified"]
-                if doc_name not in mtimes or mtime > mtimes[doc_name]:
-                    mtimes[doc_name] = mtime
+            while True:
+                points, offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=10000,
+                    offset=offset,
+                    with_payload=["document_name", "last_modified"],
+                    with_vectors=False,
+                )
+                for point in points:
+                    doc_name = point.payload["document_name"]
+                    mtime = point.payload["last_modified"]
+                    if doc_name not in mtimes or mtime > mtimes[doc_name]:
+                        mtimes[doc_name] = mtime
+                if offset is None:
+                    break
             return mtimes
-        except Exception as e:
-            logger.warning(f"Failed to fetch document mtimes: {e}")
+        except Exception as exc:
+            logger.warning("Failed to fetch document mtimes: %s", exc)
+            if raise_on_error:
+                raise RuntimeError(
+                    f"Failed to fetch document mtimes from {self.collection_name}: {exc}"
+                ) from exc
             return {}
 
-    def delete_document(self, document_name: str) -> None:
-        """Deletes all chunks belonging to a specific document."""
+    def get_document_point_ids(self, document_name: str) -> set[str]:
+        point_ids: set[str] = set()
+        offset = None
+        document_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="document_name",
+                    match=MatchValue(value=document_name),
+                )
+            ]
+        )
+        try:
+            while True:
+                points, offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=document_filter,
+                    limit=10000,
+                    offset=offset,
+                    with_payload=False,
+                    with_vectors=False,
+                )
+                point_ids.update(str(point.id) for point in points)
+                if offset is None:
+                    break
+            return point_ids
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to fetch existing chunks for {document_name}: {exc}"
+            ) from exc
+
+    def delete_point_ids(self, point_ids: set[str]) -> None:
+        if not point_ids:
+            return
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=PointIdsList(points=sorted(point_ids)),
+                wait=True,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to delete {len(point_ids)} stale chunks: {exc}"
+            ) from exc
+
+    def delete_document(
+        self,
+        document_name: str,
+        *,
+        raise_on_error: bool = False,
+    ) -> None:
         try:
             self.client.delete(
                 collection_name=self.collection_name,
@@ -178,72 +235,64 @@ class QdrantAdapter:
                     must=[
                         FieldCondition(
                             key="document_name",
-                            match=MatchValue(value=document_name)
+                            match=MatchValue(value=document_name),
                         )
                     ]
-                )
+                ),
+                wait=True,
             )
-            logger.debug(f"Deleted old chunks for {document_name} from Qdrant.")
-        except Exception as e:
-            logger.error(f"Failed to delete {document_name} from Qdrant: {e}")
+            logger.debug("Deleted chunks for %s from Qdrant.", document_name)
+        except Exception as exc:
+            logger.error(
+                "Failed to delete %s from Qdrant: %s",
+                document_name,
+                exc,
+            )
+            if raise_on_error:
+                raise RuntimeError(
+                    f"Failed to delete existing chunks for {document_name}: {exc}"
+                ) from exc
 
-    async def upsert(self, chunks: List[Chunk], batch_size: int = 50) -> None:
-        if not chunks:
-            return
-
-        total = len(chunks)
+    def upsert_points(
+        self,
+        points: list[dict],
+        *,
+        batch_size: int = 50,
+    ) -> None:
+        qdrant_points = [
+            PointStruct(
+                id=point["id"],
+                vector=point["vector"],
+                payload=point["payload"],
+            )
+            for point in points
+        ]
+        total = len(qdrant_points)
         for start in range(0, total, batch_size):
-            batch = chunks[start:start + batch_size]
-            points = []
-            for c in batch:
-                vector = await self._get_embedding(c.text)
-                points.append(PointStruct(
-                    id=c.chunk_id,
-                    vector=vector,
-                    payload=c.model_dump()
-                ))
-
+            batch = qdrant_points[start:start + batch_size]
             try:
                 self.client.upsert(
                     collection_name=self.collection_name,
-                    points=points
+                    points=batch,
                 )
                 logger.info(
-                    f"Upserted chunk batch {start + 1}-{start + len(batch)} "
-                    f"of {total} into {self.collection_name}."
+                    "Upserted point batch %s-%s of %s into %s.",
+                    start + 1,
+                    start + len(batch),
+                    total,
+                    self.collection_name,
                 )
-            except Exception as e:
-                logger.error(f"Failed to upsert points: {e}")
-                raise RuntimeError(f"Upsert failed: {e}")
+            except Exception as exc:
+                logger.error("Failed to upsert points: %s", exc)
+                raise RuntimeError(f"Upsert failed: {exc}") from exc
 
-    async def search(self, query: str | list[str], limit: int = 5, threshold_factor: float = 0.8) -> List[Chunk]:
-        if not query:
-            logger.warning("Empty query provided to search.")
-            return []
-            
-        if isinstance(query, list):
-            query = " ".join(query)
-            
-        vector = await self._get_embedding(query)
-        
-        try:
-            # Qdrant client 1.18.0 deprecates .search() in favor of .query_points()
-            results = self.client.query_points(
-                collection_name=self.collection_name,
-                query=vector,
-                limit=limit,
-                with_payload=True
-            ).points
-            
-            if not results:
-                return []
-                
-            top_score = results[0].score
-            threshold = top_score * threshold_factor
-            
-            filtered_results = [r for r in results if r.score >= threshold]
-            
-            return [Chunk(**r.payload) for r in filtered_results]
-        except Exception as e:
-            logger.error(f"Semantic search failed: {e}")
-            return []
+    def query(self, vector: list[float], *, limit: int):
+        return self.client.query_points(
+            collection_name=self.collection_name,
+            query=vector,
+            limit=limit,
+            with_payload=True,
+        ).points
+
+    def delete_collection(self) -> None:
+        self.client.delete_collection(self.collection_name)

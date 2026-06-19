@@ -1,7 +1,8 @@
 import typer
-import asyncio
-from skills.expert_search.expert_search import expert_search
+
+from lib.cli import run_command
 from lib.logger import get_logger
+from skills.expert_search.expert_search import expert_search
 
 logger = get_logger(__name__)
 app = typer.Typer(help="Find expert individuals for a startup.")
@@ -16,18 +17,17 @@ def main(
     parsed_includes = [x.strip() for x in include.split(",")] if include else None
     parsed_excludes = [x.strip() for x in exclude.split(",")] if exclude else None
 
-    try:
-        result = asyncio.run(expert_search(
+    result = run_command(
+        lambda: expert_search(
             startup_name=startup,
             target_experts=parsed_includes,
             exclude_experts=parsed_excludes,
             top_k=top_k
-        ))
-        print("\n--- Expert Search Result ---\n")
-        print(result)
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        raise typer.Exit(code=1)
+        ),
+        logger=logger,
+    )
+    typer.echo("\n--- Expert Search Result ---\n")
+    typer.echo(result)
 
 if __name__ == "__main__":
     app()

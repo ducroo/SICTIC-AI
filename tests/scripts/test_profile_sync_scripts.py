@@ -5,12 +5,23 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from lib.active_dataset import activate_dataset
-from lib.dataset_from_insight import DatasetFromInsightResult, dataset_from_insight
+from lib.datasets.state import activate_dataset
+from lib.insights import (
+    InsightHydrationResult,
+    discover_insights,
+    hydrate_dataset_from_insights,
+)
 from lib.storage import get_storage
+from lib.datasets.paths import dataset_location_for_domain
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _create_dataset(name: str, domain: str):
+    location = dataset_location_for_domain(name, domain)
+    get_storage().mkdir(location.raw_rel)
+    return location
 
 
 def _load_script(name: str):
@@ -30,6 +41,7 @@ def _load_script(name: str):
 async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_file(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini,ollama/qwen3:8b")
     storage = get_storage()
+    _create_dataset("sictic-members", "community")
 
     storage.write_text(
         "storage/community/sictic-members/insights/person-profile/urs-gubser-qwen3-8b.md",
@@ -40,11 +52,11 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
         "preferred gpt profile",
     )
     storage.write_text(
-        "storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
+        "storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
-    result = await dataset_from_insight(
+    result = await hydrate_dataset_from_insights(
         insight_name="person_profile",
         source_dataset="sictic-members",
     )
@@ -52,26 +64,27 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
     assert result.selected == 1
     assert result.synced == 1
     assert result.removed == 1
-    assert storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
-    assert not storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
-    assert storage.read_text("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
+    assert storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert not storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
+    assert storage.read_text("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
 
 
 @pytest.mark.asyncio
 async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
     storage = get_storage()
+    _create_dataset("sictic-members", "community")
 
     storage.write_text(
         "storage/community/sictic-members/insights/person-profile/urs-gubser-gpt-5-4-mini.md",
         "preferred gpt profile",
     )
     storage.write_text(
-        "storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
+        "storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
-    result = await dataset_from_insight(
+    result = await hydrate_dataset_from_insights(
         insight_name="person_profile",
         source_dataset="sictic-members",
         dry_run=True,
@@ -80,14 +93,16 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
     assert result.dry_run is True
     assert result.synced == 1
     assert result.removed == 1
-    assert not storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
-    assert storage.exists("storage/community/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
+    assert not storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
 
 
 @pytest.mark.asyncio
 async def test_dataset_from_insight_without_source_scans_active_datasets(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
     storage = get_storage()
+    _create_dataset("avientus", "startups")
+    _create_dataset("archived", "startups")
     activate_dataset("avientus")
 
     storage.write_text(
@@ -99,26 +114,26 @@ async def test_dataset_from_insight_without_source_scans_active_datasets(mock_en
         "archived profile",
     )
 
-    result = await dataset_from_insight("person_profile")
+    result = await hydrate_dataset_from_insights("person_profile")
 
     assert result.target_dataset == "active-person-profile"
-    assert result.target_path == "storage/community/active-person-profile/datasets"
+    assert result.target_path == "storage/generated/active-person-profile/datasets"
     assert result.selected == 1
-    assert storage.exists("storage/community/active-person-profile/datasets/jane-doe-gpt-5-4-mini.md")
-    assert not storage.exists("storage/community/active-person-profile/datasets/john-doe-gpt-5-4-mini.md")
+    assert storage.exists("storage/generated/active-person-profile/datasets/jane-doe-gpt-5-4-mini.md")
+    assert not storage.exists("storage/generated/active-person-profile/datasets/john-doe-gpt-5-4-mini.md")
 
 
 @pytest.mark.asyncio
-async def test_sync_datasets_force_bypasses_recent_sync_cache(mocker):
-    import skills.dataset_chat.core.ingestion as ingestion
+async def test_sync_datasets_always_reconciles_current_state(mocker):
+    import lib.datasets.ingestion as ingestion
 
-    ingestion._last_sync_times.clear()
     ingestion._sync_locks.clear()
 
     calls = []
 
-    async def fake_sync(dataset_name, *, domain=None):
-        calls.append((dataset_name, domain))
+    async def fake_sync(dataset_name):
+        calls.append(dataset_name)
+        return ingestion.IngestionResult(dataset=dataset_name)
 
     mocker.patch.object(ingestion, "_sync_single_dataset", side_effect=fake_sync)
 
@@ -127,17 +142,40 @@ async def test_sync_datasets_force_bypasses_recent_sync_cache(mocker):
     await ingestion.sync_datasets(["person_profile"], raise_on_error=True, force=True)
 
     assert calls == [
-        ("person-profile", None),
-        ("person-profile", None),
+        "person-profile",
+        "person-profile",
+        "person-profile",
     ]
 
 
-def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
-    import lib.dataset_from_insight as module
+def test_insight_discovery_returns_structured_records(mock_env, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
+    storage = get_storage()
+    _create_dataset("sictic-members", "community")
+    storage.write_text(
+        "storage/community/sictic-members/insights/person-profile/"
+        "urs-gubser-gpt-5-4-mini.md",
+        "profile",
+    )
 
-    expected = DatasetFromInsightResult(
+    records = discover_insights(
+        "person_profile",
+        source_dataset="sictic-members",
+    )
+
+    assert len(records) == 1
+    assert records[0].dataset == "sictic-members"
+    assert records[0].skill == "person-profile"
+    assert records[0].identifier == "urs-gubser"
+    assert records[0].subdir is True
+
+
+def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
+    from skills.dataset_maintenance import __main__ as module
+
+    expected = InsightHydrationResult(
         target_dataset="sictic-members-person-profile",
-        target_path="storage/community/sictic-members-person-profile/datasets",
+        target_path="storage/generated/sictic-members-person-profile/datasets",
         insight="person-profile",
         source_dataset="sictic-members",
         selected=2,
@@ -146,15 +184,20 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
 
     calls = []
 
-    async def fake_dataset_from_insight(**kwargs):
+    async def fake_hydration(**kwargs):
         calls.append(kwargs)
         return expected
 
-    mocker.patch.object(module, "dataset_from_insight", side_effect=fake_dataset_from_insight)
+    mocker.patch.object(
+        module,
+        "hydrate_dataset_from_insights",
+        side_effect=fake_hydration,
+    )
 
     result = CliRunner().invoke(
         module.app,
         [
+            "from-insight",
             "--insight-name",
             "person_profile",
             "--source-dataset",
@@ -171,23 +214,89 @@ def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
             "dry_run": True,
         }
     ]
-    assert "Target path: storage/community/sictic-members-person-profile/datasets" in result.output
+    assert "Target path: storage/generated/sictic-members-person-profile/datasets" in result.output
+
+
+def test_dataset_maintenance_lifecycle_cli_uses_dataset_option(mocker):
+    from skills.dataset_maintenance import __main__ as module
+
+    calls = []
+
+    mocker.patch.object(
+        module,
+        "activate_dataset_marker",
+        side_effect=lambda dataset: calls.append(("activate", dataset)) or dataset,
+    )
+    mocker.patch.object(
+        module,
+        "archive_dataset_marker",
+        side_effect=lambda dataset: calls.append(("archive", dataset)) or dataset,
+    )
+
+    activate_result = CliRunner().invoke(
+        module.app,
+        ["activate", "--dataset", "Avientus, Scanvio"],
+    )
+    archive_result = CliRunner().invoke(
+        module.app,
+        ["archive", "-d", "Avientus, Scanvio"],
+    )
+
+    assert activate_result.exit_code == 0
+    assert archive_result.exit_code == 0
+    assert calls == [
+        ("activate", "Avientus"),
+        ("activate", "Scanvio"),
+        ("archive", "Avientus"),
+        ("archive", "Scanvio"),
+    ]
+    assert "Activated: Avientus" in activate_result.output
+    assert "Activated: Scanvio" in activate_result.output
+    assert "Archived: Avientus" in archive_result.output
+    assert "Archived: Scanvio" in archive_result.output
+
+
+def test_dataset_maintenance_create_cli_initializes_startup_dossier(mock_env):
+    from skills.dataset_maintenance import __main__ as module
+    from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
+    from lib.startups.dossier import STARTUP_DATASET_SUBDIRS
+
+    result = CliRunner().invoke(
+        module.app,
+        ["create", "Example Startup"],
+    )
+
+    assert result.exit_code == 0
+    assert "Created startup dossier: example-startup" in result.output
+    storage = get_storage()
+    for root in (
+        dataset_raw_path("example-startup"),
+        dataset_parsed_path("example-startup"),
+    ):
+        for subdir in STARTUP_DATASET_SUBDIRS:
+            assert storage.is_dir(f"{root}/{subdir}")
+    assert storage.exists(
+        f"{dataset_raw_path('example-startup')}/__active_dataset__.md"
+    )
 
 
 @pytest.mark.asyncio
 async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
-    from lib.models.person import Person
+    from lib.people.model import Person
     script = _load_script("generate_member_profiles")
 
     mocker.patch(
-        "skills.person_profile.persons_in_dataset.persons_in_dataset",
+        "lib.people.discovery.persons_in_dataset",
         return_value=[Person(full_name="Urs Gubser", linkedin_id="urs-gubser")],
     )
     mock_profile = mocker.patch(
         "skills.person_profile.person_profile.person_profile",
         return_value=[Person(full_name="Urs Gubser")],
     )
-    mock_hydrate = mocker.patch.object(script, "dataset_from_insight")
+    mock_hydrate = mocker.patch.object(
+        script,
+        "hydrate_dataset_from_insights",
+    )
 
     result = await script.generate_member_profiles(
         dataset="sictic-members",

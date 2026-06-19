@@ -14,25 +14,36 @@ This toolkit serves four audiences:
 
 ## Available Skills
 
-| Category | Skill | Status | Description |
-|---|---|---|---|
-| **Community** | `expert_search` | ✅ | Identifies eight club members with the most relevant domain expertise to assist with due diligence or operational support |
-| | `potential_investors` | ✅ | Identifies sixteen potential investors for a startup with the best match |
-| | `advocates` | ✅ | Identifies inspiring members to represent the organization at external events |
-| | `investor_profile` | ✅ | Combines each member's professional profile with their investment track record and preferences |
-| | `suggested_startups` | ✅ | Proposes 5–7 attractive startups in active fundraising to each of our 500+ members |
-| **Startup Selection & Jury** | `submission_ready` | | Basic checks to verify if a startup's application and submitted materials are complete |
-| | `pitch_ready` | | Evaluates the clarity and completeness of the startup's materials and value proposition for investor pitch sessions |
-| **Due Diligence** | `startup_profile` | ✅ | Generates a succinct overview of the startup. Serves as input for many other skills |
-| | `team_profile` | ✅ | Provides a balanced assessment of individual founders and the complete team dynamics |
-| | `person_profile` | ✅ | Generates a comprehensive profile for any person in a dataset (either a founder or a club member) |
-| | `startup_traction` | ✅ | Summarizes and provides a quantified overview of the startup's market traction |
-| | `dd_checks` | ✅ | Executes a comprehensive suite of 100+ common due diligence checks on a startup |
-| | `market_review` | | Analyzes the target market, customer needs, competitive landscape, and potential substitutes |
-| | `t&c_review` | | Reviews and assesses the terms and conditions of the proposed funding round |
-| **Ongoing Monitoring** | `alerts&news` | | Monitors and interprets relevant news and updates concerning portfolio startups |
-| | `startup_support` | | Coordinates and schedules operational support provided to the startup by investors |
-| | `portfolio_mgmt` | | Generates risk-return overviews and performance metrics for a portfolio of startups |
+| Skill | Status | Description |
+|---|---|---|
+| **Community** | | |
+| `expert_search` | ✅ | Identifies club members with relevant domain expertise for due diligence or operational support |
+| `potential_investors` | ✅ | Identifies potential investors for a startup with the strongest fit |
+| `advocates` | ✅ | Identifies inspiring members to represent the organization at external events |
+| `investor_profile` | ✅ | Combines each member's professional profile with their investment track record and preferences |
+| `suggested_startups` | ✅ | Proposes attractive startups in active fundraising to each member |
+| **Startup Selection & Jury** | | |
+| `submission_ready` | | Checks whether a startup's application and submitted materials are complete |
+| `pitch_ready` | | Evaluates the clarity and completeness of startup materials for investor pitch sessions |
+| **Due Diligence** | | |
+| `startup_profile` | ✅ | Generates a succinct overview of the startup and serves as input for other skills |
+| `team_profile` | ✅ | Assesses individual founders and overall team dynamics |
+| `person_profile` | ✅ | Generates a comprehensive profile for any founder, member, or other person in a dataset |
+| `startup_traction` | ✅ | Summarizes and quantifies the startup's market traction |
+| `dd_checks` | ✅ | Executes a comprehensive suite of common due diligence checks |
+| `market_review` | | Analyzes market size, customer needs, competition, and substitutes |
+| `t&c_review` | | Reviews and assesses the terms and conditions of a proposed funding round |
+| **Ongoing Monitoring** | | |
+| `alerts&news` | | Monitors and interprets relevant news and updates concerning portfolio startups |
+| `startup_support` | | Coordinates operational support provided to startups by investors |
+| `portfolio_mgmt` | | Generates risk-return overviews and performance metrics for startup portfolios |
+| **Operations** | | |
+| `gdrive_sync` | ✅ | Synchronizes local storage with Google Drive |
+| `bulk_refresh` | ✅ | Refreshes one or more insights across one or more datasets |
+| `dataset_maintenance` | ✅ | Diagnoses, migrates, prunes, and repairs datasets and Qdrant collections |
+| `startup_website_import` | ✅ | Imports startup public websites into dataset website folders |
+| `linkedin_maintenance` | ✅ | Lists missing LinkedIn profiles, imports manually scraped profiles, and diagnoses registry issues |
+| `sictic_git_sync` | ✅ | Synchronizes repository changes and acts as an architectural gatekeeper |
 
 
 <details>
@@ -98,10 +109,11 @@ Qdrant is required for semantic search. You do not need to install it manually:
 ### Step 2: Install the Environment
 
 Run the provided installer. This creates a self-contained Python environment
-(`sictic-env`) and copies the skill instruction folders into your AI workspace.
-The Python package itself is installed editable from this repository, so harness
-commands execute the current repo code while the target directory contains
-portable `SKILL.md` instructions for your agent.
+(`sictic-env`) and symlinks the skill folder contents into your AI workspace.
+The installer registers the repository root in the Conda environment, so
+harness commands execute the current repo code and the target workspace points
+at the same canonical skill instructions. All runtime dependencies are defined
+in `environment.yml`.
 
 ```bash
 # Same for macOS, Linux, and WSL2
@@ -123,9 +135,9 @@ configure these variables:
 |---|---|---|---|
 |1| `WORKSPACE_PATH` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
 |2| `REPO_PATH` | Absolute path to the root of this SICTIC-AI git repository | `/Users/you/SICTIC-AI` |
-|3| `STORAGE_PROVIDER` | Where should data be saved? (`local`, `google`, or `hybrid`) | `local` |
-|4| `STORAGE_PATH` | If `local`: absolute path. If `google`/`hybrid`: Drive folder ID, `root`, or folder path/name | `/Users/you/sictic_data`, `SICTIC-AI`, or `root` |
-|5| `STORAGE_MIRROR_PATH` | If `hybrid`: absolute path to the local Google Drive mirror | `/Users/you/SICTIC-AI/gdrive-mirror` |
+|3| `LOCAL_STORAGE_PATH` | Absolute local application storage path | `/Users/you/SICTIC-AI/gdrive-mirror` |
+|4| `CLOUD_PROVIDER` | Optional cloud backend; currently only`google` works | `google` |
+|5| `CLOUD_STORAGE_PATH` | Cloud root, such as a Drive folder ID, `root`, or folder path/name | `SICTIC-AI-storage` |
 |6| `LLM_MODEL` | The primary text-generation model used for analysis | `google/gemini-flash-latest` or `ollama/qwen3:8b` |
 |7| `LLM_BASE_URL` | Base URL for the text-generation endpoint; blank uses the provider default | `http://localhost:11434` |
 |8| `LLM_API_KEY` | API key for the text-generation endpoint when needed | blank for local Ollama |
@@ -152,7 +164,7 @@ Qdrant and Ollama, and pulls the Ollama models referenced by `LLM_MODEL`,
 ./launch.sh stop    # shut down local background services
 ```
 
-### Step 5: Run a Skill in the harness
+### Step 5: Run a Skill
 
 You are ready to go. Execute user-facing skills either through the lightweight
 slash-command harness or directly:
@@ -170,6 +182,21 @@ conda run -n sictic-env python -m skills.harness
 
 Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and `/dd_checks <startup>`.
 
+### Command interfaces
+
+Use these supported entry points:
+
+| Interface | Purpose | Example |
+|---|---|---|
+| Harness | User-facing interactive skills | `conda run -n sictic-env python -m skills.harness /startup_profile SpaceX` |
+| Skill module | Direct execution of one skill | `conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex --skill startup_profile` |
+| Dataset maintenance | Maintained operational utility | `conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members` |
+| Script | Maintenance or migration operation documented by that script | `conda run -n sictic-env python scripts/generate_member_profiles.py --help` |
+
+User-facing skills live under `skills` and should be invoked as
+`python -m skills.<skill_name>`. The slash-command harness remains the preferred
+interface when it exposes the requested skill.
+
 ## Using it in practice
 
 ### 1. Community management
@@ -179,7 +206,7 @@ Communities can be large, so it is useful to do some preparation overnight.
 To make an inventory of all persons mentioned in `community/sictic-members/datasets/`, run:
 
 ```bash
-conda run -n sictic-env python -m person_profile.persons_in_dataset --dataset sictic.members
+conda run -n sictic-env python -c "from skills.person_profile.persons_in_dataset import persons_in_dataset; persons_in_dataset('sictic-members')"
 ```
 
 It will generate a draft of all members in `community/sictic-members/insights/persons-in-dataset-sictic-members-manual.md`. Probably it is quite incomplete and you want to edit it manually. From there on, the system will use that list of members.
@@ -187,7 +214,7 @@ It will generate a draft of all members in `community/sictic-members/insights/pe
 Next you want to create a comprehensive profile of each member combining their LinkedIn profile, their resumes and other credentials. For this you use:
 
 ```bash
-conda run -n sictic-env python -m person_profile --dataset sictic.members
+conda run -n sictic-env python -m skills.person_profile --dataset sictic-members
 ```
 
 The resulting profiles are in:
@@ -196,9 +223,16 @@ The resulting profiles are in:
 storage/community/sictic-members/insights/person-profile/
 ```
 
-It may complain that it cannot fetch LinkedIn profiles. From `lib/adapters/linkedin.py`, you can use:
-* `linkedin_missing_profiles` to get a list of missing LinkedIn profiles.
-* `linkedin_bulk_upload` to upload a JSON with those profiles into the system. It knows which dataset each profile belongs to.
+It may report LinkedIn profiles that require manual scraping. Use:
+
+```bash
+python -m skills.linkedin_maintenance missing
+python -m skills.linkedin_maintenance import profiles.json
+python -m skills.linkedin_maintenance diagnose
+```
+
+The import command uses the pending registry to route each profile to its
+dataset. An explicit `--dataset` may be supplied as an additional target.
 
 The matching skills `expert_search`, `potential_investors`, and `advocates`
 search a derived `sictic-members-investor-profile` dataset for the best fit. Its
@@ -207,7 +241,7 @@ preferences.
 
 ```bash
 conda run -n sictic-env python -m skills.investor_profile
-conda run -n sictic-env python -m lib.dataset_from_insight --insight-name investor_profile --source-dataset sictic-members
+conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members
 ```
 
 ### 2. Overnight Refresh
@@ -217,30 +251,37 @@ The `bulk_refresh` command can refresh a set of insights on a set of datasets.
 * If the insights are not specified, it will refresh all relevant skills.
 
 ```bash
-# refresh the person_profile on spaceX
-conda run -n sictic-env python -m bulk_refresh/ --insight-name "person_profile" --dataset spaceX
+# refresh the person_profile on spacex
+conda run -n sictic-env python -m skills.bulk_refresh --skill person_profile --dataset spacex
 # refresh all insights on spacex
-conda run -n sictic-env python -m bulk_refresh/ --dataset spacex
+conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex
 # refresh all the person_profile for all active dataset
-conda run -n sictic-env python -m bulk_refresh/ --insight-name "person_profile"
+conda run -n sictic-env python -m skills.bulk_refresh --skill person_profile
 # refresh all insights on all active dataset
-conda run -n sictic-env python -m bulk_refresh/
+conda run -n sictic-env python -m skills.bulk_refresh
 
 ```
 
-### 3. Where is my data?
+## Where is my data?
 
 Once configured, the system uses the storage domains defined in
 `config/storage_domains.json`. The default layout is:
 
-* **`storage/startups/<startup>/datasets/`**: raw startup data rooms, such as pitch decks, Excel sheets, and PDFs.
-* **`storage/startups/<startup>/insights/`**: generated startup Markdown reports.
-* **`storage/community/<dataset>/datasets/`**: community/member datasets, such as `sictic-members`, plus derived searchable datasets.
-* **`storage/community/<dataset>/insights/`**: generated community Markdown reports and profiles.
-* **`storage/datasets2md/<domain>/<dataset>/datasets/`**: durable parsed Markdown generated by Docling.
-* **`storage/<domain>/<dataset>/insights/persons-in-dataset-<dataset>-manual.md`**:
-  manually maintained person lists generated by `persons_in_dataset`.
-* **`cache/...`**: disposable runtime cache and temporary operational state.
+| Path | Description |
+|---|---|
+| `storage/startups/<startup>/datasets/` | Raw startup data rooms, such as pitch decks, Excel sheets, and PDFs. |
+| `storage/startups/<startup>/insights/` | Generated startup Markdown reports. |
+| `storage/community/<dataset>/datasets/` | Primary community and member datasets, such as `sictic-members`. |
+| `storage/community/<dataset>/insights/` | Generated community Markdown reports and profiles. |
+| `storage/generated/<dataset>/datasets/` | Searchable datasets assembled from insights, such as `sictic-members-investor-profile`. |
+| `storage/generated/<dataset>/insights/` | Insights associated with generated datasets, when applicable. |
+| `docling_data/datasets2md/<domain>/<dataset>/datasets/` | Durable machine-local parsed Markdown generated by Docling. This is not synchronized to Google Drive. |
+| `storage/<domain>/<dataset>/insights/persons-in-dataset-<dataset>-manual.md` | Manually maintained person lists generated by `persons_in_dataset`. |
+| `gdrive_sync_state/<pairing-id>/` | Durable Google Drive synchronization baseline and changes token. Do not delete this as part of cache cleanup. |
+| `cache/...` | Disposable runtime cache and temporary operational state. |
+
+`LOCAL_DATA_PATH` optionally changes the root containing `cache/` and
+`docling_data/`. It defaults to `REPO_PATH`.
 
 If you put a pitch deck into `storage/startups/spacex/datasets/`, running the
 `startup_profile` skill will parse it, index it, and write the final analysis
@@ -250,85 +291,103 @@ Document parsing is handled locally by Docling. On macOS, the installer includes
 the `ocrmac` extra for Apple Vision OCR. On Linux/WSL2, the installer uses the
 standard Docling package and RapidOCR. In both cases, `VLM_MODEL` is used for
 image and chart descriptions through Ollama or another configured model provider.
+RTF files, which Docling does not support, are converted directly to searchable
+plain text using the Conda `striprtf` package.
 
-### 4. Google Drive Integration (Production Mode)
+## Test suite
 
-(You read this far, so you're serious about this.) By default (`STORAGE_PROVIDER="local"`), all datasets and generated insights are written to the local file system path provided in `STORAGE_PATH`.
-
-In production at SICTIC, we use Google Drive to share datasets and insights with Deal Leads. When `STORAGE_PROVIDER="google"`, the skills read and write directly to Google Drive via the native API.
-
-**Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you (We did it with Openclaw)
-
-#### Local Google-backed Testing
-
-For local testing with Google credentials, prefer `STORAGE_PROVIDER="hybrid"`. In hybrid mode, Google Drive is used as a read fallback while generated files are written to a local mirror first. Markdown outputs outside local cache paths are then uploaded to Drive as Google Docs; updating an existing Google Doc preserves the file ID and creates a normal Drive revision.
-
-Required `.env` fields for hybrid testing:
-
-```bash
-REPO_PATH=/absolute/path/to/SICTIC-AI
-STORAGE_PROVIDER=hybrid
-STORAGE_PATH=<google-drive-folder-id-root-or-folder-path>
-STORAGE_MIRROR_PATH=/absolute/path/to/local-mirror
-GDRIVE_CREDENTIALS=/absolute/path/to/credentials.json
-GDRIVE_TOKEN=/absolute/path/to/token.json
-QDRANT_HOST=http://localhost:6333
-OLLAMA_HOST=http://localhost:11434
-LLM_MODEL=...
-LLM_BASE_URL=...
-LLM_API_KEY=...
-VLM_MODEL=...
-VLM_BASE_URL=...
-VLM_API_KEY=...
-EMBEDDING_MODEL=...
-EMBEDDING_BASE_URL=...
-EMBEDDING_API_KEY=...
-```
-
-The default test suite is mocked/local and safe to run with:
+Run the local test suite with:
 
 ```bash
 conda run -n sictic-env python -m pytest -q
 ```
 
-Opt-in live smoke tests require local services and configured storage:
+The default suite uses isolated local storage and mocked external services.
+Tests marked `live` are collected but skipped.
+
+To run only the opt-in live tests:
 
 ```bash
 SICTIC_RUN_LIVE_SMOKE=1 conda run -n sictic-env python -m pytest -q -m live
 ```
 
-#### Synchronizing the Hybrid Mirror
+Live tests may require running Qdrant and Ollama services and specific test
+datasets. Tests whose required datasets are unavailable are skipped.
 
-The repo includes a CLI utility at `gdrive-sync/` for synchronizing the hybrid
-local mirror with the configured Google Drive root. After installing the repo
-editable in the active conda environment, the command is available from any
-working directory:
+## Google Drive Integration
+
+All skills read and write the local filesystem path configured by
+`LOCAL_STORAGE_PATH`. Google Drive access is isolated in the `gdrive_sync`
+administrative skill; normal application storage never accesses Drive.
+
+In production at SICTIC, Google Drive is used to share datasets and insights
+with Deal Leads. `CLOUD_PROVIDER=google` enables synchronization and
+`CLOUD_STORAGE_PATH` identifies the Drive root.
+
+**Setting up the Google Drive API requires creating an OAuth Desktop-App client in the Google Cloud Console.** Because this process involves navigating complex Google Cloud settings and handling JSON credentials, the best approach is to ask your AI assistant to walk you through the Google Cloud setup and authenticate the credentials for you (We did it with Openclaw)
+
+#### Google Drive Synchronization
+
+Synchronizing a large cloud drive is tedious and slow. SICTIC-AI therefore
+works entirely against `LOCAL_STORAGE_PATH`, tracks changes on both sides, and
+synchronizes periodically instead of accessing Google Drive for every file
+operation.
+
+| Command | Description |
+|---|---|
+| `python -m skills.gdrive_sync pull` | Make local storage match Google Drive. Cloud is authoritative. Use this to create the initial local copy and synchronization baseline. |
+| `python -m skills.gdrive_sync sync --local-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the local version as canonical. |
+| `python -m skills.gdrive_sync sync --cloud-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the cloud version as canonical. |
+
+Add `--dry-run` to any command to report the planned changes without modifying
+local files, Google Drive, or the successful synchronization baseline. Add
+`--json` when machine-readable output is useful.
+
+The normal routine is:
+
+1. **Initial setup:** run `python -m skills.gdrive_sync pull`. The first pull
+   walks the complete Drive tree and builds the baseline, so it can take
+   substantial time. (read: hours)
+2. **Before a job:** run
+   `python -m skills.gdrive_sync sync --cloud-wins`.
+3. **Run the job:** skills read and write only `LOCAL_STORAGE_PATH`; they do not
+   synchronize while the job is running.
+4. **After a job:** run
+   `python -m skills.gdrive_sync sync --local-wins`.
+
+Later synchronizations are faster because `gdrive_sync` compares local hashes
+with its stored baseline and uses the Google Drive Changes API instead of
+rebuilding the complete inventory each time.
+
+Synchronization is manual today. Automatic synchronization around skill jobs
+is planned but has not yet been implemented.
+
+The command reads these `.env` values:
+
+* `CLOUD_PROVIDER`: must be `google`
+* `LOCAL_STORAGE_PATH`: local application storage root
+* `CLOUD_STORAGE_PATH`: Google Drive folder ID/root
+* `GDRIVE_CREDENTIALS`: OAuth Desktop-App credentials JSON
+* `GDRIVE_TOKEN`: cached OAuth token JSON
+
+Configuring Google OAuth and Drive access is outside the scope of this README.
+Ask a chatbot for help; Gemini was used to configure the current installation.
+
+The durable baseline and Drive changes token are stored under
+`gdrive_sync_state/<pairing-id>/`. Do not delete this directory as cache.
+Runtime logs are written to `logs/gdrive-sync.log`.
+
+## Dataset Maintenance
+
+Dataset ingestion owns document replacement and removal decisions. Qdrant
+adapters perform database operations only. Collection diagnostics and pruning
+are exposed separately:
 
 ```bash
-python -m pip install -e .
-gdrive-sync pull
-gdrive-sync sync --conflict-policy local-wins
-gdrive-sync sync --conflict-policy local-wins --dry-run
+python -m skills.dataset_maintenance diagnose
+python -m skills.dataset_maintenance prune
+python -m skills.dataset_maintenance prune --apply
+python -m skills.dataset_maintenance migrate-startup-dossiers
 ```
 
-`gdrive-sync` reads the same `.env` values as the application:
-
-* `STORAGE_MIRROR_PATH`: local mirror root
-* `STORAGE_PATH`: Google Drive folder ID/root
-* `GDRIVE_CREDENTIALS`: OAuth Desktop-App credentials
-* `GDRIVE_TOKEN`: cached OAuth token
-
-The first successful `gdrive-sync pull` performs a full bootstrap walk of Drive,
-downloads ordinary files as binary files, exports Google Docs as local Markdown,
-and stores a repo-local SQLite baseline under `gdrive-sync/.state/`. Later pulls
-use the Google Drive Changes API (`changes.list`) and only apply changed,
-created, moved, renamed, or deleted Drive entries.
-
-For bidirectional work, `gdrive-sync sync --conflict-policy local-wins` compares
-local file hashes with the SQLite baseline and combines that with Drive
-`changes.list`. Local-only edits are uploaded to Drive; cloud-only edits are
-pulled locally; if both sides changed the same path, the conflict policy decides
-which side wins. Use `--dry-run` before a real sync when testing changes.
-
-Runtime logs are written to `gdrive-sync/logs/gdrive-sync.log`. See
-`gdrive-sync/README.md` for operational details and cron examples.
+Pruning is dry-run by default.

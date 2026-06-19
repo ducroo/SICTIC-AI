@@ -4,9 +4,8 @@ from lib.runtime_noise import configure_runtime_noise
 
 configure_runtime_noise()
 
-import litellm
 from litellm.exceptions import APIConnectionError
-from lib.services_gateway import gateway, Priority
+from lib.services_gateway import gateway
 from lib.env import get_env_var
 from lib.logger import get_logger
 from lib.model_config import llm_endpoint
@@ -18,8 +17,8 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
     default_model = endpoint.model
     is_ollama = default_model.startswith("ollama/")
 
-    min_ctx = int(get_env_var("OLLAMA_NUM_CTX"))
-    max_ctx = int(get_env_var("OLLAMA_NUM_CTX_MAX"))
+    min_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH"))
+    max_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH_MAX"))
     estimated_tokens = int(len(prompt) / 3)
 
     if estimated_tokens > max_ctx:
@@ -44,13 +43,11 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
             kwargs["response_format"] = response_format
 
     if is_ollama:
-        # Only pass num_ctx if it's larger than the baseline daemon config
-        if ctx > min_ctx:
-            kwargs["num_ctx"] = ctx
+        kwargs["num_ctx"] = ctx
     
     logger.info(f"Sending request to {default_model} with context {ctx} (estimated tokens: {estimated_tokens})...")
     try:
-        response = await gateway.request_completion(kwargs, priority=Priority.STANDARD)
+        response = await gateway.request_completion(kwargs)
         content = response.choices[0].message.content
         if not content:
             logger.warning("Received an empty response from the model.")

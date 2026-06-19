@@ -1,7 +1,7 @@
 import typer
-import asyncio
 from typing import Optional, List
 
+from lib.cli import run_command
 from lib.runtime_noise import configure_runtime_noise
 
 configure_runtime_noise()
@@ -28,16 +28,16 @@ def main(
         help='Optional one-shot slash command, for example: /help or /startup_profile avientus.'
     )
 ):
-    try:
-        if command:
-            output = asyncio.run(_dispatch_one_shot(" ".join(command)))
-            if output and output != "__EXIT__":
-                print(output)
-            return
-        run()
-    except Exception as e:
-        logger.error(f"Harness failed: {e}")
-        raise typer.Exit(code=1)
+    if command:
+        output = run_command(
+            lambda: _dispatch_one_shot(" ".join(command)),
+            logger=logger,
+            error_prefix="Harness failed",
+        )
+        if output and output != "__EXIT__":
+            typer.echo(output)
+        return
+    run_command(run, logger=logger, error_prefix="Harness failed")
 
 
 if __name__ == "__main__":

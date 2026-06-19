@@ -1,3 +1,8 @@
+---
+name: config_load
+description: Compile Markdown-based configuration files from the configured Google Drive/rclone config tree into a cached hierarchical JSON file. Use when configuration prompts, skill settings, or the config cache need to be loaded, refreshed, or inspected.
+---
+
 # config_load
 
 **Description:**
@@ -17,5 +22,5 @@ Compiles Markdown-based configuration files from a Google Drive rclone mount int
 3. Use the `read` tool to load the contents of that JSON file if the user requests the specific configuration data, or just confirm to the user that the configuration has been updated.
 
 **Prerequisites:**
-- All runtime dependencies (including `rich`) are installed in the project venv at `the Conda environment ` by `{{REPO_ROOT}}/install_skills.sh`.
+- All runtime dependencies (including `rich`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install_skills_conda.sh`.
 - The Google Drive must be mounted via rclone to the path set in `REPO_PATH` (see `.env`).

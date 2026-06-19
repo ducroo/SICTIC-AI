@@ -1,13 +1,13 @@
 from typing import List, Optional
 
 from lib.model_config import llm_model
-from lib.storage import get_storage
 from lib.logger import get_logger
 from lib.slugify import slugify
-from lib.insight_refresh import check_insight_refresh
+from lib.insights import InsightFile
 from skills.config_load.config_load import config_load
 from skills.ranking.ranking_persons import ranking_persons
-from lib.dataset_from_insight import dataset_from_insight
+from lib.insights import hydrate_dataset_from_insights
+from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
@@ -15,26 +15,17 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     """
     Provides a ranked list of potential advocates for a given event based on quickselect ranking and LLM refinement.
     """
-    storage = get_storage()
     event_name_slug = slugify(event_name)
     default_llm = llm_model()
     
-    from lib.insight_filepath import get_insight_filepath
-    out_path = get_insight_filepath(
-        dataset_name="sictic-members",
-        skill_name="advocates",
-        model=default_llm,
-        identifier=event_name_slug,
-        subdir=True
+    people_dataset = "sictic-members-investor-profile"
+    logger.info(f"[{event_name_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
+    await hydrate_dataset_from_insights(
+        insight_name="investor_profile",
+        source_dataset="sictic-members",
     )
+    await sync_datasets([people_dataset], raise_on_error=True)
 
-    # 0. Check cache
-    needs_refresh, cached_content, matched_file = check_insight_refresh(["investor_profile", "advocates", event_name_slug], out_path)
-    if not needs_refresh:
-        logger.info(f"[{event_name_slug}] Using cached advocates from {matched_file}")
-        return cached_content
-
-    # 1. Config & Objective
     try:
         config = config_load()
         objective_template = config['advocates']['objective']
@@ -42,12 +33,21 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         logger.error(f"[{event_name_slug}] Failed to load configuration: {e}")
         raise RuntimeError(f"Failed to load configuration: {e}")
 
-    objective = objective_template.replace("{{overview_event}}", event_description)
+    insight = InsightFile(
+        dataset="sictic-members",
+        skill="advocates",
+        model=default_llm,
+        identifier=event_name_slug,
+        subdir=True,
+        source_datasets=[people_dataset],
+        prompt_key=event_description + objective_template,
+    )
+    reusable = insight.find_reusable()
+    if reusable:
+        logger.info(f"[{event_name_slug}] Using cached advocates from {reusable.path}")
+        return reusable.content()
 
-    # 1.5 Hydrate Target Dataset
-    people_dataset = "sictic-members-investor-profile"
-    logger.info(f"[{event_name_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
-    await dataset_from_insight(insight_name="investor_profile", source_dataset="sictic-members")
+    objective = objective_template.replace("{{overview_event}}", event_description)
 
     # 2. Call ranking_persons Engine
     logger.info(f"[{event_name_slug}] Invoking ranking_persons engine for advocates...")
@@ -62,7 +62,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     )
     
     # 3. Output & Persistence
-    storage.write_text(out_path, result)
-    logger.info(f"[{event_name_slug}] Advocates search complete. Results saved to {out_path}")
+    insight.save(result)
+    logger.info(f"[{event_name_slug}] Advocates search complete. Results saved to {insight.path}")
 
     return result

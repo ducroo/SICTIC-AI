@@ -1,6 +1,9 @@
 import pytest
 from importlib import import_module
 
+from lib.storage import get_storage
+from lib.datasets.paths import dataset_location_for_domain
+
 advocates_module = import_module("skills.advocates.advocates")
 expert_search_module = import_module("skills.expert_search.expert_search")
 potential_investors_module = import_module(
@@ -14,6 +17,14 @@ async def _fake_startup_profile(*args, **kwargs):
 
 async def _fake_ranking_persons(*args, **kwargs):
     return "Ranked result"
+
+
+def _create_route_datasets(module):
+    if module is advocates_module:
+        location = dataset_location_for_domain("sictic-members", "community")
+    else:
+        location = dataset_location_for_domain("example-startup", "startups")
+    get_storage().mkdir(location.raw_rel)
 
 
 @pytest.mark.asyncio
@@ -48,11 +59,10 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     config_key,
     args,
 ):
-    mocker.patch.object(
-        module,
-        "check_insight_refresh",
-        return_value=(True, None, None),
-    )
+    _create_route_datasets(module)
+    mocker.patch.object(module.InsightFile, "find_reusable", return_value=None)
+    mocker.patch.object(module.InsightFile, "save")
+    mocker.patch.object(module, "sync_datasets")
     if hasattr(module, "startup_profile"):
         mocker.patch.object(
             module,
@@ -64,7 +74,10 @@ async def test_ranking_skill_uses_investor_profile_dataset(
         "config_load",
         return_value={config_key: {"objective": "Objective {{startup_profile}}{{overview_event}}"}},
     )
-    hydrate = mocker.patch.object(module, "dataset_from_insight")
+    hydrate = mocker.patch.object(
+        module,
+        "hydrate_dataset_from_insights",
+    )
     ranking = mocker.patch.object(
         module,
         "ranking_persons",
@@ -117,7 +130,10 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
     targets,
     excludes,
 ):
-    mocker.patch.object(module, "check_insight_refresh", return_value=(True, None, None))
+    _create_route_datasets(module)
+    mocker.patch.object(module.InsightFile, "find_reusable", return_value=None)
+    mocker.patch.object(module.InsightFile, "save")
+    mocker.patch.object(module, "sync_datasets")
     if hasattr(module, "startup_profile"):
         mocker.patch.object(module, "startup_profile", side_effect=_fake_startup_profile)
     config_key = func_name
@@ -130,7 +146,7 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
             }
         },
     )
-    mocker.patch.object(module, "dataset_from_insight")
+    mocker.patch.object(module, "hydrate_dataset_from_insights")
     ranking = mocker.patch.object(
         module,
         "ranking_persons",

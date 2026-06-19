@@ -3,12 +3,13 @@ from typing import List, Optional
 from skills.config_load.config_load import config_load
 from lib.logger import get_logger
 
-from lib.adapters.linkedin import LinkedInAdapter
-from lib.insight_refresh import check_insight_refresh
+from lib.linkedin import LinkedInResolver
+from lib.insights import InsightFile
 from lib.slugify import slugify
 from skills.suggested_startups.core.llm_processor import compile_startup_profiles, process_single_investor
-from lib.member_profile import member_profile
-from lib.storage_domains import list_dataset_names
+from skills.investor_profile.investor_profile import investor_profile, read_investor_profiles
+from lib.datasets.ingestion import sync_datasets
+from lib.datasets.paths import list_dataset_names
 
 logger = get_logger(__name__)
 
@@ -22,10 +23,10 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     
     dataset_slug = slugify(dataset_name)
     
-    # Resolve default investors using LinkedInAdapter for the community dataset
+    # Resolve default investors from the community LinkedIn cache.
     if not investors:
-        linkedin_adapter = LinkedInAdapter(dataset_slug)
-        investors = linkedin_adapter.get_all_persons()
+        linkedin_resolver = LinkedInResolver(dataset_slug)
+        investors = linkedin_resolver.get_all_persons()
         
     # Resolve default startups dynamically using config
     if not startups:
@@ -51,30 +52,29 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         logger.error(f"[{dataset_name}] Missing configuration: {e}")
         raise ValueError(f"Missing configuration for suggested_startups: {e}")
 
-    from lib.storage import get_storage
-    storage = get_storage()
     default_llm = llm_model()
-    from lib.insight_filepath import get_insight_filepath
 
     # Filter investors whose cache is already up-to-date
     investors_to_process = []
     datasets_to_check = [dataset_slug] + [slugify(s) for s in startups]
+    await sync_datasets(datasets_to_check, raise_on_error=True)
 
     for investor in investors:
-        output_file = get_insight_filepath(
-            dataset_name=dataset_slug,
-            skill_name="suggested_startups",
+        insight = InsightFile(
+            dataset=dataset_slug,
+            skill="suggested_startups",
             model=default_llm,
             identifier=investor,
-            subdir=True
+            subdir=True,
+            source_datasets=datasets_to_check,
+            prompt_key=prompt_template,
         )
-        
-        needs_refresh, cached_content, matched_file = check_insight_refresh(datasets_to_check, output_file)
-        if not needs_refresh:
+        reusable = insight.find_reusable()
+        if reusable:
             logger.info(f"[{dataset_name}] Skipping {investor}: Cache up to date.")
             continue
             
-        investors_to_process.append((investor, output_file))
+        investors_to_process.append((investor, insight))
         
     if not investors_to_process:
         logger.info(f"[{dataset_name}] All investor suggestions are up to date. Exiting.")
@@ -84,11 +84,12 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
     
     names_to_process = [inv for inv, _ in investors_to_process]
     logger.info(f"[{dataset_name}] Batch fetching investor profiles for {len(names_to_process)} investors...")
-    investor_profiles_dict = await member_profile("investor_profile", names_to_process)
+    await investor_profile(source_dataset=dataset_slug)
+    investor_profiles_dict = read_investor_profiles(dataset_slug, names_to_process)
     
     import asyncio
 
-    async def process_inv(investor, output_file):
+    async def process_inv(investor, insight):
         logger.info(f"[{dataset_name}] Processing investor: {investor}")
         profile_text = investor_profiles_dict.get(investor)
         
@@ -101,12 +102,12 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         if new_lines:
             header = f"# Startup Suggestions for {investor}\n\n| Startup | Rationale |\n|---|---|\n"
             content = header + "\n".join(new_lines)
-            storage.write_text(output_file, content)
-            logger.info(f"[{dataset_name}] Saved suggestions for {investor} to {output_file}")
+            insight.save(content)
+            logger.info(f"[{dataset_name}] Saved suggestions for {investor} to {insight.path}")
             return f"Processed {investor}"
         return f"No results for {investor}"
         
-    tasks = [process_inv(inv, out_file) for inv, out_file in investors_to_process]
+    tasks = [process_inv(inv, insight) for inv, insight in investors_to_process]
     results = await asyncio.gather(*tasks)
 
     logger.info(f"[{dataset_name}] Successfully finished suggested_startups.")

@@ -1,3 +1,8 @@
+---
+name: ranking
+description: Rank people or other supported entities against a specific objective using semantic candidate filtering and LLM-based comparison. Use as a backend utility for workflows that need structured ranked rows or a Markdown ranking report, such as expert search or potential-investor matching.
+---
+
 # Skill: Ranking
 
 `ranking_persons(...)` returns the human-readable Markdown report.

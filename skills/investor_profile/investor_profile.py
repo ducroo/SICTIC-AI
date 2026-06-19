@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import List
 
-from lib.insight_refresh import best_alternative, get_base_name
+from lib.insights import InsightFile, insight_base_name
 from lib.logger import get_logger
-from lib.models.person import Person
+from lib.people.model import Person
 from lib.slugify import slugify
 from lib.storage import get_storage
-from lib.storage_domains import dataset_insights_path, dataset_raw_path
+from lib.datasets.paths import dataset_insights_path, dataset_raw_path
 
 logger = get_logger(__name__)
 
@@ -58,7 +58,7 @@ async def investor_profile(
 
     for filename in filenames:
         stem = PurePosixPath(filename).stem
-        linkedin_id = get_base_name(filename)
+        linkedin_id = insight_base_name(filename)
         if not linkedin_id or linkedin_id == stem:
             logger.warning(f"[{dataset_slug}] Skipping malformed person profile filename: {filename}")
             skipped += 1
@@ -66,7 +66,15 @@ async def investor_profile(
 
         source_path = f"{person_profile_dir}/{filename}"
         track_record_path = f"{track_record_dir}/{linkedin_id}.md"
-        output_path = f"{investor_profile_dir}/{filename}"
+        source_model = stem[len(linkedin_id) + 1 :]
+        insight = InsightFile(
+            dataset=dataset_slug,
+            skill="investor_profile",
+            model=source_model,
+            identifier=linkedin_id,
+            subdir=True,
+            prompt_key="compose person profile with investment track record",
+        )
 
         try:
             person_profile_content = storage.read_text(source_path)
@@ -82,11 +90,11 @@ async def investor_profile(
                 person_profile_content,
                 track_record_content,
             )
-            if storage.exists(output_path) and storage.read_text(output_path) == content:
+            if insight.exists() and insight.content() == content:
                 unchanged += 1
                 continue
 
-            storage.write_text(output_path, content)
+            insight.save(content)
             written += 1
         except Exception as error:
             logger.warning(f"[{dataset_slug}] Skipping {filename}: {error}")
@@ -117,13 +125,13 @@ def read_investor_profiles(
     if not storage.exists(profile_dir):
         return {}
 
-    from skills.person_profile.persons_in_dataset import persons_in_dataset
+    from lib.people.discovery import persons_in_dataset
 
     discovered = persons_in_dataset(dataset_slug)
     files = storage.list(profile_dir, suffix=".md")
     files_by_id: dict[str, list[str]] = {}
     for filename in files:
-        linkedin_id = get_base_name(filename)
+        linkedin_id = insight_base_name(filename)
         if linkedin_id and linkedin_id != PurePosixPath(filename).stem:
             files_by_id.setdefault(linkedin_id, []).append(filename)
 
@@ -136,11 +144,16 @@ def read_investor_profiles(
             logger.warning(f"[{dataset_slug}] No LinkedIn ID found for investor '{name}'.")
             continue
 
-        candidates = files_by_id.get(matched.linkedin_id, [])
-        selected = next(best_alternative(candidates[0], candidates), None) if candidates else None
-        if not selected:
+        selected = InsightFile(
+            dataset=dataset_slug,
+            skill="investor_profile",
+            model="manual",
+            identifier=matched.linkedin_id,
+            subdir=True,
+        ).find_any()
+        if selected is None:
             logger.warning(f"[{dataset_slug}] No investor profile found for '{name}'.")
             continue
-        results[name] = storage.read_text(f"{profile_dir}/{selected}")
+        results[name] = selected.content()
 
     return results

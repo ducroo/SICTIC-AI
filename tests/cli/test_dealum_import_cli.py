@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from typer.testing import CliRunner
-from lib.dealum_import import DealumApplicationNotFoundError
+from lib.startups.dealum import DealumApplicationNotFoundError
 
 
 def _result(name: str, *, found: bool = True):

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import typer
-from skills.config_load.config_load import config_load, _local_cache_paths
+
+from lib.cli import run_command
 from lib.logger import get_logger
+from skills.config_load.config_load import _local_cache_paths, config_load
 
 logger = get_logger(__name__)
 
@@ -9,7 +11,7 @@ app = typer.Typer(help="Load JSON configuration from Google Drive.")
 
 @app.command()
 def load():
-    try:
+    def load_config():
         try:
             from rich.console import Console
             console = Console()
@@ -28,12 +30,15 @@ def load():
             console.print(f"[bold green]Successfully pulled configuration for {skill_count} skills.[/bold green]")
         else:
             logger.info(f"Successfully pulled configuration for {skill_count} skills.")
-            
-        _, cache_file = _local_cache_paths()
-        print(f"RESULT_PATH: {cache_file}")
-    except Exception as e:
-        logger.error(f"Execution failed: {e}")
-        raise typer.Exit(code=1)
+
+        return _local_cache_paths()[1]
+
+    cache_file = run_command(
+        load_config,
+        logger=logger,
+        error_prefix="Execution failed",
+    )
+    typer.echo(f"RESULT_PATH: {cache_file}")
 
 if __name__ == "__main__":
     app()

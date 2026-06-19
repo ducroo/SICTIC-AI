@@ -1,13 +1,23 @@
 import pytest
 
-from lib.insight_generator import generate_dataset_insight
+from lib.storage import get_storage
+from lib.datasets.paths import dataset_location_for_domain
+from skills.startup_traction.startup_traction import startup_traction
 
 
 @pytest.mark.asyncio
-async def test_generate_dataset_insight_does_not_cache_insufficient_context(mock_env, mocker):
-    mocker.patch("lib.insight_generator.check_insight_refresh", return_value=(True, None, None))
+async def test_startup_traction_does_not_cache_insufficient_context(mock_env, mocker):
+    get_storage().mkdir(
+        dataset_location_for_domain("bewe", "startups").raw_rel
+    )
     mocker.patch(
-        "lib.insight_generator.config_load",
+        "skills.startup_traction.startup_traction.InsightFile.find_reusable",
+        return_value=None,
+    )
+    mocker.patch("skills.startup_traction.startup_traction.sync_datasets")
+    save = mocker.patch("skills.startup_traction.startup_traction.InsightFile.save")
+    mocker.patch(
+        "skills.startup_traction.startup_traction.config_load",
         return_value={
             "startup_traction": {
                 "query": "Find traction.",
@@ -18,10 +28,11 @@ async def test_generate_dataset_insight_does_not_cache_insufficient_context(mock
             },
         },
     )
-    mocker.patch("lib.insight_generator.dataset_chat", return_value="INSUFFICIENT_CONTEXT")
-    mock_storage = mocker.patch("lib.insight_generator.get_storage")
-
+    mocker.patch(
+        "skills.startup_traction.startup_traction.dataset_chat",
+        return_value="INSUFFICIENT_CONTEXT",
+    )
     with pytest.raises(ValueError, match="Insufficient indexed context"):
-        await generate_dataset_insight("bewe", "startup_traction", "startup_traction")
+        await startup_traction("bewe")
 
-    mock_storage.return_value.write_text.assert_not_called()
+    save.assert_not_called()

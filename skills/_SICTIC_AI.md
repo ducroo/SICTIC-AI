@@ -1,16 +1,30 @@
-# SICTIC-AI skills (installed from /Users/claw-agent/SICTIC-AI, conda variant)
+# SICTIC-AI skills
 
-These skill directories were mirrored from `/Users/claw-agent/SICTIC-AI/skills/` by:
+These skills run from the installed SICTIC-AI repository in the `sictic-env`
+conda environment. Repository and storage locations vary by machine; do not
+hardcode user-specific absolute paths in skill instructions.
 
-    /Users/claw-agent/SICTIC-AI/install_skills_conda.sh
+## Storage
 
-Re-run that command after editing SKILL.md or moving the repo.
+Use `LOCAL_STORAGE_PATH` as the storage root for synchronized application data.
+
+Startup datasets live under:
+
+    $LOCAL_STORAGE_PATH/storage/startups/<startup>/datasets/
+
+Dealum imports write to:
+
+    $LOCAL_STORAGE_PATH/storage/startups/<startup>/datasets/dealum/
+
+To list local startup dataset folders:
+
+    ls "$LOCAL_STORAGE_PATH/storage/startups"
 
 ## Invocation
 
-Each SKILL.md "Usage" section contains absolute, copy-pastable commands of the form:
+Each SKILL.md "Usage" section contains commands of the form:
 
-    /opt/homebrew/Caskroom/miniforge/base/envs/sictic-env/bin/python -m skills.<skill_name> [args...]
+    python -m skills.<skill_name> [args...]
 
-Run them exactly as written. No `conda activate` needed — the absolute python
-path resolves to the conda env directly.
+Run them inside `sictic-env`, or use `conda run -n sictic-env` when launching
+from a plain shell.

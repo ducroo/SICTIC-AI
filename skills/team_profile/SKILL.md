@@ -9,24 +9,28 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
 
 ## Workflow
 
-1. **Discovery (Broad & Deep):** 
- - **Web:** Executes a Google search to map the entire headcount via LinkedIn, i.e., `site:linkedin.com/in/ <STARTUP_NAME> -intitle:jobs -intitle:directories`.
- - **Dataset:** If the startup is in a dataset, uses `dataset_chat` to locate "Founder," "CXO," "Management," or "Team" folders. Specifically looks for resumes/CVs, certificates & academic records, and legal background checks (e.g., "Auszug Strafregister", "Criminal Record").
+1. **Dataset Preparation:**
+   * Convert `startup_name` to a dataset slug with `slugify(...)`.
+   * Resolve and prepare the startup dataset with `ensure_startup_dataset(...)`.
+   * Run `sync_datasets([dataset_slug], raise_on_error=True)` so parsed Markdown and Qdrant are current before analysis.
 
-2. **Identity Resolution:** 
- - Filters all discovered names into two buckets: **Founders/CXOs** (to be profiled) and **Other Employees** (to be listed).
- - "CXO" logic: Captures any C-level role (CEO, CTO, COO, CMO, CFO, etc.).
+2. **Configuration & Insight Cache:**
+   * Load `resume_queries`, `team_assessment_prompt`, and optional `linkedin_classification_prompt` from `config_load()["team_profile"]`.
+   * Build an output insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="team_profile", model=llm_model(), prompt_key=<resume_queries_and_prompts>)`.
+   * Use `insight.find_reusable()` and `insight.content()` to reuse a fresh existing team profile when available.
 
-3. **Data Reconciliation:** 
- - Scrapes LinkedIn via Apify for the Founder bucket (`client.actor("dev_fusion/Linkedin-Profile-Scraper")`).
- - Strips unnecessary links and caches JSONs in `datasets/<STARTUP_NAME>/linkedin`.
- - Compares LinkedIn data against Data Room resumes, treating LinkedIn as the source of truth for dates and titles; discrepancies are flagged as "Integrity/Flexibility" notes.
+3. **Person Discovery & Profile Reuse:**
+   * Call `person_profile(startup_name, names=None)` to discover and synthesize profiles for the startup's associated people.
+   * `person_profile` handles LinkedIn resolution, cached LinkedIn payloads, data-room mentions, personal documents, and generated person-profile insights.
 
-4. **Output Generation:** 
- - **Section A:** Full Employee List (Name + LinkedIn URL).
- - **Section B:** Individual Founder Assessments (Table).
- - **Section C:** Team Effectiveness & Synergy Report.
- - Saved to `insights/<STARTUP_NAME>/<STARTUP_NAME>_team_profile_<MODEL_NAME>.md`.
+4. **Team Context Assembly:**
+   * Run `dataset_search(dataset_name=dataset_slug, query=resume_queries)` to collect broader resume/CV/team-document chunks.
+   * Deduplicate all person-profile mentions and resume-query chunks by `chunk_id`.
+   * Build a single context containing aggregated data-room mentions and discovered person profile summaries.
+
+5. **LLM Assessment & Output:**
+   * Call `llm_chat(prompt=<assembled_context_and_team_profile_instructions>)`.
+   * Save the Markdown report with `insight.save(report_md)`, log `insight.path`, and return `(report_md, insight.path)`.
 
 ## Usage
 

@@ -5,17 +5,17 @@ channels:
   - conda-forge
   - defaults
 
-# Source of truth for the runtime is pyproject.toml — this file mirrors it.
+# This file is the sole source of truth for the Python runtime.
 # Anything listed under `dependencies:` is installed via conda-forge.
 # Anything under `pip:` is installed via pip because it isn't on conda-forge,
-# has an `extra` we need (e.g. docling[ocrmac]), or is the editable project.
+# or has an extra we need (e.g. docling[ocrmac]).
 
 dependencies:
   # Python 3.12 is the supported runtime on macOS and Linux.
   - python=3.12
   - pip
 
-  # === Runtime deps available on conda-forge (mirrors pyproject.toml) ===
+  # === Runtime deps available on conda-forge ===
   - aiohttp
   - google-api-python-client
   - google-auth-oauthlib
@@ -27,9 +27,11 @@ dependencies:
   - rapidfuzz
   - requests
   - rich
+  - striprtf=0.0.29
   - typer
+  - xlrd
 
-  # === Test deps (optional in pyproject; included here for convenience) ===
+  # === Test deps ===
   - pytest
   - pytest-mock
 
@@ -43,5 +45,3 @@ dependencies:
       - torch==2.10.0
       - torchvision==0.25.0
       - 'ocrmac==1.0.1; platform_system == "Darwin"'
-      # Editable install of this repo — makes `skills.*` and `lib.*` importable.
-      - --editable .

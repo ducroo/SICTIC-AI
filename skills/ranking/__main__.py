@@ -1,7 +1,8 @@
 import typer
-import asyncio
-from skills.ranking.ranking_persons import ranking_persons
+
+from lib.cli import run_command
 from lib.logger import get_logger
+from skills.ranking.ranking_persons import ranking_persons
 
 logger = get_logger(__name__)
 app = typer.Typer(help="Ranking module for SICTIC-AI")
@@ -14,18 +15,17 @@ def main(
     top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top candidates to return")
 ):
     if target == "persons":
-        try:
-            result = asyncio.run(ranking_persons(
+        result = run_command(
+            lambda: ranking_persons(
                 objective=objective,
                 query=query,
                 top_k=top_k
-            ))
-            print("\n\n" + result)
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            raise typer.Exit(code=1)
+            ),
+            logger=logger,
+        )
+        typer.echo("\n\n" + result)
     else:
-        print(f"Target '{target}' is not yet implemented.")
+        typer.echo(f"Target '{target}' is not yet implemented.")
 
 if __name__ == "__main__":
     app()

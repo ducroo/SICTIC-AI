@@ -1,3 +1,8 @@
+---
+name: dataset_chat
+description: Answer questions about a startup or community dataset using the local RAG stack. Use when a user asks for information, evidence, or document-backed analysis from a named dataset; the skill may refresh OCR via Docling and embeddings in Qdrant as needed before answering.
+---
+
 # Dataset_Chat Skill
 
 A high-precision, multi-tenant RAG engine designed for deep document inspection and integration with llm_chat.
@@ -21,7 +26,7 @@ The following environment variables must be present in the repo's `.env` file (`
 - `EMBEDDING_BASE_URL`: Optional endpoint base URL. Use `http://localhost:11434` for local Ollama.
 - `EMBEDDING_API_KEY`: Optional endpoint API key. Leave blank for local Ollama.
 
-Required python packages (installed into `the Conda environment ` by `install_skills.sh`): `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
+Required Python packages are installed into the `sictic-env` Conda environment by `install_skills_conda.sh`: `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
 
 ## Usage
 

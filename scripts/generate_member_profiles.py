@@ -12,11 +12,11 @@ from typing import List, Optional
 
 import typer
 
-from lib.models.person import Person
-from lib.dataset_from_insight import dataset_from_insight
+from lib.people.model import Person
+from lib.insights import hydrate_dataset_from_insights
 from lib.slugify import slugify
 from lib.storage import get_storage
-from lib.storage_domains import dataset_insights_path
+from lib.datasets.paths import dataset_insights_path
 
 app = typer.Typer(help="Generate SICTIC member person profile insights.")
 
@@ -36,7 +36,7 @@ def _parse_names(raw_names: Optional[str]) -> Optional[List[str]]:
 
 
 def _target_people(dataset: str, names: Optional[List[str]], limit: Optional[int]) -> List[Person]:
-    from skills.person_profile.persons_in_dataset import persons_in_dataset
+    from lib.people.discovery import persons_in_dataset
 
     discovered = persons_in_dataset(slugify(dataset))
     if names:
@@ -80,7 +80,7 @@ async def generate_member_profiles(
     linkedin_only: bool = True,
 ) -> GenerateMemberProfilesResult:
     if sync_source:
-        from skills.dataset_chat.core.ingestion import sync_datasets
+        from lib.datasets.ingestion import sync_datasets
 
         await sync_datasets([dataset], raise_on_error=True, force=True)
 
@@ -98,7 +98,7 @@ async def generate_member_profiles(
     )
 
     if not skip_index:
-        await dataset_from_insight(
+        await hydrate_dataset_from_insights(
             insight_name="person_profile",
             source_dataset=dataset,
         )

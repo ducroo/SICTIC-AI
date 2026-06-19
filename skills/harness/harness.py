@@ -64,7 +64,7 @@ async def _sync(args: List[str]) -> str:
     parser = _parser("/sync")
     parser.add_argument("dataset")
     ns = parser.parse_args(args)
-    from skills.dataset_chat.core.ingestion import sync_datasets
+    from lib.datasets.ingestion import sync_datasets
 
     await sync_datasets([ns.dataset], raise_on_error=True)
     return f"Synced dataset: {ns.dataset}"
@@ -98,6 +98,19 @@ async def _startup_traction(args: List[str]) -> str:
     from skills.startup_traction.startup_traction import startup_traction
 
     return _format_result(await startup_traction(ns.startup))
+
+
+async def _batch_audit(args: List[str]) -> str:
+    parser = _parser("/batch_audit")
+    parser.add_argument("dataset")
+    parser.add_argument("checklist_file")
+    ns = parser.parse_args(args)
+    from pathlib import Path
+
+    from skills.batch_audit.batch_audit import batch_audit
+
+    checklist = Path(ns.checklist_file).read_text(encoding="utf-8")
+    return _format_result(await batch_audit(ns.dataset, checklist))
 
 
 async def _person_profile(args: List[str]) -> str:
@@ -208,6 +221,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/dataset_chat", "/dataset_chat <dataset> <question>", "Ask a dataset question.", _dataset_chat),
         HarnessCommand("/startup_profile", "/startup_profile <startup>", "Generate a startup profile.", _startup_profile),
         HarnessCommand("/startup_traction", "/startup_traction <startup>", "Summarize commercial traction.", _startup_traction),
+        HarnessCommand("/batch_audit", "/batch_audit <dataset> <checklist-file>", "Run a checklist against a dataset.", _batch_audit),
         HarnessCommand("/person_profile", "/person_profile <dataset> <person>", "Generate a person profile.", _person_profile),
         HarnessCommand("/team_profile", "/team_profile <startup>", "Generate a team profile.", _team_profile),
         HarnessCommand("/investor_profile", "/investor_profile [--source-dataset dataset]", "Build investor profiles.", _investor_profile),

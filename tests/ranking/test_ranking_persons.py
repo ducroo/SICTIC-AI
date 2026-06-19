@@ -1,7 +1,7 @@
 import pytest
 
-from lib.models.person import Person
-from skills.dataset_chat.core.models import Chunk
+from lib.people.model import Person
+from lib.datasets.models import Chunk
 from skills.ranking.ranking_persons import (
     _resolve_members,
     rank_person_rows,

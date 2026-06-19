@@ -1,4 +1,4 @@
-from skills.dataset_chat.core.ingestion import _list_source_files
+from lib.datasets.source import list_source_files
 
 
 class FakeStorage:
@@ -15,7 +15,7 @@ class FakeStorage:
 
 
 def test_list_source_files_ignores_assets_and_metadata():
-    files = _list_source_files(FakeStorage(), "storage/startups/bewe/datasets")
+    files = list_source_files(FakeStorage(), "storage/startups/bewe/datasets")
 
     names = [name for name, _ in files]
     assert names == [
