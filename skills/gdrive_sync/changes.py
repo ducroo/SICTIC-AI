@@ -162,6 +162,21 @@ def _is_self_generated_change(
     return bool(path and path in mutations.paths)
 
 
+def _sleep_with_countdown(wait_seconds: float) -> None:
+    full_seconds = int(wait_seconds)
+    if full_seconds <= 0:
+        time.sleep(wait_seconds)
+        return
+
+    for remaining in range(full_seconds, 0, -1):
+        logger.info("Drive quiet wait countdown: %s", remaining)
+        time.sleep(1.0)
+
+    remainder = wait_seconds - full_seconds
+    if remainder > 0:
+        time.sleep(remainder)
+
+
 def wait_for_drive_quiet(
     context,
     *,
@@ -175,7 +190,7 @@ def wait_for_drive_quiet(
     token = start_token
     while True:
         if wait_seconds > 0:
-            time.sleep(wait_seconds)
+            _sleep_with_countdown(wait_seconds)
         result.quiet_wait_rounds += 1
         changes, next_token = context.drive.list_changes(token)
         if not changes:

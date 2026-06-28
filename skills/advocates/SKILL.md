@@ -5,6 +5,14 @@ description: Shortlists 10 members that can represent SICTIC at an event; rangin
 
 ## Usage
 
+Via the slash-command harness:
+
 ```bash
 conda run -n sictic-env python -m skills.harness /advocates "<EVENT_NAME>" --description "<EVENT_DESCRIPTION>"
+```
+
+Via the direct Typer entrypoint:
+
+```bash
+conda run -n sictic-env python -m skills.advocates --event "<EVENT_NAME>" --description "<EVENT_DESCRIPTION>"
 ```

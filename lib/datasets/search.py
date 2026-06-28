@@ -14,6 +14,7 @@ async def dataset_search(
     dataset_name: str,
     query: str | list[str] = "",
     max_chunks: int = 25,
+    raise_on_error: bool = False,
 ) -> list[Chunk]:
     """Unified API to run semantic search and retrieve dataset chunks."""
     dataset_slug = slugify(dataset_name)
@@ -37,7 +38,11 @@ async def dataset_search(
             for vector in vectors
         ]
     except Exception as exc:
-        logger.error("Semantic search failed: %s", exc)
+        logger.exception("Semantic search failed for dataset '%s'.", dataset_slug)
+        if raise_on_error:
+            raise RuntimeError(
+                f"Semantic search failed for dataset '{dataset_slug}': {exc}"
+            ) from exc
         return []
 
     chunks = []

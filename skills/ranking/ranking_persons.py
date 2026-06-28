@@ -154,6 +154,7 @@ async def rank_person_rows(
         dataset_name=dataset_name,
         query=query,
         max_chunks=cutoff_m * 20,
+        raise_on_error=True,
     )
     if not chunks:
         raise RuntimeError(

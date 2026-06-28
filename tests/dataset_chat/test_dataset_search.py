@@ -60,6 +60,28 @@ async def test_dataset_search_normalizes_ids_from_legacy_and_current_payloads(mo
     assert chunks[0].score == 0.91
 
 
+@pytest.mark.asyncio
+async def test_dataset_search_can_raise_after_logging_failures(mocker):
+    mocker.patch("lib.datasets.search.sync_datasets")
+    embedding_service = mocker.patch(
+        "lib.datasets.search.EmbeddingService"
+    )
+    embedding_service.return_value.embed_many = mocker.AsyncMock(
+        side_effect=RuntimeError("embedding service unavailable")
+    )
+    logged = mocker.patch("lib.datasets.search.logger.exception")
+
+    with pytest.raises(RuntimeError, match="Semantic search failed"):
+        await dataset_search(
+            "Avientus",
+            "profile query",
+            max_chunks=25,
+            raise_on_error=True,
+        )
+
+    logged.assert_called_once()
+
+
 def test_parsed_filepath_keeps_markdown_source_name():
     assert parsed_filepath("docling_data/datasets2md/generated/person-profile/datasets", "urs-gubser.md") == (
         "docling_data/datasets2md/generated/person-profile/datasets/urs-gubser.md"
