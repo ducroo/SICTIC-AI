@@ -42,6 +42,34 @@ def test_gdrive_sync_uses_new_environment_roots(monkeypatch, tmp_path):
     assert syncer.drive.kwargs["root_folder_id"] == "cloud-root"
 
 
+def test_gdrive_sync_requires_explicit_cloud_root(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLOUD_PROVIDER", "google")
+    monkeypatch.setenv("LOCAL_STORAGE_PATH", str(tmp_path / "local"))
+    monkeypatch.delenv("CLOUD_STORAGE_PATH", raising=False)
+
+    with pytest.raises(ValueError, match="CLOUD_STORAGE_PATH must be set explicitly"):
+        client.GDriveSync(
+            state_dir=str(tmp_path / "state"),
+            log_dir=str(tmp_path / "logs"),
+        )
+
+
+def test_gdrive_sync_allows_explicit_drive_root(monkeypatch, tmp_path):
+    local_root = tmp_path / "local"
+    monkeypatch.setenv("CLOUD_PROVIDER", "google")
+    monkeypatch.setenv("LOCAL_STORAGE_PATH", str(local_root))
+    monkeypatch.setenv("CLOUD_STORAGE_PATH", "root")
+    monkeypatch.setattr(client, "DriveTree", _FakeDriveTree)
+
+    syncer = client.GDriveSync(
+        state_dir=str(tmp_path / "state"),
+        log_dir=str(tmp_path / "logs"),
+    )
+
+    assert syncer.gdrive_root == "root"
+    assert syncer.drive.kwargs["root_folder_id"] == "root"
+
+
 def test_default_operational_paths_use_repo_path(monkeypatch, tmp_path):
     monkeypatch.setenv("REPO_PATH", str(tmp_path))
 

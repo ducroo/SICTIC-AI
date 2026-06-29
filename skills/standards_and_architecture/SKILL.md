@@ -40,7 +40,7 @@ hardcoding storage paths.
   * **Only** after the user explicitly agrees to the proposed approach are you allowed to execute the refactor and edit the code.
 * **Testing Protocol:**
   * If you write or use temporary Python scripts to test or verify functionality in the codebase, you must always ask the user afterwards if that script should be converted into a formal `pytest` unit/integration test.
-* **Environment:** All code is executed via the `sictic-env` Conda environment, bootstrapped from `environment.yml` by `install_skills_conda.sh`.
+* **Environment:** All code is executed via the `sictic-env` Conda environment, bootstrapped from `environment.yml` by `install.sh`.
 * **Python Path:** The installer writes the repository root to a `.pth` file in the Conda environment, so `import skills.<SKILL_NAME>.<SCRIPT_NAME>` and `import lib.<MODULE>` resolve from any CWD without setting `PYTHONPATH`.
 * **Imports:** User-facing skill code lives under `skills.<SKILL_NAME>.<SCRIPT_NAME>`. Shared infrastructure lives under `lib.<MODULE>` (logger, env, adapters, slugify, etc.).
 * **Naming Conventions:** 

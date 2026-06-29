@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -7,27 +8,39 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-# The single source of truth is now the local Git repository's config folder.
-REPO_ROOT = Path(get_env_var("REPO_PATH"))
-SOURCE_DIR = REPO_ROOT / "config"
+def _repo_root() -> Path:
+    return Path(get_env_var("REPO_PATH")).expanduser()
+
+
+def _source_dir() -> Path:
+    # The single source of truth is the local Git repository's config folder.
+    return _repo_root() / "config"
+
+
+def _local_data_root() -> Path:
+    configured = os.environ.get("LOCAL_DATA_PATH") or get_env_var("REPO_PATH")
+    root = Path(configured).expanduser()
+    if not root.is_absolute():
+        raise ValueError(f"LOCAL_DATA_PATH must be absolute, got: {configured}")
+    return root
 
 def _local_cache_paths() -> tuple[Path, Path]:
-    """Local cache lives in the configured REPO_PATH/cache."""
-    cache_dir = REPO_ROOT / "cache"
+    """Local config cache lives under LOCAL_DATA_PATH/cache."""
+    cache_dir = _local_data_root() / "cache"
     cache_file = cache_dir / "config.json"
     return cache_dir, cache_file
 
-def _build_tree_from_local_files(md_files: list[Path]) -> Dict[str, Any]:
+def _build_tree_from_local_files(md_files: list[Path], source_dir: Path) -> Dict[str, Any]:
     """Given a list of local .md file Paths, build the nested config dict.
-    Directory entries are inferred from path segments relative to SOURCE_DIR.
+    Directory entries are inferred from path segments relative to source_dir.
     """
     tree: Dict[str, Any] = {}
     for filepath in md_files:
         # Get the path relative to the config/ root
         try:
-            relpath = filepath.relative_to(SOURCE_DIR)
+            relpath = filepath.relative_to(source_dir)
         except ValueError:
-            logger.warning(f"File {filepath} is not relative to {SOURCE_DIR}. Skipping.")
+            logger.warning(f"File {filepath} is not relative to {source_dir}. Skipping.")
             continue
             
         parts = relpath.parts
@@ -53,17 +66,18 @@ def _build_tree_from_local_files(md_files: list[Path]) -> Dict[str, Any]:
     return tree
 
 def config_load() -> Dict[str, Any]:
+    source_dir = _source_dir()
     cache_dir, cache_file = _local_cache_paths()
 
-    if not SOURCE_DIR.exists() or not SOURCE_DIR.is_dir():
-        logger.error(f"Cannot find local config directory at {SOURCE_DIR}.")
+    if not source_dir.exists() or not source_dir.is_dir():
+        logger.error(f"Cannot find local config directory at {source_dir}.")
         return {}
 
     # Find every .md file recursively in the local config directory
-    md_files = list(SOURCE_DIR.rglob("*.md"))
+    md_files = list(source_dir.rglob("*.md"))
     
     if not md_files:
-        logger.error(f"Cannot rebuild cache: no .md files found in {SOURCE_DIR}.")
+        logger.error(f"Cannot rebuild cache: no .md files found in {source_dir}.")
         return {}
 
     # Find the most recently modified file to check against the cache
@@ -79,7 +93,7 @@ def config_load() -> Dict[str, Any]:
                 logger.error(f"Failed to load existing cache file: {e}. Rebuilding...")
 
     # Rebuild from local Git files
-    config_data = _build_tree_from_local_files(md_files)
+    config_data = _build_tree_from_local_files(md_files, source_dir)
 
     # Persist to local cache
     cache_dir.mkdir(parents=True, exist_ok=True)

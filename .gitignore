@@ -23,6 +23,7 @@ __pycache__/
 .storage/
 .storage-mirror/
 gdrive-mirror/
+gdrive-sync/
 gdrive_sync_state/
 
 venv/

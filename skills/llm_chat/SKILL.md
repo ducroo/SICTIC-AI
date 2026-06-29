@@ -9,7 +9,7 @@ A robust support utility for interacting with Large Language Models (LLMs) via L
 
 ## Setup
 
-1. All runtime dependencies (`typer`, `python-dotenv`, `rich`, `litellm`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install_skills_conda.sh`.
+1. All runtime dependencies (`typer`, `python-dotenv`, `rich`, `litellm`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install.sh`.
 2. The `.env` file at `{{REPO_ROOT}}/.env` must define:
    - `LLM_MODEL`: The default text-generation model to use (e.g., `gemini/gemini-1.5-pro`, `ollama/llama3`).
    - `LLM_BASE_URL`: Optional endpoint base URL. Use `http://localhost:11434` for local Ollama.

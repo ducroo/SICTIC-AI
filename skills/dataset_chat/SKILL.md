@@ -26,7 +26,7 @@ The following environment variables must be present in the repo's `.env` file (`
 - `EMBEDDING_BASE_URL`: Optional endpoint base URL. Use `http://localhost:11434` for local Ollama.
 - `EMBEDDING_API_KEY`: Optional endpoint API key. Leave blank for local Ollama.
 
-Required Python packages are installed into the `sictic-env` Conda environment by `install_skills_conda.sh`: `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
+Required Python packages are installed into the `sictic-env` Conda environment by `install.sh`: `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
 
 ## Usage
 

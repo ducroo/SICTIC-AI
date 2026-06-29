@@ -18,9 +18,9 @@ Compiles Markdown-based configuration files from a Google Drive rclone mount int
    ```bash
    conda run -n sictic-env python -m skills.harness /config
    ```
-2. The script will output the path to the cached JSON file (e.g., `RESULT_PATH: {{REPO_ROOT}}/cache/config.json`).
+2. The script will output the path to the cached JSON file (e.g., `RESULT_PATH: {{LOCAL_DATA_PATH}}/cache/config.json`).
 3. Use the `read` tool to load the contents of that JSON file if the user requests the specific configuration data, or just confirm to the user that the configuration has been updated.
 
 **Prerequisites:**
-- All runtime dependencies (including `rich`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install_skills_conda.sh`.
+- All runtime dependencies (including `rich`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install.sh`.
 - The Google Drive must be mounted via rclone to the path set in `REPO_PATH` (see `.env`).

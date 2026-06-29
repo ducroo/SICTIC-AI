@@ -49,11 +49,12 @@ class GDriveSync:
             raise ValueError("skills.gdrive_sync requires CLOUD_PROVIDER=google")
 
         self.local_root = local_root or os.environ.get("LOCAL_STORAGE_PATH")
-        self.gdrive_root = (
+        configured_gdrive_root = (
             gdrive_root
-            or os.environ.get("CLOUD_STORAGE_PATH")
-            or "root"
+            if gdrive_root is not None
+            else os.environ.get("CLOUD_STORAGE_PATH")
         )
+        self.gdrive_root = (configured_gdrive_root or "").strip()
         self.credentials_path = (
             credentials_path
             or os.environ.get("GDRIVE_CREDENTIALS")
@@ -69,6 +70,12 @@ class GDriveSync:
         if not self.local_root:
             raise ValueError(
                 "local_root is required or LOCAL_STORAGE_PATH must be set"
+            )
+        if not self.gdrive_root:
+            raise ValueError(
+                "gdrive_root is required or CLOUD_STORAGE_PATH must be set "
+                "explicitly. Use CLOUD_STORAGE_PATH=root only if syncing the "
+                "Google Drive root is intentional."
             )
         if not os.path.isabs(self.local_root):
             raise ValueError(

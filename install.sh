@@ -1,5 +1,5 @@
 #!/bin/sh
-# install_skills_conda.sh — conda-based installer for SICTIC-AI.
+# install.sh - conda-based installer for SICTIC-AI.
 #
 # Prerequisite: `conda` must be on PATH.
 #   macOS:
@@ -16,16 +16,15 @@
 #      If yes, updates it with --prune (removes deps no longer listed).
 #   2. Registers the repository root in the environment's site-packages using
 #      a generated .pth file, without invoking project dependency resolution.
-#   3. Creates every <target>/<name>/ as a real directory, then symlinks the
-#      contents back to skills/<name>/. Existing copied skill directories are
-#      preserved under <target>/.skill-copy-backups/ before migration.
+#   3. Copies every skill directory into <target>/<name>/. Existing installed
+#      skill directories are preserved under <target>/.skill-copy-backups/.
 #
 # Usage:
-#   ./install_skills_conda.sh --target /path/to/openclaw/skill/dir   # required
-#   ./install_skills_conda.sh --target ... --rebuild-env             # force a fresh conda env
-#   ./install_skills_conda.sh --target ... --skip-env                # skip steps 1+2
-#   ./install_skills_conda.sh --target ... --copy                    # copy instead of symlink
-#   ./install_skills_conda.sh --target ... --non-interactive          # do not prompt for .env values
+#   ./install.sh                                      # interactive install
+#   ./install.sh --target /path/to/openclaw/skills    # optional target override
+#   ./install.sh --rebuild-env                        # force a fresh conda env
+#   ./install.sh --skip-env                           # skip steps 1+2
+#   ./install.sh --non-interactive --target ...       # do not prompt for .env values
 
 set -eu
 
@@ -35,7 +34,7 @@ ENV_FILE="$REPO_ROOT/environment.yml"
 REBUILD_ENV=0
 SKIP_ENV=0
 INTERACTIVE=1
-INSTALL_MODE="symlink"
+SCRIPT_NAME=$(basename "$0")
 
 usage() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
@@ -48,18 +47,57 @@ while [ $# -gt 0 ]; do
         --prune) shift ;; # Kept for backwards compatibility; install mode handles files.
         --rebuild-env) REBUILD_ENV=1; shift ;;
         --skip-env) SKIP_ENV=1; shift ;;
-        --copy) INSTALL_MODE="copy"; shift ;;
+        --copy) shift ;; # Kept for backwards compatibility; copying is now the only mode.
         --non-interactive) INTERACTIVE=0; shift ;;
-        --symlink) INSTALL_MODE="symlink"; shift ;; # Kept for backwards compatibility.
+        --symlink) echo "install.sh: --symlink is no longer supported; copying skill files instead." >&2; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
     esac
 done
 
+env_file_get() {
+    key="$1"
+    path="$2"
+    if [ ! -f "$path" ]; then
+        return 0
+    fi
+    awk -F= -v k="$key" '
+        $0 ~ "^[[:space:]]*" k "[[:space:]]*=" {
+            val=$0
+            sub("^[^=]*=", "", val)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+            if ((val ~ /^".*"$/) || (val ~ /^\047.*\047$/)) {
+                val=substr(val, 2, length(val)-2)
+            }
+            print val
+            exit
+        }
+    ' "$path"
+}
+
 if [ -z "$TARGET" ]; then
-    echo "install_skills_conda: --target is required." >&2
-    usage
-    exit 2
+    if [ "$INTERACTIVE" -eq 1 ]; then
+        target_default=$(env_file_get WORKSPACE_PATH "$REPO_ROOT/.env" || true)
+        while [ -z "$TARGET" ]; do
+            if [ -n "$target_default" ]; then
+                printf 'Installed skills path [%s]: ' "$target_default"
+            else
+                printf 'Installed skills path: '
+            fi
+            IFS= read -r target_answer || target_answer=""
+            if [ -z "$target_answer" ]; then
+                target_answer="$target_default"
+            fi
+            TARGET="$target_answer"
+            if [ -z "$TARGET" ]; then
+                echo "  WORKSPACE_PATH is required."
+            fi
+        done
+    else
+        echo "install.sh: --target is required with --non-interactive." >&2
+        usage
+        exit 2
+    fi
 fi
 
 # Ensure TARGET resolves to an absolute path for user-facing metadata.
@@ -67,15 +105,15 @@ mkdir -p "$TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
 
 if [ ! -d "$REPO_ROOT/skills" ]; then
-    echo "install_skills_conda: $REPO_ROOT/skills not found." >&2
+    echo "install.sh: $REPO_ROOT/skills not found." >&2
     exit 1
 fi
 if [ ! -f "$ENV_FILE" ]; then
-    echo "install_skills_conda: $ENV_FILE not found." >&2
+    echo "install.sh: $ENV_FILE not found." >&2
     exit 1
 fi
 if ! command -v conda >/dev/null 2>&1; then
-    echo "install_skills_conda: 'conda' not on PATH. Install Miniforge first:" >&2
+    echo "install.sh: 'conda' not on PATH. Install Miniforge first:" >&2
     echo "  macOS:" >&2
     echo "    brew install --cask miniforge" >&2
     echo "    conda init zsh   # or bash; then restart your shell" >&2
@@ -92,7 +130,7 @@ fi
 # ---------------------------------------------------------------------------
 ENV_NAME=$(awk -F: '/^name:[[:space:]]*/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' "$ENV_FILE")
 if [ -z "$ENV_NAME" ]; then
-    echo "install_skills_conda: could not read 'name:' from $ENV_FILE." >&2
+    echo "install.sh: could not read 'name:' from $ENV_FILE." >&2
     exit 1
 fi
 DESIRED_PYTHON=$(awk -F= '/^[[:space:]]*-[[:space:]]*python=/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' "$ENV_FILE")
@@ -110,13 +148,13 @@ active_conda_env() {
 require_env_not_active_for_rebuild() {
     active_env=$(active_conda_env)
     if [ "$REBUILD_ENV" -eq 1 ] && [ "$active_env" = "$ENV_NAME" ]; then
-        echo "install_skills_conda: cannot rebuild '$ENV_NAME' while it is the active conda environment." >&2
+        echo "install.sh: cannot rebuild '$ENV_NAME' while it is the active conda environment." >&2
         echo >&2
         echo "Run this first:" >&2
         echo "    conda deactivate" >&2
         echo >&2
         echo "Then rerun the installer:" >&2
-        echo "    $0 --target \"$TARGET\" --rebuild-env" >&2
+        echo "    ./$SCRIPT_NAME --target \"$TARGET\" --rebuild-env" >&2
         exit 1
     fi
 }
@@ -131,7 +169,7 @@ copy_skill_dir() {
         find . \
             \( -name __pycache__ -o -name .DS_Store -o -name '*.pyc' \) -prune \
             -o -type d -exec mkdir -p "$dst_dir/{}" \; \
-            -o -type f -exec cp "{}" "$dst_dir/{}" \;
+            -o -type f -exec cp -p "{}" "$dst_dir/{}" \;
     )
 }
 
@@ -157,68 +195,12 @@ backup_existing_skill() {
     echo "       ~ preserved existing $backup_name at $backup_path"
 }
 
-is_managed_link_dir() {
-    dst_dir="$1"
-    src_dir="$2"
-    marker="$dst_dir/.sictic-symlink-dir"
-
-    [ -d "$dst_dir" ] && [ ! -L "$dst_dir" ] && [ -f "$marker" ] && [ "$(cat "$marker")" = "$src_dir" ]
-}
-
-clear_managed_link_dir() {
-    dst_dir="$1"
-
-    for item in "$dst_dir"/* "$dst_dir"/.[!.]* "$dst_dir"/..?*; do
-        [ -e "$item" ] || [ -L "$item" ] || continue
-        [ "$(basename "$item")" = ".sictic-symlink-dir" ] && continue
-        if [ -L "$item" ]; then
-            unlink "$item"
-        else
-            return 1
-        fi
-    done
-    return 0
-}
-
-symlink_skill_dir() {
-    src_dir="$1"
-    dst_dir="$2"
-
-    if is_managed_link_dir "$dst_dir" "$src_dir"; then
-        if ! clear_managed_link_dir "$dst_dir"; then
-            backup_existing_skill "$dst_dir"
-            mkdir -p "$dst_dir"
-        fi
-    elif [ -L "$dst_dir" ]; then
-        current_target=$(readlink "$dst_dir")
-        if [ "$current_target" = "$src_dir" ]; then
-            backup_existing_skill "$dst_dir"
-        else
-            backup_existing_skill "$dst_dir"
-        fi
-    elif [ -e "$dst_dir" ]; then
-        backup_existing_skill "$dst_dir"
-    fi
-
-    mkdir -p "$dst_dir"
-    printf '%s\n' "$src_dir" > "$dst_dir/.sictic-symlink-dir"
-
-    for item in "$src_dir"/* "$src_dir"/.[!.]* "$src_dir"/..?*; do
-        [ -e "$item" ] || [ -L "$item" ] || continue
-        entry_name=$(basename "$item")
-        case "$entry_name" in
-            __pycache__|.DS_Store|*.pyc) continue ;;
-        esac
-        ln -s "$item" "$dst_dir/$entry_name"
-    done
-}
-
 echo "Installing SICTIC-AI (conda variant)"
 echo "  source:   $REPO_ROOT"
 echo "  target:   $TARGET"
 echo "  env name: $ENV_NAME"
 echo "  env file: $ENV_FILE"
-echo "  skills:   $INSTALL_MODE"
+echo "  skills:   copy"
 echo
 
 # ---------------------------------------------------------------------------
@@ -253,12 +235,12 @@ if [ "$SKIP_ENV" -eq 0 ]; then
                         env_exists=0
                         ;;
                     *)
-                        echo "install_skills_conda: rebuild required for the pinned Docling runtime. Re-run with --rebuild-env when ready." >&2
+                        echo "install.sh: rebuild required for the pinned Docling runtime. Re-run with --rebuild-env when ready." >&2
                         exit 1
                         ;;
                 esac
             else
-                echo "install_skills_conda: rebuild required for Python $DESIRED_PYTHON. Re-run with --rebuild-env." >&2
+                echo "install.sh: rebuild required for Python $DESIRED_PYTHON. Re-run with --rebuild-env." >&2
                 exit 1
             fi
         fi
@@ -274,7 +256,7 @@ if [ "$SKIP_ENV" -eq 0 ]; then
 
     ENV_PY=$(conda run -n "$ENV_NAME" --no-capture-output which python | tail -1 | tr -d '\r')
     if [ -z "$ENV_PY" ] || [ ! -x "$ENV_PY" ]; then
-        echo "install_skills_conda: could not resolve python path in '$ENV_NAME'." >&2
+        echo "install.sh: could not resolve python path in '$ENV_NAME'." >&2
         exit 1
     fi
 
@@ -282,7 +264,7 @@ else
     echo "[1+2/3] conda env: skipped (--skip-env)"
     ENV_PY=$(conda run -n "$ENV_NAME" --no-capture-output which python 2>/dev/null | tail -1 | tr -d '\r' || true)
     if [ -z "$ENV_PY" ] || [ ! -x "$ENV_PY" ]; then
-        echo "install_skills_conda: --skip-env requested but env '$ENV_NAME' has no usable python." >&2
+        echo "install.sh: --skip-env requested but env '$ENV_NAME' has no usable python." >&2
         exit 1
     fi
 fi
@@ -291,7 +273,7 @@ echo "[2/3] Registering repository import path in $ENV_NAME..."
 "$ENV_PY" -m pip uninstall --yes sictic-skills >/dev/null 2>&1 || true
 SITE_PACKAGES=$("$ENV_PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
 if [ -z "$SITE_PACKAGES" ] || [ ! -d "$SITE_PACKAGES" ]; then
-    echo "install_skills_conda: could not resolve site-packages in '$ENV_NAME'." >&2
+    echo "install.sh: could not resolve site-packages in '$ENV_NAME'." >&2
     exit 1
 fi
 printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
@@ -299,11 +281,7 @@ printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
 # ---------------------------------------------------------------------------
 # Step 3: install skills
 # ---------------------------------------------------------------------------
-if [ "$INSTALL_MODE" = "copy" ]; then
-    echo "[3/3] Copying skills into $TARGET ..."
-else
-    echo "[3/3] Linking skills into $TARGET ..."
-fi
+echo "[3/3] Copying skills into $TARGET ..."
 
 INSTALLED_LIST=""
 installed_count=0
@@ -315,14 +293,10 @@ for src in "$REPO_ROOT/skills"/*/; do
 
     dst="$TARGET/$name"
 
-    if [ "$INSTALL_MODE" = "copy" ]; then
-        if [ -L "$dst" ]; then
-            backup_existing_skill "$dst"
-        fi
-        copy_skill_dir "$src" "$dst"
-    else
-        symlink_skill_dir "$src" "$dst"
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+        backup_existing_skill "$dst"
     fi
+    copy_skill_dir "$src" "$dst"
 
     INSTALLED_LIST="$INSTALLED_LIST $name "
     installed_count=$((installed_count + 1))
@@ -334,11 +308,11 @@ cat > "$TARGET/_SICTIC_AI.md" <<EOF
 
 These skill directories are installed from \`$REPO_ROOT/skills/\` by:
 
-    $REPO_ROOT/install_skills_conda.sh
+    $REPO_ROOT/install.sh
 
-Default installs real workspace skill directories whose contents are symlinked
-to the repository, so skill discovery works while the repository remains the
-single source of truth. Use \`--copy\` only for a portable snapshot install.
+The installer copies skill files into the workspace so skill discovery does not
+depend on symlink support. Re-run the installer after changing \`SKILL.md\`
+files or adding/removing skills.
 
 The installer registers \`$REPO_ROOT\` in the \`$ENV_NAME\` conda environment,
 so harness commands execute repository code. Runtime dependencies come only
@@ -425,7 +399,7 @@ ask_env() {
 
 if [ ! -f "$ENV_PATH" ]; then
     if [ ! -f "$ENV_TEMPLATE" ]; then
-        echo "install_skills_conda: cannot create .env because .env-template is missing." >&2
+        echo "install.sh: cannot create .env because .env-template is missing." >&2
         exit 1
     fi
     cp "$ENV_TEMPLATE" "$ENV_PATH"
@@ -444,6 +418,7 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
     ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
     ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
+    ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$REPO_ROOT" 1 0
     ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "google" 0 0
     cloud_provider=$(env_get CLOUD_PROVIDER || true)
     case "$(printf '%s' "$cloud_provider" | tr '[:upper:]' '[:lower:]')" in
@@ -462,15 +437,15 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "LLM_MODEL" "LLM model" "$(env_get LLM_MODEL || true)" 1 0
     ask_env "LLM_BASE_URL" "LLM base URL (blank for provider default)" "$(env_get LLM_BASE_URL || true)" 0 0
     ask_env "LLM_API_KEY" "LLM API key (blank if unused)" "$(env_get LLM_API_KEY || true)" 0 1
+    ask_env "RANKED_LLMS" "Reusable insight model ranking CSV" "$(env_get RANKED_LLMS || true)" 1 0
     ask_env "VLM_MODEL" "VLM model" "$(env_get VLM_MODEL || true)" 1 0
     vlm_base_default=$(env_get VLM_BASE_URL || true)
     if [ -z "$vlm_base_default" ]; then
         vlm_model_current=$(env_get VLM_MODEL || true)
-        if [[ "$vlm_model_current" == ollama/* ]]; then
-            vlm_base_default=$(env_get OLLAMA_HOST || true)
-        else
-            vlm_base_default=$(env_get LLM_BASE_URL || true)
-        fi
+        case "$vlm_model_current" in
+            ollama/*) vlm_base_default=$(env_get OLLAMA_HOST || true) ;;
+            *) vlm_base_default=$(env_get LLM_BASE_URL || true) ;;
+        esac
     fi
     vlm_key_default=$(env_get VLM_API_KEY || true)
     if [ -z "$vlm_key_default" ]; then
@@ -481,6 +456,12 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_get EMBEDDING_MODEL || true)" 1 0
     ask_env "EMBEDDING_BASE_URL" "Embedding base URL (blank for provider default)" "$(env_get EMBEDDING_BASE_URL || true)" 0 0
     ask_env "EMBEDDING_API_KEY" "Embedding API key (blank if unused)" "$(env_get EMBEDDING_API_KEY || true)" 0 1
+    ask_env "OLLAMA_CONTEXT_LENGTH" "Ollama baseline context length" "$(env_get OLLAMA_CONTEXT_LENGTH || true)" 1 0
+    ask_env "OLLAMA_CONTEXT_LENGTH_MAX" "Ollama maximum context length" "$(env_get OLLAMA_CONTEXT_LENGTH_MAX || true)" 1 0
+    ask_env "OLLAMA_NUM_PARALLEL" "Ollama parallel request limit" "$(env_get OLLAMA_NUM_PARALLEL || true)" 1 0
+    ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_get OLLAMA_MAX_LOADED_MODELS || true)" 1 0
+    ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_get OLLAMA_KV_CACHE_TYPE || true)" 0 0
+    ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_get OLLAMA_FLASH_ATTENTION || true)" 0 0
     ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
     ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
@@ -492,6 +473,8 @@ else
     echo "[4/4] .env prompts skipped (--non-interactive)."
     if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
     if [ -z "$(env_get WORKSPACE_PATH || true)" ]; then env_set "WORKSPACE_PATH" "$TARGET"; fi
+    if [ -z "$(env_get LOCAL_STORAGE_PATH || true)" ]; then env_set "LOCAL_STORAGE_PATH" "$REPO_ROOT/.storage"; fi
+    if [ -z "$(env_get LOCAL_DATA_PATH || true)" ]; then env_set "LOCAL_DATA_PATH" "$REPO_ROOT"; fi
 fi
 
 echo

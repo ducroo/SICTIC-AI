@@ -109,15 +109,15 @@ Qdrant is required for semantic search. You do not need to install it manually:
 ### Step 2: Install the Environment
 
 Run the provided installer. This creates a self-contained Python environment
-(`sictic-env`) and symlinks the skill folder contents into your AI workspace.
+(`sictic-env`) and copies the skill folder contents into your AI workspace.
 The installer registers the repository root in the Conda environment, so
-harness commands execute the current repo code and the target workspace points
-at the same canonical skill instructions. All runtime dependencies are defined
-in `environment.yml`.
+harness commands execute the current repo code. Re-run the installer after
+changing skill instructions or adding/removing skills. All runtime dependencies
+are defined in `environment.yml`.
 
 ```bash
 # Same for macOS, Linux, and WSL2
-./install_skills_conda.sh --target /Users/you/.openclaw/workspace-ops/skills
+./install.sh
 ```
 
 The installer creates the conda environment `sictic-env` for macOS, Linux, and
@@ -136,18 +136,19 @@ configure these variables:
 |1| `WORKSPACE_PATH` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
 |2| `REPO_PATH` | Absolute path to the root of this SICTIC-AI git repository | `/Users/you/SICTIC-AI` |
 |3| `LOCAL_STORAGE_PATH` | Absolute local application storage path | `/Users/you/SICTIC-AI/gdrive-mirror` |
-|4| `CLOUD_PROVIDER` | Optional cloud backend; currently only`google` works | `google` |
-|5| `CLOUD_STORAGE_PATH` | Cloud root, such as a Drive folder ID, `root`, or folder path/name | `SICTIC-AI-storage` |
-|6| `LLM_MODEL` | The primary text-generation model used for analysis | `google/gemini-flash-latest` or `ollama/qwen3:8b` |
-|7| `LLM_BASE_URL` | Base URL for the text-generation endpoint; blank uses the provider default | `http://localhost:11434` |
-|8| `LLM_API_KEY` | API key for the text-generation endpoint when needed | blank for local Ollama |
-|9| `VLM_MODEL` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
-|10| `VLM_BASE_URL` | Base URL for the vision-language endpoint; defaults to `LLM_BASE_URL` | `http://localhost:11434` |
-|11| `VLM_API_KEY` | API key for the vision-language endpoint; defaults to `LLM_API_KEY` | blank for local Ollama |
-|12| `EMBEDDING_MODEL` | The model used for semantic search embeddings | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
-|13| `EMBEDDING_BASE_URL` | Base URL for the embedding endpoint; blank uses the provider default | `http://localhost:11434` |
-|14| `EMBEDDING_API_KEY` | API key for the embedding endpoint when needed | blank for local Ollama |
-|15| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
+|4| `LOCAL_DATA_PATH` | Absolute local runtime cache path for `cache/` and `docling_data/` | `/Users/you/SICTIC-AI` |
+|5| `CLOUD_PROVIDER` | Optional cloud backend; currently only`google` works | `google` |
+|6| `CLOUD_STORAGE_PATH` | Cloud root, such as a Drive folder ID, `root`, or folder path/name | `SICTIC-AI-storage` |
+|7| `LLM_MODEL` | The primary text-generation model used for analysis | `google/gemini-flash-latest` or `ollama/qwen3:8b` |
+|8| `LLM_BASE_URL` | Base URL for the text-generation endpoint; blank uses the provider default | `http://localhost:11434` |
+|9| `LLM_API_KEY` | API key for the text-generation endpoint when needed | blank for local Ollama |
+|10| `VLM_MODEL` | The model used for extracting text from images/charts | `ollama/qwen3-vl:8b` or `openai/gpt-4o-mini` |
+|11| `VLM_BASE_URL` | Base URL for the vision-language endpoint; defaults to `LLM_BASE_URL` | `http://localhost:11434` |
+|12| `VLM_API_KEY` | API key for the vision-language endpoint; defaults to `LLM_API_KEY` | blank for local Ollama |
+|13| `EMBEDDING_MODEL` | The model used for semantic search embeddings | `ollama/qwen3-embedding:8b` or `openai/text-embedding-3-small` |
+|14| `EMBEDDING_BASE_URL` | Base URL for the embedding endpoint; blank uses the provider default | `http://localhost:11434` |
+|15| `EMBEDDING_API_KEY` | API key for the embedding endpoint when needed | blank for local Ollama |
+|16| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
 
 *(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
 

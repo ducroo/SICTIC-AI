@@ -42,17 +42,27 @@ class LocalTree:
     def scan(self) -> dict[str, SnapshotEntry]:
         out: dict[str, SnapshotEntry] = {}
         to_hash: list[tuple[str, Path, os.stat_result]] = []
-        for path in sorted(self.root.rglob("*")):
-            rel = clean_rel(path.relative_to(self.root).as_posix())
-            if is_hidden_rel(rel) or is_excluded(rel, self.exclude):
-                continue
-            if path.is_symlink():
-                continue
-            if path.is_dir():
+        for current_root, dirnames, filenames in os.walk(self.root, topdown=True):
+            current = Path(current_root)
+
+            kept_dirnames = []
+            for dirname in sorted(dirnames):
+                path = current / dirname
+                rel = clean_rel(path.relative_to(self.root).as_posix())
+                if path.is_symlink() or is_hidden_rel(rel) or is_excluded(rel, self.exclude):
+                    continue
+                kept_dirnames.append(dirname)
                 out[rel] = SnapshotEntry(path=rel, type="folder", mtime=path.stat().st_mtime)
-            elif path.is_file():
-                stat = path.stat()
-                to_hash.append((rel, path, stat))
+            dirnames[:] = kept_dirnames
+
+            for filename in sorted(filenames):
+                path = current / filename
+                rel = clean_rel(path.relative_to(self.root).as_posix())
+                if path.is_symlink() or is_hidden_rel(rel) or is_excluded(rel, self.exclude):
+                    continue
+                if path.is_file():
+                    stat = path.stat()
+                    to_hash.append((rel, path, stat))
 
         if to_hash:
             started = time.monotonic()

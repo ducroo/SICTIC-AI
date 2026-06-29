@@ -7,14 +7,13 @@ description: Synchronize the SICTIC-AI toolbox Git repository and safely publish
 
 ## Description
 This admin skill helps keep the SICTIC-AI toolbox updated and safely push contributions.
-The installer creates real skill folders in the target workspace, symlinks their
-contents back to the Git repository, and registers the Git repository in the
-Conda environment with a generated `.pth` file. The Git repository remains the
-single source of truth for skill instructions and runtime code.
+The installer copies skill folders into the target workspace and registers the
+Git repository in the Conda environment with a generated `.pth` file. The Git
+repository remains the single source of truth for runtime code.
 
 ## Workspace Model
 1. **Source of truth:** The Git repository contains the Python package, scripts, tests, and canonical skill instructions.
-2. **Installed skill folders:** The installer creates each target skill directory and symlinks its contents from the repository skill directory.
+2. **Installed skill folders:** The installer creates each target skill directory by copying the repository skill directory.
 3. **Runtime code:** Harness commands execute repository Python code through the Conda environment's `.pth` registration.
 
 ## The Architecture & Simplicity Framework
@@ -33,7 +32,7 @@ Before executing a `push` action, you (the AI Agent) MUST review modified files 
 
 ### Scenario A: Safely Updating the Toolbox
 1. Run `conda run -n sictic-env python -m skills.sictic_git_sync --action pull`.
-2. Re-run `./install_skills_conda.sh --target <SKILLS_TARGET> --skip-env` if new skill directories were added or removed.
+2. Re-run `./install.sh --skip-env` if new skill directories were added or removed.
 3. Summarize the changes for the user.
 
 ### Scenario B: Contributing Changes & New Skills
