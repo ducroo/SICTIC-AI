@@ -33,3 +33,31 @@ def test_reconcile_workspace_replaces_old_symlink_install(tmp_path):
     assert (workspace / "sample").is_dir()
     assert not (workspace / "sample").is_symlink()
     assert (workspace / "sample" / "SKILL.md").read_text(encoding="utf-8") == "fresh\n"
+
+
+def test_reconcile_workspace_ignores_repo_directories_without_skill_manifest(tmp_path):
+    repo = tmp_path / "repo"
+    workspace = tmp_path / "workspace"
+    helper_dir = repo / "skills" / "helper_package"
+    helper_dir.mkdir(parents=True)
+    (helper_dir / "__init__.py").write_text("", encoding="utf-8")
+
+    logs = _reconcile_workspace_copies(repo, workspace)
+
+    assert "Copied repo skill into workspace: helper_package" not in logs
+    assert not (workspace / "helper_package").exists()
+
+
+def test_reconcile_workspace_does_not_ingest_non_skill_workspace_folders(tmp_path):
+    repo = tmp_path / "repo"
+    workspace = tmp_path / "workspace"
+    (repo / "skills").mkdir(parents=True)
+    notes = workspace / "notes"
+    notes.mkdir(parents=True)
+    (notes / "README.md").write_text("workspace notes\n", encoding="utf-8")
+
+    logs = _reconcile_workspace_copies(repo, workspace)
+
+    assert "Skipped unmanaged non-skill workspace folder: notes" in logs
+    assert (workspace / "notes" / "README.md").is_file()
+    assert not (repo / "skills" / "notes").exists()

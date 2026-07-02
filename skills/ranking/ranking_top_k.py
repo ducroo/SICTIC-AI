@@ -1,7 +1,7 @@
 import asyncio
 import random
 from typing import Dict, List, Any, Tuple
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
@@ -11,13 +11,12 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 class RankedProfilesResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     ranked_profile_ids: List[str] = Field(
         description="List of profile IDs ordered from best to worst",
         alias="ranked_profiles_ids"
     )
-
-    class Config:
-        populate_by_name = True
 
 async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
     """Ranks a small set of profiles using LLM and returns sorted profile IDs."""
