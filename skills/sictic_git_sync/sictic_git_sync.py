@@ -7,6 +7,10 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 IGNORED_COPY_NAMES = {"__pycache__", ".DS_Store"}
 
+
+def _is_skill_dir(path: Path) -> bool:
+    return path.is_dir() and (path / "SKILL.md").is_file()
+
 def run_cmd(cmd: list[str], cwd: Path) -> str:
     """Executes a shell command and returns the output."""
     try:
@@ -53,6 +57,9 @@ def _reconcile_workspace_copies(repo_dir: Path, workspace_dir: Path) -> list[str
             item.unlink()
             logs.append(f"Removed workspace symlink: {item.name}")
         elif item.is_dir():
+            if not _is_skill_dir(item):
+                logs.append(f"Skipped unmanaged non-skill workspace folder: {item.name}")
+                continue
             repo_item = repo_skills / item.name
             if repo_item.exists():
                 continue
@@ -63,7 +70,11 @@ def _reconcile_workspace_copies(repo_dir: Path, workspace_dir: Path) -> list[str
 
     # 2. Scan repo: copy all skills into the workspace.
     for repo_item in repo_skills.iterdir():
-        if not repo_item.is_dir() or repo_item.name.startswith(".") or repo_item.name in IGNORED_COPY_NAMES:
+        if (
+            not _is_skill_dir(repo_item)
+            or repo_item.name.startswith(".")
+            or repo_item.name in IGNORED_COPY_NAMES
+        ):
             continue
             
         workspace_item = workspace_dir / repo_item.name
