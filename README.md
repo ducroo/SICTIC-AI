@@ -152,6 +152,12 @@ configure these variables:
 
 *(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
 
+`REPO_PATH` points to this git repository. `WORKSPACE_PATH` points to the
+installed skill-copy directory used by the AI workspace for skill discovery.
+Legacy aliases such as `REPO_DIR`, `WORKSPACE_DIR`, `STORAGE_PROVIDER`,
+`STORAGE_PATH`, and `STORAGE_MIRROR_PATH` are no longer used; the installer
+removes them from `.env` when it runs.
+
 ### Step 4: Start Background Services
 
 SICTIC-AI relies on Qdrant for semantic search and on Ollama when any configured

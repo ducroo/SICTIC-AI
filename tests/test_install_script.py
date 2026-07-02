@@ -31,6 +31,18 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
         "CLOUD_STORAGE_PATH=\n",
         encoding="utf-8",
     )
+    (source / ".env").write_text(
+        "REPO_PATH=\n"
+        "WORKSPACE_PATH=\n"
+        "LOCAL_STORAGE_PATH=\n"
+        "LOCAL_DATA_PATH=\n"
+        "CLOUD_PROVIDER=google\n"
+        "CLOUD_STORAGE_PATH=\n"
+        "STORAGE_PROVIDER=google\n"
+        "DEFAULT_LLM=legacy\n"
+        "OLLAMA_NUM_CTX=4096\n",
+        encoding="utf-8",
+    )
 
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -85,4 +97,6 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
     assert f"WORKSPACE_PATH={target}" in env_file
     assert f"LOCAL_STORAGE_PATH={source / '.storage'}" in env_file
     assert f"LOCAL_DATA_PATH={source}" in env_file
-
+    assert "STORAGE_PROVIDER=" not in env_file
+    assert "DEFAULT_LLM=" not in env_file
+    assert "OLLAMA_NUM_CTX=" not in env_file
