@@ -14,7 +14,7 @@ os.environ["SICTIC_TESTING"] = "1"
 import lib.env  # noqa: E402,F401
 
 os.environ["REPO_PATH"] = str(REPO_ROOT)
-os.environ["WORKSPACE_PATH"] = str(REPO_ROOT / "skills")
+os.environ["INSTALLED_SKILLS_PATH"] = str(REPO_ROOT / "skills")
 os.environ["LOCAL_STORAGE_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["LOCAL_DATA_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["CLOUD_PROVIDER"] = "google"
@@ -71,7 +71,7 @@ def pytest_pyfunc_call(pyfuncitem):
 def mock_env(monkeypatch, tmp_path):
     """
     Sets up a safe, isolated environment for tests.
-    It overrides REPO_PATH and WORKSPACE_PATH to point to a temporary directory
+    It overrides REPO_PATH and INSTALLED_SKILLS_PATH to point to temporary directories
     so that no real files are ever affected during unit testing.
     """
     # Create mock directories
@@ -87,7 +87,7 @@ def mock_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CLOUD_PROVIDER", "google")
     monkeypatch.setenv("CLOUD_STORAGE_PATH", "test-drive-root")
     monkeypatch.setenv("REPO_PATH", str(Path(__file__).resolve().parents[1]))
-    monkeypatch.setenv("WORKSPACE_PATH", str(workspace_mock))
+    monkeypatch.setenv("INSTALLED_SKILLS_PATH", str(workspace_mock))
     monkeypatch.setenv("LLM_MODEL", "ollama/test_model:1b")
     monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("LLM_API_KEY", "")

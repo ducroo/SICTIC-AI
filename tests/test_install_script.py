@@ -24,7 +24,7 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
     )
     (source / ".env-template").write_text(
         "REPO_PATH=\n"
-        "WORKSPACE_PATH=\n"
+        "INSTALLED_SKILLS_PATH=\n"
         "LOCAL_STORAGE_PATH=\n"
         "LOCAL_DATA_PATH=\n"
         "CLOUD_PROVIDER=google\n"
@@ -94,7 +94,8 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
 
     env_file = (source / ".env").read_text(encoding="utf-8")
     assert f"REPO_PATH={source}" in env_file
-    assert f"WORKSPACE_PATH={target}" in env_file
+    assert f"INSTALLED_SKILLS_PATH={target}" in env_file
+    assert "WORKSPACE_PATH=" not in env_file
     assert f"LOCAL_STORAGE_PATH={source / '.storage'}" in env_file
     assert f"LOCAL_DATA_PATH={source}" in env_file
     assert "STORAGE_PROVIDER=" not in env_file
