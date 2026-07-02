@@ -1,4 +1,5 @@
 .env
+.env-old
 .DS_Store
 **/.DS_Store
 .openclaw/

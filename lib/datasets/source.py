@@ -40,6 +40,7 @@ IGNORED_EXTENSIONS = (
     ".gdraw",
 )
 IGNORED_FILENAMES = {
+    ".ds_store",
     "__active_dataset__.md",
     "__archived_dataset__.md",
     "application.raw.json",
@@ -59,7 +60,7 @@ def list_source_files(storage, raw_rel: str) -> list[tuple[str, float]]:
     return [
         (name, mtime)
         for name, mtime in storage.list_with_mtime(raw_rel, recursive=True)
-        if name.rsplit("/", 1)[-1] not in IGNORED_FILENAMES
+        if name.rsplit("/", 1)[-1].lower() not in IGNORED_FILENAMES
         and not name.lower().endswith(IGNORED_EXTENSIONS)
     ]
 
