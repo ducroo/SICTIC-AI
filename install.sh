@@ -14,10 +14,12 @@
 # What it does:
 #   1. Ensures the conda env named in environment.yml exists. If not, creates it.
 #      If yes, updates it with --prune (removes deps no longer listed).
-#   2. Registers the repository root in the environment's site-packages using
+#   2. Registers the installed workspace in the environment's site-packages using
 #      a generated .pth file, without invoking project dependency resolution.
-#   3. Copies every skill directory into <target>/<name>/. Existing installed
-#      skill directories are preserved under <target>/.skill-copy-backups/.
+#   3. Copies every skill directory into <target>/<name>/ for skill discovery,
+#      and also copies runnable packages/support files into <target>/.
+#      Existing installed skill directories are preserved under
+#      <target>/.skill-copy-backups/.
 #
 # Usage:
 #   ./install.sh                                      # interactive install
@@ -173,6 +175,30 @@ copy_skill_dir() {
     )
 }
 
+copy_runtime_dir() {
+    src_dir="$1"
+    dst_dir="$2"
+
+    [ -d "$src_dir" ] || return 0
+    rm -rf "$dst_dir"
+    mkdir -p "$dst_dir"
+    (
+        cd "$src_dir"
+        find . \
+            \( -name __pycache__ -o -name .DS_Store -o -name '*.pyc' \) -prune \
+            -o -type d -exec mkdir -p "$dst_dir/{}" \; \
+            -o -type f -exec cp -p "{}" "$dst_dir/{}" \;
+    )
+}
+
+copy_support_file() {
+    src_file="$1"
+    dst_file="$2"
+
+    [ -f "$src_file" ] || return 0
+    cp -p "$src_file" "$dst_file"
+}
+
 BACKUP_ROOT=""
 
 backup_existing_skill() {
@@ -269,14 +295,14 @@ else
     fi
 fi
 
-echo "[2/3] Registering repository import path in $ENV_NAME..."
+echo "[2/3] Registering installed workspace import path in $ENV_NAME..."
 "$ENV_PY" -m pip uninstall --yes sictic-skills >/dev/null 2>&1 || true
 SITE_PACKAGES=$("$ENV_PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
 if [ -z "$SITE_PACKAGES" ] || [ ! -d "$SITE_PACKAGES" ]; then
     echo "install.sh: could not resolve site-packages in '$ENV_NAME'." >&2
     exit 1
 fi
-printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
+printf '%s\n' "$TARGET" > "$SITE_PACKAGES/sictic-ai-repo.pth"
 
 # ---------------------------------------------------------------------------
 # Step 3: install skills
@@ -314,9 +340,10 @@ The installer copies skill files into the workspace so skill discovery does not
 depend on symlink support. Re-run the installer after changing \`SKILL.md\`
 files or adding/removing skills.
 
-The installer registers \`$REPO_ROOT\` in the \`$ENV_NAME\` conda environment,
-so harness commands execute repository code. Runtime dependencies come only
-from \`environment.yml\`.
+The installer also copies runnable \`skills/\`, \`lib/\`, \`config/\`, and support
+files into this workspace. It registers \`$TARGET\` in the \`$ENV_NAME\` conda
+environment, so harness commands execute the installed copy rather than the
+source repository. Runtime dependencies come only from \`environment.yml\`.
 
 ## Invocation
 
@@ -325,11 +352,22 @@ EOF
 
 echo "       Installed $installed_count skill(s)."
 
+echo "       Copying runtime packages and support files..."
+copy_runtime_dir "$REPO_ROOT/skills" "$TARGET/skills"
+copy_runtime_dir "$REPO_ROOT/lib" "$TARGET/lib"
+copy_runtime_dir "$REPO_ROOT/config" "$TARGET/config"
+copy_runtime_dir "$REPO_ROOT/scripts" "$TARGET/scripts"
+copy_support_file "$REPO_ROOT/environment.yml" "$TARGET/environment.yml"
+copy_support_file "$REPO_ROOT/launch.sh" "$TARGET/launch.sh"
+copy_support_file "$REPO_ROOT/README.md" "$TARGET/README.md"
+copy_support_file "$REPO_ROOT/.env-template" "$TARGET/.env-template"
+
 # ---------------------------------------------------------------------------
 # Step 4: interactive .env setup
 # ---------------------------------------------------------------------------
-ENV_PATH="$REPO_ROOT/.env"
-ENV_TEMPLATE="$REPO_ROOT/.env-template"
+SOURCE_ENV_PATH="$REPO_ROOT/.env"
+ENV_PATH="$TARGET/.env"
+ENV_TEMPLATE="$TARGET/.env-template"
 ENV_CREATED=0
 
 env_get() {
@@ -349,6 +387,27 @@ env_get() {
             exit
         }
     ' "$ENV_PATH"
+}
+
+source_env_get() {
+    key="$1"
+    env_file_get "$key" "$SOURCE_ENV_PATH"
+}
+
+env_default() {
+    key="$1"
+    fallback="$2"
+    current=$(env_get "$key" || true)
+    if [ -n "$current" ]; then
+        printf '%s\n' "$current"
+        return
+    fi
+    source_value=$(source_env_get "$key" || true)
+    if [ -n "$source_value" ]; then
+        printf '%s\n' "$source_value"
+        return
+    fi
+    printf '%s\n' "$fallback"
 }
 
 env_set() {
@@ -467,10 +526,10 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     echo "Press Enter to keep the value shown in brackets. Secrets are preserved when already configured."
     echo
 
-    ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
+    ask_env "REPO_PATH" "Repository path" "$TARGET" 1 0
     ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
-    ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
-    ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$REPO_ROOT" 1 0
+    ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$(env_default LOCAL_STORAGE_PATH "$TARGET/.storage")" 1 0
+    ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$(env_default LOCAL_DATA_PATH "$TARGET")" 1 0
     ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "google" 0 0
     cloud_provider=$(env_get CLOUD_PROVIDER || true)
     case "$(printf '%s' "$cloud_provider" | tr '[:upper:]' '[:lower:]')" in
@@ -484,49 +543,45 @@ if [ "$INTERACTIVE" -eq 1 ]; then
             ;;
     esac
 
-    ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
-    ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_get OLLAMA_HOST || true)" 1 0
-    ask_env "LLM_MODEL" "LLM model" "$(env_get LLM_MODEL || true)" 1 0
-    ask_env "LLM_BASE_URL" "LLM base URL (blank for provider default)" "$(env_get LLM_BASE_URL || true)" 0 0
-    ask_env "LLM_API_KEY" "LLM API key (blank if unused)" "$(env_get LLM_API_KEY || true)" 0 1
-    ask_env "RANKED_LLMS" "Reusable insight model ranking CSV" "$(env_get RANKED_LLMS || true)" 1 0
-    ask_env "VLM_MODEL" "VLM model" "$(env_get VLM_MODEL || true)" 1 0
-    vlm_base_default=$(env_get VLM_BASE_URL || true)
+    ask_env "QDRANT_HOST" "Qdrant host" "$(env_default QDRANT_HOST "")" 1 0
+    ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_default OLLAMA_HOST "")" 1 0
+    ask_env "LLM_MODEL" "LLM model" "$(env_default LLM_MODEL "")" 1 0
+    ask_env "LLM_BASE_URL" "LLM base URL (blank for provider default)" "$(env_default LLM_BASE_URL "")" 0 0
+    ask_env "LLM_API_KEY" "LLM API key (blank if unused)" "" 0 1
+    ask_env "RANKED_LLMS" "Reusable insight model ranking CSV" "$(env_default RANKED_LLMS "")" 1 0
+    ask_env "VLM_MODEL" "VLM model" "$(env_default VLM_MODEL "")" 1 0
+    vlm_base_default=$(env_default VLM_BASE_URL "")
     if [ -z "$vlm_base_default" ]; then
-        vlm_model_current=$(env_get VLM_MODEL || true)
+        vlm_model_current=$(env_default VLM_MODEL "")
         case "$vlm_model_current" in
-            ollama/*) vlm_base_default=$(env_get OLLAMA_HOST || true) ;;
-            *) vlm_base_default=$(env_get LLM_BASE_URL || true) ;;
+            ollama/*) vlm_base_default=$(env_default OLLAMA_HOST "") ;;
+            *) vlm_base_default=$(env_default LLM_BASE_URL "") ;;
         esac
     fi
-    vlm_key_default=$(env_get VLM_API_KEY || true)
-    if [ -z "$vlm_key_default" ]; then
-        vlm_key_default=$(env_get LLM_API_KEY || true)
-    fi
     ask_env "VLM_BASE_URL" "VLM base URL (local Ollama VLMs should use OLLAMA_HOST)" "$vlm_base_default" 0 0
-    ask_env "VLM_API_KEY" "VLM API key (defaults to LLM_API_KEY)" "$vlm_key_default" 0 1
-    ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_get EMBEDDING_MODEL || true)" 1 0
-    ask_env "EMBEDDING_BASE_URL" "Embedding base URL (blank for provider default)" "$(env_get EMBEDDING_BASE_URL || true)" 0 0
-    ask_env "EMBEDDING_API_KEY" "Embedding API key (blank if unused)" "$(env_get EMBEDDING_API_KEY || true)" 0 1
-    ask_env "OLLAMA_CONTEXT_LENGTH" "Ollama baseline context length" "$(env_get OLLAMA_CONTEXT_LENGTH || true)" 1 0
-    ask_env "OLLAMA_CONTEXT_LENGTH_MAX" "Ollama maximum context length" "$(env_get OLLAMA_CONTEXT_LENGTH_MAX || true)" 1 0
-    ask_env "OLLAMA_NUM_PARALLEL" "Ollama parallel request limit" "$(env_get OLLAMA_NUM_PARALLEL || true)" 1 0
-    ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_get OLLAMA_MAX_LOADED_MODELS || true)" 1 0
-    ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_get OLLAMA_KV_CACHE_TYPE || true)" 0 0
-    ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_get OLLAMA_FLASH_ATTENTION || true)" 0 0
-    ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
-    ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
-    ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
-    ask_env "APIFY_KEY" "Apify API key (blank if unused)" "$(env_get APIFY_KEY || true)" 0 1
-    ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "$(env_get DEALUM_API_KEY || true)" 0 1
-    ask_env "DEALUM_DEALROOM_ID" "Dealum deal room ID (blank if unused)" "$(env_get DEALUM_DEALROOM_ID || true)" 0 1
-    ask_env "DEALUM_SYNC_TTL_SECONDS" "Dealum sync TTL in seconds" "$(env_get DEALUM_SYNC_TTL_SECONDS || true)" 0 0
+    ask_env "VLM_API_KEY" "VLM API key (defaults to LLM_API_KEY)" "" 0 1
+    ask_env "EMBEDDING_MODEL" "Embedding model" "$(env_default EMBEDDING_MODEL "")" 1 0
+    ask_env "EMBEDDING_BASE_URL" "Embedding base URL (blank for provider default)" "$(env_default EMBEDDING_BASE_URL "")" 0 0
+    ask_env "EMBEDDING_API_KEY" "Embedding API key (blank if unused)" "" 0 1
+    ask_env "OLLAMA_CONTEXT_LENGTH" "Ollama baseline context length" "$(env_default OLLAMA_CONTEXT_LENGTH "")" 1 0
+    ask_env "OLLAMA_CONTEXT_LENGTH_MAX" "Ollama maximum context length" "$(env_default OLLAMA_CONTEXT_LENGTH_MAX "")" 1 0
+    ask_env "OLLAMA_NUM_PARALLEL" "Ollama parallel request limit" "$(env_default OLLAMA_NUM_PARALLEL "")" 1 0
+    ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_default OLLAMA_MAX_LOADED_MODELS "")" 1 0
+    ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_default OLLAMA_KV_CACHE_TYPE "")" 0 0
+    ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_default OLLAMA_FLASH_ATTENTION "")" 0 0
+    ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "" 0 1
+    ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "" 0 1
+    ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "" 0 1
+    ask_env "APIFY_KEY" "Apify API key (blank if unused)" "" 0 1
+    ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "" 0 1
+    ask_env "DEALUM_DEALROOM_ID" "Dealum deal room ID (blank if unused)" "" 0 1
+    ask_env "DEALUM_SYNC_TTL_SECONDS" "Dealum sync TTL in seconds" "$(env_default DEALUM_SYNC_TTL_SECONDS "")" 0 0
 else
     echo "[4/4] .env prompts skipped (--non-interactive)."
-    if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
+    if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$TARGET"; fi
     if [ -z "$(env_get WORKSPACE_PATH || true)" ]; then env_set "WORKSPACE_PATH" "$TARGET"; fi
-    if [ -z "$(env_get LOCAL_STORAGE_PATH || true)" ]; then env_set "LOCAL_STORAGE_PATH" "$REPO_ROOT/.storage"; fi
-    if [ -z "$(env_get LOCAL_DATA_PATH || true)" ]; then env_set "LOCAL_DATA_PATH" "$REPO_ROOT"; fi
+    if [ -z "$(env_get LOCAL_STORAGE_PATH || true)" ]; then env_set "LOCAL_STORAGE_PATH" "$(env_default LOCAL_STORAGE_PATH "$TARGET/.storage")"; fi
+    if [ -z "$(env_get LOCAL_DATA_PATH || true)" ]; then env_set "LOCAL_DATA_PATH" "$(env_default LOCAL_DATA_PATH "$TARGET")"; fi
 fi
 
 echo
