@@ -53,7 +53,6 @@ def _parse_manual_persons_table(content: str) -> List[Person] | None:
                 persons.append(
                     Person(
                         linkedin_id=linkedin_slug,
-                        linkedin_id_locked=True,
                     )
                 )
             continue
@@ -92,7 +91,6 @@ def _parse_manual_persons_table(content: str) -> List[Person] | None:
             Person(
                 full_name=full_name,
                 linkedin_id=linkedin_id,
-                linkedin_id_locked=True,
                 email_addresses=email_addresses,
             )
         )

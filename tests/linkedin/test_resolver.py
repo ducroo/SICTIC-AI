@@ -88,17 +88,7 @@ def test_linkedin_scrape_uses_profile_urls_input():
     ]
 
 
-class _FakeWebSearch:
-    def __init__(self):
-        self.calls = []
-
-    def search(self, query):
-        self.calls.append(query)
-        return [{"link": "https://www.linkedin.com/in/wrong-person/"}]
-
-
-def test_locked_blank_linkedin_id_skips_discovery_and_cache_matching():
-    web_search = _FakeWebSearch()
+def test_blank_linkedin_id_skips_discovery_and_scrape():
     resolver = LinkedInResolver.__new__(LinkedInResolver)
     resolver.dataset_name = "novoviz"
     resolver.cache = {
@@ -109,13 +99,11 @@ def test_locked_blank_linkedin_id_skips_discovery_and_cache_matching():
         )
     }
     resolver.registry_store = _FakeRegistry()
-    resolver._web_search_factory = lambda: web_search
     resolver._apify_factory = lambda: _FakeApify()
 
     person = Person(
         full_name="Samuel Cheng",
         linkedin_id="",
-        linkedin_id_locked=True,
         email_addresses=["srcheng@gmail.com"],
     )
 
@@ -124,5 +112,4 @@ def test_locked_blank_linkedin_id_skips_discovery_and_cache_matching():
     assert resolved == [person]
     assert person.linkedin_id == ""
     assert person.linkedin_profile == {}
-    assert web_search.calls == []
     assert resolver.registry_store.upserts == []
