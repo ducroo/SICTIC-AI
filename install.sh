@@ -77,7 +77,10 @@ env_file_get() {
 
 if [ -z "$TARGET" ]; then
     if [ "$INTERACTIVE" -eq 1 ]; then
-        target_default=$(env_file_get WORKSPACE_PATH "$REPO_ROOT/.env" || true)
+        target_default=$(env_file_get INSTALLED_SKILLS_PATH "$REPO_ROOT/.env" || true)
+        if [ -z "$target_default" ]; then
+            target_default=$(env_file_get WORKSPACE_PATH "$REPO_ROOT/.env" || true)
+        fi
         while [ -z "$TARGET" ]; do
             if [ -n "$target_default" ]; then
                 printf 'Installed skills path [%s]: ' "$target_default"
@@ -90,7 +93,7 @@ if [ -z "$TARGET" ]; then
             fi
             TARGET="$target_answer"
             if [ -z "$TARGET" ]; then
-                echo "  WORKSPACE_PATH is required."
+                echo "  INSTALLED_SKILLS_PATH is required."
             fi
         done
     else
@@ -403,6 +406,7 @@ prune_legacy_env_vars() {
         OLLAMA_NUM_CTX \
         OLLAMA_NUM_CTX_MAX \
         REPO_DIR \
+        WORKSPACE_PATH \
         WORKSPACE_DIR \
         STORAGE_MIRROR_DIR \
         STORAGE_MIRROR_PATH \
@@ -417,6 +421,15 @@ prune_legacy_env_vars() {
     done
     if [ -n "$removed" ]; then
         echo "Removed legacy .env variables:$removed"
+    fi
+}
+
+migrate_installed_skills_path() {
+    current=$(env_get INSTALLED_SKILLS_PATH || true)
+    legacy=$(env_get WORKSPACE_PATH || true)
+    if [ -z "$current" ] && [ -n "$legacy" ]; then
+        env_set "INSTALLED_SKILLS_PATH" "$legacy"
+        echo "Migrated WORKSPACE_PATH to INSTALLED_SKILLS_PATH."
     fi
 }
 
@@ -464,6 +477,7 @@ else
     echo "[4/4] Updating $ENV_PATH"
 fi
 
+migrate_installed_skills_path
 prune_legacy_env_vars
 
 if [ "$INTERACTIVE" -eq 1 ]; then
@@ -473,7 +487,7 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     echo
 
     ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
-    ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
+    ask_env "INSTALLED_SKILLS_PATH" "Installed skills path" "$TARGET" 1 0
     ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
     ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$REPO_ROOT" 1 0
     ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "" 0 0
@@ -529,7 +543,7 @@ if [ "$INTERACTIVE" -eq 1 ]; then
 else
     echo "[4/4] .env prompts skipped (--non-interactive)."
     if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
-    if [ -z "$(env_get WORKSPACE_PATH || true)" ]; then env_set "WORKSPACE_PATH" "$TARGET"; fi
+    if [ -z "$(env_get INSTALLED_SKILLS_PATH || true)" ]; then env_set "INSTALLED_SKILLS_PATH" "$TARGET"; fi
     if [ -z "$(env_get LOCAL_STORAGE_PATH || true)" ]; then env_set "LOCAL_STORAGE_PATH" "$REPO_ROOT/.storage"; fi
     if [ -z "$(env_get LOCAL_DATA_PATH || true)" ]; then env_set "LOCAL_DATA_PATH" "$REPO_ROOT"; fi
 fi

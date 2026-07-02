@@ -133,7 +133,7 @@ configure these variables:
 
 | \# | Variable | Purpose | Example |
 |---|---|---|---|
-|1| `WORKSPACE_PATH` | Absolute path to the AI workspace skills directory | `/Users/you/.openclaw/workspace-ops/skills` |
+|1| `INSTALLED_SKILLS_PATH` | Deployment-only path for installer-copied skills; development happens in `REPO_PATH` | `/Users/you/.openclaw/workspace-ops/skills` |
 |2| `REPO_PATH` | Absolute path to the root of this SICTIC-AI git repository | `/Users/you/SICTIC-AI` |
 |3| `LOCAL_STORAGE_PATH` | Absolute local application storage path | `/Users/you/SICTIC-AI/gdrive-mirror` |
 |4| `LOCAL_DATA_PATH` | Absolute local runtime cache path for `cache/` and `docling_data/` | `/Users/you/SICTIC-AI` |
@@ -152,9 +152,9 @@ configure these variables:
 
 *(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
 
-`REPO_PATH` points to this git repository. `WORKSPACE_PATH` points to the
-installed skill-copy directory used by the AI workspace for skill discovery.
-Legacy aliases such as `REPO_DIR`, `WORKSPACE_DIR`, `STORAGE_PROVIDER`,
+`REPO_PATH` points to this git repository. `INSTALLED_SKILLS_PATH` points to
+the installed skill-copy directory used by the AI workspace for skill discovery.
+Legacy aliases such as `REPO_DIR`, `WORKSPACE_PATH`, `WORKSPACE_DIR`, `STORAGE_PROVIDER`,
 `STORAGE_PATH`, and `STORAGE_MIRROR_PATH` are no longer used; the installer
 removes them from `.env` when it runs.
 
