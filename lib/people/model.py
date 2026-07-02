@@ -66,6 +66,7 @@ def _email_local_part_score(full_name: str, emails: List[str]) -> int:
 class Person:
     full_name: str = ""
     linkedin_id: str = ""
+    linkedin_id_locked: bool = False
     email_addresses: List[str] = field(default_factory=list)
     linkedin_profile: Dict[str, Any] = field(default_factory=dict)
     dossier: List[Chunk] = field(default_factory=list)
@@ -151,7 +152,7 @@ class Person:
         elif self.full_name and other.full_name and len(other.full_name) > len(self.full_name):
             self.full_name = other.full_name
             
-        if not self.linkedin_id and other.linkedin_id:
+        if not self.linkedin_id and other.linkedin_id and not self.linkedin_id_locked:
             self.linkedin_id = other.linkedin_id
 
         self.email_addresses = normalize_email_addresses(self.email_addresses + other.email_addresses)

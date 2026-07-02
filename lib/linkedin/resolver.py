@@ -117,6 +117,14 @@ class LinkedInResolver:
             if sanitized_name:
                 person.full_name = sanitized_name
 
+            if person.linkedin_id_locked and not person.linkedin_id:
+                logger.info(
+                    "Skipping LinkedIn discovery for locked manual person %s",
+                    person.display_name,
+                )
+                result.append(person)
+                continue
+
             cached = find_cached_person(person, list(self.cache.values()))
             if cached is not None:
                 person.merge(cached)
