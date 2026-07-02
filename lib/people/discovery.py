@@ -50,7 +50,12 @@ def _parse_manual_persons_table(content: str) -> List[Person] | None:
             key = linkedin_slug.lower()
             if key not in seen:
                 seen.add(key)
-                persons.append(Person(linkedin_id=linkedin_slug))
+                persons.append(
+                    Person(
+                        linkedin_id=linkedin_slug,
+                        linkedin_id_locked=True,
+                    )
+                )
             continue
 
         if not stripped.startswith("|") or not stripped.endswith("|"):
@@ -83,7 +88,14 @@ def _parse_manual_persons_table(content: str) -> List[Person] | None:
         if key in seen:
             continue
         seen.add(key)
-        persons.append(Person(full_name=full_name, linkedin_id=linkedin_id, email_addresses=email_addresses))
+        persons.append(
+            Person(
+                full_name=full_name,
+                linkedin_id=linkedin_id,
+                linkedin_id_locked=True,
+                email_addresses=email_addresses,
+            )
+        )
 
     return persons if header is not None or persons else None
 

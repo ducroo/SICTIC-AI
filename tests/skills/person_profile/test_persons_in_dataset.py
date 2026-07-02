@@ -38,10 +38,16 @@ def test_persons_in_dataset_reads_manual_insight_table(mock_env):
         Person(
             full_name="Urs Gubser",
             linkedin_id="urs-gubser",
+            linkedin_id_locked=True,
             email_addresses=["urs@gubser.ch", "urs.gubser@investor.sictic.ch"],
         ),
-        Person(full_name="Jane Doe", linkedin_id="", email_addresses=["jane@example.com"]),
-        Person(full_name="", linkedin_id="no-name"),
+        Person(
+            full_name="Jane Doe",
+            linkedin_id="",
+            linkedin_id_locked=True,
+            email_addresses=["jane@example.com"],
+        ),
+        Person(full_name="", linkedin_id="no-name", linkedin_id_locked=True),
     ]
 
 
@@ -65,8 +71,8 @@ def test_persons_in_dataset_reads_manual_insight_url_list(mock_env):
     persons = persons_in_dataset("sictic_members")
 
     assert persons == [
-        Person(full_name="", linkedin_id="ursgubser"),
-        Person(full_name="", linkedin_id="jane-doe"),
+        Person(full_name="", linkedin_id="ursgubser", linkedin_id_locked=True),
+        Person(full_name="", linkedin_id="jane-doe", linkedin_id_locked=True),
     ]
 
 
@@ -95,6 +101,7 @@ def test_persons_in_dataset_ignores_linkedin_example_in_intro(mock_env):
         Person(
             full_name="Urs Gubser",
             linkedin_id="urs-gubser",
+            linkedin_id_locked=True,
             email_addresses=["urs@gubser.ch"],
         )
     ]
@@ -126,7 +133,11 @@ def test_persons_in_dataset_reads_legacy_manual_table_headers(mock_env, mocker):
     persons = persons_in_dataset("sictic_members")
 
     assert persons == [
-        Person(full_name="Patrick Schuler", linkedin_id="schulerp")
+        Person(
+            full_name="Patrick Schuler",
+            linkedin_id="schulerp",
+            linkedin_id_locked=True,
+        )
     ]
 
 

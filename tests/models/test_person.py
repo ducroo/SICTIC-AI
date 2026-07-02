@@ -32,6 +32,15 @@ def test_person_merge_deduplicates_normalized_email_addresses():
     assert left.email_addresses == ["urs@gubser.ch", "urs.gubser@investor.sictic.ch"]
 
 
+def test_person_merge_preserves_locked_blank_linkedin_id():
+    left = Person(full_name="Samuel Cheng", linkedin_id_locked=True)
+    right = Person(full_name="Samuel Cheng", linkedin_id="wrong-person")
+
+    left.merge(right)
+
+    assert left.linkedin_id == ""
+
+
 def test_extract_email_addresses_recursively_scans_linkedin_payloads():
     payload = {
         "contact": {"primary": "mailto:URS@GUBSER.CH"},
