@@ -365,6 +365,56 @@ env_set() {
     mv "$tmp" "$ENV_PATH"
 }
 
+env_has() {
+    key="$1"
+    if [ ! -f "$ENV_PATH" ]; then
+        return 1
+    fi
+    grep -q "^[[:space:]]*$key[[:space:]]*=" "$ENV_PATH"
+}
+
+env_unset() {
+    key="$1"
+    if [ ! -f "$ENV_PATH" ]; then
+        return
+    fi
+    tmp="$ENV_PATH.tmp.$$"
+    awk -F= -v k="$key" '
+        $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { next }
+        { print }
+    ' "$ENV_PATH" > "$tmp"
+    mv "$tmp" "$ENV_PATH"
+}
+
+prune_legacy_env_vars() {
+    removed=""
+    for key in \
+        DEFAULT_LLM \
+        DEFAULT_EMBEDDINGS \
+        DEFAULT_VLM \
+        MAX_CONCURRENT_DOCLING \
+        MAX_CONCURRENT_EMBEDS \
+        MAX_CONCURRENT_LLMS \
+        OLLAMA_NUM_CTX \
+        OLLAMA_NUM_CTX_MAX \
+        REPO_DIR \
+        WORKSPACE_DIR \
+        STORAGE_MIRROR_DIR \
+        STORAGE_MIRROR_PATH \
+        STORAGE_PATH \
+        STORAGE_PROVIDER \
+        SICTIC_SYNC_DAEMON
+    do
+        if env_has "$key"; then
+            env_unset "$key"
+            removed="$removed $key"
+        fi
+    done
+    if [ -n "$removed" ]; then
+        echo "Removed legacy .env variables:$removed"
+    fi
+}
+
 ask_env() {
     key="$1"
     prompt="$2"
@@ -408,6 +458,8 @@ if [ ! -f "$ENV_PATH" ]; then
 else
     echo "[4/4] Updating $ENV_PATH"
 fi
+
+prune_legacy_env_vars
 
 if [ "$INTERACTIVE" -eq 1 ]; then
     echo
