@@ -167,21 +167,36 @@ Qdrant and Ollama, and pulls the Ollama models referenced by `LLM_MODEL`,
 
 ### Step 5: Run a Skill
 
-You are ready to go. Execute user-facing skills either through the lightweight
-slash-command harness or directly:
+You are ready to go. There are two common ways to execute skills:
+
+1. Use the lightweight slash-command harness for user-facing commands exposed by
+   `skills.harness`.
+2. Run a skill module directly when you need that module's own CLI options or
+   when the command is an operational utility.
 
 ```bash
 conda run -n sictic-env python -m skills.harness /startup_profile SpaceX
 conda run -n sictic-env python -m skills.dataset_chat SpaceX "What are the main risks?"
 ```
 
-For interactive manual testing, start the harness without a slash command:
+The harness also has an interactive mode. When launching it through
+`conda run`, use `--no-capture-output`; otherwise Conda may close stdin and the
+prompt exits immediately.
 
 ```bash
-conda run -n sictic-env python -m skills.harness
+conda run -n sictic-env --no-capture-output python -m skills.harness
 ```
 
-Inside the harness, run `/help` to list commands such as `/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and `/dd_checks <startup>`.
+Alternatively, activate the environment first and then run:
+
+```bash
+conda activate sictic-env
+python -m skills.harness
+```
+
+Inside the harness, run `/help` to list commands such as
+`/dataset_chat <dataset> <question>`, `/startup_profile <startup>`, and
+`/dd_checks <startup>`.
 
 ### Command interfaces
 
@@ -189,14 +204,20 @@ Use these supported entry points:
 
 | Interface | Purpose | Example |
 |---|---|---|
-| Harness | User-facing interactive skills | `conda run -n sictic-env python -m skills.harness /startup_profile SpaceX` |
-| Skill module | Direct execution of one skill | `conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex --skill startup_profile` |
+| Harness one-shot | Run one user-facing slash command and exit | `conda run -n sictic-env python -m skills.harness /startup_profile SpaceX` |
+| Harness interactive | Start the slash-command REPL for manual testing | `conda run -n sictic-env --no-capture-output python -m skills.harness` |
+| Skill module | Run one module's direct CLI and options | `conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex --skill startup_profile` |
 | Dataset maintenance | Maintained operational utility | `conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members` |
 | Script | Maintenance or migration operation documented by that script | `conda run -n sictic-env python scripts/generate_member_profiles.py --help` |
 
-User-facing skills live under `skills` and should be invoked as
-`python -m skills.<skill_name>`. The slash-command harness remains the preferred
-interface when it exposes the requested skill.
+Use the harness when the command exists in `/help` and you want the stable,
+user-facing behavior. Harness commands always start with `/`, for example
+`/startup_profile SpaceX`; plain `startup_profile SpaceX` is rejected.
+
+Use direct module execution as `python -m skills.<skill_name>` when the skill has
+its own CLI flags, when it is not exposed by `/help`, or when the operation is a
+batch or maintenance workflow. For example, `skills.bulk_refresh` is usually run
+directly because its module CLI owns options such as `--dataset` and `--skill`.
 
 ## Using it in practice
 

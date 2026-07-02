@@ -49,3 +49,13 @@ def test_harness_cli_accepts_one_shot_command():
 
     assert result.exit_code == 0
     assert "Available commands" in result.output
+
+
+def test_harness_cli_rejects_interactive_mode_without_tty():
+    from typer.testing import CliRunner
+    from skills.harness.__main__ import app
+
+    result = CliRunner().invoke(app, [])
+
+    assert result.exit_code == 2
+    assert "--no-capture-output" in result.output

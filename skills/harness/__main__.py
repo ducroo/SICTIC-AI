@@ -1,3 +1,4 @@
+import sys
 import typer
 from typing import Optional, List
 
@@ -12,6 +13,12 @@ from skills.harness.harness import dispatch_command, run
 
 logger = get_logger(__name__)
 app = typer.Typer(help="Lightweight slash-command CLI harness for SICTIC-AI skills.")
+
+INTERACTIVE_CONDA_HINT = (
+    "Interactive harness mode requires a live terminal stdin. "
+    "Use `conda run -n sictic-env --no-capture-output python -m skills.harness`, "
+    "or activate the environment first and run `python -m skills.harness`."
+)
 
 
 async def _dispatch_one_shot(command: str) -> str:
@@ -37,6 +44,9 @@ def main(
         if output and output != "__EXIT__":
             typer.echo(output)
         return
+    if not sys.stdin.isatty():
+        typer.echo(INTERACTIVE_CONDA_HINT, err=True)
+        raise typer.Exit(code=2)
     run_command(run, logger=logger, error_prefix="Harness failed")
 
 

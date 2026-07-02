@@ -6,7 +6,7 @@ description: Lightweight slash-command CLI chat harness for manually exercising 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness
+conda run -n sictic-env --no-capture-output python -m skills.harness
 ```
 
 One-shot harness commands are also supported:
