@@ -42,6 +42,31 @@ def test_gdrive_sync_uses_new_environment_roots(monkeypatch, tmp_path):
     assert syncer.drive.kwargs["root_folder_id"] == "cloud-root"
 
 
+def test_pairing_identity_canonicalizes_local_root_case(monkeypatch, tmp_path):
+    local_root = tmp_path / "MixedCaseLocal"
+    local_root.mkdir()
+    lower_spelling = local_root.with_name("mixedcaselocal")
+    monkeypatch.setenv("CLOUD_PROVIDER", "google")
+    monkeypatch.setattr(client, "DriveTree", _FakeDriveTree)
+
+    canonical = client.GDriveSync(
+        local_root=str(local_root),
+        gdrive_root="cloud-root",
+        token_path=str(tmp_path / "token.json"),
+        state_dir=str(tmp_path / "state"),
+        log_dir=str(tmp_path / "logs"),
+    )
+    lower = client.GDriveSync(
+        local_root=str(lower_spelling),
+        gdrive_root="cloud-root",
+        token_path=str(tmp_path / "token.json"),
+        state_dir=str(tmp_path / "state"),
+        log_dir=str(tmp_path / "logs"),
+    )
+
+    assert lower.identity == canonical.identity
+
+
 def test_gdrive_sync_requires_explicit_cloud_root(monkeypatch, tmp_path):
     monkeypatch.setenv("CLOUD_PROVIDER", "google")
     monkeypatch.setenv("LOCAL_STORAGE_PATH", str(tmp_path / "local"))

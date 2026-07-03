@@ -27,6 +27,38 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def _canonical_identity_path(path: str) -> str:
+    """Return a stable filesystem path string for sync-pair identity hashing.
+
+    macOS is commonly case-insensitive but case-preserving. Without this, a
+    cosmetic edit from /users/... to /Users/... changes the sync-pair hash and
+    strands the existing baseline.
+    """
+    resolved = Path(path).expanduser().resolve(strict=False)
+    if not resolved.is_absolute():
+        return str(resolved)
+
+    current = Path(resolved.anchor)
+    for part in resolved.parts[1:]:
+        candidate = current / part
+        try:
+            if current.is_dir():
+                exact = None
+                case_match = None
+                target = part.casefold()
+                for child in current.iterdir():
+                    if child.name == part:
+                        exact = child
+                        break
+                    if case_match is None and child.name.casefold() == target:
+                        case_match = child
+                candidate = exact or case_match or candidate
+        except OSError:
+            pass
+        current = candidate
+    return str(current)
+
+
 class GDriveSync:
     """Configure a local/Drive pairing and dispatch synchronization workflows."""
 
@@ -137,7 +169,7 @@ class GDriveSync:
 
     def _pairing_identity(self) -> str:
         raw = (
-            f"{Path(self.local_root).resolve()}|{self.gdrive_root}|"
+            f"{_canonical_identity_path(self.local_root)}|{self.gdrive_root}|"
             f"{Path(self.token_path).expanduser()}"
         )
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
