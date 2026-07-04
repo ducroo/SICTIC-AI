@@ -1,8 +1,8 @@
 import json
 import sqlite3
 
-from skills.gdrive_sync.state import SyncState
-from skills.gdrive_sync.types import SnapshotEntry
+from gdrive_sync.state import SyncState
+from gdrive_sync.types import SnapshotEntry
 
 
 def test_baseline_drive_id_lookup_and_upsert(tmp_path):

@@ -11,7 +11,7 @@ This skill acts as a mandatory pre-flight checklist. Review these standards befo
 
 The AI and all skills must strictly adhere to the configured storage-domain
 layout. The local root is defined by `LOCAL_STORAGE_PATH`. Google Drive access
-is isolated in `skills.gdrive_sync`; general application storage is always
+is isolated in the standalone `gdrive_sync` utility; general application storage is always
 local. The domain roots are defined in
 `config/storage_domains.json`; code must use `lib.datasets.paths` rather than
 hardcoding storage paths.

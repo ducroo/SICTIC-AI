@@ -3,31 +3,19 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from dataclasses import fields
 from pathlib import Path
 
 from .types import SnapshotEntry
 from .util import clean_rel
 
 
-_SNAPSHOT_ENTRY_FIELDS = {field.name for field in fields(SnapshotEntry)}
-
-
-def _snapshot_entry(data: dict, *, path: str) -> SnapshotEntry:
-    """Load current entries while ignoring fields from older state schemas."""
-    normalized = {
-        key: value
-        for key, value in data.items()
-        if key in _SNAPSHOT_ENTRY_FIELDS
-    }
-    normalized["path"] = clean_rel(normalized.get("path") or path)
-    return SnapshotEntry(**normalized)
+_SNAPSHOT_FIELDS = set(SnapshotEntry.__dataclass_fields__)
 
 
 def default_state_dir() -> Path:
-    repo_root = os.environ.get("REPO_PATH")
-    if repo_root:
-        return Path(repo_root).expanduser() / "gdrive_sync_state"
+    repo_path = os.environ.get("REPO_PATH")
+    if repo_path:
+        return Path(repo_path).expanduser() / "gdrive_sync_state"
     return Path(__file__).resolve().parents[2] / "gdrive_sync_state"
 
 
@@ -91,7 +79,13 @@ class SyncState:
         for row in rows:
             data = json.loads(row["entry_json"])
             path = clean_rel(row["path"])
-            out[path] = _snapshot_entry(data, path=path)
+            data["path"] = clean_rel(data.get("path") or path)
+            data = {
+                key: value
+                for key, value in data.items()
+                if key in _SNAPSHOT_FIELDS
+            }
+            out[path] = SnapshotEntry(**data)
         return out
 
     def save_baseline(self, entries: dict[str, SnapshotEntry]) -> None:
@@ -118,13 +112,12 @@ class SyncState:
     def upsert_baseline_entry(self, entry: SnapshotEntry) -> None:
         path = clean_rel(entry.path)
         with self._connect() as con:
-            data = {**entry.__dict__, "path": path}
             con.execute(
                 """
                 insert into baseline(path, entry_json) values(?, ?)
                 on conflict(path) do update set entry_json = excluded.entry_json
                 """,
-                (path, json.dumps(data, sort_keys=True)),
+                (path, json.dumps({**entry.__dict__, "path": path}, sort_keys=True)),
             )
 
     def delete_baseline_path(self, path: str, *, include_descendants: bool = False) -> None:
@@ -148,7 +141,13 @@ class SyncState:
         for row in rows:
             data = json.loads(row["entry_json"])
             path = clean_rel(row["path"])
-            out[path] = _snapshot_entry(data, path=path)
+            data["path"] = clean_rel(data.get("path") or path)
+            data = {
+                key: value
+                for key, value in data.items()
+                if key in _SNAPSHOT_FIELDS
+            }
+            out[path] = SnapshotEntry(**data)
         return out
 
     def save_checkpoint_entry(self, operation_id: str, entry: SnapshotEntry) -> None:

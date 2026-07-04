@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from skills.gdrive_sync import client
-from skills.gdrive_sync.logging_config import default_log_dir
-from skills.gdrive_sync.state import default_state_dir
+from gdrive_sync import client
+from gdrive_sync.logging_config import default_log_dir
+from gdrive_sync.state import default_state_dir
 
 
 class _FakeDriveTree:

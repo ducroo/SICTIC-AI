@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from skills.gdrive_sync.drive import DriveTree, GDOC_SAFE_MAX_CHARACTERS, _local_rel_for_drive_item
+from gdrive_sync.drive import DriveTree, GDOC_SAFE_MAX_CHARACTERS, _local_rel_for_drive_item
 
 
 def test_google_doc_without_md_suffix_maps_to_markdown_file():

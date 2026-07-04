@@ -55,7 +55,6 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.dd_checks.__main__",
         "skills.dealum_import.__main__",
         "skills.expert_search.__main__",
-        "skills.gdrive_sync.__main__",
         "skills.harness.__main__",
         "skills.investor_profile.__main__",
         "skills.linkedin_maintenance.__main__",

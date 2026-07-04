@@ -21,45 +21,13 @@ class SnapshotEntry:
 
 
 @dataclass(frozen=True)
-class IncrementalDecision:
+class PlannedAction:
+    action: str
     path: str
-    source: Side
-    conflict: bool = False
-
-
-@dataclass
-class CloudMutations:
-    drive_ids: set[str] = field(default_factory=set)
-    paths: set[str] = field(default_factory=set)
-
-    def add(self, path: str | None = None, drive_id: str | None = None) -> None:
-        if path:
-            self.paths.add(path)
-        if drive_id:
-            self.drive_ids.add(drive_id)
-
-
-@dataclass
-class TransferProgress:
-    total: int = 0
-    completed: int = 0
-
-    def log(self, verb: str, path: str, size: int) -> None:
-        import logging
-
-        self.completed += 1
-        logger = logging.getLogger(__name__)
-        if self.total:
-            logger.info(
-                "%s %s/%s %s (%s bytes)",
-                verb,
-                self.completed,
-                self.total,
-                path,
-                size,
-            )
-            return
-        logger.info("%s %s (%s bytes)", verb, path, size)
+    source: Side | None = None
+    target: Side | None = None
+    conflict_path: str | None = None
+    message: str | None = None
 
 
 @dataclass
@@ -76,9 +44,6 @@ class OperationResult:
     failures: list[str] = field(default_factory=list)
     bytes_transferred: int = 0
     elapsed_seconds: float = 0.0
-    self_generated_drive_changes: int = 0
-    external_drive_changes_after_sync: int = 0
-    quiet_wait_rounds: int = 0
 
     @property
     def ok(self) -> bool:
