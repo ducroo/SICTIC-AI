@@ -3,9 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from skills.gdrive_sync.client import GDriveSync
-from skills.gdrive_sync.planner import collapse_local_folder_deletions
-from skills.gdrive_sync.types import SnapshotEntry, SyncOperationFailed
+from gdrive_sync.client import GDriveSync
+from gdrive_sync.types import SnapshotEntry, SyncOperationFailed
 
 
 def test_incremental_upload_failure_does_not_stop_following_file(monkeypatch):
@@ -50,7 +49,7 @@ def test_incremental_upload_failure_does_not_stop_following_file(monkeypatch):
     syncer.lock_path = "unused"
     syncer.lock_timeout = 1
     monkeypatch.setattr(
-        "skills.gdrive_sync.client.PairingLock",
+        "gdrive_sync.client.PairingLock",
         lambda *_args, **_kwargs: nullcontext(),
     )
 
@@ -70,51 +69,3 @@ def test_incremental_upload_failure_does_not_stop_following_file(monkeypatch):
     assert [entry.path for entry in baselined] == ["z-next.md"]
     assert result.updated_files == ["z-next.md"]
     assert result.bytes_transferred == 2
-
-
-def test_local_folder_delete_collapses_unchanged_descendants():
-    baseline = {
-        "storage/datasets2md": SnapshotEntry(path="storage/datasets2md", type="folder"),
-        "storage/datasets2md/startups": SnapshotEntry(
-            path="storage/datasets2md/startups",
-            type="folder",
-        ),
-        "storage/datasets2md/startups/example.md": SnapshotEntry(
-            path="storage/datasets2md/startups/example.md",
-            type="file",
-        ),
-        "keep.md": SnapshotEntry(path="keep.md", type="file"),
-    }
-    local_changed = {
-        "storage/datasets2md",
-        "storage/datasets2md/startups",
-        "storage/datasets2md/startups/example.md",
-        "keep.md",
-    }
-
-    paths = collapse_local_folder_deletions(
-        set(local_changed),
-        local_changed=local_changed,
-        cloud_changed=set(),
-        baseline=baseline,
-        local_snapshot={"keep.md": SnapshotEntry(path="keep.md", type="file", sha256="new")},
-    )
-
-    assert paths == ["keep.md", "storage/datasets2md"]
-
-
-def test_remote_change_under_deleted_folder_is_not_collapsed():
-    baseline = {
-        "folder": SnapshotEntry(path="folder", type="folder"),
-        "folder/changed.md": SnapshotEntry(path="folder/changed.md", type="file"),
-    }
-
-    paths = collapse_local_folder_deletions(
-        {"folder", "folder/changed.md"},
-        local_changed={"folder", "folder/changed.md"},
-        cloud_changed={"folder/changed.md"},
-        baseline=baseline,
-        local_snapshot={},
-    )
-
-    assert paths == ["folder", "folder/changed.md"]

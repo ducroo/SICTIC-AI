@@ -3,9 +3,9 @@
 Dry-run is the default. Use --apply only after reviewing the JSON manifest.
 This script changes the local mirror only; sync both migrated trees afterward:
 
-    python -m skills.gdrive_sync sync --local-wins
+    python -m gdrive_sync sync --conflict-policy local-wins
 
-The stateful sync skill operates on the complete configured storage tree.
+The stateful standalone sync utility operates on the complete configured storage tree.
 """
 from __future__ import annotations
 

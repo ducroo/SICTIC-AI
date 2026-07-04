@@ -1,7 +1,6 @@
 import os
-import threading
 
-from skills.gdrive_sync.local import LocalTree
+from gdrive_sync.local import LocalTree
 
 
 def test_local_scan_ignores_hidden_files_dirs_and_exclusions(tmp_path):
@@ -25,7 +24,7 @@ def test_local_scan_always_rehashes_files(tmp_path, monkeypatch):
     calls = []
 
     monkeypatch.setattr(
-        "skills.gdrive_sync.local.sha256_file",
+        "gdrive_sync.local.sha256_file",
         lambda hashed_path: calls.append(hashed_path) or "fresh-hash",
     )
 
@@ -52,24 +51,3 @@ def test_local_scan_detects_change_with_preserved_size_and_timestamp(tmp_path):
     assert current["visible.md"].size == baseline["visible.md"].size
     assert path.stat().st_mtime_ns == previous_stat.st_mtime_ns
     assert current["visible.md"].sha256 != baseline["visible.md"].sha256
-
-
-def test_local_scan_hashes_candidates_in_parallel(tmp_path, monkeypatch):
-    paths = [tmp_path / "a.md", tmp_path / "b.md"]
-    for path in paths:
-        path.write_text(path.name)
-    barrier = threading.Barrier(2, timeout=2)
-    thread_ids = set()
-
-    def hash_in_parallel(path):
-        thread_ids.add(threading.get_ident())
-        barrier.wait()
-        return path.name
-
-    monkeypatch.setattr("skills.gdrive_sync.local.sha256_file", hash_in_parallel)
-
-    current = LocalTree(tmp_path).scan()
-
-    assert current["a.md"].sha256 == "a.md"
-    assert current["b.md"].sha256 == "b.md"
-    assert len(thread_ids) == 2

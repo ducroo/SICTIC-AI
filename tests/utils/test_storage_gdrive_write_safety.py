@@ -2,7 +2,7 @@ import threading
 
 import pytest
 
-from skills.gdrive_sync.drive_api import DriveApi, _sanitize_markdown_upload
+from lib.storage_gdrive import GoogleDriveStorage, _sanitize_markdown_upload
 
 
 class _FakeListRequest:
@@ -63,7 +63,7 @@ class _FakeService:
 
 
 def _storage_with_files(files):
-    storage = DriveApi.__new__(DriveApi)
+    storage = GoogleDriveStorage.__new__(GoogleDriveStorage)
     storage._service_lock = threading.Lock()
     storage._path_to_id = {"": "root", "insights": "parent"}
     storage._path_to_mime = {"": "application/vnd.google-apps.folder"}
@@ -109,16 +109,15 @@ def test_gdrive_write_resolution_accepts_one_existing_file():
     assert storage._path_to_mime["insights/report.md"] == "application/vnd.google-apps.document"
 
 
-def test_gdrive_md_resolution_rejects_binary_markdown():
+def test_gdrive_md_resolution_accepts_legacy_binary_markdown():
     storage = _storage_with_files([
         {"id": "binary", "name": "report.md", "mimeType": "text/markdown"},
     ])
 
-    with pytest.raises(RuntimeError, match="must be native Google Docs"):
-        storage._resolve("insights/report.md")
+    assert storage._resolve("insights/report.md") == "binary"
 
 
-def test_gdrive_md_write_rejects_binary_markdown():
+def test_gdrive_md_write_replaces_legacy_binary_markdown():
     storage = _storage_with_files([
         {"id": "binary", "name": "report.md", "mimeType": "text/markdown"},
     ])
@@ -126,8 +125,10 @@ def test_gdrive_md_write_rejects_binary_markdown():
     storage.mkdir = lambda *args, **kwargs: None
     storage._resolve_or_raise = lambda rel: "parent" if rel == "insights" else rel
 
-    with pytest.raises(RuntimeError, match="must be native Google Docs"):
-        storage.write_bytes("insights/report.md", b"# Report\n")
+    storage.write_bytes("insights/report.md", b"# Report\n")
+
+    assert storage._service.files().created
+    assert storage._service.files().deleted == ["binary"]
 
 
 def test_gdrive_md_write_rejects_duplicate_same_name_files():

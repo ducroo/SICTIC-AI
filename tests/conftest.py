@@ -2,9 +2,14 @@ import os
 import asyncio
 import inspect
 import pytest
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+GDRIVE_SYNC_ROOT = REPO_ROOT / "gdrive-sync"
+if str(GDRIVE_SYNC_ROOT) not in sys.path:
+    sys.path.insert(0, str(GDRIVE_SYNC_ROOT))
 
 # Application logs remain available to pytest capture, but must not be written
 # into the operational sictic-ai.log file.

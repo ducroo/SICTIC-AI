@@ -1,17 +1,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import Iterator
 
 from googleapiclient.errors import HttpError
-from .drive_api import (
-    DriveApi,
-    _FOLDER_MIME,
-    _GDOC_MIME,
-    _parse_modtime,
-    _sanitize_markdown_upload,
-)
+from lib.storage_gdrive import GoogleDriveStorage, _FOLDER_MIME, _GDOC_MIME, _parse_modtime
 
 from .types import SnapshotEntry
 from .util import clean_rel, is_excluded, is_hidden_rel, sha256_bytes
@@ -24,8 +19,8 @@ UNSUPPORTED_MIMES = {
     "application/vnd.google-apps.form": "Google Forms",
 }
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
-GDOC_SAFE_MAX_CHARACTERS = 950_000
 logger = logging.getLogger(__name__)
+GDOC_SAFE_MAX_CHARACTERS = 1_000_000
 
 
 def _local_rel_for_drive_item(prefix: str, name: str, mime: str) -> str:
@@ -62,7 +57,7 @@ class DriveTree:
         token_path: str,
         exclude: list[str] | None = None,
     ):
-        self.storage = DriveApi(
+        self.storage = GoogleDriveStorage(
             credentials_path=credentials_path,
             token_path=token_path,
             root_folder_id=root_folder_id,
@@ -84,55 +79,6 @@ class DriveTree:
             if getattr(exc.resp, "status", None) == 404:
                 return None
             raise
-
-    def count_files(self) -> int:
-        """Count supported files under the configured root without downloading."""
-        self.storage._resolve_root_folder()
-        service = self.storage._ensure_service()
-        stack = [(self.storage.root_folder_id, "")]
-        total = 0
-        while stack:
-            parent_id, prefix = stack.pop()
-            page_token = None
-            seen_names: set[str] = set()
-            while True:
-                res = _execute_with_retries(
-                    service.files().list(
-                        q=f"'{parent_id}' in parents and trashed=false",
-                        fields="nextPageToken,files(id,name,mimeType)",
-                        pageSize=1000,
-                        pageToken=page_token,
-                        supportsAllDrives=True,
-                        includeItemsFromAllDrives=True,
-                    ),
-                    context=f"Drive count files {prefix or '/'}",
-                )
-                for item in res.get("files", []):
-                    name = item["name"]
-                    mime = item.get("mimeType", "")
-                    rel = _local_rel_for_drive_item(prefix, name, mime)
-                    if (
-                        is_hidden_rel(rel)
-                        or is_excluded(rel, self.exclude)
-                        or name in seen_names
-                    ):
-                        continue
-                    seen_names.add(name)
-                    if mime == _FOLDER_MIME:
-                        stack.append((item["id"], rel))
-                    elif (
-                        mime != SHORTCUT_MIME
-                        and mime not in UNSUPPORTED_MIMES
-                        and (
-                            not mime.startswith("application/vnd.google-apps.")
-                            or mime == _GDOC_MIME
-                        )
-                    ):
-                        total += 1
-                page_token = res.get("nextPageToken")
-                if not page_token:
-                    break
-        return total
 
     def _path_for_file(self, file_meta: dict) -> str | None:
         self.storage._resolve_root_folder()
@@ -187,7 +133,6 @@ class DriveTree:
         self,
         change: dict,
         *,
-        inspection_label: str | None = None,
         include_content: bool = True,
     ) -> tuple[SnapshotEntry | None, bytes | None, str | None, str | None]:
         file_meta = change.get("file")
@@ -208,8 +153,6 @@ class DriveTree:
             return None, None, None, f"{rel}: unsupported {UNSUPPORTED_MIMES[mime]}"
         if mime.startswith("application/vnd.google-apps.") and mime not in {_FOLDER_MIME, _GDOC_MIME}:
             return None, None, None, f"{rel}: unsupported Google native type {mime}"
-        if inspection_label:
-            logger.info("%s %s", inspection_label, rel)
         self.storage._path_to_id[rel] = file_id
         self.storage._path_to_mime[rel] = mime
         if mime == _FOLDER_MIME:
@@ -230,7 +173,8 @@ class DriveTree:
                 SnapshotEntry(
                     path=rel,
                     type="file",
-                    size=int(file_meta["size"]) if file_meta.get("size") else None,
+                    sha256=None,
+                    size=int(file_meta.get("size") or 0),
                     mtime=_parse_modtime(file_meta.get("modifiedTime")),
                     drive_id=file_id,
                     mime_type=mime,
@@ -265,13 +209,11 @@ class DriveTree:
         root_path: str,
         checkpoint: dict[str, SnapshotEntry] | None = None,
         local_snapshot: dict[str, SnapshotEntry] | None = None,
-        include_content: bool = True,
     ) -> Iterator[tuple[SnapshotEntry | None, bytes | None, str | None, str | None]]:
         yield from self._iter_entries_with_content_from(
             [(root_id, root_path)],
             checkpoint=checkpoint,
             local_snapshot=local_snapshot,
-            include_content=include_content,
             log_label=f"Drive subtree walk {root_path}",
         )
 
@@ -379,7 +321,6 @@ class DriveTree:
             [(self.storage.root_folder_id, "")],
             checkpoint=checkpoint,
             local_snapshot=local_snapshot,
-            include_content=True,
             log_label="Drive streaming walk",
         )
 
@@ -389,7 +330,6 @@ class DriveTree:
         *,
         checkpoint: dict[str, SnapshotEntry] | None = None,
         local_snapshot: dict[str, SnapshotEntry] | None = None,
-        include_content: bool,
         log_label: str,
     ) -> Iterator[tuple[SnapshotEntry | None, bytes | None, str | None, str | None]]:
         logger.info("%s started", log_label)
@@ -450,21 +390,6 @@ class DriveTree:
                         continue
                     self.storage._path_to_id[rel] = item["id"]
                     self.storage._path_to_mime[rel] = mime
-                    if not include_content:
-                        yield (
-                            SnapshotEntry(
-                                path=rel,
-                                type="file",
-                                size=int(item["size"]) if item.get("size") else None,
-                                mtime=_parse_modtime(item.get("modifiedTime")),
-                                drive_id=item["id"],
-                                mime_type=mime,
-                            ),
-                            None,
-                            None,
-                            None,
-                        )
-                        continue
                     completed = checkpoint.get(rel)
                     local_entry = local_snapshot.get(rel)
                     item_mtime = _parse_modtime(item.get("modifiedTime"))
@@ -510,17 +435,8 @@ class DriveTree:
 
     def write_bytes(self, rel: str, content: bytes) -> None:
         rel = clean_rel(rel)
-        if rel.lower().endswith(".md"):
-            sanitized = _sanitize_markdown_upload(content)
-            try:
-                character_count = len(sanitized.decode("utf-8"))
-            except UnicodeDecodeError as exc:
-                raise ValueError(f"Markdown is not valid UTF-8: {exc}") from exc
-            if character_count > GDOC_SAFE_MAX_CHARACTERS:
-                raise ValueError(
-                    f"Markdown has {character_count:,} characters; Google Doc upload safety limit "
-                    f"is {GDOC_SAFE_MAX_CHARACTERS:,}"
-                )
+        if rel.lower().endswith(".md") and len(content) > GDOC_SAFE_MAX_CHARACTERS:
+            raise ValueError("Google Doc upload safety limit exceeded")
         self.storage.write_bytes(rel, content)
 
     def entry_after_write(self, rel: str, content: bytes) -> SnapshotEntry:

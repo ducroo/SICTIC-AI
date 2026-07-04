@@ -357,9 +357,9 @@ operation.
 
 | Command | Description |
 |---|---|
-| `python -m skills.gdrive_sync pull` | Make local storage match Google Drive. Cloud is authoritative. Use this to create the initial local copy and synchronization baseline. |
-| `python -m skills.gdrive_sync sync --local-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the local version as canonical. |
-| `python -m skills.gdrive_sync sync --cloud-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the cloud version as canonical. |
+| `python -m gdrive_sync pull` | Make local storage match Google Drive. Cloud is authoritative. Use this to create the initial local copy and synchronization baseline. |
+| `python -m gdrive_sync sync --conflict-policy local-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the local version as canonical. |
+| `python -m gdrive_sync sync --conflict-policy cloud-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the cloud version as canonical. |
 
 Add `--dry-run` to any command to report the planned changes without modifying
 local files, Google Drive, or the successful synchronization baseline. Add
@@ -367,15 +367,15 @@ local files, Google Drive, or the successful synchronization baseline. Add
 
 The normal routine is:
 
-1. **Initial setup:** run `python -m skills.gdrive_sync pull`. The first pull
+1. **Initial setup:** run `python -m gdrive_sync pull`. The first pull
    walks the complete Drive tree and builds the baseline, so it can take
    substantial time. (read: hours)
 2. **Before a job:** run
-   `python -m skills.gdrive_sync sync --cloud-wins`.
+   `python -m gdrive_sync sync --conflict-policy cloud-wins`.
 3. **Run the job:** skills read and write only `LOCAL_STORAGE_PATH`; they do not
    synchronize while the job is running.
 4. **After a job:** run
-   `python -m skills.gdrive_sync sync --local-wins`.
+   `python -m gdrive_sync sync --conflict-policy local-wins`.
 
 Later synchronizations are faster because `gdrive_sync` compares local hashes
 with its stored baseline and uses the Google Drive Changes API instead of

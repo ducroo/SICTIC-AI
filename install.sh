@@ -276,7 +276,12 @@ if [ -z "$SITE_PACKAGES" ] || [ ! -d "$SITE_PACKAGES" ]; then
     echo "install.sh: could not resolve site-packages in '$ENV_NAME'." >&2
     exit 1
 fi
-printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
+{
+    printf '%s\n' "$REPO_ROOT"
+    if [ -d "$REPO_ROOT/gdrive-sync/gdrive_sync" ]; then
+        printf '%s\n' "$REPO_ROOT/gdrive-sync"
+    fi
+} > "$SITE_PACKAGES/sictic-ai-repo.pth"
 
 # ---------------------------------------------------------------------------
 # Step 3: install skills
