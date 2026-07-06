@@ -376,6 +376,79 @@ async def test_three_services_share_model_slots_equally(tmp_path):
                 }
 
 
+def test_expired_lease_from_live_process_is_reclaimed(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=2,
+        wait_timeout=1,
+        poll_interval=0.01,
+        lease_max_age=60,
+    )
+
+    def make_lease(lease_id, acquired_at):
+        return {
+            "lease_id": lease_id,
+            "resource": "llm",
+            "model": "llm",
+            "pid": os.getpid(),
+            "process_start": gateway._process_start,
+            "acquired_at": acquired_at,
+        }
+
+    gateway.state_path.parent.mkdir(parents=True, exist_ok=True)
+    gateway.state_path.write_text(
+        json.dumps(
+            {
+                "version": 4,
+                "leases": {
+                    "docling": [],
+                    "embedding": [],
+                    "llm": [
+                        make_lease("expired", time.time() - 3600),
+                        make_lease("fresh", time.time()),
+                    ],
+                },
+                "requests": {"docling": [], "embedding": [], "llm": []},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    remaining = _leases(gateway, "llm")
+
+    assert [lease["lease_id"] for lease in remaining] == ["fresh"]
+
+
+@pytest.mark.asyncio
+async def test_completion_applies_default_request_timeout(
+    clean_gateway,
+    mocker,
+):
+    completion = mocker.patch(
+        "litellm.acompletion",
+        return_value="Mocked LLM",
+    )
+
+    await clean_gateway.request_completion({"model": "ollama/llm"})
+
+    assert completion.call_args.kwargs["timeout"] == 600.0
+
+
+@pytest.mark.asyncio
+async def test_caller_request_timeout_is_preserved(clean_gateway, mocker):
+    embedding = mocker.patch(
+        "litellm.aembedding",
+        return_value="Mocked Embedding",
+    )
+
+    await clean_gateway.request_embedding(
+        {"model": "ollama/embed", "timeout": 42}
+    )
+
+    assert embedding.call_args.kwargs["timeout"] == 42
+
+
 def test_dead_or_reused_pid_lease_is_cleaned(clean_gateway):
     clean_gateway.state_path.parent.mkdir(parents=True, exist_ok=True)
     clean_gateway.state_path.write_text(
