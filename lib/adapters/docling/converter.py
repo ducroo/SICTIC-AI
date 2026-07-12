@@ -85,11 +85,36 @@ def get_converter():
     return _converter
 
 
+def export_document_markdown(document) -> str:
+    """Export Markdown with explicit page markers when Docling has page data."""
+    from lib.datasets.page_markers import format_page_marker
+
+    page_numbers = sorted(document.pages.keys())
+    if not page_numbers:
+        return document.export_to_markdown()
+
+    if len(page_numbers) == 1:
+        page_no = page_numbers[0]
+        body = document.export_to_markdown().strip()
+        if not body:
+            return ""
+        return f"{format_page_marker(page_no)}\n\n{body}"
+
+    parts: list[str] = []
+    for page_no in page_numbers:
+        page_md = document.export_to_markdown(page_no=page_no).strip()
+        if page_md:
+            parts.append(f"{format_page_marker(page_no)}\n\n{page_md}")
+    if parts:
+        return "\n\n".join(parts)
+    return document.export_to_markdown()
+
+
 def convert_document(filepath: str) -> str:
     converter = get_converter()
     with _convert_lock:
         result = converter.convert(filepath)
-    return result.document.export_to_markdown()
+    return export_document_markdown(result.document)
 
 
 def chat_completions_url(base_url: str) -> str:
