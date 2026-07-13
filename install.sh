@@ -476,7 +476,7 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "WORKSPACE_PATH" "Installed skills path" "$TARGET" 1 0
     ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
     ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$REPO_ROOT" 1 0
-    ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "google" 0 0
+    ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "" 0 0
     cloud_provider=$(env_get CLOUD_PROVIDER || true)
     case "$(printf '%s' "$cloud_provider" | tr '[:upper:]' '[:lower:]')" in
         "") ;;

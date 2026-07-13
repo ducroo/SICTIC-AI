@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 MANIFEST_FILENAME = ".ingestion-manifest.json"
 MANIFEST_VERSION = 1
-PARSER_VERSION = "docling-values-v2"
+PARSER_VERSION = "docling-page-markers-v1"
 CHUNKER_VERSION = "markdown-1000-100-v1"
 
 

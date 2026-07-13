@@ -40,4 +40,7 @@ class Chunk(BaseModel):
 
     def to_md(self) -> str:
         """Renders the chunk as a standalone Markdown block."""
-        return f"### Source: {self.document_name} | Page: {self.page_number}\n\n{self.text.strip()}"
+        header = f"### Source: {self.document_name}"
+        if self.page_number != "n/a":
+            header = f"{header} | Page: {self.page_number}"
+        return f"{header}\n\n{self.text.strip()}"

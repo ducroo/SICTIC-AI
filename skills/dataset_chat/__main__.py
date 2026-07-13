@@ -21,8 +21,13 @@ def search_cmd(
         logger=logger,
     )
     for chunk in chunks:
+        source_label = (
+            f"[Source: {chunk.document_name}]"
+            if chunk.page_number == "n/a"
+            else f"[Source: {chunk.document_name}, Page: {chunk.page_number}]"
+        )
         typer.echo(
-            f"[Source: {chunk.document_name}, Page: {chunk.page_number}]\n"
+            f"{source_label}\n"
             f"{chunk.text}\n"
         )
 
