@@ -21,6 +21,23 @@ logger = get_logger(__name__)
 _RESOURCE_KEYS = ("docling", "embedding", "llm")
 _DEFAULT_WAIT_TIMEOUT = 3600.0
 _POLL_INTERVAL = 0.5
+# A lease held longer than this is treated as leaked and reclaimed even if
+# the owning process is still alive: a hung provider call never returns, so
+# pid-liveness alone cannot distinguish a stuck job from a long one.
+_DEFAULT_LEASE_MAX_AGE = 1800.0
+_DEFAULT_LLM_REQUEST_TIMEOUT = 600.0
+_DEFAULT_EMBEDDING_REQUEST_TIMEOUT = 300.0
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Ignoring non-numeric %s=%r", name, raw)
+        return default
 
 
 class GatewayTimeoutError(TimeoutError):
@@ -108,6 +125,7 @@ class ServicesGateway:
         ollama_max_loaded_models: int | None = None,
         wait_timeout: float = _DEFAULT_WAIT_TIMEOUT,
         poll_interval: float = _POLL_INTERVAL,
+        lease_max_age: float | None = None,
     ):
         self.state_path = Path(
             state_path or default_gateway_state_path()
@@ -124,6 +142,11 @@ class ServicesGateway:
         )
         self.wait_timeout = wait_timeout
         self.poll_interval = poll_interval
+        self.lease_max_age = (
+            lease_max_age
+            if lease_max_age is not None
+            else _float_env("GATEWAY_LEASE_MAX_AGE", _DEFAULT_LEASE_MAX_AGE)
+        )
         self._process_start = _process_start_token(os.getpid()) or str(
             time.time_ns()
         )
@@ -170,6 +193,24 @@ class ServicesGateway:
             return self._empty_state()
         cleaned = self._empty_state()
         process_alive: dict[tuple[int, str], bool] = {}
+        now = time.time()
+
+        def lease_is_current(lease: dict) -> bool:
+            try:
+                age = now - float(lease["acquired_at"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            if age <= self.lease_max_age:
+                return True
+            logger.warning(
+                "Reclaiming expired %s lease held by pid %s "
+                "(age %.0fs > max %.0fs)",
+                lease.get("resource"),
+                lease.get("pid"),
+                age,
+                self.lease_max_age,
+            )
+            return False
 
         def entry_is_alive(entry: dict) -> bool:
             try:
@@ -189,7 +230,9 @@ class ServicesGateway:
                 cleaned["leases"][resource] = [
                     lease
                     for lease in pool
-                    if isinstance(lease, dict) and entry_is_alive(lease)
+                    if isinstance(lease, dict)
+                    and entry_is_alive(lease)
+                    and lease_is_current(lease)
                 ]
             queue = requests.get(resource, [])
             if isinstance(queue, list):
@@ -481,6 +524,15 @@ class ServicesGateway:
         import litellm
 
         litellm.disable_aiohttp_transport = True
+        # Bound the provider call so a hung connection raises and releases
+        # its lease instead of blocking the machine-wide slot forever.
+        kwargs.setdefault(
+            "timeout",
+            _float_env(
+                "EMBEDDING_REQUEST_TIMEOUT",
+                _DEFAULT_EMBEDDING_REQUEST_TIMEOUT,
+            ),
+        )
         async with self.slot(
             "embedding",
             model=str(kwargs.get("model") or "embedding"),
@@ -498,6 +550,15 @@ class ServicesGateway:
         import litellm
 
         litellm.disable_aiohttp_transport = True
+        # Bound the provider call so a hung connection raises and releases
+        # its lease instead of blocking the machine-wide slot forever.
+        kwargs.setdefault(
+            "timeout",
+            _float_env(
+                "LLM_REQUEST_TIMEOUT",
+                _DEFAULT_LLM_REQUEST_TIMEOUT,
+            ),
+        )
         async with self.slot(
             "llm",
             model=str(kwargs.get("model") or "llm"),
