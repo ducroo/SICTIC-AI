@@ -18,6 +18,42 @@ async def test_harness_dispatches_registered_command():
 
 
 @pytest.mark.asyncio
+async def test_harness_apostrophe_in_query_is_not_a_parse_error():
+    async def handler(args):
+        return " ".join(args)
+
+    registry = {
+        "/echo": HarnessCommand("/echo", "/echo <text>", "Echo text.", handler)
+    }
+
+    result = await dispatch_command("/echo What's the funding ask?", registry)
+
+    assert "Parse error" not in result
+    assert result == "What's the funding ask?"
+
+
+@pytest.mark.asyncio
+async def test_harness_double_quotes_group_strip_and_keep_apostrophe():
+    async def handler(args):
+        return f"{len(args)}|" + "|".join(args)
+
+    registry = {
+        "/echo": HarnessCommand("/echo", "/echo <text>", "Echo text.", handler)
+    }
+
+    result = await dispatch_command('/echo "What\'s the funding ask?"', registry)
+
+    assert result == "1|What's the funding ask?"
+
+
+@pytest.mark.asyncio
+async def test_harness_empty_input_returns_empty_string():
+    result = await dispatch_command("   ")
+
+    assert result == ""
+
+
+@pytest.mark.asyncio
 async def test_harness_unknown_command_is_readable():
     result = await dispatch_command("/missing")
 

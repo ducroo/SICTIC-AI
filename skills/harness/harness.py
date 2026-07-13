@@ -258,7 +258,13 @@ async def dispatch_command(line: str, registry: Dict[str, HarnessCommand] | None
         return "Use slash commands. Type /help for available commands."
 
     try:
-        parts = shlex.split(stripped)
+        # Only double quotes group tokens; apostrophes in natural-language
+        # queries (e.g. "What's ...") must not open a quote.
+        lexer = shlex.shlex(stripped, posix=True)
+        lexer.quotes = '"'
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        parts = list(lexer)
     except ValueError as e:
         return f"Parse error: {e}"
 
