@@ -74,6 +74,8 @@ def plan_sync(
         if not local_changed and not cloud_changed:
             continue
         if local_changed and not cloud_changed:
+            if conflict_policy == "cloud-wins":
+                continue
             if left is None:
                 actions.append(PlannedAction("delete", path, target="cloud"))
             elif left.type == "folder":
@@ -83,8 +85,10 @@ def plan_sync(
             continue
         if cloud_changed and not local_changed:
             if right is None:
-                actions.append(PlannedAction("delete", path, target="local"))
-            elif right.type == "folder":
+                if conflict_policy != "cloud-wins":
+                    actions.append(PlannedAction("delete", path, target="local"))
+                continue
+            if right.type == "folder":
                 actions.append(PlannedAction("mkdir", path, source="cloud", target="local"))
             else:
                 actions.append(PlannedAction("copy", path, source="cloud", target="local"))
@@ -115,24 +119,15 @@ def plan_sync(
             actions.append(PlannedAction("conflict", path, message="local-wins"))
         else:
             if right is None:
-                if left is not None and left.type == "file":
-                    conflict = conflict_name(path, "conflict-local", existing)
-                    actions.append(PlannedAction("copy_as", path, source="local", target="cloud", conflict_path=conflict))
-                    actions.append(PlannedAction("copy_as", path, source="local", target="local", conflict_path=conflict))
-                actions.append(PlannedAction("delete", path, target="local"))
-            elif left is None:
+                continue
+            if left is None:
                 if right.type == "folder":
                     actions.append(PlannedAction("mkdir", path, source="cloud", target="local"))
                 else:
                     actions.append(PlannedAction("copy", path, source="cloud", target="local"))
+            elif right.type == "folder":
+                actions.append(PlannedAction("mkdir", path, source="cloud", target="local"))
             else:
-                if left.type == "file":
-                    conflict = conflict_name(path, "conflict-local", existing)
-                    actions.append(PlannedAction("copy_as", path, source="local", target="cloud", conflict_path=conflict))
-                    actions.append(PlannedAction("copy_as", path, source="local", target="local", conflict_path=conflict))
-                if right.type == "folder":
-                    actions.append(PlannedAction("mkdir", path, source="cloud", target="local"))
-                else:
-                    actions.append(PlannedAction("copy", path, source="cloud", target="local"))
+                actions.append(PlannedAction("copy", path, source="cloud", target="local"))
             actions.append(PlannedAction("conflict", path, message="cloud-wins"))
     return actions

@@ -52,10 +52,13 @@ Sync behavior:
 - If a successful baseline and Drive start page token exist, `sync` uses
   `changes.list` for cloud-side changes and local-vs-baseline hashes for
   local-side changes.
-- Local-only changes are uploaded to Drive. Cloud-only changes are applied
-  locally. If both sides changed the same path, `--conflict-policy` chooses the
-  winning side for the canonical path.
-- If no baseline/token exists, `sync` falls back to the full-scan planner.
+- `sync --conflict-policy local-wins` uploads local-only changes to Drive and
+  applies cloud-only changes locally. If both sides changed the same path, the
+  local version becomes canonical.
+- `sync --conflict-policy cloud-wins` is non-destructive: cloud adds and
+  updates are applied locally, but nothing is deleted on either side. Local-only
+  changes are not uploaded.
+- If no baseline/token exists, `sync` fails and asks you to run `pull` first.
 
 Logs rotate by default in:
 

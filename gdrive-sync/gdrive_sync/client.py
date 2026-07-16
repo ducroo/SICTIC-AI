@@ -479,8 +479,12 @@ class GDriveSync:
                         dry_run=dry_run,
                     )
                 elif has_local_change:
-                    self._apply_local_change_to_cloud(path, local_entry, base, result, dry_run=dry_run)
+                    if conflict_policy != "cloud-wins":
+                        self._apply_local_change_to_cloud(path, local_entry, base, result, dry_run=dry_run)
                 elif has_cloud_change:
+                    if path in cloud_deleted and conflict_policy == "cloud-wins":
+                        logger.info("sync skip cloud delete %s (cloud-wins is non-destructive)", path)
+                        continue
                     self._apply_cloud_change_to_local(
                         path,
                         cloud_entries.get(path),
@@ -490,8 +494,9 @@ class GDriveSync:
                     )
 
             if not dry_run and not result.failures:
-                for path in cloud_deleted:
-                    self.state.delete_baseline_path(path, include_descendants=(baseline.get(path) or SnapshotEntry(path, "file")).type == "folder")
+                if conflict_policy != "cloud-wins":
+                    for path in cloud_deleted:
+                        self.state.delete_baseline_path(path, include_descendants=(baseline.get(path) or SnapshotEntry(path, "file")).type == "folder")
                 for path, entry in baseline_updates.items():
                     self.state.upsert_baseline_entry(entry)
                 token_after_writes = self.drive.start_page_token()
@@ -595,6 +600,8 @@ class GDriveSync:
         result.conflicts.append(path)
         if conflict_policy == "local-wins":
             self._apply_local_change_to_cloud(path, local_entry, baseline_entry, result, dry_run=dry_run)
+        elif cloud_entry is None:
+            logger.info("sync skip cloud delete %s (cloud-wins is non-destructive)", path)
         else:
             self._apply_cloud_change_to_local(path, cloud_entry, cloud_content, result, dry_run=dry_run)
 
