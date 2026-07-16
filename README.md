@@ -365,7 +365,7 @@ operation.
 |---|---|
 | `python -m gdrive_sync pull` | Make local storage match Google Drive. Cloud is authoritative. Use this to create the initial local copy and synchronization baseline. |
 | `python -m gdrive_sync sync --conflict-policy local-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the local version as canonical. |
-| `python -m gdrive_sync sync --conflict-policy cloud-wins` | Synchronize changes in both directions. If the same path changed on both sides, keep the cloud version as canonical. |
+| `python -m gdrive_sync sync --conflict-policy cloud-wins` | Merge cloud changes into local storage. Cloud adds and updates overwrite or create local files. Nothing is deleted on either side. |
 
 Add `--dry-run` to any command to report the planned changes without modifying
 local files, Google Drive, or the successful synchronization baseline. Add
@@ -377,7 +377,8 @@ The normal routine is:
    walks the complete Drive tree and builds the baseline, so it can take
    substantial time. (read: hours)
 2. **Before a job:** run
-   `python -m gdrive_sync sync --conflict-policy cloud-wins`.
+   `python -m gdrive_sync sync --conflict-policy cloud-wins`. This downloads
+   cloud adds and updates locally without deleting files on either side.
 3. **Run the job:** skills read and write only `LOCAL_STORAGE_PATH`; they do not
    synchronize while the job is running.
 4. **After a job:** run

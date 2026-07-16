@@ -51,3 +51,42 @@ def test_sync_content_conflict_local_wins_preserves_cloud_copy():
     assert copy_as[0].conflict_path == "a.conflict-cloud.md"
     assert canonical[0].source == "local"
     assert canonical[0].target == "cloud"
+
+
+def test_sync_cloud_wins_applies_cloud_updates_without_deletes():
+    actions = plan_sync(
+        {"a.md": file("a.md", "1"), "gone.md": file("gone.md", "1")},
+        {"a.md": file("a.md", "2")},
+        {"a.md": file("a.md", "3"), "new.md": file("new.md", "1")},
+        conflict_policy="cloud-wins",
+    )
+
+    assert {a.action for a in actions} == {"copy", "conflict"}
+    copies = [a for a in actions if a.action == "copy"]
+    assert {a.path for a in copies} == {"a.md", "new.md"}
+    assert all(a.source == "cloud" and a.target == "local" for a in copies)
+    conflicts = [a for a in actions if a.action == "conflict"]
+    assert len(conflicts) == 1
+    assert conflicts[0].path == "a.md"
+
+
+def test_sync_cloud_wins_skips_local_only_changes():
+    actions = plan_sync(
+        {"a.md": file("a.md", "1")},
+        {"a.md": file("a.md", "2"), "local-only.md": file("local-only.md", "9")},
+        {"a.md": file("a.md", "1")},
+        conflict_policy="cloud-wins",
+    )
+
+    assert actions == []
+
+
+def test_sync_cloud_wins_skips_cloud_deletions():
+    actions = plan_sync(
+        {"gone.md": file("gone.md", "1")},
+        {"gone.md": file("gone.md", "1")},
+        {},
+        conflict_policy="cloud-wins",
+    )
+
+    assert actions == []
