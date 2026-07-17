@@ -40,7 +40,11 @@ def test_persons_in_dataset_reads_manual_insight_table(mock_env):
             linkedin_id="urs-gubser",
             email_addresses=["urs@gubser.ch", "urs.gubser@investor.sictic.ch"],
         ),
-        Person(full_name="Jane Doe", linkedin_id="", email_addresses=["jane@example.com"]),
+        Person(
+            full_name="Jane Doe",
+            linkedin_id="",
+            email_addresses=["jane@example.com"],
+        ),
         Person(full_name="", linkedin_id="no-name"),
     ]
 
@@ -126,7 +130,10 @@ def test_persons_in_dataset_reads_legacy_manual_table_headers(mock_env, mocker):
     persons = persons_in_dataset("sictic_members")
 
     assert persons == [
-        Person(full_name="Patrick Schuler", linkedin_id="schulerp")
+        Person(
+            full_name="Patrick Schuler",
+            linkedin_id="schulerp",
+        )
     ]
 
 

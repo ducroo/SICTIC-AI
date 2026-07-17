@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import os
 from pathlib import Path
 from lib.env import get_env_var
 from lib.logger import get_logger
@@ -36,7 +37,7 @@ def _copy_skill_contents(repo_item: Path, workspace_item: Path) -> None:
 
 def _reconcile_workspace_copies(repo_dir: Path, workspace_dir: Path) -> list[str]:
     """
-    Enforces a strict 1:1 mapping between REPO_PATH/skills and WORKSPACE_PATH.
+    Enforces a strict 1:1 mapping between REPO_PATH/skills and INSTALLED_SKILLS_PATH.
     1. Removes old symlink installs.
     2. Moves unmanaged raw folders from workspace to repo when possible.
     3. Copies repository skills into the workspace.
@@ -89,7 +90,13 @@ def _reconcile_workspace_copies(repo_dir: Path, workspace_dir: Path) -> list[str
 async def sictic_git_sync(action: str, message: str = "") -> str:
     """Main orchestration for git sync and workspace skill copies."""
     repo_dir = Path(get_env_var("REPO_PATH"))
-    workspace_dir = Path(get_env_var("WORKSPACE_PATH"))
+    installed_skills_path = os.environ.get("INSTALLED_SKILLS_PATH")
+    if not installed_skills_path:
+        installed_skills_path = get_env_var("WORKSPACE_PATH")
+        logger.warning(
+            "WORKSPACE_PATH is deprecated; use INSTALLED_SKILLS_PATH instead."
+        )
+    workspace_dir = Path(installed_skills_path)
     
     output = []
     

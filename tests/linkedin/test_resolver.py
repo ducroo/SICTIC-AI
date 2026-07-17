@@ -49,12 +49,13 @@ def test_cached_profile_matches_unicode_normalized_linkedin_id():
 class _FakeRegistry:
     def __init__(self):
         self.marked = []
+        self.upserts = []
 
     def find(self, *_args, **_kwargs):
         return None
 
-    def upsert(self, *_args, **_kwargs):
-        return None
+    def upsert(self, *args, **kwargs):
+        self.upserts.append((args, kwargs))
 
     def mark_status(self, linkedin_id, status):
         self.marked.append((linkedin_id, status))
@@ -85,3 +86,30 @@ def test_linkedin_scrape_uses_profile_urls_input():
             {"profileUrls": ["https://www.linkedin.com/in/jane-doe/"]},
         )
     ]
+
+
+def test_blank_linkedin_id_skips_discovery_and_scrape():
+    resolver = LinkedInResolver.__new__(LinkedInResolver)
+    resolver.dataset_name = "novoviz"
+    resolver.cache = {
+        "wrong-person": Person(
+            full_name="Samuel Cheng",
+            linkedin_id="wrong-person",
+            linkedin_profile={"fullName": "Samuel Cheng"},
+        )
+    }
+    resolver.registry_store = _FakeRegistry()
+    resolver._apify_factory = lambda: _FakeApify()
+
+    person = Person(
+        full_name="Samuel Cheng",
+        linkedin_id="",
+        email_addresses=["srcheng@gmail.com"],
+    )
+
+    resolved = resolver.get_profiles([person])
+
+    assert resolved == [person]
+    assert person.linkedin_id == ""
+    assert person.linkedin_profile == {}
+    assert resolver.registry_store.upserts == []

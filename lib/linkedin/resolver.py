@@ -3,11 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from lib.adapters.apify import ApifyAdapter
-from lib.adapters.web_search import WebSearchAdapter
 from lib.linkedin.cache import LinkedInCache
 from lib.linkedin.identity import (
-    extract_linkedin_id,
     find_cached_person,
+    extract_linkedin_id,
     sanitize_name,
     unresolved_registry_key,
 )
@@ -23,7 +22,7 @@ LINKEDIN_PROFILE_ACTOR = "dev_fusion/Linkedin-Profile-Scraper"
 
 
 class LinkedInResolver:
-    """Resolve Person objects from cache, search, and optional LinkedIn scraping."""
+    """Resolve explicit LinkedIn IDs from cache and optional LinkedIn scraping."""
 
     def __init__(
         self,
@@ -31,7 +30,6 @@ class LinkedInResolver:
         *,
         storage=None,
         registry: LinkedInRegistry | None = None,
-        web_search_factory: Callable[[], WebSearchAdapter] = WebSearchAdapter,
         apify_factory: Callable[[], ApifyAdapter] = ApifyAdapter,
     ):
         location = dataset_location(dataset_name)
@@ -42,7 +40,6 @@ class LinkedInResolver:
             f"{dataset_raw_path(self.dataset_name)}/linkedin",
         )
         self.registry_store = registry or LinkedInRegistry()
-        self._web_search_factory = web_search_factory
         self._apify_factory = apify_factory
         self.cache = self.cache_store.load_all()
 
@@ -57,21 +54,6 @@ class LinkedInResolver:
                 if person.display_name
             }
         )
-
-    def _discover_linkedin_id(self, person: Person) -> str:
-        query = f"{sanitize_name(person.full_name)} {self.dataset_name}"
-        try:
-            results = self._web_search_factory().search(
-                f"{query} site:linkedin.com/in/"
-            )
-        except Exception as exc:
-            logger.warning("LinkedIn web search failed for %s: %s", query, exc)
-            return ""
-        for result in results:
-            url = result.get("link", "")
-            if "linkedin.com/in/" in url.lower():
-                return extract_linkedin_id(url)
-        return ""
 
     def _cache_scraped_profile(self, payload: dict) -> Person | None:
         identifier_source = (
@@ -117,6 +99,14 @@ class LinkedInResolver:
             if sanitized_name:
                 person.full_name = sanitized_name
 
+            if not person.linkedin_id:
+                logger.info(
+                    "Skipping LinkedIn resolution for %s: no LinkedIn ID provided",
+                    person.display_name,
+                )
+                result.append(person)
+                continue
+
             cached = find_cached_person(person, list(self.cache.values()))
             if cached is not None:
                 person.merge(cached)
@@ -147,21 +137,6 @@ class LinkedInResolver:
                 continue
 
             linkedin_id = person.linkedin_id
-            if not linkedin_id:
-                linkedin_id = self._discover_linkedin_id(person)
-                if linkedin_id:
-                    person.linkedin_id = linkedin_id
-                    registry_key = linkedin_id
-                else:
-                    self.registry_store.upsert(
-                        registry_key,
-                        dataset=self.dataset_name,
-                        full_name=person.full_name,
-                        linkedin_id="",
-                        status="URL_NOT_FOUND",
-                    )
-                    result.append(person)
-                    continue
 
             self.registry_store.upsert(
                 registry_key,
