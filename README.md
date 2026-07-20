@@ -4,7 +4,9 @@
 ![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-Welcome to the SICTIC-AI toolkit! This is an open-source collection of AI-powered analysis routines (AKA skills) designed to supercharge the startup ecosystem. It is completely free to use and easy to contribute to!
+SICTIC is Switzerland's largest and most active business angel network. It has already connected 1'000+ early-stage startups with 500+ angel investors ([sictic.ch](https://www.sictic.ch)).
+
+This is the SICTIC-AI toolkit we use. It is an open-source collection of AI-powered analysis routines (also known as skills) designed to supercharge the startup ecosystem. It is completely free to use and easy to contribute to!
 
 This toolkit serves four audiences:
 * **Startups:** Prepare for your first funding round with a dry run of our AI on your data room.
