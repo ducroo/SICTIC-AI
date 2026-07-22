@@ -345,8 +345,9 @@ datasets. Tests whose required datasets are unavailable are skipped.
 ## Google Drive Integration
 
 All skills read and write the local filesystem path configured by
-`LOCAL_STORAGE_PATH`. Google Drive access is isolated in the `gdrive_sync`
-administrative skill; normal application storage never accesses Drive.
+`LOCAL_STORAGE_PATH`. Google Drive access is isolated in the standalone
+`gdrive_sync` administrative utility under `gdrive-sync/`; normal application
+storage never accesses Drive.
 
 In production at SICTIC, Google Drive is used to share datasets and insights
 with Deal Leads. `CLOUD_PROVIDER=google` enables synchronization and
