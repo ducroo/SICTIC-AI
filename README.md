@@ -43,7 +43,6 @@ This toolkit serves four audiences:
 | `dataset_maintenance` | ✅ | Diagnoses, migrates, prunes, and repairs datasets and Qdrant collections |
 | `startup_website_import` | ✅ | Imports startup public websites into dataset website folders |
 | `linkedin_maintenance` | ✅ | Lists missing LinkedIn profiles, imports manually scraped profiles, and diagnoses registry issues |
-| `sictic_git_sync` | ✅ | Synchronizes repository changes and acts as an architectural gatekeeper |
 
 
 <details>
@@ -66,7 +65,8 @@ This toolkit serves four audiences:
 The setup is deliberately simple so everyone can join and co-develop:
 * This is about investing expertise and insight, not IT know-how.
 * You can safely create new skills or edit existing ones directly inside your UI.
-* Then your AI agent will do the syncing to GitHub for you; it has a `sictic_git_sync` skill. This skill also acts as an architectural gatekeeper, reviewing your code and enforcing the simplicity standards.
+* Your AI coding agent can review the changes and use its Git integration to
+  publish them to GitHub.
 
 ## Runtime Context
 

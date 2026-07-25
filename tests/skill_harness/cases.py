@@ -21,7 +21,6 @@ SKILL_COVERAGE = {
     "person_profile": "local-smoke",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
-    "sictic_git_sync": "existing-unit",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
     "startup_traction": "local-smoke",
