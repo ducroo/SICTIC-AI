@@ -213,8 +213,6 @@ in `lib/`.
   profiles, dataset search, ranking, and per-investor insight outputs.
 * `bulk_refresh`: Batch orchestration across active datasets and skills.
 * `dealum_import`: CLI wrapper around `lib.startups.dealum`.
-* `sictic_git_sync`: Repository synchronization and architecture review
-  gatekeeper.
 
 ## Skill Directory Structure
 

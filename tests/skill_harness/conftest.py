@@ -83,17 +83,14 @@ def forbid_cloud_sync(monkeypatch):
     def blocked(*_args, **_kwargs):
         raise AssertionError("skill harness tests must not invoke Google Drive sync")
 
-    import skills.gdrive_sync.__main__ as gdrive_main
-    import skills.gdrive_sync.client as gdrive_client
-    import skills.gdrive_sync.drive_api as drive_api
-    import skills.gdrive_sync.incremental as incremental
+    import gdrive_sync.client as gdrive_client
+    import lib.storage_gdrive as storage_gdrive
 
-    monkeypatch.setattr(gdrive_main, "run_operation", blocked)
+    monkeypatch.setattr(gdrive_client.GDriveSync, "push", blocked)
     monkeypatch.setattr(gdrive_client.GDriveSync, "pull", blocked)
     monkeypatch.setattr(gdrive_client.GDriveSync, "sync", blocked)
-    monkeypatch.setattr(incremental, "run_incremental_sync", blocked)
-    monkeypatch.setattr(drive_api.DriveApi, "_ensure_service", blocked)
-    monkeypatch.setattr(drive_api.DriveApi, "_load_or_authorize", blocked)
+    monkeypatch.setattr(storage_gdrive.GoogleDriveStorage, "_ensure_service", blocked)
+    monkeypatch.setattr(storage_gdrive.GoogleDriveStorage, "_load_or_authorize", blocked)
 
 
 @pytest.fixture

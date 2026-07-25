@@ -68,8 +68,8 @@ class GoogleDriveStorage:
         root_folder_id: str = "root",
         local_cache_dir: Optional[str] = None,
     ):
-        self.credentials_path = credentials_path
-        self.token_path = token_path
+        self.credentials_path = os.path.expanduser(credentials_path)
+        self.token_path = os.path.expanduser(token_path)
         self._root_folder_spec = root_folder_id or "root"
         self.root_folder_id = self._root_folder_spec
         self._root_resolved = self._root_folder_spec == "root"

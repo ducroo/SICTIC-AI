@@ -14,7 +14,6 @@ SKILL_COVERAGE = {
     "dd_checks": "local-smoke",
     "dealum_import": "utility-smoke",
     "expert_search": "local-smoke",
-    "gdrive_sync": "contract-admin",
     "harness": "existing-unit",
     "investor_profile": "local-smoke",
     "linkedin_maintenance": "utility-smoke",
@@ -22,7 +21,6 @@ SKILL_COVERAGE = {
     "person_profile": "local-smoke",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
-    "sictic_git_sync": "existing-unit",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
     "startup_traction": "local-smoke",
@@ -32,7 +30,6 @@ SKILL_COVERAGE = {
 }
 
 SKILL_COVERAGE_REASONS = {
-    "contract-admin": "Operational skill with external or destructive side effects; covered by import/CLI contracts and focused existing tests.",
     "docs-only": "Instruction-only skill package; import and SKILL.md contracts are the behavioral surface.",
     "existing-unit": "Covered by existing focused tests outside the skill harness suite.",
     "harness-smoke": "Covered through the slash-command harness with mocked service boundaries.",

@@ -9,19 +9,13 @@ loading still assume the source repository is on `sys.path` through the
 installer-generated `.pth` file. That should be handled in the separate
 self-contained installer PR.
 
-This assessment PR keeps changes low risk: it fixes a workspace synchronization
-bug and removes a repo-owned Pydantic v2 deprecation warning.
+This assessment PR keeps changes low risk and removes a repo-owned Pydantic v2
+deprecation warning.
 
 ## Findings
 
 ### Fixed in this PR
 
-- `skills.sictic_git_sync` copied any directory under `skills/` into the AI
-  workspace, including helper packages without `SKILL.md`. It now copies only
-  manifest-bearing skill directories.
-- `skills.sictic_git_sync` could ingest arbitrary unmanaged workspace folders
-  into the repo as skills. It now skips unmanaged workspace directories unless
-  they are actual skill directories with `SKILL.md`.
 - `skills.ranking.ranking_top_k.RankedProfilesResult` used deprecated Pydantic
   `Config`; it now uses `ConfigDict`.
 

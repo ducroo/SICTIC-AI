@@ -48,12 +48,12 @@ class GDriveSync:
             else os.environ.get("CLOUD_STORAGE_PATH")
         )
         self.gdrive_root = (configured_gdrive_root or "").strip()
-        self.credentials_path = (
+        self.credentials_path = os.path.expanduser(
             credentials_path
             or os.environ.get("GDRIVE_CREDENTIALS")
             or os.path.expanduser("~/.openclaw/gdrive-ops-credentials.json")
         )
-        self.token_path = (
+        self.token_path = os.path.expanduser(
             token_path
             or os.environ.get("GDRIVE_TOKEN")
             or os.path.expanduser("~/.openclaw/gdrive-ops-token.json")
