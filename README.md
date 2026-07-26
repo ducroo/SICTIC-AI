@@ -25,7 +25,7 @@ This toolkit serves four audiences:
 | `investor_profile` | ✅ | Combines each member's professional profile with their investment track record and preferences |
 | `suggested_startups` | ✅ | Proposes attractive startups in active fundraising to each member |
 | **Startup Selection & Jury** | | |
-| `submission_ready` | | Checks whether a startup's application and submitted materials are complete |
+| `submission_ready` | ✅ | Checks whether a Dealum application is complete and meets initial SICTIC eligibility criteria |
 | `pitch_ready` | | Evaluates the clarity and completeness of startup materials for investor pitch sessions |
 | **Due Diligence** | | |
 | `startup_profile` | ✅ | Generates a succinct overview of the startup and serves as input for other skills |

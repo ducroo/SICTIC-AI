@@ -196,6 +196,16 @@ async def _dd_checks(args: List[str]) -> str:
     return f"DD checks complete. Output saved to {output_path}"
 
 
+async def _submission_ready(args: List[str]) -> str:
+    parser = _parser("/submission_ready")
+    parser.add_argument("startup")
+    ns = parser.parse_args(args)
+    from skills.submission_ready.submission_ready import submission_ready
+
+    output_path = await submission_ready(ns.startup)
+    return f"Submission readiness check complete. Output saved to {output_path}"
+
+
 async def _dealum_import(args: List[str]) -> str:
     parser = _parser("/dealum_import")
     parser.add_argument("startup")
@@ -229,6 +239,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/potential_investors", "/potential_investors <startup>", "Rank potential investors.", _potential_investors),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
+        HarnessCommand("/submission_ready", "/submission_ready <startup>", "Check application completeness and eligibility.", _submission_ready),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]

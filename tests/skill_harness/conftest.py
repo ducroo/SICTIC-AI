@@ -103,6 +103,13 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_dataset_chat(*_args, **_kwargs):
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'
 
+    async def fake_submission_dataset_chat(*_args, **_kwargs):
+        return (
+            '{"judgment": "Pass", "assessment": "Fixture evidence", '
+            '"source_documents": ["Dealum Application — fixture"], '
+            '"proposed_next_step": "No action"}'
+        )
+
     async def fake_llm_chat(*_args, **_kwargs):
         return "Fixture LLM profile."
 
@@ -164,6 +171,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     startup_sources = importlib.import_module("lib.startups.sources")
     advocates_mod = importlib.import_module("skills.advocates.advocates")
     batch_audit_mod = importlib.import_module("skills.batch_audit.batch_audit")
+    submission_ready_mod = importlib.import_module(
+        "skills.submission_ready.submission_ready"
+    )
     dataset_chat_mod = importlib.import_module("skills.dataset_chat.dataset_chat")
     dd_checks_mod = importlib.import_module("skills.dd_checks.dd_checks")
     expert_search_mod = importlib.import_module("skills.expert_search.expert_search")
@@ -188,6 +198,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         person_profile_mod,
         team_profile_mod,
         dd_checks_mod,
+        submission_ready_mod,
         expert_search_mod,
         potential_investors_mod,
         advocates_mod,
@@ -201,6 +212,11 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(dataset_chat_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dd_checks_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(batch_audit_mod, "dataset_chat", fake_dataset_chat)
+    monkeypatch.setattr(
+        submission_ready_mod,
+        "dataset_chat",
+        fake_submission_dataset_chat,
+    )
     monkeypatch.setattr(person_profile_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(team_profile_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(team_profile_mod, "dataset_search", fake_dataset_search)
