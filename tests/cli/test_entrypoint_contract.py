@@ -50,6 +50,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.batch_audit.__main__",
         "skills.bulk_refresh.__main__",
         "skills.config_load.__main__",
+        "skills.submission_ready.__main__",
         "skills.dataset_chat.__main__",
         "skills.dataset_maintenance.__main__",
         "skills.dd_checks.__main__",

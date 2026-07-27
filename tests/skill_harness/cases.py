@@ -9,6 +9,7 @@ SKILL_COVERAGE = {
     "batch_audit": "local-smoke",
     "bulk_refresh": "existing-unit",
     "config_load": "existing-unit",
+    "submission_ready": "local-smoke",
     "dataset_chat": "harness-smoke",
     "dataset_maintenance": "utility-smoke",
     "dd_checks": "local-smoke",
@@ -53,4 +54,5 @@ HARNESS_SMOKE_COMMANDS = {
         "--investors Jane Doe --max-startups 1"
     ),
     "/dd_checks": "/dd_checks example-startup",
+    "/submission_ready": "/submission_ready example-startup",
 }

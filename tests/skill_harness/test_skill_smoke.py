@@ -139,6 +139,20 @@ async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
 
 
 @pytest.mark.asyncio
+async def test_submission_ready_writes_report_from_local_fixture(
+    mocked_skill_boundaries,
+):
+    from skills.submission_ready.submission_ready import submission_ready
+
+    path = await submission_ready("example-startup")
+
+    assert path.startswith("storage/startups/example-startup/insights/")
+    report = get_storage().read_text(path)
+    assert "Completeness and Eligibility" in report
+    assert "| Pass | Fixture evidence |" in report
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("command_name", sorted(HARNESS_SMOKE_COMMANDS))
 async def test_harness_core_command_smoke(command_name, mocked_skill_boundaries, tmp_path):
     checklist = tmp_path / "checklist.md"
