@@ -34,7 +34,11 @@ def parse_industry_type(response: str, allowed_industry_types: set[str]) -> str:
 async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_industry_types: set) -> str:
     industry_prompt = dd_config['industry_type_query']
     industry_instructions = dd_config['industry_type_llm_instructions']
-    industry_response = await dataset_chat(dataset_name=startup_name_lower, questions=industry_prompt, llm_instructions=industry_instructions, max_chunks=5)
+    industry_response = await dataset_chat(
+        dataset_name=startup_name_lower,
+        questions=industry_prompt,
+        llm_instructions=industry_instructions,
+    )
     
     logger.info(f"[{startup_name_lower}] Raw Industry Type LLM Response: {industry_response}")
     return parse_industry_type(industry_response or "", allowed_industry_types)

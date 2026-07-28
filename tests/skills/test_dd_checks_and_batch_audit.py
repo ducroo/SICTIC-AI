@@ -1,7 +1,7 @@
 import pytest
 
 from skills.batch_audit.batch_audit import run_audit_query
-from skills.dd_checks.dd_checks import parse_industry_type
+from skills.dd_checks.dd_checks import find_industry_type, parse_industry_type
 
 
 def test_parse_industry_type_uses_explicit_label_not_rationale():
@@ -19,6 +19,29 @@ def test_parse_industry_type_defaults_to_general_when_unparseable():
     result = parse_industry_type("No clear answer", {"biology", "hardware", "software", "general"})
 
     assert result == "general"
+
+
+@pytest.mark.asyncio
+async def test_find_industry_type_uses_default_retrieval_chunk_count(monkeypatch):
+    calls = {}
+
+    async def fake_dataset_chat(*args, **kwargs):
+        calls["kwargs"] = kwargs
+        return "Industry Type: Hardware Confidence Score: 95%"
+
+    monkeypatch.setattr("skills.dd_checks.dd_checks.dataset_chat", fake_dataset_chat)
+
+    result = await find_industry_type(
+        "proud-technology",
+        {
+            "industry_type_query": "classify the startup",
+            "industry_type_llm_instructions": "choose one industry type",
+        },
+        {"biology", "general", "hardware", "software"},
+    )
+
+    assert result == "hardware"
+    assert "max_chunks" not in calls["kwargs"]
 
 
 @pytest.mark.asyncio
