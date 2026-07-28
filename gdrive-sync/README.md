@@ -29,6 +29,10 @@ Markdown files are written to Drive through the existing `GoogleDriveStorage`
 strategy, so local `.md` files become Google Docs and Google Docs are exported
 back to local Markdown. Other ordinary files are copied as binary files.
 
+Google Drive shortcuts are not supported inside the synchronized root. A
+shortcut causes synchronization to stop during preflight, before applying
+changes; replace it with a real folder or file before retrying.
+
 State is stored in the repo-local durable state directory:
 
 - `gdrive_sync_state/<pairing-id>/`

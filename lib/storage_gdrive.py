@@ -599,7 +599,14 @@ class GoogleDriveStorage:
         rel = rel.strip("/")
         if not rel:
             return
-        if self._resolve(rel) is not None:
+        existing_id = self._resolve(rel)
+        if existing_id is not None:
+            existing_mime = self._get_mime(rel, existing_id)
+            if existing_mime != _FOLDER_MIME:
+                raise NotADirectoryError(
+                    f"{rel}: cannot create a folder because a non-folder Drive "
+                    f"object already exists there ({existing_mime or 'unknown MIME type'})."
+                )
             if exist_ok:
                 return
             raise FileExistsError(rel)
@@ -612,6 +619,13 @@ class GoogleDriveStorage:
             elif self._resolve(parent_rel) is None:
                 raise FileNotFoundError(parent_rel)
         parent_id = self._resolve_or_raise(parent_rel) if parent_rel else self.root_folder_id
+        if parent_rel:
+            parent_mime = self._get_mime(parent_rel, parent_id)
+            if parent_mime != _FOLDER_MIME:
+                raise NotADirectoryError(
+                    f"{parent_rel}: cannot create {rel!r} because its Drive parent "
+                    f"is not a folder ({parent_mime or 'unknown MIME type'})."
+                )
         service = self._ensure_service()
         with self._service_lock:
             created = service.files().create(

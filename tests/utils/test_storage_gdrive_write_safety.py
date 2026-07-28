@@ -2,7 +2,10 @@ import threading
 
 import pytest
 
-from lib.storage_gdrive import GoogleDriveStorage, _sanitize_markdown_upload
+from lib.storage_gdrive import (
+    GoogleDriveStorage,
+    _sanitize_markdown_upload,
+)
 
 
 class _FakeListRequest:
@@ -142,3 +145,17 @@ def test_gdrive_md_write_rejects_duplicate_same_name_files():
 
     with pytest.raises(RuntimeError, match="ambiguous Google Drive path"):
         storage.write_bytes("insights/report.md", b"# Report\n")
+
+
+def test_gdrive_mkdir_rejects_existing_shortcut():
+    storage = _storage_with_files([])
+    storage._resolve_root_folder = lambda: None
+    storage._path_to_id["insights/shortcut"] = "shortcut-id"
+    storage._path_to_mime["insights/shortcut"] = (
+        "application/vnd.google-apps.shortcut"
+    )
+
+    with pytest.raises(NotADirectoryError, match="non-folder Drive object"):
+        storage.mkdir("insights/shortcut")
+
+    assert storage._service.files().created == []
