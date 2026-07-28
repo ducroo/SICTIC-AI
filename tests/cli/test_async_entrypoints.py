@@ -44,6 +44,24 @@ def test_dd_checks_cli_awaits_async_function(mocker):
     assert "coroutine object" not in result.output
 
 
+def test_dd_priorities_cli_awaits_async_function(mocker):
+    from skills.dd_priorities.__main__ import app
+
+    async def fake_dd_priorities(startup):
+        return f"insights/{startup}/dd-priorities.md"
+
+    mocker.patch(
+        "skills.dd_priorities.__main__.dd_priorities",
+        side_effect=fake_dd_priorities,
+    )
+    result = CliRunner().invoke(app, ["--startup", "avientus"])
+
+    assert result.exit_code == 0
+    assert "DD priorities complete" in result.output
+    assert "insights/avientus/dd-priorities.md" in result.output
+    assert "coroutine object" not in result.output
+
+
 def test_submission_ready_cli_awaits_async_function(mocker):
     from skills.submission_ready.__main__ import app
 

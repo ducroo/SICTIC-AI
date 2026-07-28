@@ -69,6 +69,17 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
         identifier=fixtures.person_linkedin_id,
         subdir=True,
     ).save("# Jane Doe\n\nExperienced angel investor.")
+    InsightFile(
+        fixtures.startup,
+        "dd_checks",
+        "manual",
+    ).save(
+        "# M&A Due Diligence Checks\n\n"
+        "| No | Line-Item | Status | Summary | Concerns |\n"
+        "|---|---|---|---|---|\n"
+        "| 4.1.3 | Cash Position | Not Found | Current cash is not verified. | "
+        "Can cash be verified? |\n"
+    )
     get_storage().write_text(
         "storage/community/sictic-members/datasets/track-record/jane-doe.md",
         "Invested in fixture startups.",
@@ -176,6 +187,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     )
     dataset_chat_mod = importlib.import_module("skills.dataset_chat.dataset_chat")
     dd_checks_mod = importlib.import_module("skills.dd_checks.dd_checks")
+    dd_priorities_mod = importlib.import_module(
+        "skills.dd_priorities.dd_priorities"
+    )
     expert_search_mod = importlib.import_module("skills.expert_search.expert_search")
     investor_profile_mod = importlib.import_module("skills.investor_profile.investor_profile")
     person_profile_mod = importlib.import_module("skills.person_profile.person_profile")
@@ -211,6 +225,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(startup_traction_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dataset_chat_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dd_checks_mod, "dataset_chat", fake_dataset_chat)
+    monkeypatch.setattr(dd_priorities_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(batch_audit_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(
         submission_ready_mod,

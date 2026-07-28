@@ -196,6 +196,16 @@ async def _dd_checks(args: List[str]) -> str:
     return f"DD checks complete. Output saved to {output_path}"
 
 
+async def _dd_priorities(args: List[str]) -> str:
+    parser = _parser("/dd_priorities")
+    parser.add_argument("startup")
+    ns = parser.parse_args(args)
+    from skills.dd_priorities.dd_priorities import dd_priorities
+
+    output_path = await dd_priorities(ns.startup)
+    return f"DD priorities complete. Output saved to {output_path}"
+
+
 async def _submission_ready(args: List[str]) -> str:
     parser = _parser("/submission_ready")
     parser.add_argument("startup")
@@ -241,6 +251,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand("/submission_ready", "/submission_ready <startup>", "Check application completeness and eligibility.", _submission_ready),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
+        HarnessCommand("/dd_priorities", "/dd_priorities <startup>", "Prioritize an existing DD checks report.", _dd_priorities),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}

@@ -13,6 +13,7 @@ SKILL_COVERAGE = {
     "dataset_chat": "harness-smoke",
     "dataset_maintenance": "utility-smoke",
     "dd_checks": "local-smoke",
+    "dd_priorities": "local-smoke",
     "dealum_import": "utility-smoke",
     "expert_search": "local-smoke",
     "harness": "existing-unit",
@@ -54,5 +55,6 @@ HARNESS_SMOKE_COMMANDS = {
         "--investors Jane Doe --max-startups 1"
     ),
     "/dd_checks": "/dd_checks example-startup",
+    "/dd_priorities": "/dd_priorities example-startup",
     "/submission_ready": "/submission_ready example-startup",
 }

@@ -54,6 +54,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.dataset_chat.__main__",
         "skills.dataset_maintenance.__main__",
         "skills.dd_checks.__main__",
+        "skills.dd_priorities.__main__",
         "skills.dealum_import.__main__",
         "skills.expert_search.__main__",
         "skills.harness.__main__",
