@@ -1,7 +1,80 @@
 import pytest
 
-from skills.batch_audit.batch_audit import run_audit_query
+from skills.batch_audit.batch_audit import (
+    _model_display_name,
+    batch_audit,
+    run_audit_query,
+)
 from skills.dd_checks.dd_checks import find_industry_type, parse_industry_type
+
+
+@pytest.mark.parametrize(
+    ("model", "expected"),
+    [
+        ("ollama/gemma4:31b-mlx", "gemma4:31b-mlx"),
+        ("google/gemini-2.5-pro", "gemini-2.5-pro"),
+        ("gpt/gpt-5", "gpt-5"),
+        ("model-without-prefix", "model-without-prefix"),
+    ],
+)
+def test_model_display_name_strips_provider_prefix(model, expected):
+    assert _model_display_name(model) == expected
+
+
+@pytest.mark.asyncio
+async def test_batch_audit_shows_model_once_above_table(monkeypatch):
+    class FakeInsightFile:
+        def __init__(self, *args, **kwargs):
+            self.prompt_key = kwargs["prompt_key"]
+
+        def find_reusable(self):
+            return None
+
+        def save(self, _content):
+            return None
+
+    async def fake_run_audit_query(*args, **kwargs):
+        return {
+            "status": "Pass",
+            "summary": "Evidence found",
+            "concerns": "None",
+        }
+
+    table_template = (
+        "| No | Line-Item | Status | Summary | Concerns |\n"
+        "|---|---|---|---|---|"
+    )
+    monkeypatch.setattr(
+        "skills.batch_audit.batch_audit.config_load",
+        lambda: {
+            "batch_audit": {
+                "table_lines": table_template,
+                "llm_instructions": "Return JSON.",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "skills.batch_audit.batch_audit.llm_model",
+        lambda: "google/gemini-2.5-pro",
+    )
+    monkeypatch.setattr(
+        "skills.batch_audit.batch_audit.InsightFile",
+        FakeInsightFile,
+    )
+    monkeypatch.setattr(
+        "skills.batch_audit.batch_audit.run_audit_query",
+        fake_run_audit_query,
+    )
+
+    result = await batch_audit(
+        "example-startup",
+        "# Commercial\n- Is there traction?",
+    )
+
+    assert result.startswith(f"**Model:** gemini-2.5-pro\n\n{table_template}")
+    assert "Author" not in result
+    assert "google/" not in result
+    assert "| 1.1 | Is there traction? | Pass | Evidence found | None |" in result
 
 
 def test_parse_industry_type_uses_explicit_label_not_rationale():
