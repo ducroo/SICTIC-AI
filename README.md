@@ -374,6 +374,10 @@ Add `--dry-run` to any command to report the planned changes without modifying
 local files, Google Drive, or the successful synchronization baseline. Add
 `--json` when machine-readable output is useful.
 
+Google Drive shortcuts are not supported inside the synchronized root.
+Synchronization preflights for shortcuts and stops before applying changes;
+replace any shortcut with a real folder or file before retrying.
+
 The normal routine is:
 
 1. **Initial setup:** run `python -m gdrive_sync pull`. The first pull

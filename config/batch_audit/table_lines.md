@@ -1,2 +1,2 @@
-| No | Line-Item | Author | Status | Summary | Concerns |
-|---|---|---|---|---|---|
+| No | Line-Item | Status | Summary | Concerns |
+|---|---|---|---|---|

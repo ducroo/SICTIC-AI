@@ -17,6 +17,10 @@ def _table_cell(value) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def _model_display_name(model: str) -> str:
+    return model.rsplit("/", 1)[-1]
+
+
 class ChecklistParser:
     def __init__(self):
         self.idx = []
@@ -106,7 +110,7 @@ async def run_audit_query(
 
 async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     """Process a Markdown checklist against a dataset and return a Markdown table."""
-    author = llm_model()
+    model = llm_model()
     parser = ChecklistParser()
     lines = checklist_string.strip().splitlines()
     chapter = None
@@ -124,15 +128,16 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
 
     dataset_slug = slugify(dataset_name)
     config = config_load()
-    table_lines = config["batch_audit"]["table_lines"]
+    table_template = config["batch_audit"]["table_lines"]
+    table_lines = f"**Model:** {_model_display_name(model)}\n\n{table_template}"
     llm_instructions = config["batch_audit"]["llm_instructions"]
     insight = InsightFile(
         dataset=dataset_slug,
         skill="batch_audit",
-        model=author,
+        model=model,
         identifier=chapter,
         subdir=True,
-        prompt_key=checklist_string + llm_instructions,
+        prompt_key=checklist_string + llm_instructions + table_template,
     )
 
     reusable = insight.find_reusable()
@@ -187,14 +192,14 @@ async def batch_audit(dataset_name: str, checklist_string: str) -> str:
     for item in parsed_items:
         if item["type"] == "header":
             table_lines += (
-                f"\n| {item['idx_string']} | **{item['title']}** | | | | |"
+                f"\n| {item['idx_string']} | **{item['title']}** | | | |"
             )
         else:
             result = item["task"].result()
             display = _table_cell(item["display"])
             table_lines += (
-                f"\n| {item['idx_string']} | {display} | {author} | "
-                f"{result['status']} | {result['summary']} | {result['concerns']} |"
+                f"\n| {item['idx_string']} | {display} | {result['status']} | "
+                f"{result['summary']} | {result['concerns']} |"
             )
 
     insight.save(table_lines)

@@ -156,6 +156,12 @@ class GDriveSync:
             cloud_snapshot, warnings, failures = self.drive.scan()
             result.warnings.extend(warnings)
             result.failures.extend(failures)
+            if result.failures:
+                result.elapsed_seconds = time.monotonic() - start
+                raise SyncOperationFailed(
+                    f"{operation} preflight failed: {result.failures[0]}",
+                    partial_result=result,
+                )
             if operation == "push":
                 actions = plan_push(local_snapshot, cloud_snapshot)
             elif operation == "pull":
@@ -196,6 +202,15 @@ class GDriveSync:
         start = time.monotonic()
         result = OperationResult(operation="pull", dry_run=dry_run)
         with PairingLock(self.lock_path, timeout=self.lock_timeout, operation="pull"):
+            try:
+                self.drive.validate_no_shortcuts()
+            except ValueError as exc:
+                result.failures.append(str(exc))
+                result.elapsed_seconds = time.monotonic() - start
+                raise SyncOperationFailed(
+                    f"pull preflight failed: {exc}",
+                    partial_result=result,
+                ) from exc
             active_operation_id = self.state.get_metadata("active_operation_id")
             if active_operation_id and active_operation_id.startswith("pull-"):
                 operation_id = active_operation_id
@@ -223,7 +238,7 @@ class GDriveSync:
                 if failure:
                     result.failures.append(failure)
                     logger.error(failure)
-                    continue
+                    break
                 if entry is None:
                     continue
                 cloud_snapshot[entry.path] = entry
@@ -258,14 +273,15 @@ class GDriveSync:
                     result.created_files.append(entry.path)
                 else:
                     result.updated_files.append(entry.path)
-            for path in sorted(set(local_snapshot) - set(cloud_snapshot), reverse=True):
-                logger.info("pull delete local %s", path)
-                if dry_run:
-                    result.skipped_entries.append(f"dry-run:delete:{path}")
-                else:
-                    self.local.remove(path)
-                    self.local.prune_empty_parents(path)
-                result.deleted_entries.append(path)
+            if not result.failures:
+                for path in sorted(set(local_snapshot) - set(cloud_snapshot), reverse=True):
+                    logger.info("pull delete local %s", path)
+                    if dry_run:
+                        result.skipped_entries.append(f"dry-run:delete:{path}")
+                    else:
+                        self.local.remove(path)
+                        self.local.prune_empty_parents(path)
+                    result.deleted_entries.append(path)
             if not dry_run and not result.failures:
                 logger.info("pull committing baseline")
                 self.state.promote_checkpoint_to_baseline(operation_id)
@@ -294,6 +310,25 @@ class GDriveSync:
                 entry.drive_id: entry for entry in baseline.values() if entry.drive_id
             }
             changes, new_token = self.drive.list_changes(token)
+            for change in changes:
+                if change.get("removed") or (change.get("file") or {}).get("trashed"):
+                    continue
+                _entry, _content, warning, failure = self.drive.entry_for_change(
+                    change,
+                    include_content=False,
+                )
+                if warning:
+                    result.warnings.append(warning)
+                    logger.warning(warning)
+                if failure:
+                    result.failures.append(failure)
+                    logger.error(failure)
+            if result.failures:
+                result.elapsed_seconds = time.monotonic() - start
+                raise SyncOperationFailed(
+                    f"incremental pull preflight failed: {result.failures[0]}",
+                    partial_result=result,
+                )
             logger.info("pull incremental applying %s Drive changes", len(changes))
             for change in changes:
                 file_id = change.get("fileId")
@@ -461,6 +496,33 @@ class GDriveSync:
                 len(cloud_entries),
                 len(cloud_deleted),
             )
+            if result.failures:
+                result.elapsed_seconds = time.monotonic() - start
+                raise SyncOperationFailed(
+                    f"incremental sync preflight failed: {result.failures[0]}",
+                    partial_result=result,
+                )
+
+            if conflict_policy != "cloud-wins":
+                cloud_mutations = [
+                    (
+                        path,
+                        local_snapshot.get(path) is not None
+                        and local_snapshot[path].type == "folder",
+                    )
+                    for path in affected_paths
+                    if path in local_changed
+                ]
+                try:
+                    self.drive.validate_cloud_mutations(cloud_mutations)
+                except NotADirectoryError as exc:
+                    result.failures.append(str(exc))
+                    result.elapsed_seconds = time.monotonic() - start
+                    raise SyncOperationFailed(
+                        f"incremental sync preflight failed: {exc}",
+                        partial_result=result,
+                    ) from exc
+
             for path in affected_paths:
                 base = baseline.get(path)
                 local_entry = local_snapshot.get(path)

@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from collections.abc import Iterator
+from pathlib import PurePosixPath
 
 from googleapiclient.errors import HttpError
 from lib.storage_gdrive import GoogleDriveStorage, _FOLDER_MIME, _GDOC_MIME, _parse_modtime
@@ -21,6 +22,13 @@ UNSUPPORTED_MIMES = {
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
 logger = logging.getLogger(__name__)
 GDOC_SAFE_MAX_CHARACTERS = 1_000_000
+
+
+def _shortcut_failure(rel: str) -> str:
+    return (
+        f"{rel}: Google Drive shortcuts are not supported inside the sync root. "
+        "Replace the shortcut with a real folder or file before synchronizing."
+    )
 
 
 def _local_rel_for_drive_item(prefix: str, name: str, mime: str) -> str:
@@ -148,7 +156,7 @@ class DriveTree:
         if is_hidden_rel(rel) or is_excluded(rel, self.exclude):
             return None, None, None, None
         if mime == SHORTCUT_MIME:
-            return None, None, f"{rel}: ignored Drive shortcut", None
+            return None, None, None, _shortcut_failure(rel)
         if mime in UNSUPPORTED_MIMES:
             return None, None, None, f"{rel}: unsupported {UNSUPPORTED_MIMES[mime]}"
         if mime.startswith("application/vnd.google-apps.") and mime not in {_FOLDER_MIME, _GDOC_MIME}:
@@ -257,7 +265,7 @@ class DriveTree:
                         continue
                     seen_names.add(name)
                     if mime == SHORTCUT_MIME:
-                        warnings.append(f"{rel}: ignored Drive shortcut")
+                        failures.append(_shortcut_failure(rel))
                         continue
                     if mime in UNSUPPORTED_MIMES:
                         failures.append(f"{rel}: unsupported {UNSUPPORTED_MIMES[mime]}")
@@ -303,6 +311,40 @@ class DriveTree:
             len(failures),
         )
         return entries, warnings, failures
+
+    def validate_no_shortcuts(self) -> None:
+        """Walk folder metadata and reject shortcuts before a streaming pull."""
+        self.storage._resolve_root_folder()
+        service = self.storage._ensure_service()
+        stack: list[tuple[str, str]] = [(self.storage.root_folder_id, "")]
+        while stack:
+            parent_id, prefix = stack.pop()
+            page_token = None
+            while True:
+                res = _execute_with_retries(
+                    service.files().list(
+                        q=f"'{parent_id}' in parents and trashed=false",
+                        fields="nextPageToken,files(id,name,mimeType)",
+                        pageSize=1000,
+                        pageToken=page_token,
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True,
+                    ),
+                    context=f"Drive shortcut preflight {prefix or '/'}",
+                )
+                for item in res.get("files", []):
+                    name = item["name"]
+                    mime = item.get("mimeType", "")
+                    rel = _local_rel_for_drive_item(prefix, name, mime)
+                    if is_hidden_rel(rel) or is_excluded(rel, self.exclude):
+                        continue
+                    if mime == SHORTCUT_MIME:
+                        raise ValueError(_shortcut_failure(rel))
+                    if mime == _FOLDER_MIME:
+                        stack.append((item["id"], rel))
+                page_token = res.get("nextPageToken")
+                if not page_token:
+                    break
 
     def iter_entries_with_content(
         self,
@@ -367,7 +409,7 @@ class DriveTree:
                         continue
                     seen_names.add(name)
                     if mime == SHORTCUT_MIME:
-                        yield None, None, f"{rel}: ignored Drive shortcut", None
+                        yield None, None, None, _shortcut_failure(rel)
                         continue
                     if mime in UNSUPPORTED_MIMES:
                         yield None, None, None, f"{rel}: unsupported {UNSUPPORTED_MIMES[mime]}"
@@ -457,6 +499,36 @@ class DriveTree:
 
     def mkdir(self, rel: str) -> None:
         self.storage.mkdir(clean_rel(rel))
+
+    def validate_cloud_mutations(
+        self,
+        mutations: list[tuple[str, bool]],
+    ) -> None:
+        """Require every existing cloud parent used by a mutation to be a folder."""
+        checked: set[str] = set()
+        for rel, path_must_be_folder in mutations:
+            clean_path = clean_rel(rel)
+            parts = list(PurePosixPath(clean_path).parts)
+            prefix_count = len(parts) if path_must_be_folder else len(parts) - 1
+            for index in range(1, prefix_count + 1):
+                prefix = "/".join(parts[:index])
+                if prefix in checked:
+                    continue
+                checked.add(prefix)
+                file_id = self.storage._resolve(prefix)
+                if file_id is None:
+                    break
+                mime = self.storage._get_mime(prefix, file_id)
+                if mime == _FOLDER_MIME:
+                    continue
+                if mime == SHORTCUT_MIME:
+                    detail = "a Google Drive shortcut"
+                else:
+                    detail = f"a non-folder object ({mime or 'unknown MIME type'})"
+                raise NotADirectoryError(
+                    f"{prefix}: {detail} blocks synchronized path {clean_path!r}. "
+                    "Replace it with a real folder before synchronizing."
+                )
 
     def entry_after_mkdir(self, rel: str) -> SnapshotEntry:
         rel = clean_rel(rel)

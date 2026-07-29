@@ -2,7 +2,10 @@ import threading
 
 import pytest
 
-from lib.storage_gdrive import GoogleDriveStorage, _sanitize_markdown_upload
+from lib.storage_gdrive import (
+    GoogleDriveStorage,
+    _sanitize_markdown_upload,
+)
 
 
 class _FakeListRequest:
@@ -66,8 +69,12 @@ def _storage_with_files(files):
     storage = GoogleDriveStorage.__new__(GoogleDriveStorage)
     storage._service_lock = threading.Lock()
     storage._path_to_id = {"": "root", "insights": "parent"}
-    storage._path_to_mime = {"": "application/vnd.google-apps.folder"}
+    storage._path_to_mime = {
+        "": "application/vnd.google-apps.folder",
+        "insights": "application/vnd.google-apps.folder",
+    }
     storage._dir_children = {}
+    storage._deleted_ids = set()
     storage._root_resolved = True
     storage.root_folder_id = "root"
     storage._service = _FakeService(files)
@@ -142,3 +149,44 @@ def test_gdrive_md_write_rejects_duplicate_same_name_files():
 
     with pytest.raises(RuntimeError, match="ambiguous Google Drive path"):
         storage.write_bytes("insights/report.md", b"# Report\n")
+
+
+def test_gdrive_mkdir_rejects_existing_shortcut():
+    storage = _storage_with_files([])
+    storage._resolve_root_folder = lambda: None
+    storage._path_to_id["insights/shortcut"] = "shortcut-id"
+    storage._path_to_mime["insights/shortcut"] = (
+        "application/vnd.google-apps.shortcut"
+    )
+
+    with pytest.raises(NotADirectoryError, match="non-folder Drive object"):
+        storage.mkdir("insights/shortcut")
+
+    assert storage._service.files().created == []
+
+
+def test_gdrive_mkdir_ignores_recently_deleted_case_variant():
+    storage = _storage_with_files(
+        [
+            {
+                "id": "deleted-folder",
+                "name": "ANtonio Freire de Rivas",
+                "mimeType": "application/vnd.google-apps.folder",
+            },
+        ]
+    )
+    storage._resolve_root_folder = lambda: None
+    storage._path_to_id["insights/ANtonio Freire de Rivas"] = "deleted-folder"
+    storage._path_to_mime["insights/ANtonio Freire de Rivas"] = (
+        "application/vnd.google-apps.folder"
+    )
+
+    storage.remove("insights/ANtonio Freire de Rivas")
+    storage.mkdir("insights/Antonio Freire de Rivas")
+
+    assert storage._service.files().deleted == ["deleted-folder"]
+    assert (
+        storage._service.files().created[0]["body"]["name"]
+        == "Antonio Freire de Rivas"
+    )
+    assert storage._path_to_id["insights/Antonio Freire de Rivas"] == "created-gdoc"

@@ -73,6 +73,10 @@ class GoogleDriveStorage:
         self._root_folder_spec = root_folder_id or "root"
         self.root_folder_id = self._root_folder_spec
         self._root_resolved = self._root_folder_spec == "root"
+        # Drive's search index can briefly return an object after files.delete()
+        # has completed. Remember deletions for this client lifetime so a
+        # subsequent case-only rename cannot resolve to the removed object.
+        self._deleted_ids: set[str] = set()
         self._local_cache_dir = Path(
             local_cache_dir
             or os.path.expanduser("~/.cache/sictic/gdrive-materialized")
@@ -230,7 +234,14 @@ class GoogleDriveStorage:
                 supportsAllDrives=True,
                 includeItemsFromAllDrives=True,
             ).execute()
-        files = res.get("files", [])
+        # Drive name queries are not reliably case-sensitive, and deleted
+        # objects can remain visible in search results briefly. Enforce the
+        # requested spelling client-side and ignore IDs deleted by this client.
+        files = [
+            item
+            for item in res.get("files", [])
+            if item.get("name") == name and item["id"] not in self._deleted_ids
+        ]
         if not files:
             self._path_to_id[rel] = None
             return None
@@ -588,6 +599,7 @@ class GoogleDriveStorage:
         except HttpError as e:
             if e.resp.status != 404:
                 raise
+        self._deleted_ids.add(fid)
         self._invalidate(rel)
 
     def rmtree(self, rel: str) -> None:
@@ -599,7 +611,14 @@ class GoogleDriveStorage:
         rel = rel.strip("/")
         if not rel:
             return
-        if self._resolve(rel) is not None:
+        existing_id = self._resolve(rel)
+        if existing_id is not None:
+            existing_mime = self._get_mime(rel, existing_id)
+            if existing_mime != _FOLDER_MIME:
+                raise NotADirectoryError(
+                    f"{rel}: cannot create a folder because a non-folder Drive "
+                    f"object already exists there ({existing_mime or 'unknown MIME type'})."
+                )
             if exist_ok:
                 return
             raise FileExistsError(rel)
@@ -612,6 +631,13 @@ class GoogleDriveStorage:
             elif self._resolve(parent_rel) is None:
                 raise FileNotFoundError(parent_rel)
         parent_id = self._resolve_or_raise(parent_rel) if parent_rel else self.root_folder_id
+        if parent_rel:
+            parent_mime = self._get_mime(parent_rel, parent_id)
+            if parent_mime != _FOLDER_MIME:
+                raise NotADirectoryError(
+                    f"{parent_rel}: cannot create {rel!r} because its Drive parent "
+                    f"is not a folder ({parent_mime or 'unknown MIME type'})."
+                )
         service = self._ensure_service()
         with self._service_lock:
             created = service.files().create(
