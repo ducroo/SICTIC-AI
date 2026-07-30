@@ -1,3 +1,5 @@
+from typing import Optional
+
 import typer
 
 from lib.cli import run_command
@@ -12,14 +14,25 @@ app = typer.Typer(
 
 @app.command()
 def run_submission_ready(
-    startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup")
+    startup: Optional[list[str]] = typer.Option(
+        None,
+        "--startup",
+        "-s",
+        help=(
+            "Startup name. Repeat for multiple startups; omit to process "
+            "all Application and Under review submissions."
+        ),
+    ),
 ):
-    output_file = run_command(
-        lambda: submission_ready(startup),
+    result = run_command(
+        lambda: submission_ready(startup or None),
         logger=logger,
         error_prefix="Execution failed",
     )
-    typer.echo(f"Submission readiness check complete. Output saved to {output_file}")
+    if isinstance(result, list):
+        typer.echo("\n".join(result))
+    else:
+        typer.echo(result)
 
 
 if __name__ == "__main__":

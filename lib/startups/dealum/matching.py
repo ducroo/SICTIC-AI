@@ -70,6 +70,7 @@ def reconcile_dealum_startup(
     startup: str,
     *,
     adapter: DealumAdapter | None = None,
+    applications: list[dict[str, Any]] | None = None,
 ) -> DealumMatch:
     requested = startup.strip()
     if not requested:
@@ -92,15 +93,16 @@ def reconcile_dealum_startup(
         requested,
         target_slug,
     )
-    try:
-        applications = adapter.list_applications()
-    except Exception:
-        logger.exception(
-            "[dealum-reconcile] Failed to retrieve Dealum applications: "
-            "requested=%r",
-            requested,
-        )
-        raise
+    if applications is None:
+        try:
+            applications = adapter.list_applications()
+        except Exception:
+            logger.exception(
+                "[dealum-reconcile] Failed to retrieve Dealum applications: "
+                "requested=%r",
+                requested,
+            )
+            raise
 
     logger.info(
         "[dealum-reconcile] Retrieved %d Dealum applications for "

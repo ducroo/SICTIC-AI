@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from lib.adapters.dealum import DealumAdapter
 from lib.startups.dealum import import_startup_from_dealum
@@ -38,8 +38,10 @@ async def ensure_startup_dataset(
     *,
     refresh_dealum: bool = True,
     sync_after_import: bool = True,
+    dealum_applications: list[dict[str, Any]] | None = None,
+    raise_on_error: bool = False,
 ) -> StartupDataStatus:
-    """Optionally hydrate a startup dataset from Dealum without changing no-Dealum behavior."""
+    """Optionally hydrate a startup dataset from Dealum."""
     dataset_slug = canonical_startup_slug(startup)
     storage = get_storage()
     existing_location = find_dataset_location(dataset_slug)
@@ -68,6 +70,7 @@ async def ensure_startup_dataset(
         result = import_startup_from_dealum(
             startup,
             adapter=adapter,
+            applications=dealum_applications,
             activate=False,
         )
         if result.imported and result.changed and sync_after_import:
@@ -84,7 +87,14 @@ async def ensure_startup_dataset(
             dealum_changed=result.changed,
         )
     except Exception as e:
-        logger.warning(f"[{dataset_slug}] Dealum preflight failed; continuing with existing data if available: {e}")
+        if raise_on_error:
+            raise
+        logger.warning(
+            "[%s] Dealum preflight failed; continuing with existing data "
+            "if available: %s",
+            dataset_slug,
+            e,
+        )
         return StartupDataStatus(
             startup=startup,
             dataset_slug=dataset_slug,

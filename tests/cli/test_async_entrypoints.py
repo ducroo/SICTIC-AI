@@ -65,8 +65,8 @@ def test_dd_priorities_cli_awaits_async_function(mocker):
 def test_submission_ready_cli_awaits_async_function(mocker):
     from skills.submission_ready.__main__ import app
 
-    async def fake_submission_ready(startup):
-        return f"insights/{startup}/submission-ready.md"
+    async def fake_submission_ready(startups):
+        return f"insights/{startups[0]}/submission-ready.md"
 
     mocker.patch(
         "skills.submission_ready.__main__.submission_ready",
@@ -75,6 +75,5 @@ def test_submission_ready_cli_awaits_async_function(mocker):
     result = CliRunner().invoke(app, ["--startup", "avientus"])
 
     assert result.exit_code == 0
-    assert "Submission readiness check complete" in result.output
     assert "insights/avientus/submission-ready.md" in result.output
     assert "coroutine object" not in result.output

@@ -79,12 +79,17 @@ def import_startup_from_dealum(
     startup: str,
     *,
     adapter: DealumAdapter | None = None,
+    applications: list[dict[str, Any]] | None = None,
     activate: bool = True,
     download_documents: bool = True,
 ) -> DealumImportResult:
     adapter = adapter or DealumAdapter()
     logger.info("[dealum-import] Starting import: requested=%r", startup)
-    match = reconcile_dealum_startup(startup, adapter=adapter)
+    match = reconcile_dealum_startup(
+        startup,
+        adapter=adapter,
+        applications=applications,
+    )
     application = match.application
     dataset_slug = match.dataset_slug
 
@@ -111,7 +116,6 @@ def import_startup_from_dealum(
         dataset_slug,
         dealum_rel=dealum_rel,
     )
-    answer_hash = stable_hash(application_content_for_hash(application))
     application_path = f"{dealum_rel}/{APPLICATION_MD}"
     manifest_path = f"{dealum_rel}/{MANIFEST_JSON}"
 
@@ -126,6 +130,16 @@ def import_startup_from_dealum(
         adapter.extract_file_links(application),
         key=lambda link: (link.field, link.url, link.filename),
     )
+    attachment_replacements = {
+        link.url: f"dealum-attachment:{link.field}:{link.filename}"
+        for link in file_links
+    }
+    answer_hash = stable_hash(
+        application_content_for_hash(
+            application,
+            attachment_replacements=attachment_replacements,
+        )
+    )
     manifest_files: list[dict[str, Any]] = []
     downloaded_files = 0
 
@@ -135,6 +149,7 @@ def import_startup_from_dealum(
             render_application_markdown(
                 application,
                 dealum_url=match.dealum_url,
+                attachment_replacements=attachment_replacements,
             ),
         )
         storage.write_text(
@@ -168,17 +183,12 @@ def import_startup_from_dealum(
         snapshot_hash = stable_hash(
             {
                 "application_hash": answer_hash,
-                "dealum_url": match.dealum_url,
-                "application_date": match.application_date,
-                "selection_method": match.selection_method,
                 "files": [
                     {
                         key: item.get(key)
                         for key in (
                             "field",
-                            "url",
                             "filename",
-                            "path",
                             "sha256",
                         )
                     }

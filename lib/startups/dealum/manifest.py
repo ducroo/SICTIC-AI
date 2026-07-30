@@ -66,16 +66,43 @@ def file_metadata_changed(
 
 def application_content_for_hash(
     application: dict[str, Any],
+    *,
+    attachment_replacements: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": application.get("id"),
         "name": application.get("name"),
         "code": application.get("code"),
-        "step": application.get("step"),
-        "tags": application.get("tags") or [],
+        "tags": sorted(str(tag) for tag in application.get("tags") or []),
         "contact": application.get("contact") or {},
-        "answers": application.get("answers") or {},
+        "answers": replace_attachment_urls(
+            application.get("answers") or {},
+            attachment_replacements or {},
+        ),
     }
+
+
+def replace_attachment_urls(
+    value: Any,
+    replacements: dict[str, str],
+) -> Any:
+    """Replace volatile Dealum attachment URLs with stable identities."""
+    if isinstance(value, str):
+        normalized = value
+        for url, identity in replacements.items():
+            normalized = normalized.replace(url, identity)
+        return normalized
+    if isinstance(value, list):
+        return [
+            replace_attachment_urls(item, replacements)
+            for item in value
+        ]
+    if isinstance(value, dict):
+        return {
+            key: replace_attachment_urls(item, replacements)
+            for key, item in value.items()
+        }
+    return value
 
 
 def stable_json(value: Any) -> str:

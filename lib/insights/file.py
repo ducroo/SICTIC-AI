@@ -15,7 +15,7 @@ from lib.insights.paths import (
     insight_manifest_path,
     model_slug,
 )
-from lib.insights.selection import find_any, find_reusable
+from lib.insights.selection import find_any, find_reusable, is_reusable
 from lib.logger import get_logger
 from lib.storage import get_storage
 
@@ -35,6 +35,7 @@ class InsightFile:
         source_datasets: list[str] | None = None,
         prompt_key: str | None = None,
         *,
+        run_id: str | None = None,
         _path_override: str | None = None,
     ):
         self.dataset = dataset
@@ -42,6 +43,7 @@ class InsightFile:
         self.model = model
         self.identifier = identifier
         self.subdir = subdir
+        self.run_id = run_id
         self.source_datasets = source_datasets or [dataset]
         self.prompt_key = prompt_key or ""
         self._path_override = _path_override
@@ -52,6 +54,7 @@ class InsightFile:
             self.dataset,
             self.skill,
             subdir=self.subdir,
+            run_id=self.run_id,
         )
 
     @property
@@ -93,6 +96,9 @@ class InsightFile:
     def find_any(self) -> InsightFile | None:
         return find_any(self)
 
+    def is_reusable(self) -> bool:
+        return is_reusable(self)
+
     def save(self, content: str) -> None:
         storage = get_storage()
         if model_slug(self.model) == "manual":
@@ -126,6 +132,7 @@ class InsightFile:
             model=model,
             identifier=self.identifier,
             subdir=self.subdir,
+            run_id=self.run_id,
             source_datasets=self.source_datasets,
             prompt_key=self.prompt_key,
         )
@@ -139,6 +146,7 @@ class InsightFile:
             model=candidate_model,
             identifier=self.identifier,
             subdir=self.subdir,
+            run_id=self.run_id,
             source_datasets=self.source_datasets,
             prompt_key=self.prompt_key,
             _path_override=f"{self.directory}/{filename}",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -178,6 +179,22 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_ensure_startup_dataset(startup, **_kwargs):
         return SimpleNamespace(dataset_slug="example-startup", dataset_exists=True)
 
+    class FakeSubmissionDealumAdapter:
+        dealroom_id = "test"
+
+        def is_configured(self):
+            return True
+
+        def list_applications(self):
+            return [
+                {
+                    "id": 1,
+                    "name": "example-startup",
+                    "code": "EXAMPLE-1",
+                    "step": "Application",
+                }
+            ]
+
     people_discovery = importlib.import_module("lib.people.discovery")
     startup_sources = importlib.import_module("lib.startups.sources")
     advocates_mod = importlib.import_module("skills.advocates.advocates")
@@ -231,6 +248,32 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         submission_ready_mod,
         "dataset_chat",
         fake_submission_dataset_chat,
+    )
+    monkeypatch.setattr(
+        submission_ready_mod,
+        "DealumAdapter",
+        FakeSubmissionDealumAdapter,
+    )
+    monkeypatch.setattr(
+        submission_ready_mod,
+        "import_startup_from_dealum",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            dataset_slug="example-startup",
+            changed=False,
+        ),
+    )
+    monkeypatch.setattr(
+        submission_ready_mod,
+        "llm_chat",
+        lambda *_args, **_kwargs: asyncio.sleep(
+            0,
+            result=(
+                '{"proposed_action":"Move to Under review",'
+                '"rationale":"Complete.",'
+                '"eligibility_concerns":[],'
+                '"missing_or_inconsistent_information":[]}'
+            ),
+        ),
     )
     monkeypatch.setattr(person_profile_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(team_profile_mod, "llm_chat", fake_llm_chat)

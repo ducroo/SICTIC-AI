@@ -144,12 +144,21 @@ async def test_submission_ready_writes_report_from_local_fixture(
 ):
     from skills.submission_ready.submission_ready import submission_ready
 
-    path = await submission_ready("example-startup")
+    result = await submission_ready("example-startup")
 
-    assert path.startswith("storage/startups/example-startup/insights/")
-    report = get_storage().read_text(path)
-    assert "Completeness and Eligibility" in report
-    assert "| Pass | Fixture evidence |" in report
+    assert "Proposed action:" in result
+    root = (
+        "storage/startups/example-startup/insights/submission-ready"
+    )
+    run_id = get_storage().list(root)[0]
+    files = get_storage().list(f"{root}/{run_id}")
+    assert "checklist-test-model-1b.md" in files
+    assert "response-test-model-1b.md" in files
+    checklist = get_storage().read_text(
+        f"{root}/{run_id}/checklist-test-model-1b.md"
+    )
+    assert "Completeness and Eligibility" in checklist
+    assert "| Pass | Fixture evidence |" in checklist
 
 
 @pytest.mark.asyncio

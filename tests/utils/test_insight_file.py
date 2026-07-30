@@ -184,3 +184,46 @@ def test_save_same_content_preserves_output_mtime(mock_env):
     insight.save("profile")
 
     assert storage.mtime(insight.path) == 123
+
+
+def test_insight_file_supports_timestamped_run_directory(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile(
+        "avientus",
+        "submission_ready",
+        "ollama/test_model:1b",
+        identifier="checklist",
+        subdir=True,
+        run_id="20260730T221500Z",
+    )
+
+    assert insight.path == (
+        "storage/startups/avientus/insights/submission-ready/"
+        "20260730T221500Z/checklist-test-model-1b.md"
+    )
+
+
+def test_timestamped_insight_can_be_reused_for_exact_model(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile(
+        "avientus",
+        "submission_ready",
+        "ollama/test_model:1b",
+        identifier="checklist",
+        subdir=True,
+        run_id="20260730T221500Z",
+        prompt_key="checklist prompt",
+    )
+    insight.save("checklist")
+
+    assert insight.is_reusable() is True
+    changed_prompt = InsightFile(
+        "avientus",
+        "submission_ready",
+        "ollama/test_model:1b",
+        identifier="checklist",
+        subdir=True,
+        run_id="20260730T221500Z",
+        prompt_key="changed prompt",
+    )
+    assert changed_prompt.is_reusable() is False

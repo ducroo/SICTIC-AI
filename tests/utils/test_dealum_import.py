@@ -219,6 +219,65 @@ def test_dealum_import_failure_preserves_previous_snapshot_and_timestamp(
     )
 
 
+def test_dealum_stage_and_operational_dates_do_not_change_snapshot(
+    mock_env,
+):
+    first = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(),
+    )
+    changed_application = {
+        **APPLICATION,
+        "step": "Under review",
+        "moveDate": 1_999_999_999_000,
+        "reviewDate": 1_999_999_999_001,
+    }
+
+    second = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(changed_application),
+    )
+
+    assert first.changed is True
+    assert second.changed is False
+    application_md = get_storage().read_text(second.application_path)
+    assert "- Step:" not in application_md
+    manifest = json.loads(get_storage().read_text(second.manifest_path))
+    assert manifest["step"] == "Under review"
+
+
+def test_dealum_rotated_attachment_url_does_not_change_snapshot(
+    mock_env,
+):
+    import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(),
+    )
+    changed_application = {
+        **APPLICATION,
+        "answers": {
+            **APPLICATION["answers"],
+            "pitch_deck": (
+                "https://files.dealum.com/rotated-token/"
+                "Avientus_Deck.pdf"
+            ),
+        },
+    }
+
+    second = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(changed_application),
+    )
+
+    assert second.changed is False
+    application_md = get_storage().read_text(second.application_path)
+    assert "rotated-token" not in application_md
+    assert (
+        "dealum-attachment:pitch_deck:Avientus_Deck.pdf"
+        in application_md
+    )
+
+
 def test_dealum_sync_due_is_per_startup_and_uses_six_hour_timestamp(
     mock_env,
     mocker,
