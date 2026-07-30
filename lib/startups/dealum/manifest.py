@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 
 DEALUM_SUBDIR = "dealum"
 MANIFEST_JSON = "manifest.json"
+LAST_SUCCESSFUL_PULL_AT = "last_successful_pull_at"
 
 
 def dealum_dataset_rel(dataset_slug: str) -> str:
