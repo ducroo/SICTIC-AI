@@ -3,8 +3,8 @@ from pathlib import Path
 import typer
 
 from lib.cli import run_command
-from lib.insights import InsightFile
 from lib.logger import get_logger
+from skills.dd_checks_agent.dd_checks_agent import save_report
 
 logger = get_logger(__name__)
 app = typer.Typer(
@@ -24,18 +24,13 @@ def main(
         help="Freshness/cache key recorded for this report.",
     ),
 ):
-    def save() -> str:
-        insight = InsightFile(
-            dataset=dataset,
-            skill="dd_checks",
-            model="anthropic/claude-code-agent",
-            prompt_key=prompt_key,
-        )
-        insight.save(content_file.read_text(encoding="utf-8"))
-        return insight.path
-
+    logger.info("Saving agent-orchestrated dd_checks report for %s", dataset)
     result = run_command(
-        save, logger=logger, error_prefix="Failed to save dd_checks_agent report"
+        lambda: save_report(
+            dataset, content_file.read_text(encoding="utf-8"), prompt_key
+        ),
+        logger=logger,
+        error_prefix="Failed to save dd_checks_agent report",
     )
     typer.echo(result)
 

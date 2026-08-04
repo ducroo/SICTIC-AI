@@ -3,18 +3,17 @@ from pathlib import Path
 import typer
 
 from lib.cli import run_command
-from lib.insights.file import InsightFile
 from lib.logger import get_logger
+from skills.startup_profile_agent.startup_profile_agent import save_report
 
 logger = get_logger(__name__)
-
 app = typer.Typer(
     help="Persists an agent-authored startup profile report through InsightFile."
 )
 
 
 @app.command()
-def save_report(
+def main(
     dataset: str = typer.Argument(..., help="Startup dataset name"),
     content_file: Path = typer.Option(
         ...,
@@ -27,24 +26,15 @@ def save_report(
         help="Prompt/version key recorded for insight freshness tracking",
     ),
 ) -> None:
-    def _save() -> str:
-        logger.info("Saving agent-orchestrated startup profile for %s", dataset)
-        content = content_file.read_text(encoding="utf-8")
-        insight = InsightFile(
-            dataset=dataset,
-            skill="startup_profile",
-            model="anthropic/claude-code-agent",
-            prompt_key=prompt_key,
-        )
-        insight.save(content)
-        return insight.path
-
-    path = run_command(
-        _save,
+    logger.info("Saving agent-orchestrated startup profile for %s", dataset)
+    result = run_command(
+        lambda: save_report(
+            dataset, content_file.read_text(encoding="utf-8"), prompt_key
+        ),
         logger=logger,
         error_prefix="Failed to save startup profile report",
     )
-    typer.echo(path)
+    typer.echo(result)
 
 
 if __name__ == "__main__":

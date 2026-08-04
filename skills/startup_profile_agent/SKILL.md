@@ -75,7 +75,7 @@ Given a `<DATASET>` (startup dataset name):
    `startup_profile` insight for the same dataset:
 
    ```bash
-   conda run -n sictic-env python -m skills.startup_profile_agent.save_report "<slug>" --content-file <path-to-written-report>
+   conda run -n sictic-env python -m skills.startup_profile_agent "<slug>" --content-file <path-to-written-report>
    ```
 
    The command prints the resulting insight path to stdout.
@@ -96,5 +96,5 @@ Run startup_profile_agent for "<STARTUP_NAME>"
 Only the final persistence step (workflow step 5) is a script:
 
 ```bash
-conda run -n sictic-env python -m skills.startup_profile_agent.save_report "<slug>" --content-file <path>
+conda run -n sictic-env python -m skills.startup_profile_agent "<slug>" --content-file <path>
 ```

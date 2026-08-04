@@ -197,7 +197,7 @@ Write the assembled Markdown to a temporary file, then persist it as an insight 
 helper (the *only* supported way to save this report — do not hand-construct insight paths):
 
 ```bash
-conda run -n sictic-env python -m skills.dd_checks_agent.save_report "<dataset>" --content-file <path-to-written-report>
+conda run -n sictic-env python -m skills.dd_checks_agent "<dataset>" --content-file <path-to-written-report>
 ```
 
 This calls `InsightFile(dataset=dataset, skill="dd_checks", model="anthropic/claude-code-agent",
@@ -208,7 +208,7 @@ colliding with — a litellm-generated `dd_checks` report for the same dataset.
 ### 9. Report back
 
 Tell the user the due diligence review is complete and report the exact `insight.path` printed by
-`save_report`.
+the persistence command in step 8.
 
 ## Usage
 
@@ -222,5 +222,5 @@ Run dd_checks_agent for "<STARTUP_NAME>"
 Only the final persistence step is a script:
 
 ```bash
-conda run -n sictic-env python -m skills.dd_checks_agent.save_report "<dataset>" --content-file <path>
+conda run -n sictic-env python -m skills.dd_checks_agent "<dataset>" --content-file <path>
 ```

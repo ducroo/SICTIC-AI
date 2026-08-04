@@ -1,6 +1,6 @@
 from typer.testing import CliRunner
 
-from skills.dd_checks_agent.save_report import app
+from skills.dd_checks_agent.__main__ import app
 
 
 class FakeInsightFile:
@@ -19,7 +19,9 @@ def test_save_report_cli_builds_insight_file_with_defaults(tmp_path, mocker):
     content_file = tmp_path / "report.md"
     content_file.write_text("# M&A Due Diligence Checks\n\nbody", encoding="utf-8")
 
-    mocker.patch("skills.dd_checks_agent.save_report.InsightFile", FakeInsightFile)
+    mocker.patch(
+        "skills.dd_checks_agent.dd_checks_agent.InsightFile", FakeInsightFile
+    )
 
     result = CliRunner().invoke(
         app, ["avientus", "--content-file", str(content_file)]
@@ -43,7 +45,9 @@ def test_save_report_cli_accepts_custom_prompt_key(tmp_path, mocker):
     content_file = tmp_path / "report.md"
     content_file.write_text("content", encoding="utf-8")
 
-    mocker.patch("skills.dd_checks_agent.save_report.InsightFile", FakeInsightFile)
+    mocker.patch(
+        "skills.dd_checks_agent.dd_checks_agent.InsightFile", FakeInsightFile
+    )
 
     result = CliRunner().invoke(
         app,
@@ -72,7 +76,7 @@ def test_save_report_cli_reports_errors_and_exits_nonzero(tmp_path, mocker):
             raise RuntimeError("disk full")
 
     mocker.patch(
-        "skills.dd_checks_agent.save_report.InsightFile", ExplodingInsightFile
+        "skills.dd_checks_agent.dd_checks_agent.InsightFile", ExplodingInsightFile
     )
 
     result = CliRunner().invoke(
