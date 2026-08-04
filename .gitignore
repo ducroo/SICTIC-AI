@@ -24,6 +24,7 @@ __pycache__/
 .storage-mirror/
 .installed-skills/
 gdrive-mirror/
+local-storage-dev/
 gdrive-sync/.state/
 gdrive-sync/logs/
 gdrive_sync_state/

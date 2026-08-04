@@ -78,7 +78,7 @@ hardcoding storage paths.
   * Strict error reporting is mandatory.
   * Utility modules, adapters, and core functions must **never** call `sys.exit()` or `raise typer.Exit()`. They must raise standard Python Exceptions (e.g., `ValueError`, `RuntimeError`).
   * Only the top-level CLI wrapper (`@app.command()`) is allowed to catch these exceptions, log them, and execute a graceful `raise typer.Exit(code=1)`.
-* **LLM Inference (LiteLLM):** All LLM inferences (both Text Generation and Embeddings) MUST be routed through the `litellm` library. Direct API calls to specific providers (like Ollama, OpenAI, Anthropic) are strictly forbidden for inference.
+* **LLM Inference (LiteLLM):** All LLM inferences (both Text Generation and Embeddings) MUST be routed through the `litellm` library. Direct API calls to specific providers (like Ollama, OpenAI, Anthropic) are strictly forbidden for inference. This applies to unattended/batch-mode skills. Agent-orchestrated skills (e.g. `dd_checks_agent`, `startup_profile_agent`) are an explicit, documented exception per the SICTIC-AI Constitution's Principle II (Dual-Mode LLM Execution) — they are executed directly by a live Claude Code agent and make no `litellm` calls at all.
 
 ## Architecture
 
