@@ -38,7 +38,16 @@ def chat_cmd(
     llm_instructions: Optional[str] = typer.Argument(None, help="Optional formatting/anti-hallucination instructions.")
 ):
     response = run_command(
-        lambda: dataset_chat(dataset_name, questions, llm_instructions),
+        lambda: dataset_chat(
+            dataset_name,
+            questions,
+            f"Query: {questions}"
+            + (
+                f"\n\nInstructions: {llm_instructions}"
+                if llm_instructions
+                else ""
+            ),
+        ),
         logger=logger,
     )
     if response:

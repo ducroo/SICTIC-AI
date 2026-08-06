@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, TypeVar
@@ -27,17 +27,15 @@ from lib.startups.dealum import (
     reconcile_dealum_startup,
 )
 from lib.storage import get_storage
-from skills.batch_audit.batch_audit import ChecklistParser
+from skills.batch_audit.batch_audit import batch_audit
+from skills.batch_audit.checklist import parse_checklist
+from skills.batch_audit.rendering import json_to_markdown_table
+from skills.batch_audit.schema import audit_errors, validate_audit_document
 from skills.config_load.config_load import config_load
-from skills.dataset_chat.dataset_chat import (
-    _fallback_trigger,
-    dataset_chat,
-)
 from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
 
-VALID_JUDGMENTS = {"Pass", "Fail", "Unclear"}
 IN_SCOPE_STAGES = {
     "application": "Application",
     "under review": "Under review",
@@ -116,163 +114,6 @@ def _table_cell(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def _source_documents(value: Any) -> str:
-    if isinstance(value, list):
-        sources = [str(item).strip() for item in value if str(item).strip()]
-        return "; ".join(sources) if sources else "None"
-    rendered = str(value or "").strip()
-    return rendered or "None"
-
-
-def _unclear_result(assessment: str, next_step: str) -> dict[str, str]:
-    return {
-        "judgment": "Unclear",
-        "assessment": _table_cell(assessment),
-        "source_documents": "None",
-        "proposed_next_step": _table_cell(next_step),
-    }
-
-
-def _parse_check_result(raw_response: str) -> dict[str, str]:
-    result = repair_json_payload(raw_response)
-    if not isinstance(result, dict):
-        raise ValueError("The automated response was not a JSON object.")
-
-    judgment = str(result.get("judgment", "")).strip().title()
-    if judgment not in VALID_JUDGMENTS:
-        raise ValueError(
-            "The automated response returned an invalid judgment: "
-            f"{judgment or 'empty'}."
-        )
-    return {
-        "judgment": _table_cell(judgment),
-        "assessment": _table_cell(
-            result.get(
-                "assessment",
-                "No written assessment was returned.",
-            )
-        ),
-        "source_documents": _table_cell(
-            _source_documents(result.get("source_documents"))
-        ),
-        "proposed_next_step": _table_cell(
-            result.get("proposed_next_step", "Review manually.")
-        ),
-    }
-
-
-async def run_submission_query(
-    dataset_name: str,
-    query_text: str,
-    idx_string: str,
-    llm_instructions: str,
-) -> dict[str, str]:
-    """Evaluate one screening item with three attempts for technical failures."""
-    logger.info(
-        "[%s] Checking submission item %s: %s...",
-        dataset_name,
-        idx_string,
-        query_text[:80],
-    )
-
-    async def execute() -> dict[str, str]:
-        raw_response = await dataset_chat(
-            dataset_name,
-            query_text,
-            llm_instructions,
-            strict_insufficient_context=False,
-        )
-        if not raw_response or raw_response.strip() == _fallback_trigger():
-            return _unclear_result(
-                "The submitted Dealum evidence does not establish this item.",
-                "Request the missing or clarifying evidence.",
-            )
-        return _parse_check_result(raw_response)
-
-    return await _retry(
-        f"[{dataset_name}] submission item {idx_string}",
-        execute,
-    )
-
-
-async def _run_checklist(
-    dataset_name: str,
-    checklist: str,
-    llm_instructions: str,
-    table_lines: str,
-) -> str:
-    parser = ChecklistParser()
-    parsed_items: list[dict[str, Any]] = []
-    for line in checklist.strip().splitlines():
-        if not line.strip():
-            continue
-        item_type, idx_string, display_text, query = parser.parse(line)
-        if item_type == "header":
-            parsed_items.append(
-                {
-                    "type": "header",
-                    "idx_string": idx_string,
-                    "title": display_text,
-                }
-            )
-        else:
-            parsed_items.append(
-                {
-                    "type": "question",
-                    "idx_string": idx_string,
-                    "display": display_text,
-                    "query": query,
-                }
-            )
-
-    if not any(item["type"] == "header" for item in parsed_items):
-        raise ValueError("No checklist chapter title found.")
-
-    tasks = []
-    for item in parsed_items:
-        if item["type"] != "question":
-            continue
-        task = asyncio.create_task(
-            run_submission_query(
-                dataset_name,
-                item["query"],
-                item["idx_string"],
-                llm_instructions,
-            )
-        )
-        item["task"] = task
-        tasks.append(task)
-    if tasks:
-        await asyncio.gather(*tasks)
-
-    for item in parsed_items:
-        if item["type"] == "header":
-            table_lines += (
-                f"\n| {item['idx_string']} | "
-                f"**{_table_cell(item['title'])}** | | | | |"
-            )
-            continue
-        result = item["task"].result()
-        table_lines += (
-            f"\n| {item['idx_string']} | {_table_cell(item['display'])} | "
-            f"{result['judgment']} | {result['assessment']} | "
-            f"{result['source_documents']} | "
-            f"{result['proposed_next_step']} |"
-        )
-    return table_lines
-
-
-def _checklist_prompt_key(check_config: dict[str, str]) -> str:
-    return "\n\n".join(
-        [
-            check_config["policy"],
-            check_config["checklist"],
-            check_config["llm_instructions"],
-            check_config["table_lines"],
-        ]
-    )
-
-
 def _insight_for_run(
     startup_slug: str,
     *,
@@ -318,15 +159,6 @@ def _reusable_run_insight(
         )
         if candidate.is_reusable():
             return candidate
-    if identifier == "checklist":
-        legacy = InsightFile(
-            dataset=startup_slug,
-            skill="submission_ready",
-            model=llm_model(),
-            prompt_key=prompt_key,
-        )
-        if legacy.is_reusable():
-            return legacy
     return None
 
 
@@ -396,13 +228,11 @@ async def _generate_proposed_action(
     response_instructions: str,
     response_schema: str,
 ) -> tuple[str, str]:
-    prompt = "\n\n".join(
-        [
-            response_instructions,
-            f"Current Dealum stage: {stage}",
-            "Current submission checklist:\n" + checklist_report,
-            response_schema,
-        ]
+    prompt = _proposed_action_prompt(
+        stage=stage,
+        checklist_report=checklist_report,
+        response_instructions=response_instructions,
+        response_schema=response_schema,
     )
 
     async def execute() -> dict[str, Any]:
@@ -413,6 +243,23 @@ async def _generate_proposed_action(
 
     result = await _retry("Proposed-action analysis", execute)
     return _render_proposed_action(stage, result), prompt
+
+
+def _proposed_action_prompt(
+    *,
+    stage: str,
+    checklist_report: str,
+    response_instructions: str,
+    response_schema: str,
+) -> str:
+    return "\n\n".join(
+        [
+            response_instructions,
+            f"Current Dealum stage: {stage}",
+            "Current submission checklist:\n" + checklist_report,
+            response_schema,
+        ]
+    )
 
 
 def _render_concerns(concerns: list[str]) -> str:
@@ -566,38 +413,71 @@ async def _process_candidate(
         adapter=adapter,
         force_refresh=force_refresh,
     )
-    checklist_prompt = _checklist_prompt_key(check_config)
-    reusable_checklist = _reusable_run_insight(
-        startup_slug,
-        identifier="checklist",
-        prompt_key=checklist_prompt,
+    llm_instructions = (
+        f"{check_config['policy']}\n\n"
+        f"{check_config['llm_instructions']}"
     )
-
-    if reusable_checklist is not None:
-        checklist_report = reusable_checklist.content()
-        response_prompt = "\n\n".join(
-            [
-                check_config["response_instructions"],
-                f"Current Dealum stage: {stage}",
-                "Current submission checklist:\n" + checklist_report,
-                check_config["response_schema"],
-            ]
+    audit_insight = await batch_audit(
+        dataset_name=startup_slug,
+        checklist_markdown=check_config["checklist"],
+        skill_name="submission_ready",
+        llm_instructions=llm_instructions,
+        status_scale=["Pass", "Fail", "Unclear"],
+        missing_evidence_status="Unclear",
+    )
+    audit = validate_audit_document(json.loads(audit_insight.content()))
+    failed_checks = audit_errors(audit)
+    if failed_checks:
+        details = "; ".join(
+            f"{check['number']}: {check['error']}"
+            for check in failed_checks
         )
-        reusable_response = _reusable_run_insight(
+        raise RuntimeError(
+            f"Submission audit contains {len(failed_checks)} technical "
+            f"failure(s): {details}"
+        )
+    table = json_to_markdown_table(audit_insight)
+    checklist_report = (
+        "# Completeness and Eligibility Check for "
+        f"{match.matched_name}\n\n"
+        "Scope: Dealum submission completeness and SICTIC initial "
+        "eligibility. This is not a pitch-readiness or "
+        "investment-quality assessment.\n\n"
+        f"{table}\n"
+    )
+    checklist_prompt = (
+        f"Rendered from structured audit: {audit_insight.path}\n\n"
+        + audit_insight.content()
+    )
+    response_prompt = _proposed_action_prompt(
+        stage=stage,
+        checklist_report=checklist_report,
+        response_instructions=check_config["response_instructions"],
+        response_schema=check_config["response_schema"],
+    )
+    reusable_response = _reusable_run_insight(
+        startup_slug,
+        identifier="response",
+        prompt_key=response_prompt,
+    )
+    if reusable_response is not None:
+        reusable_checklist = _insight_for_run(
             startup_slug,
-            identifier="response",
-            prompt_key=response_prompt,
+            identifier="checklist",
+            run_id=reusable_response.run_id,
+            prompt_key=checklist_prompt,
         )
-        if reusable_response is not None:
-            return SubmissionReadyResult(
-                startup=match.matched_name,
-                stage=stage,
-                status="unchanged; reused existing analysis",
-                checklist_path=reusable_checklist.path,
-                response_path=reusable_response.path,
-            )
-    else:
-        checklist_report = ""
+        return SubmissionReadyResult(
+            startup=match.matched_name,
+            stage=stage,
+            status="unchanged; reused existing analysis",
+            checklist_path=(
+                reusable_checklist.path
+                if reusable_checklist.exists()
+                else audit_insight.path
+            ),
+            response_path=reusable_response.path,
+        )
 
     checklist_insight = _insight_for_run(
         startup_slug,
@@ -605,29 +485,7 @@ async def _process_candidate(
         run_id=run_id,
         prompt_key=checklist_prompt,
     )
-    if reusable_checklist is not None:
-        checklist_report = reusable_checklist.content()
-        checklist_insight.save(checklist_report)
-    else:
-        llm_instructions = (
-            f"{check_config['policy']}\n\n"
-            f"{check_config['llm_instructions']}"
-        )
-        table = await _run_checklist(
-            startup_slug,
-            check_config["checklist"],
-            llm_instructions,
-            check_config["table_lines"],
-        )
-        checklist_report = (
-            "# Completeness and Eligibility Check for "
-            f"{match.matched_name}\n\n"
-            "Scope: Dealum submission completeness and SICTIC initial "
-            "eligibility. This is not a pitch-readiness or "
-            "investment-quality assessment.\n\n"
-            f"{table}\n"
-        )
-        checklist_insight.save(checklist_report)
+    checklist_insight.save(checklist_report)
 
     response_report, response_prompt = await _generate_proposed_action(
         stage=stage,
@@ -642,15 +500,10 @@ async def _process_candidate(
         prompt_key=response_prompt,
     )
     response_insight.save(response_report)
-    status = (
-        "stage changed; reused checklist and generated proposed action"
-        if reusable_checklist is not None
-        else "generated new checklist and proposed action"
-    )
     return SubmissionReadyResult(
         startup=match.matched_name,
         stage=stage,
-        status=status,
+        status="generated checklist and proposed action",
         checklist_path=checklist_insight.path,
         response_path=response_insight.path,
     )
@@ -733,6 +586,29 @@ def _latest_existing_artifacts(
         response_path = response.path if response.exists() else None
         if checklist_path or response_path:
             return checklist_path, response_path
+    try:
+        checklist_title = parse_checklist(
+            config_load()["submission_ready"]["checklist"]
+        ).title
+        audit_insight = InsightFile(
+            dataset=location.slug,
+            skill="batch_audit",
+            model=llm_model(),
+            identifier=f"submission_ready-{checklist_title}",
+            subdir=True,
+            extension="json",
+        ).find_any()
+        if audit_insight is not None:
+            audit = validate_audit_document(
+                json.loads(audit_insight.content())
+            )
+            if not audit_errors(audit):
+                return audit_insight.path, None
+    except (KeyError, ValueError, json.JSONDecodeError):
+        logger.warning(
+            "[%s] Could not resolve an older structured submission audit.",
+            startup,
+        )
     return None, None
 
 

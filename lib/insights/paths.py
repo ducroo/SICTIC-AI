@@ -36,12 +36,13 @@ def insight_filename(
     *,
     identifier: str | None,
     subdir: bool,
+    extension: str = "md",
 ) -> str:
     identity = identifier or dataset
     core = slugify(f"{identity}-{model_slug(model)}")
     if subdir:
-        return f"{core}.md"
-    return f"{slugify(skill)}-{core}.md"
+        return f"{core}.{extension}"
+    return f"{slugify(skill)}-{core}.{extension}"
 
 
 def insight_base(

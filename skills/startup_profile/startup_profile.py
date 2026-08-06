@@ -51,8 +51,11 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
 
     profile_output = await dataset_chat(
         dataset_name=dataset_name,
-        questions=questions,
-        llm_instructions=llm_instructions,
+        queries=questions,
+        prompt=(
+            f"Query: {'\n\n'.join(questions)}\n\n"
+            f"Instructions: {llm_instructions}"
+        ),
     )
 
     if profile_output is None:

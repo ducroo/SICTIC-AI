@@ -5,6 +5,7 @@ from lib.insights import InsightFile
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.batch_audit.batch_audit import batch_audit
+from skills.batch_audit.rendering import json_to_markdown_table
 from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.slugify import slugify
 from lib.logger import get_logger
@@ -36,8 +37,11 @@ async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_i
     industry_instructions = dd_config['industry_type_llm_instructions']
     industry_response = await dataset_chat(
         dataset_name=startup_name_lower,
-        questions=industry_prompt,
-        llm_instructions=industry_instructions,
+        queries=industry_prompt,
+        prompt=(
+            f"Query: {industry_prompt}\n\n"
+            f"Instructions: {industry_instructions}"
+        ),
     )
     
     logger.info(f"[{startup_name_lower}] Raw Industry Type LLM Response: {industry_response}")
@@ -48,6 +52,7 @@ async def chapter_by_chapter(
     sorted_chapters: list,
     industry_type: str,
     dd_config: dict,
+    batch_instructions: str,
 ) -> list[str]:
     checklists = dd_config['checklists']
     sections = []
@@ -60,7 +65,21 @@ async def chapter_by_chapter(
             
         checklist_string = checklists[checklist_key]
         try:
-            chapter_output = await batch_audit(dataset_name=startup_name_lower, checklist_string=checklist_string)
+            audit_insight = await batch_audit(
+                dataset_name=startup_name_lower,
+                checklist_markdown=checklist_string,
+                skill_name="dd_checks",
+                llm_instructions=batch_instructions,
+                status_scale=[
+                    "Not Found",
+                    "Critical",
+                    "Borderline",
+                    "Sufficient",
+                    "Fine",
+                ],
+                missing_evidence_status="Not Found",
+            )
+            chapter_output = json_to_markdown_table(audit_insight)
             sections.append(f"## Chapter: {chapter}\n\n{chapter_output}\n")
         except Exception as e:
             sections.append(
@@ -86,6 +105,7 @@ async def dd_checks(startup: str) -> str:
         
     config = config_load()
     dd_config = config['dd_checks']
+    batch_instructions = config["batch_audit"]["llm_instructions"]
     checklists = dd_config['checklists']
 
     chapters, allowed_industry_types = set(), set()
@@ -105,10 +125,12 @@ async def dd_checks(startup: str) -> str:
         sorted_chapters,
         industry_type,
         dd_config,
+        batch_instructions,
     )
     prompt_key = (
         dd_config["industry_type_query"]
         + dd_config["industry_type_llm_instructions"]
+        + batch_instructions
         + "\n".join(
             f"{key}:{value}"
             for key, value in sorted(checklists.items())

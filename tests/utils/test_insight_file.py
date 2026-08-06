@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 from lib.insights import InsightFile
 from lib.storage import get_storage
@@ -33,6 +34,54 @@ def test_paths_match_existing_convention(mock_env):
         "storage/startups/daav/insights/"
         "startup-profile-daav-gemma4-31b-nvfp4.md"
     )
+
+
+def test_json_extension_uses_existing_naming_and_freshness(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile(
+        "avientus",
+        "dd_checks",
+        "ollama/qwen3:8b",
+        identifier="Legal Due Diligence",
+        extension="json",
+        prompt_key="structured checklist",
+    )
+
+    insight.save('{"status": "Fine"}')
+
+    assert insight.filename == "dd-checks-legal-due-diligence-qwen3-8b.json"
+    assert insight.content() == '{"status": "Fine"}'
+    assert insight.is_reusable() is True
+
+
+def test_find_any_respects_json_extension(mock_env, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/new-model")
+    _create_indexed_dataset("avientus", "startups", "revision")
+    generated = InsightFile(
+        "avientus",
+        "dd_checks",
+        "ollama/old-model",
+        identifier="Legal",
+        extension="json",
+        prompt_key="prompt",
+    )
+    generated.save("{}")
+
+    requested = InsightFile(
+        "avientus",
+        "dd_checks",
+        "ollama/new-model",
+        identifier="Legal",
+        extension="json",
+        prompt_key="prompt",
+    )
+
+    assert requested.find_any().path == generated.path
+
+
+def test_rejects_invalid_insight_extension(mock_env):
+    with pytest.raises(ValueError, match="Invalid insight extension"):
+        InsightFile("avientus", "dd_checks", "model", extension="../json")
 
 
 def test_save_and_find_reusable_by_ranked_model(mock_env, monkeypatch):

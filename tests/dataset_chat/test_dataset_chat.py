@@ -24,7 +24,11 @@ async def test_dataset_chat_basic(mocker):
     mock_llm.side_effect = mock_llm_coro
 
     # Execute
-    output = await dataset_chat("test_dataset", "What is testing?")
+    output = await dataset_chat(
+        "test_dataset",
+        "What is testing?",
+        "Query: What is testing?",
+    )
 
     # Assert
     assert output == "This is the LLM response."
@@ -32,7 +36,7 @@ async def test_dataset_chat_basic(mocker):
     mock_llm.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_dataset_chat_uses_list_as_multi_query_and_prompt(mocker):
+async def test_dataset_chat_separates_search_queries_from_prompt(mocker):
     from lib.datasets.models import Chunk
 
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
@@ -50,18 +54,23 @@ async def test_dataset_chat_uses_list_as_multi_query_and_prompt(mocker):
         "skills.dataset_chat.dataset_chat.llm_chat",
         return_value="This is the LLM response.",
     )
-    questions = ["What is testing?", "Why does testing matter?"]
+    queries = ["What is testing?", "testing validation quality"]
 
-    output = await dataset_chat("test_dataset", questions)
+    output = await dataset_chat(
+        "test_dataset",
+        queries,
+        "Question: Why does testing matter?",
+    )
 
     assert output == "This is the LLM response."
     mock_search.assert_awaited_once_with(
         "test_dataset",
-        questions,
+        queries,
         max_chunks=25,
     )
     prompt = mock_llm.call_args.kwargs["prompt"]
-    assert "Query: What is testing?\n\nWhy does testing matter?" in prompt
+    assert "Question: Why does testing matter?" in prompt
+    assert "testing validation quality" not in prompt
 
 
 @pytest.mark.asyncio
@@ -76,7 +85,11 @@ async def test_dataset_chat_refuses_empty_context(mocker):
         }
     }
 
-    output = await dataset_chat("test_dataset", "What is testing?")
+    output = await dataset_chat(
+        "test_dataset",
+        "What is testing?",
+        "Query: What is testing?",
+    )
 
     assert output == "INSUFFICIENT_CONTEXT"
     mock_llm.assert_not_called()
@@ -107,7 +120,11 @@ async def test_dataset_chat_budgets_context_without_front_truncation(mocker, mon
     }
     mock_llm = mocker.patch("skills.dataset_chat.dataset_chat.llm_chat", return_value="grounded")
 
-    output = await dataset_chat("avientus", "Profile Avientus", "Use only context.")
+    output = await dataset_chat(
+        "avientus",
+        "Profile Avientus",
+        "Query: Profile Avientus\n\nInstructions: Use only context.",
+    )
 
     assert output == "grounded"
     prompt = mock_llm.call_args.kwargs["prompt"]

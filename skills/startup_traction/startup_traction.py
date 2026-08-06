@@ -39,8 +39,8 @@ async def startup_traction(startup_name: str) -> str:
 
     result = await dataset_chat(
         dataset_name=dataset_slug,
-        questions=query,
-        llm_instructions=llm_instructions,
+        queries=query,
+        prompt=f"Query: {query}\n\nInstructions: {llm_instructions}",
         max_chunks=100,
         strict_insufficient_context=False,
     )

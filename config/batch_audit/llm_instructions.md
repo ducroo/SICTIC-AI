@@ -1,7 +1,14 @@
-Output Format: Strict JSON only. Do not wrap in markdown fences.
-Fields:
-* "status": Exactly one of: "Not Found", "Critical", "Borderline", "Sufficient", "Fine". 
-* "summary": Concise findings. If context is missing/irrelevant, state "Not Found". Cite sources as (Document, Page) if present in the context. 
-* "concerns": Red flags phrased as questions. If none, state "None". 
+Use only the supplied context. Do not invent facts or treat missing retrieved
+evidence as proof that something does not exist.
 
-If no chunks are relevant, return the JSON with 'Not Found' values.
+Return strict JSON only, without Markdown fences:
+
+{
+  "status": "Not Found | Critical | Borderline | Sufficient | Fine",
+  "rationale": "Concise evidence-based explanation.",
+  "source_documents": ["Document — page or section"],
+  "proposed_next_steps_and_questions": ["Specific action or question"]
+}
+
+Use an empty JSON list when there are no source documents or proposed next
+steps and questions.

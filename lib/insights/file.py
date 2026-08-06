@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import re
 
 from lib.insights.locking import write_if_changed
 from lib.insights.manifest import (
@@ -36,6 +37,7 @@ class InsightFile:
         prompt_key: str | None = None,
         *,
         run_id: str | None = None,
+        extension: str = "md",
         _path_override: str | None = None,
     ):
         self.dataset = dataset
@@ -46,6 +48,10 @@ class InsightFile:
         self.run_id = run_id
         self.source_datasets = source_datasets or [dataset]
         self.prompt_key = prompt_key or ""
+        normalized_extension = extension.removeprefix(".").lower()
+        if not re.fullmatch(r"[a-z0-9]+", normalized_extension):
+            raise ValueError(f"Invalid insight extension: {extension!r}")
+        self.extension = normalized_extension
         self._path_override = _path_override
 
     @property
@@ -65,6 +71,7 @@ class InsightFile:
             self.model,
             identifier=self.identifier,
             subdir=self.subdir,
+            extension=self.extension,
         )
 
     @property
@@ -135,6 +142,7 @@ class InsightFile:
             run_id=self.run_id,
             source_datasets=self.source_datasets,
             prompt_key=self.prompt_key,
+            extension=self.extension,
         )
 
     def _candidate_from_filename(self, filename: str) -> InsightFile:
@@ -149,6 +157,7 @@ class InsightFile:
             run_id=self.run_id,
             source_datasets=self.source_datasets,
             prompt_key=self.prompt_key,
+            extension=self.extension,
             _path_override=f"{self.directory}/{filename}",
         )
 

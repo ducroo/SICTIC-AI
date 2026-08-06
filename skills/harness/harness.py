@@ -79,7 +79,10 @@ async def _dataset_chat(args: List[str]) -> str:
         raise ValueError("Missing question.")
     from skills.dataset_chat.dataset_chat import dataset_chat
 
-    return _format_result(await dataset_chat(ns.dataset, " ".join(ns.question)))
+    question = " ".join(ns.question)
+    return _format_result(
+        await dataset_chat(ns.dataset, question, f"Query: {question}")
+    )
 
 
 async def _startup_profile(args: List[str]) -> str:
@@ -104,13 +107,19 @@ async def _batch_audit(args: List[str]) -> str:
     parser = _parser("/batch_audit")
     parser.add_argument("dataset")
     parser.add_argument("checklist_file")
+    parser.add_argument("--skill-name", default="batch_audit")
     ns = parser.parse_args(args)
     from pathlib import Path
 
     from skills.batch_audit.batch_audit import batch_audit
 
     checklist = Path(ns.checklist_file).read_text(encoding="utf-8")
-    return _format_result(await batch_audit(ns.dataset, checklist))
+    insight = await batch_audit(
+        ns.dataset,
+        checklist,
+        skill_name=ns.skill_name,
+    )
+    return _format_result(insight.path)
 
 
 async def _person_profile(args: List[str]) -> str:

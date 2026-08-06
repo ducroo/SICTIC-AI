@@ -66,7 +66,8 @@ def is_reusable(insight) -> bool:
 def find_any(insight):
     from lib.storage import get_storage
 
-    available = set(get_storage().list(insight.directory, suffix=".md"))
+    suffix = f".{insight.extension}"
+    available = set(get_storage().list(insight.directory, suffix=suffix))
     manual = insight._candidate("manual")
     if manual.filename in available:
         return manual
@@ -82,7 +83,7 @@ def find_any(insight):
     remaining = [
         filename
         for filename in available - seen
-        if filename.startswith(prefix) and filename.endswith(".md")
+        if filename.startswith(prefix) and filename.endswith(suffix)
     ]
     if not remaining:
         return None

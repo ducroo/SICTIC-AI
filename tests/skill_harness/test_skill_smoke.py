@@ -119,22 +119,40 @@ async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundarie
     path = await dd_checks("example-startup")
 
     assert path.startswith("storage/startups/example-startup/insights/")
-    assert "Due Diligence" in get_storage().read_text(path)
+    report = get_storage().read_text(path)
+    assert "Due Diligence" in report
+    assert "| No | Check | Status | Rationale | Source documents |" in report
+    json_insights = get_storage().list(
+        "storage/startups/example-startup/insights/batch-audit",
+        suffix=".json",
+    )
+    assert any(name.startswith("dd-checks-") for name in json_insights)
 
 
 @pytest.mark.asyncio
 async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
     from skills.batch_audit.batch_audit import batch_audit
 
-    result = await batch_audit("example-startup", "# Commercial\n- Is there traction?")
+    insight = await batch_audit(
+        "example-startup",
+        """# Commercial
 
-    assert "| 1.1 | Is there traction?" in result
+## Traction
+
+### Customer traction
+
+Is there evidence of customer traction?
+""",
+    )
+
+    assert insight.exists()
     assert InsightFile(
         "example-startup",
         "batch_audit",
         "ollama/test_model:1b",
-        identifier="Commercial",
+        identifier="batch_audit-Commercial",
         subdir=True,
+        extension="json",
     ).exists()
 
 
@@ -165,7 +183,11 @@ async def test_submission_ready_writes_report_from_local_fixture(
 @pytest.mark.parametrize("command_name", sorted(HARNESS_SMOKE_COMMANDS))
 async def test_harness_core_command_smoke(command_name, mocked_skill_boundaries, tmp_path):
     checklist = tmp_path / "checklist.md"
-    checklist.write_text("# Commercial\n- Is there traction?\n", encoding="utf-8")
+    checklist.write_text(
+        "# Commercial\n\n## Traction\n\n### Customer traction\n\n"
+        "Is there evidence of customer traction?\n",
+        encoding="utf-8",
+    )
     command = HARNESS_SMOKE_COMMANDS[command_name].format(checklist=checklist)
 
     result = await dispatch_command(command)

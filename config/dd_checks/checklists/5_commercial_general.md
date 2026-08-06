@@ -2,27 +2,128 @@
 
 ## Revenue & Customer Composition
 
-* Executed Customer Contracts: Is there a central repository of all signed commercial agreements including MSAs SOWs and documented oral agreements? keywords: Customer Contract Signed Agreement MSA Master Service Agreement SOW Statement of Work Service Agreement Commercial Contract Side Letter hints: Verify that signatures from both parties are present and check for "change of control" clauses that could impact a potential acquisition.  
-* Pipeline Validation: Are all active Letters of Intent (LoIs) or Memorandums of Understanding (MOUs) for late-stage prospects provided? keywords: LoI Letter of Intent MOU Memorandum of Understanding Pipeline Sales Prospect Non-binding Agreement Term Sheet Lead Engagement hints: Distinguish between non-binding expressions of interest and firm contractual commitments; look for expiration dates on these documents.  
-* Service Level Compliance: Do the standard and custom Service-Level Agreements (SLAs) include uptime reports or records of penalties and credits? keywords: SLA Service Level Agreement Uptime Report Availability Penalty Clause Service Credit Maintenance Downtime Compliance Report hints: Check for recurring uptime failures or significant penalty payments that might indicate underlying technical instability or operational risk.  
-* Customer Concentration & Revenue Mix: Is there a detailed revenue split per customer identifying those accounting for more than 10% of total ARR? keywords: Customer Concentration Revenue Mix ARR per Customer Client List Revenue Split Top Customers Billing Report Subscription Revenue hints: Flag any "Single Point of Failure" where the loss of one client would significantly impact the company's financial viability.
+### Executed Customer Contracts
+
+Is there a central repository of all signed commercial agreements including MSAs SOWs and documented oral agreements?
+
+Verify that signatures from both parties are present and check for "change of control" clauses that could impact a potential acquisition.
+
+**Keywords:** Customer Contract Signed Agreement MSA Master Service Agreement SOW Statement of Work Service Agreement Commercial Contract Side Letter
+
+### Pipeline Validation
+
+Are all active Letters of Intent (LoIs) or Memorandums of Understanding (MOUs) for late-stage prospects provided?
+
+Distinguish between non-binding expressions of interest and firm contractual commitments; look for expiration dates on these documents.
+
+**Keywords:** LoI Letter of Intent MOU Memorandum of Understanding Pipeline Sales Prospect Non-binding Agreement Term Sheet Lead Engagement
+
+### Service Level Compliance
+
+Do the standard and custom Service-Level Agreements (SLAs) include uptime reports or records of penalties and credits?
+
+Check for recurring uptime failures or significant penalty payments that might indicate underlying technical instability or operational risk.
+
+**Keywords:** SLA Service Level Agreement Uptime Report Availability Penalty Clause Service Credit Maintenance Downtime Compliance Report
+
+### Customer Concentration & Revenue Mix
+
+Is there a detailed revenue split per customer identifying those accounting for more than 10% of total ARR?
+
+Flag any "Single Point of Failure" where the loss of one client would significantly impact the company's financial viability.
+
+**Keywords:** Customer Concentration Revenue Mix ARR per Customer Client List Revenue Split Top Customers Billing Report Subscription Revenue
 
 ## Sales Efficiency & Funnel Velocity
 
-* Sales Funnel Transparency: Is the current sales pipeline broken down by stage with total lead volume per stage? keywords: Sales Pipeline CRM Export Lead Volume MQL SQL Opportunity Closing Sales Stage Prospect List Funnel Management hints: Compare the current pipeline volume against the financial projections to ensure there is enough "coverage" to meet revenue targets.  
-* Funnel Conversion Metrics: Is there evidence of historical conversion rates between each stage of the sales funnel over the last 12-24 months? keywords: Conversion Rate Funnel Metrics Stage Transition Win Rate Lead-to-Close Pipeline Velocity Historical Data Conversion Benchmarks hints: Look for "bottlenecks" where conversion rates drop significantly which could indicate issues with product-market fit or sales execution.  
-* Sales Cycle Analysis: Does the data show the average length of the sales cycle segmented by customer type or deal size? keywords: Sales Cycle Length Time to Close Sales Velocity Deal Duration Segmented Sales Data Cycle Analysis Average Close Time hints: Evaluate if the sales cycle is lengthening over time which could impact cash flow and resource allocation.  
-* Customer Acquisition Cost (CAC) Efficiency: Has the company calculated the CAC Payback Period and the LTV/CAC ratio based on historical spend? keywords: CAC Payback LTV/CAC Ratio Unit Economics Acquisition Efficiency Marketing Spend Sales Expense Acquisition Metrics Efficiency Ratio hints: Validate the marketing and sales costs used in the calculation; ensure all overhead and headcount costs are included in the CAC.
+### Sales Funnel Transparency
+
+Is the current sales pipeline broken down by stage with total lead volume per stage?
+
+Compare the current pipeline volume against the financial projections to ensure there is enough "coverage" to meet revenue targets.
+
+**Keywords:** Sales Pipeline CRM Export Lead Volume MQL SQL Opportunity Closing Sales Stage Prospect List Funnel Management
+
+### Funnel Conversion Metrics
+
+Is there evidence of historical conversion rates between each stage of the sales funnel over the last 12-24 months?
+
+Look for "bottlenecks" where conversion rates drop significantly which could indicate issues with product-market fit or sales execution.
+
+**Keywords:** Conversion Rate Funnel Metrics Stage Transition Win Rate Lead-to-Close Pipeline Velocity Historical Data Conversion Benchmarks
+
+### Sales Cycle Analysis
+
+Does the data show the average length of the sales cycle segmented by customer type or deal size?
+
+Evaluate if the sales cycle is lengthening over time which could impact cash flow and resource allocation.
+
+**Keywords:** Sales Cycle Length Time to Close Sales Velocity Deal Duration Segmented Sales Data Cycle Analysis Average Close Time
+
+### Customer Acquisition Cost (CAC) Efficiency
+
+Has the company calculated the CAC Payback Period and the LTV/CAC ratio based on historical spend?
+
+Validate the marketing and sales costs used in the calculation; ensure all overhead and headcount costs are included in the CAC.
+
+**Keywords:** CAC Payback LTV/CAC Ratio Unit Economics Acquisition Efficiency Marketing Spend Sales Expense Acquisition Metrics Efficiency Ratio
 
 ## Retention & Customer Health
 
-* Retention & Churn Analysis: Is there a summary of gross and net revenue retention (NRR) with a detailed log of all churn events over the last year? keywords: NRR Net Revenue Retention Gross Retention Churn Log Customer Attrition Renewal Rate Cancellation Reason Revenue Retention Metrics hints: Analyze "Involuntary Churn" (e.g. credit card failure) vs "Voluntary Churn" (e.g. lost to competitor) to understand the root cause of customer loss.  
-* Cohort Analysis: Does the cohort report demonstrate how customer usage and revenue expand or contract over time? keywords: Cohort Analysis Monthly Cohort Quarterly Cohort Expansion Revenue Contraction Downgrade Upsell Retention Curve hints: Look for "Negative Churn" where expansion revenue from existing cohorts outpaces the revenue lost from churned customers.  
-* Customer Sentiment & Satisfaction: Are Net Promoter Score (NPS) or Customer Satisfaction (CSAT) results and testimonials available? keywords: NPS Net Promoter Score CSAT Customer Satisfaction Testimonial Case Study Customer Feedback Sentiment Analysis Review hints: High NPS scores should be backed by recent testimonials; beware of "outdated" surveys that may not reflect current product sentiment.  
-* Engagement Infrastructure: Is there product usage data or engagement metrics that serve as leading indicators for customer health? keywords: Product Usage Engagement Metrics Health Score DAU MAU Feature Adoption Active Users Session Frequency Engagement Data hints: Identify "At-Risk" customers who show a significant decline in usage frequency or feature adoption well before their renewal date.
+### Retention & Churn Analysis
+
+Is there a summary of gross and net revenue retention (NRR) with a detailed log of all churn events over the last year?
+
+Analyze "Involuntary Churn" (e.g. credit card failure) vs "Voluntary Churn" (e.g. lost to competitor) to understand the root cause of customer loss.
+
+**Keywords:** NRR Net Revenue Retention Gross Retention Churn Log Customer Attrition Renewal Rate Cancellation Reason Revenue Retention Metrics
+
+### Cohort Analysis
+
+Does the cohort report demonstrate how customer usage and revenue expand or contract over time?
+
+Look for "Negative Churn" where expansion revenue from existing cohorts outpaces the revenue lost from churned customers.
+
+**Keywords:** Cohort Analysis Monthly Cohort Quarterly Cohort Expansion Revenue Contraction Downgrade Upsell Retention Curve
+
+### Customer Sentiment & Satisfaction
+
+Are Net Promoter Score (NPS) or Customer Satisfaction (CSAT) results and testimonials available?
+
+High NPS scores should be backed by recent testimonials; beware of "outdated" surveys that may not reflect current product sentiment.
+
+**Keywords:** NPS Net Promoter Score CSAT Customer Satisfaction Testimonial Case Study Customer Feedback Sentiment Analysis Review
+
+### Engagement Infrastructure
+
+Is there product usage data or engagement metrics that serve as leading indicators for customer health?
+
+Identify "At-Risk" customers who show a significant decline in usage frequency or feature adoption well before their renewal date.
+
+**Keywords:** Product Usage Engagement Metrics Health Score DAU MAU Feature Adoption Active Users Session Frequency Engagement Data
 
 ## Market Dynamics & Positioning
 
-* Market Opportunity (TAM/SAM/SOM): Does the data-driven assessment clearly define the Total Addressable Market (TAM) Serviceable Addressable Market (SAM) and obtainable share (SOM)? keywords: TAM SAM SOM Market Size Addressable Market Market Opportunity Top-down Analysis Bottom-up Analysis Market Forecast hints: Prioritize "Bottom-up" calculations over "Top-down" generalities to ensure the market sizing is based on realistic unit prices and customer counts.  
-* Competitive Landscape: Is there a competitor analysis matrix identifying key players and the company’s specific "Right to Win"? keywords: Competitive Matrix Competitor Analysis Market Share Right to Win Competitive Advantage SWOT Analysis Feature Comparison Differentiation hints: Focus on "Unfair Advantages" (e.g. patents proprietary data network effects) that competitors cannot easily replicate.  
-* Market Research & Validation: Are there primary or secondary market research findings that validate the current product-market fit? keywords: Market Research Industry Report Product-Market Fit Validation White Paper User Research Secondary Research Market Trends Survey Data hints: Look for "External Validation" from credible third-party industry analysts rather than just internal marketing collateral.
+### Market Opportunity (TAM/SAM/SOM)
+
+Does the data-driven assessment clearly define the Total Addressable Market (TAM) Serviceable Addressable Market (SAM) and obtainable share (SOM)?
+
+Prioritize "Bottom-up" calculations over "Top-down" generalities to ensure the market sizing is based on realistic unit prices and customer counts.
+
+**Keywords:** TAM SAM SOM Market Size Addressable Market Market Opportunity Top-down Analysis Bottom-up Analysis Market Forecast
+
+### Competitive Landscape
+
+Is there a competitor analysis matrix identifying key players and the company’s specific "Right to Win"?
+
+Focus on "Unfair Advantages" (e.g. patents proprietary data network effects) that competitors cannot easily replicate.
+
+**Keywords:** Competitive Matrix Competitor Analysis Market Share Right to Win Competitive Advantage SWOT Analysis Feature Comparison Differentiation
+
+### Market Research & Validation
+
+Are there primary or secondary market research findings that validate the current product-market fit?
+
+Look for "External Validation" from credible third-party industry analysts rather than just internal marketing collateral.
+
+**Keywords:** Market Research Industry Report Product-Market Fit Validation White Paper User Research Secondary Research Market Trends Survey Data

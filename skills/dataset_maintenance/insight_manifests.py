@@ -105,13 +105,14 @@ def _prompt_key(
         return (
             dd.get("industry_type_query", "")
             + dd.get("industry_type_llm_instructions", "")
+            + config.get("batch_audit", {}).get("llm_instructions", "")
             + "\n".join(f"{key}:{value}" for key, value in sorted(checklists.items()))
         )
     if skill == "submission-ready":
         submission = config.get("submission_ready", {})
         return "\n\n".join(
             str(submission.get(key, ""))
-            for key in ("policy", "checklist", "llm_instructions", "table_lines")
+            for key in ("policy", "checklist", "llm_instructions")
         )
     if skill == "batch-audit":
         checklists = config.get("dd_checks", {}).get("checklists", {})

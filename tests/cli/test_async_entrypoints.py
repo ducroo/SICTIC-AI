@@ -1,6 +1,37 @@
 from typer.testing import CliRunner
 
 
+def test_batch_audit_cli_forwards_calling_skill(mocker, tmp_path):
+    from skills.batch_audit.__main__ import app
+
+    checklist = tmp_path / "corporation.md"
+    checklist.write_text("# 2 Corporation-General\n", encoding="utf-8")
+
+    class Result:
+        path = (
+            "storage/startups/avientus/insights/batch-audit/"
+            "dd-checks-2-corporation-general-gemma4.json"
+        )
+
+    async def fake_batch_audit(dataset, markdown, *, skill_name):
+        assert dataset == "avientus"
+        assert markdown == "# 2 Corporation-General\n"
+        assert skill_name == "dd_checks"
+        return Result()
+
+    mocker.patch(
+        "skills.batch_audit.__main__.batch_audit",
+        side_effect=fake_batch_audit,
+    )
+    result = CliRunner().invoke(
+        app,
+        ["avientus", str(checklist), "--skill-name", "dd_checks"],
+    )
+
+    assert result.exit_code == 0
+    assert "batch-audit/dd-checks-" in result.output
+
+
 def test_llm_chat_cli_awaits_async_function(mocker):
     from skills.llm_chat.__main__ import app
 
