@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import List
 
-from lib.insights import InsightFile, InsightResult, insight_base_name
+from lib.insights import InsightFile, InsightResult, strip_model_tag
 from lib.logger import get_logger
 from lib.people.model import Person
 from lib.slugify import slugify
@@ -51,7 +51,18 @@ async def _investor_profile_result(
         logger.warning(f"[{dataset_slug}] Person profile directory not found: {person_profile_dir}")
         return InvestorProfileResult(source_dataset=dataset_slug)
 
-    filenames = storage.list(person_profile_dir, suffix=".md")
+    from lib.people.discovery import persons_in_dataset
+
+    member_ids = {
+        member.linkedin_id
+        for member in persons_in_dataset(dataset_slug)
+        if member.linkedin_id
+    }
+    filenames = [
+        filename
+        for filename in storage.list(person_profile_dir, suffix=".md")
+        if strip_model_tag(filename) in member_ids
+    ]
     written = 0
     unchanged = 0
     skipped = 0
@@ -60,7 +71,7 @@ async def _investor_profile_result(
 
     for filename in filenames:
         stem = PurePosixPath(filename).stem
-        linkedin_id = insight_base_name(filename)
+        linkedin_id = strip_model_tag(filename)
         if not linkedin_id or linkedin_id == stem:
             logger.warning(f"[{dataset_slug}] Skipping malformed person profile filename: {filename}")
             skipped += 1
@@ -141,13 +152,6 @@ def read_investor_profiles(
     from lib.people.discovery import persons_in_dataset
 
     discovered = persons_in_dataset(dataset_slug)
-    files = storage.list(profile_dir, suffix=".md")
-    files_by_id: dict[str, list[str]] = {}
-    for filename in files:
-        linkedin_id = insight_base_name(filename)
-        if linkedin_id and linkedin_id != PurePosixPath(filename).stem:
-            files_by_id.setdefault(linkedin_id, []).append(filename)
-
     results: dict[str, str] = {}
     for name in names:
         matched = Person(full_name=name, linkedin_id=slugify(name)).find_best_match(discovered)

@@ -6,7 +6,7 @@ from lib.insights.hydration import (
     dataset_from_insight,
     hydrate_dataset_from_insights,
 )
-from lib.insights.naming import insight_base_name, insight_model_slug
+from lib.insights.naming import insight_model_slug, strip_model_tag
 
 InsightResult = list[InsightFile]
 
@@ -19,6 +19,6 @@ __all__ = [
     "dataset_from_insight",
     "discover_insights",
     "hydrate_dataset_from_insights",
-    "insight_base_name",
+    "strip_model_tag",
     "insight_model_slug",
 ]

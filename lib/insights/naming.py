@@ -4,8 +4,8 @@ from lib.env import get_env_var
 from lib.slugify import slugify
 
 
-def insight_base_name(filename: str) -> str:
-    """Return the identifier portion of a canonical insight filename."""
+def strip_model_tag(filename: str) -> str:
+    """Remove the extension and model tag from an insight filename."""
     stem = PurePosixPath(filename).stem
     ranked_models = [
         slugify(model.split("/")[-1])

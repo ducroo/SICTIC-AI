@@ -1,7 +1,7 @@
 from pathlib import PurePosixPath
 from typing import Any, List, Optional
 
-from lib.insights import insight_base_name
+from lib.insights import strip_model_tag
 from lib.logger import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.model import Person, normalize_email_addresses
@@ -164,7 +164,7 @@ async def rank_person_rows(
     profile_text_by_id: dict[str, str] = {}
     for chunk in chunks:
         filename = PurePosixPath(chunk.document_name).name
-        linkedin_id = insight_base_name(filename)
+        linkedin_id = strip_model_tag(filename)
         if linkedin_id not in members_by_linkedin:
             continue
         profile_text_by_id.setdefault(linkedin_id, "")
