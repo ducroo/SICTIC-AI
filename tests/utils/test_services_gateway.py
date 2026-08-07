@@ -194,6 +194,38 @@ async def test_same_resource_different_models_have_independent_capacity(
 
 
 @pytest.mark.asyncio
+async def test_llm_capacity_is_globally_capped_at_eight(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=16,
+        ollama_max_loaded_models=2,
+        wait_timeout=1,
+        poll_interval=0.01,
+    )
+    requests = [
+        gateway._register_request(
+            "llm",
+            "model-a" if index % 2 == 0 else "model-b",
+        )[0]
+        for index in range(9)
+    ]
+    leases = [
+        gateway._try_acquire(request, max_concurrent=16)[0]
+        for request in requests[:8]
+    ]
+    blocked, _, _ = gateway._try_acquire(
+        requests[8],
+        max_concurrent=16,
+    )
+
+    assert all(lease is not None for lease in leases)
+    assert blocked is None
+    gateway._remove_request(requests[8])
+    for lease in leases:
+        gateway._release(lease)
+
+
+@pytest.mark.asyncio
 async def test_same_model_respects_per_model_capacity(
     clean_gateway,
 ):

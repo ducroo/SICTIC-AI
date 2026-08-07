@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 from lib.insights import InsightFile
 from lib.storage import get_storage
@@ -33,6 +34,54 @@ def test_paths_match_existing_convention(mock_env):
         "storage/startups/daav/insights/"
         "startup-profile-daav-gemma4-31b-nvfp4.md"
     )
+
+
+def test_json_extension_uses_existing_naming_and_freshness(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile(
+        "avientus",
+        "dd_checks",
+        "ollama/qwen3:8b",
+        identifier="Legal Due Diligence",
+        extension="json",
+        prompt_key="structured checklist",
+    )
+
+    insight.save('{"status": "Fine"}')
+
+    assert insight.filename == "dd-checks-legal-due-diligence-qwen3-8b.json"
+    assert insight.content() == '{"status": "Fine"}'
+    assert insight.is_reusable() is True
+
+
+def test_find_any_respects_json_extension(mock_env, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/new-model")
+    _create_indexed_dataset("avientus", "startups", "revision")
+    generated = InsightFile(
+        "avientus",
+        "dd_checks",
+        "ollama/old-model",
+        identifier="Legal",
+        extension="json",
+        prompt_key="prompt",
+    )
+    generated.save("{}")
+
+    requested = InsightFile(
+        "avientus",
+        "dd_checks",
+        "ollama/new-model",
+        identifier="Legal",
+        extension="json",
+        prompt_key="prompt",
+    )
+
+    assert requested.find_any().path == generated.path
+
+
+def test_rejects_invalid_insight_extension(mock_env):
+    with pytest.raises(ValueError, match="Invalid insight extension"):
+        InsightFile("avientus", "dd_checks", "model", extension="../json")
 
 
 def test_save_and_find_reusable_by_ranked_model(mock_env, monkeypatch):
@@ -184,3 +233,46 @@ def test_save_same_content_preserves_output_mtime(mock_env):
     insight.save("profile")
 
     assert storage.mtime(insight.path) == 123
+
+
+def test_insight_file_supports_timestamped_run_directory(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile(
+        "avientus",
+        "submission_ready",
+        "ollama/test_model:1b",
+        identifier="checklist",
+        subdir=True,
+        run_id="20260730T221500Z",
+    )
+
+    assert insight.path == (
+        "storage/startups/avientus/insights/submission-ready/"
+        "20260730T221500Z/checklist-test-model-1b.md"
+    )
+
+
+def test_timestamped_insight_can_be_reused_for_exact_model(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile(
+        "avientus",
+        "submission_ready",
+        "ollama/test_model:1b",
+        identifier="checklist",
+        subdir=True,
+        run_id="20260730T221500Z",
+        prompt_key="checklist prompt",
+    )
+    insight.save("checklist")
+
+    assert insight.is_reusable() is True
+    changed_prompt = InsightFile(
+        "avientus",
+        "submission_ready",
+        "ollama/test_model:1b",
+        identifier="checklist",
+        subdir=True,
+        run_id="20260730T221500Z",
+        prompt_key="changed prompt",
+    )
+    assert changed_prompt.is_reusable() is False

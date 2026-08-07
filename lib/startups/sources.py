@@ -3,10 +3,14 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from lib.adapters.dealum import DealumAdapter
-from lib.startups.dealum import dealum_manifest_path, import_startup_from_dealum
+from lib.startups.dealum import import_startup_from_dealum
+from lib.startups.dealum.manifest import (
+    LAST_SUCCESSFUL_PULL_AT,
+    read_manifest,
+)
 from lib.logger import get_logger
 from lib.startups.identity import canonical_startup_slug
 from lib.storage import get_storage
@@ -34,8 +38,10 @@ async def ensure_startup_dataset(
     *,
     refresh_dealum: bool = True,
     sync_after_import: bool = True,
+    dealum_applications: list[dict[str, Any]] | None = None,
+    raise_on_error: bool = False,
 ) -> StartupDataStatus:
-    """Optionally hydrate a startup dataset from Dealum without changing no-Dealum behavior."""
+    """Optionally hydrate a startup dataset from Dealum."""
     dataset_slug = canonical_startup_slug(startup)
     storage = get_storage()
     existing_location = find_dataset_location(dataset_slug)
@@ -50,7 +56,9 @@ async def ensure_startup_dataset(
             dealum_configured=False,
         )
 
-    if dataset_exists and (not refresh_dealum or not _dealum_sync_due(dataset_slug)):
+    if dataset_exists and (
+        not refresh_dealum or not _dealum_sync_due(dataset_slug)
+    ):
         return StartupDataStatus(
             startup=startup,
             dataset_slug=dataset_slug,
@@ -62,6 +70,7 @@ async def ensure_startup_dataset(
         result = import_startup_from_dealum(
             startup,
             adapter=adapter,
+            applications=dealum_applications,
             activate=False,
         )
         if result.imported and result.changed and sync_after_import:
@@ -78,7 +87,14 @@ async def ensure_startup_dataset(
             dealum_changed=result.changed,
         )
     except Exception as e:
-        logger.warning(f"[{dataset_slug}] Dealum preflight failed; continuing with existing data if available: {e}")
+        if raise_on_error:
+            raise
+        logger.warning(
+            "[%s] Dealum preflight failed; continuing with existing data "
+            "if available: %s",
+            dataset_slug,
+            e,
+        )
         return StartupDataStatus(
             startup=startup,
             dataset_slug=dataset_slug,
@@ -90,13 +106,12 @@ async def ensure_startup_dataset(
 
 
 def _dealum_sync_due(dataset_slug: str) -> bool:
-    storage = get_storage()
-    manifest_path = dealum_manifest_path(dataset_slug)
-    if not storage.exists(manifest_path):
+    manifest = read_manifest(dataset_slug)
+    last_successful_pull = manifest.get(LAST_SUCCESSFUL_PULL_AT)
+    if not isinstance(last_successful_pull, (int, float)):
         return True
     try:
-        ttl = int(os.environ.get("DEALUM_SYNC_TTL_SECONDS", "86400"))
+        ttl = int(os.environ.get("DEALUM_SYNC_TTL_SECONDS", "21600"))
     except ValueError:
-        ttl = 86400
-    mtime = storage.mtime(manifest_path) or 0.0
-    return (time.time() - mtime) >= ttl
+        ttl = 21600
+    return (time.time() - last_successful_pull) >= ttl

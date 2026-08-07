@@ -7,7 +7,17 @@ from typing import Any, TypeVar
 
 import typer
 
+from lib.insights import InsightFile
+
 T = TypeVar("T")
+
+
+def format_insights(insights: list[InsightFile]) -> str:
+    """Render managed insight content and paths at a CLI boundary."""
+    return "\n\n".join(
+        f"{insight.content()}\n\nRESULT_PATH: {insight.path}"
+        for insight in insights
+    )
 
 
 def run_command(

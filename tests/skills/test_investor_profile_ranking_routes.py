@@ -12,7 +12,11 @@ potential_investors_module = import_module(
 
 
 async def _fake_startup_profile(*args, **kwargs):
-    return "Startup profile", "profile.md"
+    class FakeStartupProfileInsight:
+        def content(self):
+            return "Startup profile"
+
+    return [FakeStartupProfileInsight()]
 
 
 async def _fake_ranking_persons(*args, **kwargs):
@@ -86,7 +90,8 @@ async def test_ranking_skill_uses_investor_profile_dataset(
 
     result = await getattr(module, func_name)(*args)
 
-    assert result == "Ranked result"
+    assert len(result) == 1
+    assert result[0].skill == func_name
     hydrate.assert_awaited_once_with(
         insight_name="investor_profile",
         source_dataset="sictic-members",

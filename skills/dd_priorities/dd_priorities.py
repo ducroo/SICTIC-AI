@@ -1,4 +1,4 @@
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.startups.identity import canonical_startup_slug
@@ -25,7 +25,7 @@ def _find_dd_checks_report(startup_slug: str) -> InsightFile:
     return report
 
 
-async def dd_priorities(startup: str) -> str:
+async def dd_priorities(startup: str) -> InsightResult:
     """Synthesize up to eight priorities from a saved dd_checks report."""
     startup_slug = canonical_startup_slug(startup)
     source_insight = _find_dd_checks_report(startup_slug)
@@ -55,7 +55,7 @@ async def dd_priorities(startup: str) -> str:
             startup_slug,
             reusable.path,
         )
-        return reusable.path
+        return [reusable]
 
     prompt = (
         "### DD_CHECKS REPORT START ###\n\n"
@@ -70,4 +70,4 @@ async def dd_priorities(startup: str) -> str:
 
     output_insight.save(result.strip())
     logger.info("[%s] DD priorities saved to %s", startup_slug, output_insight.path)
-    return output_insight.path
+    return [output_insight]

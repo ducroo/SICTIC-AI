@@ -4,7 +4,7 @@ from skills.config_load.config_load import config_load
 from lib.logger import get_logger
 
 from lib.linkedin import LinkedInResolver
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.slugify import slugify
 from skills.suggested_startups.core.llm_processor import compile_startup_profiles, process_single_investor
 from skills.investor_profile.investor_profile import investor_profile, read_investor_profiles
@@ -13,7 +13,7 @@ from lib.datasets.paths import list_dataset_names
 
 logger = get_logger(__name__)
 
-async def suggested_startups(dataset_name: str = "sictic_members", startups: Optional[List[str]] = None, investors: Optional[List[str]] = None, max_startups: int = 5) -> str:
+async def suggested_startups(dataset_name: str = "sictic_members", startups: Optional[List[str]] = None, investors: Optional[List[str]] = None, max_startups: int = 5) -> InsightResult:
     """
     Rank a provided list of startups against a list of investors by matching 
     startup value propositions with investor professional backgrounds and interests.
@@ -56,6 +56,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
 
     # Filter investors whose cache is already up-to-date
     investors_to_process = []
+    insights: InsightResult = []
     datasets_to_check = [dataset_slug] + [slugify(s) for s in startups]
     await sync_datasets(datasets_to_check, raise_on_error=True)
 
@@ -72,13 +73,14 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         reusable = insight.find_reusable()
         if reusable:
             logger.info(f"[{dataset_name}] Skipping {investor}: Cache up to date.")
+            insights.append(reusable)
             continue
             
         investors_to_process.append((investor, insight))
         
     if not investors_to_process:
         logger.info(f"[{dataset_name}] All investor suggestions are up to date. Exiting.")
-        return "All up to date."
+        return insights
 
     compiled_startups = await compile_startup_profiles(startups)
     
@@ -95,7 +97,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
         
         if not profile_text:
             logger.error(f"[{dataset_name}] No detailed profile available for {investor}. Skipping.")
-            return f"No results for {investor}"
+            return None
             
         new_lines = await process_single_investor(investor, profile_text, compiled_startups, prompt_template, max_startups)
         
@@ -104,12 +106,13 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
             content = header + "\n".join(new_lines)
             insight.save(content)
             logger.info(f"[{dataset_name}] Saved suggestions for {investor} to {insight.path}")
-            return f"Processed {investor}"
-        return f"No results for {investor}"
+            return insight
+        return None
         
     tasks = [process_inv(inv, insight) for inv, insight in investors_to_process]
-    results = await asyncio.gather(*tasks)
+    generated = await asyncio.gather(*tasks)
+    insights.extend(insight for insight in generated if insight is not None)
 
     logger.info(f"[{dataset_name}] Successfully finished suggested_startups.")
     
-    return "\n".join(results)
+    return insights

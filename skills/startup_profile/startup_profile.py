@@ -1,11 +1,11 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 
 from lib.model_config import llm_model
 from skills.config_load.config_load import config_load
 from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.ephemeral_dataset import prepare_ephemeral_dataset
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.slugify import slugify
 from lib.logger import get_logger
 from lib.datasets.ingestion import sync_datasets
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 _INSUFFICIENT_CONTEXT = "INSUFFICIENT_CONTEXT"
 
 
-async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tuple[str, str]:
+async def startup_profile(startup: str, files: Optional[List[str]] = None) -> InsightResult:
     """
     Generates a neutral, objective 5-point diagnostic of a startup. It bypasses marketing narratives to expose the structural reality of the business, prioritizing external risks and identifying specific tasks for an investment analyst. Use this skill when the user asks "Profile this startup", "Run startup diagnostic", or "What does this startup do?". Note that if no context/document is provided via the GUI, the <STARTUP_NAME> must be clearly specified in the query.
     """
@@ -43,7 +43,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
     if not files:
         reusable = insight.find_reusable()
         if reusable:
-            return reusable.content(), reusable.path
+            return [reusable]
 
     dataset_name = startup_slug
     if files:
@@ -51,8 +51,11 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
 
     profile_output = await dataset_chat(
         dataset_name=dataset_name,
-        questions=questions,
-        llm_instructions=llm_instructions,
+        queries=questions,
+        prompt=(
+            f"Query: {'\n\n'.join(questions)}\n\n"
+            f"Instructions: {llm_instructions}"
+        ),
     )
 
     if profile_output is None:
@@ -64,4 +67,4 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> Tu
         )
 
     insight.save(profile_output)
-    return profile_output, insight.path
+    return [insight]

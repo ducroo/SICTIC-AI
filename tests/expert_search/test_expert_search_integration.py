@@ -42,7 +42,8 @@ async def test_expert_search_semantic_and_ranking(startup_name, target_expert):
     """
     try:
         # 1. Fetch/Generate Startup Profile
-        profile_content, _ = await startup_profile(startup_name)
+        [profile_insight] = await startup_profile(startup_name)
+        profile_content = profile_insight.content()
         assert profile_content, f"Failed to get startup profile for {startup_name}"
         
         # 2. Test Semantic Retrieval

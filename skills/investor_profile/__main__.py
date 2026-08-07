@@ -1,6 +1,6 @@
 import typer
 
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.investor_profile.investor_profile import investor_profile
 
@@ -20,12 +20,7 @@ def main(
         logger=logger,
         error_prefix="Execution failed",
     )
-    typer.echo(f"Source dataset: {result.source_dataset}")
-    typer.echo(f"Person profiles: {result.person_profiles}")
-    typer.echo(f"Written: {result.written}")
-    typer.echo(f"Unchanged: {result.unchanged}")
-    typer.echo(f"Skipped: {result.skipped}")
-    typer.echo(f"Missing track records: {result.missing_track_records}")
+    typer.echo(format_insights(result))
 
 if __name__ == "__main__":
     app()

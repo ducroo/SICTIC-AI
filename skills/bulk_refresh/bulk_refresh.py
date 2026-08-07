@@ -12,7 +12,10 @@ from lib.datasets.state import is_active_dataset
 logger = get_logger(__name__)
 
 
-async def bulk_refresh(target_dataset: Optional[str] = None, target_skill: Optional[str] = None):
+async def bulk_refresh(
+    target_dataset: Optional[str] = None,
+    target_skill: Optional[str] = None,
+) -> None:
     """
     Refreshes core insights. Performs synchronous dataset ingestion first to prevent memory exhaustion,
     followed by parallelized LLM skill execution based on the target domains.

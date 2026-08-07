@@ -3,7 +3,7 @@ from typing import List, Optional
 from lib.model_config import llm_model
 from lib.logger import get_logger
 from lib.slugify import slugify
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from skills.config_load.config_load import config_load
 from skills.startup_profile.startup_profile import startup_profile
 from skills.ranking.ranking_persons import ranking_persons
@@ -12,7 +12,7 @@ from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
-async def expert_search(startup_name: str, target_experts: Optional[List[str]] = None, exclude_experts: Optional[List[str]] = None, top_k: int = 8) -> str:
+async def expert_search(startup_name: str, target_experts: Optional[List[str]] = None, exclude_experts: Optional[List[str]] = None, top_k: int = 8) -> InsightResult:
     """
     Provides a ranked list of potential experts for a given startup based on quickselect ranking and LLM refinement.
     """
@@ -50,12 +50,13 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     reusable = insight.find_reusable()
     if reusable:
         logger.info(f"[{startup_slug}] Using cached expert search from {reusable.path}")
-        return reusable.content()
+        return [reusable]
 
     # 1. Fetch Startup Profile
     logger.info(f"[{startup_slug}] Fetching startup profile...")
     try:
-        profile_content, _ = await startup_profile(startup_name)
+        [profile_insight] = await startup_profile(startup_name)
+        profile_content = profile_insight.content()
     except Exception as e:
         logger.error(f"[{startup_slug}] Failed to generate/fetch startup profile: {e}")
         raise RuntimeError(f"Failed to generate/fetch startup profile: {e}")
@@ -78,4 +79,4 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     insight.save(result)
     logger.info(f"[{startup_slug}] Expert search complete. Results saved to {insight.path}")
 
-    return result
+    return [insight]

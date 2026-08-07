@@ -46,10 +46,28 @@ def find_reusable(insight):
     return None
 
 
+def is_reusable(insight) -> bool:
+    """Return whether this exact model/path is fresh for its prompt and data."""
+    if not insight.exists():
+        return False
+    manifest = insight._load_manifest()
+    expected_revisions = insight._dataset_revisions()
+    if expected_revisions is None:
+        return False
+    entry = manifest["entries"].get(insight.path)
+    return bool(
+        isinstance(entry, dict)
+        and entry.get("model") == model_slug(insight.model)
+        and entry.get("dataset_revisions") == expected_revisions
+        and entry.get("prompt_sha256") == prompt_hash(insight.prompt_key)
+    )
+
+
 def find_any(insight):
     from lib.storage import get_storage
 
-    available = set(get_storage().list(insight.directory, suffix=".md"))
+    suffix = f".{insight.extension}"
+    available = set(get_storage().list(insight.directory, suffix=suffix))
     manual = insight._candidate("manual")
     if manual.filename in available:
         return manual
@@ -65,7 +83,7 @@ def find_any(insight):
     remaining = [
         filename
         for filename in available - seen
-        if filename.startswith(prefix) and filename.endswith(".md")
+        if filename.startswith(prefix) and filename.endswith(suffix)
     ]
     if not remaining:
         return None

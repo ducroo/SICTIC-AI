@@ -8,11 +8,20 @@ from skills.harness.harness import dispatch_command
 from tests.skill_harness.cases import HARNESS_SMOKE_COMMANDS
 
 
+def assert_insight_result(result):
+    assert isinstance(result, list)
+    assert all(isinstance(insight, InsightFile) for insight in result)
+
+
 @pytest.mark.asyncio
 async def test_startup_profile_uses_local_fixture_storage(mocked_skill_boundaries):
     from skills.startup_profile.startup_profile import startup_profile
 
-    content, path = await startup_profile("example-startup")
+    result = await startup_profile("example-startup")
+    assert_insight_result(result)
+    [insight] = result
+    content = insight.content()
+    path = insight.path
 
     assert "Fixture answer" in content
     assert path.startswith("storage/startups/example-startup/insights/")
@@ -23,7 +32,10 @@ async def test_startup_profile_uses_local_fixture_storage(mocked_skill_boundarie
 async def test_startup_traction_uses_local_fixture_storage(mocked_skill_boundaries):
     from skills.startup_traction.startup_traction import startup_traction
 
-    content = await startup_traction("example-startup")
+    result = await startup_traction("example-startup")
+    assert_insight_result(result)
+    [insight] = result
+    content = insight.content()
 
     assert "Fixture answer" in content
     assert InsightFile("example-startup", "startup_traction", "ollama/test_model:1b").exists()
@@ -31,20 +43,22 @@ async def test_startup_traction_uses_local_fixture_storage(mocked_skill_boundari
 
 @pytest.mark.asyncio
 async def test_person_profile_uses_fixture_people_and_linkedin(mocked_skill_boundaries):
-    from skills.person_profile.person_profile import person_profile
+    from skills.person_profile.person_profile import person_profile_as_person_objects
 
-    people = await person_profile("sictic-members", "Jane Doe")
+    people = await person_profile_as_person_objects("sictic-members", "Jane Doe")
 
     assert len(people) == 1
     assert people[0].full_name == "Jane Doe"
-    assert "Full-name: Jane Doe" in people[0].person_profile
+    assert "Full-name: Jane Doe" in people[0].person_profile_markdown
 
 
 @pytest.mark.asyncio
 async def test_team_profile_uses_mocked_person_context(mocked_skill_boundaries):
     from skills.team_profile.team_profile import team_profile
 
-    content, path = await team_profile("example-startup")
+    [insight] = await team_profile("example-startup")
+    content = insight.content()
+    path = insight.path
 
     assert "Fixture LLM profile" in content
     assert path.startswith("storage/startups/example-startup/insights/")
@@ -57,8 +71,8 @@ async def test_investor_profile_composes_from_local_insights(mocked_skill_bounda
 
     result = await investor_profile("sictic-members")
 
-    assert result.person_profiles == 1
-    assert result.written == 1
+    assert_insight_result(result)
+    assert len(result) == 1
     assert InsightFile(
         "sictic-members",
         "investor_profile",
@@ -94,7 +108,7 @@ async def test_investor_profile_composes_from_local_insights(mocked_skill_bounda
             "skills.suggested_startups.suggested_startups",
             "suggested_startups",
             ("sictic-members", ["example-startup"], ["Jane Doe"], 1),
-            "Processed Jane Doe",
+            "Fixture rationale",
         ),
     ],
 )
@@ -109,32 +123,57 @@ async def test_ranking_style_skills_smoke(
 
     result = await getattr(module, function_name)(*args)
 
-    assert expected in result
+    assert_insight_result(result)
+    assert len(result) == 1
+    assert expected in result[0].content()
 
 
 @pytest.mark.asyncio
 async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundaries):
     from skills.dd_checks.dd_checks import dd_checks
 
-    path = await dd_checks("example-startup")
+    result = await dd_checks("example-startup")
+    assert_insight_result(result)
+    [insight] = result
+    path = insight.path
 
     assert path.startswith("storage/startups/example-startup/insights/")
-    assert "Due Diligence" in get_storage().read_text(path)
+    report = get_storage().read_text(path)
+    assert "Due Diligence" in report
+    assert "| No | Check | Status | Rationale | Source documents |" in report
+    json_insights = get_storage().list(
+        "storage/startups/example-startup/insights/batch-audit",
+        suffix=".json",
+    )
+    assert any(name.startswith("dd-checks-") for name in json_insights)
 
 
 @pytest.mark.asyncio
 async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
     from skills.batch_audit.batch_audit import batch_audit
 
-    result = await batch_audit("example-startup", "# Commercial\n- Is there traction?")
+    result = await batch_audit(
+        "example-startup",
+        """# Commercial
 
-    assert "| 1.1 | Is there traction?" in result
+## Traction
+
+### Customer traction
+
+Is there evidence of customer traction?
+""",
+    )
+    assert_insight_result(result)
+    [insight] = result
+
+    assert insight.exists()
     assert InsightFile(
         "example-startup",
         "batch_audit",
         "ollama/test_model:1b",
-        identifier="Commercial",
+        identifier="batch_audit-Commercial",
         subdir=True,
+        extension="json",
     ).exists()
 
 
@@ -144,19 +183,34 @@ async def test_submission_ready_writes_report_from_local_fixture(
 ):
     from skills.submission_ready.submission_ready import submission_ready
 
-    path = await submission_ready("example-startup")
+    result = await submission_ready("example-startup")
 
-    assert path.startswith("storage/startups/example-startup/insights/")
-    report = get_storage().read_text(path)
-    assert "Completeness and Eligibility" in report
-    assert "| Pass | Fixture evidence |" in report
+    assert_insight_result(result)
+    assert len(result) == 2
+    assert [insight.identifier for insight in result] == ["checklist", "response"]
+    root = (
+        "storage/startups/example-startup/insights/submission-ready"
+    )
+    run_id = get_storage().list(root)[0]
+    files = get_storage().list(f"{root}/{run_id}")
+    assert "checklist-test-model-1b.md" in files
+    assert "response-test-model-1b.md" in files
+    checklist = get_storage().read_text(
+        f"{root}/{run_id}/checklist-test-model-1b.md"
+    )
+    assert "Completeness and Eligibility" in checklist
+    assert "| Pass | Fixture evidence |" in checklist
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command_name", sorted(HARNESS_SMOKE_COMMANDS))
 async def test_harness_core_command_smoke(command_name, mocked_skill_boundaries, tmp_path):
     checklist = tmp_path / "checklist.md"
-    checklist.write_text("# Commercial\n- Is there traction?\n", encoding="utf-8")
+    checklist.write_text(
+        "# Commercial\n\n## Traction\n\n### Customer traction\n\n"
+        "Is there evidence of customer traction?\n",
+        encoding="utf-8",
+    )
     command = HARNESS_SMOKE_COMMANDS[command_name].format(checklist=checklist)
 
     result = await dispatch_command(command)

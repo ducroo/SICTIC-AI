@@ -20,9 +20,16 @@ The skill executes a python script in the background that manages the process:
    1. The script reads the available checklist keys from `config['dd_checks']['checklists']`. These keys are formatted as `<chapter>_<industry_type>` (e.g., `1_elevator_general`).
    2. It distills the unique chapters from these keys.
    3. For each chapter, it selects the key that matches the identified `<industry_type>`. If an industry-specific version doesn't exist for that chapter, it falls back to the `general` version.
-3. **Comprehensive Review:** For each selected checklist, it uses `batch_audit` to process all items against the data room.
+3. **Comprehensive Review:** For each selected structured Markdown checklist,
+   it uses `batch_audit` to process all items against the data room and save a
+   freshness-tracked JSON Insight.
 4. **Resiliency:** If a chapter fails (e.g., LLM timeout, context window limit), the script logs the error inside the Markdown output file for that specific chapter, safely catches the exception, and continues processing the remaining chapters.
-5. **Output:** All chapter results are collated into one Markdown report, saved with `lib.insights.InsightFile(dataset=startup_slug, skill="dd_checks", model=llm_model(), prompt_key=<industry_and_checklist_config>)`, and returned as `insight.path`. Do not hardcode `<REPO_PATH>/insights/...` paths.
+5. **Output:** The JSON audit Insights are rendered through
+   `json_to_markdown_table` and collated into one Markdown report, saved with
+   `lib.insights.InsightFile(dataset=startup_slug, skill="dd_checks",
+   model=llm_model(), prompt_key=<industry_and_checklist_config>)`. The Python
+   API returns `[insight]`; the chapter JSON audits remain internal. Do not
+   hardcode `<REPO_PATH>/insights/...` paths.
 
 ## Usage
 

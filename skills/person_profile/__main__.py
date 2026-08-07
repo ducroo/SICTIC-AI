@@ -1,6 +1,6 @@
 import typer
 
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.person_profile.person_profile import person_profile
 
@@ -12,12 +12,11 @@ def main(
     dataset: str = typer.Option(..., "--dataset", "-d", help="The target dataset to search."),
     person: str = typer.Option(None, "--person", "-p", help="The person's name (e.g. 'John Doe'). Leave empty to profile all persons in the dataset.")
 ):
-    persons = run_command(
+    insights = run_command(
         lambda: person_profile(dataset_name=dataset, names=person),
         logger=logger,
     )
-    for profile in persons:
-        typer.echo(profile.person_profile)
+    typer.echo(format_insights(insights))
 
 if __name__ == "__main__":
     app()

@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from lib.startups.dealum.manifest import replace_attachment_urls
+
 
 def render_application_markdown(
     application: dict[str, Any],
     *,
     dealum_url: str | None = None,
+    attachment_replacements: dict[str, str] | None = None,
 ) -> str:
     name = application.get("name") or "Unknown startup"
     lines = [f"# Dealum Application: {name}", ""]
@@ -16,8 +19,7 @@ def render_application_markdown(
             f"- Dealum ID: {application.get('id', '')}",
             f"- Dealum URL: {dealum_url or ''}",
             f"- Code: {application.get('code', '')}",
-            f"- Step: {application.get('step', '')}",
-            f"- Tags: {', '.join(application.get('tags') or [])}",
+            f"- Tags: {', '.join(sorted(application.get('tags') or []))}",
             "",
         ]
     )
@@ -43,7 +45,10 @@ def render_application_markdown(
                 lines.append(f"- {label}: {contact[key]}")
         lines.append("")
 
-    answers = application.get("answers") or {}
+    answers = replace_attachment_urls(
+        application.get("answers") or {},
+        attachment_replacements or {},
+    )
     if isinstance(answers, dict):
         lines.extend(["## Application Answers", ""])
         for key in sorted(answers):

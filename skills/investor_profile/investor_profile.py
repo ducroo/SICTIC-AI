@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import List
 
-from lib.insights import InsightFile, insight_base_name
+from lib.insights import InsightFile, InsightResult, strip_model_tag
 from lib.logger import get_logger
 from lib.people.model import Person
 from lib.slugify import slugify
@@ -20,6 +20,7 @@ class InvestorProfileResult:
     unchanged: int = 0
     skipped: int = 0
     missing_track_records: int = 0
+    insights: InsightResult = field(default_factory=list)
 
 
 def _compose_investor_profile(person_profile: str, track_record: str | None) -> str:
@@ -36,7 +37,7 @@ def _compose_investor_profile(person_profile: str, track_record: str | None) -> 
     )
 
 
-async def investor_profile(
+async def _investor_profile_result(
     source_dataset: str = "sictic-members",
 ) -> InvestorProfileResult:
     """Build investor profiles by appending manual track records to person profiles."""
@@ -50,15 +51,27 @@ async def investor_profile(
         logger.warning(f"[{dataset_slug}] Person profile directory not found: {person_profile_dir}")
         return InvestorProfileResult(source_dataset=dataset_slug)
 
-    filenames = storage.list(person_profile_dir, suffix=".md")
+    from lib.people.discovery import persons_in_dataset
+
+    member_ids = {
+        member.linkedin_id
+        for member in persons_in_dataset(dataset_slug)
+        if member.linkedin_id
+    }
+    filenames = [
+        filename
+        for filename in storage.list(person_profile_dir, suffix=".md")
+        if strip_model_tag(filename) in member_ids
+    ]
     written = 0
     unchanged = 0
     skipped = 0
     missing_track_records = 0
+    insights: InsightResult = []
 
     for filename in filenames:
         stem = PurePosixPath(filename).stem
-        linkedin_id = insight_base_name(filename)
+        linkedin_id = strip_model_tag(filename)
         if not linkedin_id or linkedin_id == stem:
             logger.warning(f"[{dataset_slug}] Skipping malformed person profile filename: {filename}")
             skipped += 1
@@ -92,10 +105,12 @@ async def investor_profile(
             )
             if insight.exists() and insight.content() == content:
                 unchanged += 1
+                insights.append(insight)
                 continue
 
             insight.save(content)
             written += 1
+            insights.append(insight)
         except Exception as error:
             logger.warning(f"[{dataset_slug}] Skipping {filename}: {error}")
             skipped += 1
@@ -111,7 +126,16 @@ async def investor_profile(
         unchanged=unchanged,
         skipped=skipped,
         missing_track_records=missing_track_records,
+        insights=insights,
     )
+
+
+async def investor_profile(
+    source_dataset: str = "sictic-members",
+) -> InsightResult:
+    """Build investor profiles and return their managed insight artifacts."""
+    result = await _investor_profile_result(source_dataset)
+    return result.insights
 
 
 def read_investor_profiles(
@@ -128,13 +152,6 @@ def read_investor_profiles(
     from lib.people.discovery import persons_in_dataset
 
     discovered = persons_in_dataset(dataset_slug)
-    files = storage.list(profile_dir, suffix=".md")
-    files_by_id: dict[str, list[str]] = {}
-    for filename in files:
-        linkedin_id = insight_base_name(filename)
-        if linkedin_id and linkedin_id != PurePosixPath(filename).stem:
-            files_by_id.setdefault(linkedin_id, []).append(filename)
-
     results: dict[str, str] = {}
     for name in names:
         matched = Person(full_name=name, linkedin_id=slugify(name)).find_best_match(discovered)

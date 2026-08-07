@@ -10,7 +10,7 @@ from lib.datasets.paths import (
     storage_domain_config,
 )
 from lib.datasets.state import is_active_dataset
-from lib.insights.naming import insight_base_name
+from lib.insights.naming import strip_model_tag
 from lib.slugify import slugify
 from lib.storage import get_storage
 
@@ -94,7 +94,7 @@ def discover_insights(
                 if root_file
                 else filename
             )
-            identifier = insight_base_name(candidate_name)
+            identifier = strip_model_tag(candidate_name)
             if not identifier:
                 continue
             records.append(

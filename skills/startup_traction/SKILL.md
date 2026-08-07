@@ -33,11 +33,13 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
 4. **Data Retrieval, Synthesis & Output:**
    * Invoke `dataset_chat(dataset_name=dataset_slug, questions=query, llm_instructions=llm_instructions, max_chunks=100, strict_insufficient_context=False)`.
    * If there is insufficient indexed context, raise an error and do not save an insight.
-   * Save the Markdown result with `insight.save(result)`, log `insight.path`, and return the raw Markdown string.
+   * Save the Markdown result with `insight.save(result)`, log `insight.path`,
+     and return `[insight]`.
 
 ## Architecture Constraints
 * **Entry Point:** Must have a `__main__.py` containing a Typer CLI that accepts `startup_name` as an argument. The CLI must contain zero business logic. 
-* **Core Logic:** The core logic must live in `startup_traction.py` under the function `def startup_traction(startup_name: str) -> str:`. 
+* **Core Logic:** The core logic must live in `startup_traction.py` under the
+  function `async def startup_traction(startup_name: str) -> InsightResult:`.
 * **Error Handling:** Use standard Python exceptions internally, caught only by the Typer CLI in `__main__.py`.
 
 ## Usage

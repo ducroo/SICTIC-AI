@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -114,11 +115,16 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_dataset_chat(*_args, **_kwargs):
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'
 
-    async def fake_submission_dataset_chat(*_args, **_kwargs):
+    async def fake_structured_audit_chat(*_args, **kwargs):
+        status = (
+            "Pass"
+            if "Pass | Fail | Unclear" in kwargs.get("prompt", "")
+            else "Fine"
+        )
         return (
-            '{"judgment": "Pass", "assessment": "Fixture evidence", '
-            '"source_documents": ["Dealum Application — fixture"], '
-            '"proposed_next_step": "No action"}'
+            f'{{"status":"{status}","rationale":"Fixture evidence",'
+            '"source_documents":["fixture.md"],'
+            '"proposed_next_steps_and_questions":[]}'
         )
 
     async def fake_llm_chat(*_args, **_kwargs):
@@ -134,10 +140,19 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         insight = InsightFile(startup, "startup_profile", "manual")
         if not insight.exists():
             insight.save("# Fixture Startup Profile\n\nExample traction and market.")
-        return insight.content(), insight.path
+        return [insight]
 
     async def fake_investor_profile(*_args, **_kwargs):
-        return SimpleNamespace(source_dataset=fixtures.community, person_profiles=1, written=1)
+        insight = InsightFile(
+            fixtures.community,
+            "investor_profile",
+            "manual",
+            identifier=fixtures.person_linkedin_id,
+            subdir=True,
+        )
+        if not insight.exists():
+            insight.save("# Jane Doe\n\nInvestor fixture.")
+        return [insight]
 
     class FakeLinkedInResolver:
         def __init__(self, *_args, **_kwargs):
@@ -178,10 +193,28 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_ensure_startup_dataset(startup, **_kwargs):
         return SimpleNamespace(dataset_slug="example-startup", dataset_exists=True)
 
+    class FakeSubmissionDealumAdapter:
+        dealroom_id = "test"
+
+        def is_configured(self):
+            return True
+
+        def list_applications(self):
+            return [
+                {
+                    "id": 1,
+                    "name": "example-startup",
+                    "code": "EXAMPLE-1",
+                    "step": "Application",
+                }
+            ]
+
     people_discovery = importlib.import_module("lib.people.discovery")
     startup_sources = importlib.import_module("lib.startups.sources")
     advocates_mod = importlib.import_module("skills.advocates.advocates")
-    batch_audit_mod = importlib.import_module("skills.batch_audit.batch_audit")
+    structured_batch_audit_mod = importlib.import_module(
+        "skills.batch_audit.structured"
+    )
     submission_ready_mod = importlib.import_module(
         "skills.submission_ready.submission_ready"
     )
@@ -226,11 +259,36 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(dataset_chat_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dd_checks_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dd_priorities_mod, "llm_chat", fake_llm_chat)
-    monkeypatch.setattr(batch_audit_mod, "dataset_chat", fake_dataset_chat)
+    monkeypatch.setattr(
+        structured_batch_audit_mod,
+        "dataset_chat",
+        fake_structured_audit_chat,
+    )
     monkeypatch.setattr(
         submission_ready_mod,
-        "dataset_chat",
-        fake_submission_dataset_chat,
+        "DealumAdapter",
+        FakeSubmissionDealumAdapter,
+    )
+    monkeypatch.setattr(
+        submission_ready_mod,
+        "import_startup_from_dealum",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            dataset_slug="example-startup",
+            changed=False,
+        ),
+    )
+    monkeypatch.setattr(
+        submission_ready_mod,
+        "llm_chat",
+        lambda *_args, **_kwargs: asyncio.sleep(
+            0,
+            result=(
+                '{"proposed_action":"Move to Under review",'
+                '"rationale":"Complete.",'
+                '"eligibility_concerns":[],'
+                '"missing_or_inconsistent_information":[]}'
+            ),
+        ),
     )
     monkeypatch.setattr(person_profile_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(team_profile_mod, "llm_chat", fake_llm_chat)

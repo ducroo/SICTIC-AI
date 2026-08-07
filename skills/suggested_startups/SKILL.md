@@ -41,7 +41,9 @@ description: Rank a provided list of startups against a list of investors by mat
 
 6. **Output Generation:**
    * Save one Markdown table per investor with `insight.save(content)`.
-   * Log `insight.path` and return a newline-separated processing summary. Do not hardcode `<REPO_PATH>/insights/...` paths.
+   * Log each `insight.path` and return all generated or reusable artifacts as
+     a flat `list[InsightFile]`. Do not hardcode `<REPO_PATH>/insights/...`
+     paths.
 
 ## Usage
 

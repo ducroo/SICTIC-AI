@@ -19,7 +19,11 @@ async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
     # Mock startup_profile
     mock_startup = mocker.patch("skills.potential_investors.potential_investors.startup_profile")
     async def mock_startup_coro(*args, **kwargs):
-        return ("Startup profile text", "path")
+        class FakeInsight:
+            def content(self):
+                return "Startup profile text"
+
+        return [FakeInsight()]
     mock_startup.side_effect = mock_startup_coro
 
     # Mock config_load
@@ -57,9 +61,10 @@ async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
     output = await potential_investors(startup)
 
     # Assert output contains our mock data (generate_output writes a markdown table)
-    assert "Investor A" in output
-    assert "Investor B" in output
-    assert "90" in output
+    assert len(output) == 1
+    assert "Investor A" in output[0].content()
+    assert "Investor B" in output[0].content()
+    assert "90" in output[0].content()
 
     # Assert File System
     expected_file = "storage/startups/teststartup/insights/potential-investors-teststartup-test-model-1b.md"
@@ -67,5 +72,6 @@ async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
 
     # Assert Cache Bypass
     output_cached = await potential_investors(startup)
-    assert "Investor A" in output_cached
+    assert len(output_cached) == 1
+    assert "Investor A" in output_cached[0].content()
     mock_startup.assert_called_once() # Should not be called again

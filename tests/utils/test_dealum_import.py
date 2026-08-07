@@ -8,11 +8,12 @@ from lib.startups.dealum import (
     import_startup_from_dealum,
     reconcile_dealum_startup,
 )
-from lib.startups.sources import ensure_startup_dataset
+from lib.startups.dealum.manifest import LAST_SUCCESSFUL_PULL_AT
+from lib.startups.sources import _dealum_sync_due, ensure_startup_dataset
+from lib.datasets.source import snapshot_source_files
 from lib.datasets.state import archive_dataset, dataset_archived_marker_path
 from lib.datasets.paths import dataset_location_for_domain
 from lib.storage import get_storage
-from lib.datasets.paths import dataset_raw_path
 
 
 APPLICATION = {
@@ -103,23 +104,50 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     )
 
 
-def test_dealum_import_unchanged_skips_rewrite_and_preserves_manual_files(mock_env):
+def test_dealum_import_unchanged_replaces_snapshot_and_preserves_manual_files(
+    mock_env,
+    mocker,
+):
     adapter = FakeDealumAdapter()
     storage = get_storage()
     storage.write_text("storage/startups/avientus/datasets/manual-note.md", "manual")
+    mock_time = mocker.patch(
+        "lib.startups.dealum.importing._successful_pull_time",
+        side_effect=[100, 200],
+    )
 
     first = import_startup_from_dealum("Avientus", adapter=adapter)
-    application_mtime = storage.mtime(first.application_path)
+    first_manifest = json.loads(storage.read_text(first.manifest_path))
+    first_sources = [
+        (source.filename, source.sha256)
+        for source in snapshot_source_files(
+            storage,
+            dataset_location_for_domain("avientus", "startups").raw_rel,
+        )
+    ]
     second = import_startup_from_dealum("Avientus", adapter=adapter)
+    second_manifest = json.loads(storage.read_text(second.manifest_path))
+    second_sources = [
+        (source.filename, source.sha256)
+        for source in snapshot_source_files(
+            storage,
+            dataset_location_for_domain("avientus", "startups").raw_rel,
+        )
+    ]
 
     assert second.changed is False
-    assert second.downloaded_files == 0
-    assert second.skipped_files == 2
+    assert second.downloaded_files == 2
+    assert second.skipped_files == 0
+    assert adapter.downloads == 4
+    assert first_manifest[LAST_SUCCESSFUL_PULL_AT] == 100
+    assert second_manifest[LAST_SUCCESSFUL_PULL_AT] == 200
+    assert first_manifest["snapshot_hash"] == second_manifest["snapshot_hash"]
+    assert first_sources == second_sources
     assert storage.exists("storage/startups/avientus/datasets/manual-note.md")
-    assert storage.mtime(first.application_path) == application_mtime
+    assert mock_time.call_count == 2
 
 
-def test_dealum_import_marks_removed_file_stale(mock_env):
+def test_dealum_import_removes_files_deleted_from_dealum(mock_env):
     adapter = FakeDealumAdapter()
     import_startup_from_dealum("Avientus", adapter=adapter)
 
@@ -128,12 +156,200 @@ def test_dealum_import_marks_removed_file_stale(mock_env):
         "oneliner": APPLICATION["answers"]["oneliner"],
         "pitch_deck": APPLICATION["answers"]["pitch_deck"],
     }
-    import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(changed_application))
+    result = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(changed_application),
+    )
 
-    manifest = json.loads(get_storage().read_text("storage/startups/avientus/datasets/dealum/manifest.json"))
-    stale = [item for item in manifest["files"] if item.get("stale")]
-    assert len(stale) == 1
-    assert stale[0]["filename"] == "financialplan.xlsx"
+    manifest = json.loads(
+        get_storage().read_text(
+            "storage/startups/avientus/datasets/dealum/manifest.json"
+        )
+    )
+    assert result.changed is True
+    assert result.stale_files == 1
+    assert len(manifest["files"]) == 1
+    assert manifest["files"][0]["filename"] == "Avientus_Deck.pdf"
+    assert not get_storage().exists(
+        "storage/startups/avientus/datasets/dealum/documents/"
+        "financialplan.xlsx"
+    )
+
+
+def test_dealum_import_failure_preserves_previous_snapshot_and_timestamp(
+    mock_env,
+    mocker,
+):
+    storage = get_storage()
+    mocker.patch(
+        "lib.startups.dealum.importing._successful_pull_time",
+        return_value=100,
+    )
+    first = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(),
+    )
+    previous_manifest = storage.read_text(first.manifest_path)
+    previous_application = storage.read_text(first.application_path)
+
+    class FailingAdapter(FakeDealumAdapter):
+        def download_file(self, url):
+            if url.endswith("financialplan.xlsx"):
+                raise RuntimeError("attachment download failed")
+            return super().download_file(url)
+
+    changed_application = {
+        **APPLICATION,
+        "answers": {
+            **APPLICATION["answers"],
+            "oneliner": "This update must not be installed partially.",
+        },
+    }
+    with pytest.raises(RuntimeError, match="attachment download failed"):
+        import_startup_from_dealum(
+            "Avientus",
+            adapter=FailingAdapter(changed_application),
+        )
+
+    assert storage.read_text(first.manifest_path) == previous_manifest
+    assert storage.read_text(first.application_path) == previous_application
+    assert storage.exists(
+        "storage/startups/avientus/datasets/dealum/documents/"
+        "financialplan.xlsx"
+    )
+
+
+def test_dealum_stage_and_operational_dates_do_not_change_snapshot(
+    mock_env,
+):
+    first = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(),
+    )
+    changed_application = {
+        **APPLICATION,
+        "step": "Under review",
+        "moveDate": 1_999_999_999_000,
+        "reviewDate": 1_999_999_999_001,
+    }
+
+    second = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(changed_application),
+    )
+
+    assert first.changed is True
+    assert second.changed is False
+    application_md = get_storage().read_text(second.application_path)
+    assert "- Step:" not in application_md
+    manifest = json.loads(get_storage().read_text(second.manifest_path))
+    assert manifest["step"] == "Under review"
+
+
+def test_dealum_rotated_attachment_url_does_not_change_snapshot(
+    mock_env,
+):
+    import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(),
+    )
+    changed_application = {
+        **APPLICATION,
+        "answers": {
+            **APPLICATION["answers"],
+            "pitch_deck": (
+                "https://files.dealum.com/rotated-token/"
+                "Avientus_Deck.pdf"
+            ),
+        },
+    }
+
+    second = import_startup_from_dealum(
+        "Avientus",
+        adapter=FakeDealumAdapter(changed_application),
+    )
+
+    assert second.changed is False
+    application_md = get_storage().read_text(second.application_path)
+    assert "rotated-token" not in application_md
+    assert (
+        "dealum-attachment:pitch_deck:Avientus_Deck.pdf"
+        in application_md
+    )
+
+
+def test_dealum_sync_due_is_per_startup_and_uses_six_hour_timestamp(
+    mock_env,
+    mocker,
+    monkeypatch,
+):
+    storage = get_storage()
+    monkeypatch.delenv("DEALUM_SYNC_TTL_SECONDS", raising=False)
+    now = 1_000_000
+    for startup, last_pull in (
+        ("freshco", now - 21_599),
+        ("stale-co", now - 21_600),
+    ):
+        manifest_path = (
+            f"{dataset_location_for_domain(startup, 'startups').raw_rel}"
+            "/dealum/manifest.json"
+        )
+        storage.write_text(
+            manifest_path,
+            json.dumps({LAST_SUCCESSFUL_PULL_AT: last_pull}),
+        )
+    mocker.patch("lib.startups.sources.time.time", return_value=now)
+
+    assert _dealum_sync_due("freshco") is False
+    assert _dealum_sync_due("stale-co") is True
+
+
+def test_dealum_sync_due_treats_legacy_manifest_without_timestamp_as_due(
+    mock_env,
+):
+    storage = get_storage()
+    storage.write_text(
+        f"{dataset_location_for_domain('legacy-co', 'startups').raw_rel}"
+        "/dealum/manifest.json",
+        json.dumps({"last_sync": 999_999_999}),
+    )
+
+    assert _dealum_sync_due("legacy-co") is True
+
+
+@pytest.mark.asyncio
+async def test_ensure_startup_dataset_skips_dealum_within_freshness_window(
+    mock_env,
+    mocker,
+    monkeypatch,
+):
+    storage = get_storage()
+    monkeypatch.delenv("DEALUM_SYNC_TTL_SECONDS", raising=False)
+    manifest_path = (
+        f"{dataset_location_for_domain('avientus', 'startups').raw_rel}"
+        "/dealum/manifest.json"
+    )
+    storage.write_text(
+        manifest_path,
+        json.dumps({LAST_SUCCESSFUL_PULL_AT: 1_000_000}),
+    )
+    mocker.patch("lib.startups.sources.time.time", return_value=1_021_599)
+    mocker.patch(
+        "lib.startups.sources.DealumAdapter",
+        return_value=FakeDealumAdapter(),
+    )
+    import_mock = mocker.patch(
+        "lib.startups.sources.import_startup_from_dealum",
+    )
+
+    status = await ensure_startup_dataset(
+        "Avientus",
+        sync_after_import=False,
+    )
+
+    assert status.dataset_exists is True
+    assert status.dealum_checked is False
+    import_mock.assert_not_called()
 
 
 @pytest.mark.asyncio

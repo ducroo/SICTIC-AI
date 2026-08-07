@@ -1,4 +1,5 @@
 from pathlib import PurePosixPath
+import re
 
 from lib.datasets.paths import dataset_location
 from lib.slugify import slugify
@@ -10,9 +11,22 @@ def model_slug(model: str) -> str:
     return slugify(model.split("/")[-1])
 
 
-def insight_directory(dataset: str, skill: str, *, subdir: bool) -> str:
+def insight_directory(
+    dataset: str,
+    skill: str,
+    *,
+    subdir: bool,
+    run_id: str | None = None,
+) -> str:
     root = dataset_location(dataset).insights_rel
-    return f"{root}/{slugify(skill)}" if subdir else root
+    directory = f"{root}/{slugify(skill)}" if subdir else root
+    if run_id is None:
+        return directory
+    if not subdir:
+        raise ValueError("run_id requires subdir=True.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", run_id):
+        raise ValueError(f"Invalid insight run identifier: {run_id!r}")
+    return f"{directory}/{run_id}"
 
 
 def insight_filename(
@@ -22,12 +36,13 @@ def insight_filename(
     *,
     identifier: str | None,
     subdir: bool,
+    extension: str = "md",
 ) -> str:
     identity = identifier or dataset
     core = slugify(f"{identity}-{model_slug(model)}")
     if subdir:
-        return f"{core}.md"
-    return f"{slugify(skill)}-{core}.md"
+        return f"{core}.{extension}"
+    return f"{slugify(skill)}-{core}.{extension}"
 
 
 def insight_base(

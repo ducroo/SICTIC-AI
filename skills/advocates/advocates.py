@@ -3,7 +3,7 @@ from typing import List, Optional
 from lib.model_config import llm_model
 from lib.logger import get_logger
 from lib.slugify import slugify
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from skills.config_load.config_load import config_load
 from skills.ranking.ranking_persons import ranking_persons
 from lib.insights import hydrate_dataset_from_insights
@@ -11,7 +11,7 @@ from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
-async def advocates(event_name: str, event_description: str, target_members: Optional[List[str]] = None, exclude_members: Optional[List[str]] = None, top_k: int = 10) -> str:
+async def advocates(event_name: str, event_description: str, target_members: Optional[List[str]] = None, exclude_members: Optional[List[str]] = None, top_k: int = 10) -> InsightResult:
     """
     Provides a ranked list of potential advocates for a given event based on quickselect ranking and LLM refinement.
     """
@@ -45,7 +45,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     reusable = insight.find_reusable()
     if reusable:
         logger.info(f"[{event_name_slug}] Using cached advocates from {reusable.path}")
-        return reusable.content()
+        return [reusable]
 
     objective = objective_template.replace("{{overview_event}}", event_description)
 
@@ -65,4 +65,4 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     insight.save(result)
     logger.info(f"[{event_name_slug}] Advocates search complete. Results saved to {insight.path}")
 
-    return result
+    return [insight]

@@ -21,8 +21,11 @@ Assessment rules:
 
 Output strict JSON only, without Markdown fences:
 {
-  "judgment": "Pass | Fail | Unclear",
-  "assessment": "Concise evidence-based assessment.",
+  "status": "Pass | Fail | Unclear",
+  "rationale": "Concise evidence-based assessment.",
   "source_documents": ["Document — page/section"],
-  "proposed_next_step": "Specific Ops action."
+  "proposed_next_steps_and_questions": ["Specific Ops action or question."]
 }
+
+Use an empty JSON list when there are no source documents or proposed next
+steps and questions.

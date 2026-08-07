@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import importlib
 from pathlib import Path
+from typing import get_type_hints
 
 from typer.testing import CliRunner
 
 from skills.harness.harness import build_registry
 from skills.skill_registry import SKILL_REGISTRY
+from lib.insights import InsightFile
 from tests.skill_harness.cases import (
     ADMIN_ONLY_HARNESS_COMMANDS,
     HARNESS_SMOKE_COMMANDS,
@@ -59,3 +61,25 @@ def test_every_skill_has_explicit_harness_coverage_classification():
 
     assert set(SKILL_COVERAGE) == skill_names
     assert set(SKILL_COVERAGE.values()) <= set(SKILL_COVERAGE_REASONS)
+
+
+def test_insight_skill_apis_declare_uniform_result_contract():
+    entrypoints = {
+        "advocates": "skills.advocates.advocates",
+        "batch_audit": "skills.batch_audit.batch_audit",
+        "dd_checks": "skills.dd_checks.dd_checks",
+        "dd_priorities": "skills.dd_priorities.dd_priorities",
+        "expert_search": "skills.expert_search.expert_search",
+        "investor_profile": "skills.investor_profile.investor_profile",
+        "person_profile": "skills.person_profile.person_profile",
+        "potential_investors": "skills.potential_investors.potential_investors",
+        "startup_profile": "skills.startup_profile.startup_profile",
+        "startup_traction": "skills.startup_traction.startup_traction",
+        "submission_ready": "skills.submission_ready.submission_ready",
+        "suggested_startups": "skills.suggested_startups.suggested_startups",
+        "team_profile": "skills.team_profile.team_profile",
+    }
+
+    for function_name, module_name in entrypoints.items():
+        function = getattr(importlib.import_module(module_name), function_name)
+        assert get_type_hints(function)["return"] == list[InsightFile], function_name

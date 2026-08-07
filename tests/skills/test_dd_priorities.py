@@ -46,7 +46,8 @@ async def test_dd_priorities_synthesizes_saved_dd_checks_report(
         fake_llm_chat,
     )
 
-    path = await dd_priorities("Avientus")
+    [insight] = await dd_priorities("Avientus")
+    path = insight.path
 
     assert path.startswith("storage/startups/avientus/insights/dd-priorities-")
     assert "Cash is unverified" in prompts[0]
@@ -85,6 +86,7 @@ async def test_dd_priorities_resolves_startup_alias(
         fake_llm_chat,
     )
 
-    path = await dd_priorities("ExpertVision Ai")
+    [insight] = await dd_priorities("ExpertVision Ai")
+    path = insight.path
 
     assert path.startswith("storage/startups/expertvision/insights/dd-priorities-")

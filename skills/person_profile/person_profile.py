@@ -1,11 +1,12 @@
 import json
 import asyncio
+from dataclasses import dataclass
 from typing import List
 
 from lib.model_config import llm_model
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.linkedin import LinkedInResolver
 from lib.logger import get_logger
 from lib.people.discovery import persons_in_dataset
@@ -16,6 +17,12 @@ from lib.env import get_env_var
 from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class _PersonProfileResult:
+    persons: list[Person]
+    insights: InsightResult
 
 
 def _profile_metadata_header(person: Person) -> str:
@@ -45,17 +52,17 @@ def _ensure_profile_metadata_header(person: Person, content: str) -> str:
         return content
     return _profile_metadata_header(person) + content.lstrip()
 
-async def person_profile(
+async def _person_profile_result(
     dataset_name: str,
     names: str | list[str] = None,
     *,
     include_dataset_context: bool = True,
-) -> List[Person]:
+) -> _PersonProfileResult:
     """
     Collate a comprehensive profile on a specific person (or list of persons) by searching 
     a given dataset and LinkedIn, returning the full synthesized report.
     If names is None, discovers all persons in the dataset, pre-fetches profiles, and generates all reports.
-    Returns a list of fully populated Person objects containing the final Markdown report.
+    Returns populated Person objects and their corresponding insight artifacts.
     """
     dataset_slug = slugify(dataset_name)
     
@@ -85,7 +92,7 @@ async def person_profile(
                 
     if not target_persons:
         logger.warning(f"[{dataset_slug}] No persons discovered or requested.")
-        return []
+        return _PersonProfileResult(persons=[], insights=[])
 
     # 2. Batch Resolution
     logger.info(f"[{dataset_slug}] Resolving profiles for {len(target_persons)} entities...")
@@ -111,23 +118,62 @@ async def person_profile(
     concurrency = int(get_env_var("OLLAMA_NUM_PARALLEL"))
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def generate_with_logging(person: Person) -> None:
+    async def generate_with_logging(person: Person) -> InsightFile | None:
         try:
             async with semaphore:
-                await _generate_single_profile(dataset_slug, person, include_dataset_context=include_dataset_context)
+                return await _generate_single_profile(
+                    dataset_slug,
+                    person,
+                    include_dataset_context=include_dataset_context,
+                )
         except Exception as e:
             logger.error(f"[{dataset_slug}] Failed to generate profile for {person.display_name}: {e}")
+            return None
 
-    await asyncio.gather(*(generate_with_logging(person) for person in profiles_to_process))
-            
-    return profiles_to_process
+    generated = await asyncio.gather(
+        *(generate_with_logging(person) for person in profiles_to_process)
+    )
+    return _PersonProfileResult(
+        persons=profiles_to_process,
+        insights=[insight for insight in generated if insight is not None],
+    )
+
+
+async def person_profile(
+    dataset_name: str,
+    names: str | list[str] = None,
+    *,
+    include_dataset_context: bool = True,
+) -> InsightResult:
+    """Generate person profiles and return their managed insight artifacts."""
+    result = await _person_profile_result(
+        dataset_name,
+        names,
+        include_dataset_context=include_dataset_context,
+    )
+    return result.insights
+
+
+async def person_profile_as_person_objects(
+    dataset_name: str,
+    names: str | list[str] = None,
+    *,
+    include_dataset_context: bool = True,
+) -> list[Person]:
+    """Generate person profiles and return the populated Person objects."""
+    result = await _person_profile_result(
+        dataset_name,
+        names,
+        include_dataset_context=include_dataset_context,
+    )
+    return result.persons
 
 async def _generate_single_profile(
     dataset_slug: str,
     person: Person,
     *,
     include_dataset_context: bool = True,
-) -> None:
+) -> InsightFile:
     """
     Worker function to generate a single profile from a fully populated Person Wrapper.
     """
@@ -157,11 +203,11 @@ async def _generate_single_profile(
     )
     reusable = insight.find_reusable()
     if reusable:
-        person.person_profile = _ensure_profile_metadata_header(
+        person.person_profile_markdown = _ensure_profile_metadata_header(
             person,
             reusable.content(),
         )
-        return
+        return reusable
 
     logger.info(f"[{dataset_slug}] Collating profile for '{display_name}'...")
 
@@ -208,8 +254,9 @@ async def _generate_single_profile(
 
     # Save and update object
     insight.save(profile_output)
-    person.person_profile = profile_output
+    person.person_profile_markdown = profile_output
     logger.info(
         f"[{dataset_slug}] Successfully saved person profile for "
         f"'{display_name}' to {insight.path}"
     )
+    return insight

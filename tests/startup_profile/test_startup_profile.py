@@ -66,6 +66,9 @@ async def test_startup_profile_splits_query_lines_for_retrieval(mock_env, mocker
 
     chat.assert_awaited_once_with(
         dataset_name="avientus",
-        questions=["1. Oneliner", "2. Industry", "3. Technology"],
-        llm_instructions="Use only context.",
+        queries=["1. Oneliner", "2. Industry", "3. Technology"],
+        prompt=(
+            "Query: 1. Oneliner\n\n2. Industry\n\n3. Technology\n\n"
+            "Instructions: Use only context."
+        ),
     )

@@ -1,6 +1,6 @@
 import typer
 
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.potential_investors.potential_investors import potential_investors
 
@@ -27,7 +27,7 @@ def main(
         logger=logger,
         error_prefix="Execution failed",
     )
-    typer.echo(result)
+    typer.echo(format_insights(result))
 
 if __name__ == "__main__":
     app()
