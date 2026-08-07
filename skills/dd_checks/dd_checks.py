@@ -1,7 +1,7 @@
 import re
 
 from lib.model_config import llm_model
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.storage import get_storage
 from skills.config_load.config_load import config_load
 from skills.batch_audit.batch_audit import batch_audit
@@ -65,7 +65,7 @@ async def chapter_by_chapter(
             
         checklist_string = checklists[checklist_key]
         try:
-            audit_insight = await batch_audit(
+            audit_results = await batch_audit(
                 dataset_name=startup_name_lower,
                 checklist_markdown=checklist_string,
                 skill_name="dd_checks",
@@ -79,6 +79,7 @@ async def chapter_by_chapter(
                 ],
                 missing_evidence_status="Not Found",
             )
+            [audit_insight] = audit_results
             chapter_output = json_to_markdown_table(audit_insight)
             sections.append(f"## Chapter: {chapter}\n\n{chapter_output}\n")
         except Exception as e:
@@ -88,7 +89,7 @@ async def chapter_by_chapter(
             )
     return sections
 
-async def dd_checks(startup: str) -> str:
+async def dd_checks(startup: str) -> InsightResult:
     """
     Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, industry-aware checklists. It automatically identifies the startup's industry, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
     """
@@ -148,4 +149,4 @@ async def dd_checks(startup: str) -> str:
         + "\n"
     )
     insight.save(report)
-    return insight.path
+    return [insight]

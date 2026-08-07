@@ -1,7 +1,7 @@
 import typer
 from typing import List, Optional
 
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.suggested_startups.suggested_startups import suggested_startups
 
@@ -24,7 +24,7 @@ def main(
         logger=logger,
         error_prefix="Execution failed",
     )
-    typer.echo(result)
+    typer.echo(format_insights(result))
 
 if __name__ == "__main__":
     app()

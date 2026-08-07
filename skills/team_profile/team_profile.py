@@ -1,17 +1,16 @@
-from typing import Tuple
 from skills.config_load.config_load import config_load
-from skills.person_profile.person_profile import person_profile
+from skills.person_profile.person_profile import person_profile_as_person_objects
 from skills.llm_chat.llm_chat import llm_chat
 from lib.datasets.search import dataset_search
 from lib.model_config import llm_model
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.datasets.ingestion import sync_datasets
 from lib.slugify import slugify
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-async def team_profile(startup_name: str) -> Tuple[str, str]:
+async def team_profile(startup_name: str) -> InsightResult:
     """
     Performs deep-dive due diligence on a startup's leadership. Identifies founders,
     synthesizes person profiles, and evaluates the team composition.
@@ -44,11 +43,11 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     reusable = insight.find_reusable()
     if reusable:
         logger.info(f"[{dataset_name}] Using cached team profile from {reusable.path}")
-        return reusable.content(), reusable.path
+        return [reusable]
     
     # 1. Discovery (via person_profile)
     logger.info(f"[{dataset_name}] Fetching person profiles for the team...")
-    persons = await person_profile(startup_name, names=None)
+    persons = await person_profile_as_person_objects(startup_name, names=None)
     
     if not persons:
         logger.warning(f"[{dataset_name}] No persons discovered. Proceeding with empty context.")
@@ -86,8 +85,8 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     for p in persons:
         full_prompt += f"**Name:** {p.full_name}\n"
         full_prompt += f"**LinkedIn ID:** {p.linkedin_id}\n\n"
-        if p.person_profile:
-            full_prompt += f"**Profile Summary:**\n{p.person_profile}\n\n"
+        if p.person_profile_markdown:
+            full_prompt += f"**Profile Summary:**\n{p.person_profile_markdown}\n\n"
         full_prompt += "---\n\n"
         
     full_prompt += "### CONTEXT END ###\n\n"
@@ -108,4 +107,4 @@ async def team_profile(startup_name: str) -> Tuple[str, str]:
     insight.save(report_md)
     logger.info(f"[{dataset_name}] Team Profile saved to {insight.path}")
 
-    return report_md, insight.path
+    return [insight]

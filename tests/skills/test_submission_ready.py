@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from lib.insights import InsightFile
 from lib.startups.dealum import DealumMatch
 from lib.storage import get_storage
 from skills.submission_ready.submission_ready import (
@@ -222,7 +223,7 @@ async def test_batch_invocation_uses_six_hour_processing_mode(
 
     result = await submission_ready()
 
-    assert len(result) == 2
+    assert result == []
     assert force_modes == [False, False]
     assert adapter.list_calls == 1
 
@@ -277,7 +278,7 @@ async def test_process_candidate_writes_timestamped_pair(
 
     async def fake_batch_audit(**kwargs):
         batch_calls.append(kwargs)
-        return FakeAuditInsight()
+        return [FakeAuditInsight()]
 
     async def fake_response(**kwargs):
         return "# Proposed action\n", "response prompt"
@@ -342,7 +343,7 @@ async def test_stage_change_uses_current_batch_audit_for_new_response(
         return "example"
 
     async def fake_batch_audit(**_kwargs):
-        return FakeAuditInsight()
+        return [FakeAuditInsight()]
 
     async def fake_response(**kwargs):
         assert kwargs["stage"] == "Under review"
@@ -405,7 +406,7 @@ async def test_unchanged_stage_reuses_both_artifacts_without_llm(
         return "example"
 
     async def fake_batch_audit(**_kwargs):
-        return FakeAuditInsight()
+        return [FakeAuditInsight()]
 
     async def forbidden_response(**kwargs):
         raise AssertionError("Response LLM must not run.")
@@ -458,7 +459,7 @@ async def test_process_candidate_rejects_batch_audit_technical_errors(
         return "example"
 
     async def failed_batch_audit(**_kwargs):
-        return FakeAuditInsight(error="provider unavailable")
+        return [FakeAuditInsight(error="provider unavailable")]
 
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._prepare_dataset",
@@ -503,12 +504,19 @@ async def test_discovery_failure_retries_and_writes_failure_report(
         "skills.submission_ready.submission_ready.DealumAdapter",
         lambda: adapter,
     )
+    failure_insight = InsightFile(
+        "submission-ready-runs",
+        "submission_ready",
+        "manual",
+        identifier="failures",
+        subdir=True,
+    )
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._save_failure_report",
-        lambda failures, run_id: "failures.md",
+        lambda failures, run_id: failure_insight,
     )
 
     result = await submission_ready()
 
     assert adapter.calls == 3
-    assert "Failure report: failures.md" in result[0]
+    assert result == [failure_insight]

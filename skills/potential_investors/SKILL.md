@@ -32,7 +32,9 @@ description: This skill aims to find potential investors in the target startup. 
    * Call `ranking_persons(dataset_name=people_dataset, objective=objective, query=profile_content, candidates=target_investors, optout=exclude_investors, top_k=top_k)`.
 
 4. **Output Generation:**
-   * Save the Markdown ranking result with `insight.save(result)`, log `insight.path`, and return the Markdown string. Do not hardcode `<REPO_PATH>/insights/...` paths.
+   * Save the Markdown ranking result with `insight.save(result)`, log
+     `insight.path`, and return `[insight]`. Do not hardcode
+     `<REPO_PATH>/insights/...` paths.
 
 **CLI Interface:**
 * Expose this skill through the shared slash-command harness.

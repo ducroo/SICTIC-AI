@@ -14,7 +14,8 @@ rerunning the checklist or searching the source dataset.
 2. Stop with a clear instruction to run `dd_checks` when no report exists.
 3. Pass the complete report to one synthesis call using
    `config/dd_priorities/llm_instructions.md`.
-4. Save the result as a separate `dd_priorities` insight and return its path.
+4. Save the result as a separate `dd_priorities` insight and return it in a
+   one-element `list[InsightFile]`.
 5. Reuse an existing result when both the source dataset and synthesis input are
    unchanged.
 

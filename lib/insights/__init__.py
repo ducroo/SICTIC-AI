@@ -8,10 +8,13 @@ from lib.insights.hydration import (
 )
 from lib.insights.naming import insight_base_name, insight_model_slug
 
+InsightResult = list[InsightFile]
+
 __all__ = [
     "DatasetFromInsightResult",
     "InsightFile",
     "InsightHydrationResult",
+    "InsightResult",
     "StoredInsight",
     "dataset_from_insight",
     "discover_insights",

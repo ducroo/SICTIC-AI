@@ -13,7 +13,7 @@ from lib.datasets.paths import (
     dataset_raw_path,
     find_dataset_location,
 )
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.insights.paths import model_slug
 from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
@@ -54,6 +54,7 @@ class SubmissionReadyResult:
     checklist_path: str | None = None
     response_path: str | None = None
     error: str | None = None
+    insights: tuple[InsightFile, ...] = ()
 
     def message(self) -> str:
         if self.error:
@@ -417,7 +418,7 @@ async def _process_candidate(
         f"{check_config['policy']}\n\n"
         f"{check_config['llm_instructions']}"
     )
-    audit_insight = await batch_audit(
+    audit_results = await batch_audit(
         dataset_name=startup_slug,
         checklist_markdown=check_config["checklist"],
         skill_name="submission_ready",
@@ -425,6 +426,7 @@ async def _process_candidate(
         status_scale=["Pass", "Fail", "Unclear"],
         missing_evidence_status="Unclear",
     )
+    [audit_insight] = audit_results
     audit = validate_audit_document(json.loads(audit_insight.content()))
     failed_checks = audit_errors(audit)
     if failed_checks:
@@ -467,16 +469,15 @@ async def _process_candidate(
             run_id=reusable_response.run_id,
             prompt_key=checklist_prompt,
         )
+        if not reusable_checklist.exists():
+            reusable_checklist.save(checklist_report)
         return SubmissionReadyResult(
             startup=match.matched_name,
             stage=stage,
             status="unchanged; reused existing analysis",
-            checklist_path=(
-                reusable_checklist.path
-                if reusable_checklist.exists()
-                else audit_insight.path
-            ),
+            checklist_path=reusable_checklist.path,
             response_path=reusable_response.path,
+            insights=(reusable_checklist, reusable_response),
         )
 
     checklist_insight = _insight_for_run(
@@ -506,13 +507,14 @@ async def _process_candidate(
         status="generated checklist and proposed action",
         checklist_path=checklist_insight.path,
         response_path=response_insight.path,
+        insights=(checklist_insight, response_insight),
     )
 
 
 def _save_failure_report(
     failures: list[SubmissionReadyResult],
     run_id: str,
-) -> str:
+) -> InsightFile:
     storage = get_storage()
     location = dataset_location_for_domain(
         "submission-ready-runs",
@@ -552,7 +554,7 @@ def _save_failure_report(
         prompt_key="submission_ready failure report",
     )
     insight.save("\n".join(report) + "\n")
-    return insight.path
+    return insight
 
 
 def _latest_existing_artifacts(
@@ -614,17 +616,14 @@ def _latest_existing_artifacts(
 
 async def submission_ready(
     startups: str | list[str] | None = None,
-) -> str | list[str]:
+) -> InsightResult:
     """Process explicit or all in-scope Dealum submissions."""
     if isinstance(startups, str):
         requested_startups = [startups]
-        single_result = True
     elif startups:
         requested_startups = list(dict.fromkeys(startups))
-        single_result = False
     else:
         requested_startups = None
-        single_result = False
 
     adapter = DealumAdapter()
     if not adapter.is_configured():
@@ -645,11 +644,7 @@ async def submission_ready(
             status="failed after three attempts",
             error=str(error),
         )
-        failure_path = _save_failure_report([failure], run_id)
-        message = (
-            f"{failure.message()}. Failure report: {failure_path}"
-        )
-        return message if single_result else [message]
+        return [_save_failure_report([failure], run_id)]
     candidates, results = _resolve_candidates(
         applications,
         adapter,
@@ -688,16 +683,17 @@ async def submission_ready(
         results.append(result)
 
     if failures:
-        failure_path = _save_failure_report(failures, run_id)
-        results.append(
-            SubmissionReadyResult(
-                startup="Batch",
-                stage=None,
-                status=f"failure report saved to {failure_path}",
-            )
-        )
+        failure_insight = _save_failure_report(failures, run_id)
+    else:
+        failure_insight = None
 
     if not results:
-        return "No Dealum applications are currently in submission-ready scope."
-    messages = [result.message() for result in results]
-    return messages[0] if single_result else messages
+        return []
+    insights = [
+        insight
+        for result in results
+        for insight in result.insights
+    ]
+    if failure_insight is not None:
+        insights.append(failure_insight)
+    return insights

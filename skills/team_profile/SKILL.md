@@ -30,7 +30,8 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
 
 5. **LLM Assessment & Output:**
    * Call `llm_chat(prompt=<assembled_context_and_team_profile_instructions>)`.
-   * Save the Markdown report with `insight.save(report_md)`, log `insight.path`, and return `(report_md, insight.path)`.
+   * Save the Markdown report with `insight.save(report_md)`, log
+     `insight.path`, and return `[insight]`.
 
 ## Usage
 

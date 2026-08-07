@@ -4,6 +4,7 @@ from skills.person_profile.person_profile import (
     _ensure_profile_metadata_header,
     _generate_single_profile,
     person_profile,
+    person_profile_as_person_objects,
 )
 from lib.people.model import Person
 from lib.storage import get_storage
@@ -64,7 +65,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     # 2. Execute
     name = "Jane Doe"
     dataset = "sictic_members"
-    output = await person_profile(dataset_name=dataset, names=name)
+    output = await person_profile_as_person_objects(dataset_name=dataset, names=name)
 
     # 3. Assert Output
     expected_content = "\n".join(
@@ -76,7 +77,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
             "This is a mocked profile for Jane Doe.",
         ]
     )
-    assert len(output) == 1 and output[0].person_profile == expected_content
+    assert len(output) == 1 and output[0].person_profile_markdown == expected_content
 
     # 4. Assert File System
     expected_file = "storage/community/sictic-members/insights/person-profile/jane-doe-test-model-1b.md"
@@ -93,9 +94,13 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
 
     # 5. Assert Cache Bypass
     # If we call it again, it should use the cache (llm_chat shouldn't be called twice)
-    output_cached = await person_profile(dataset_name=dataset, names=name)
-    assert len(output_cached) == 1 and output_cached[0].person_profile == expected_content
+    output_cached = await person_profile_as_person_objects(dataset_name=dataset, names=name)
+    assert len(output_cached) == 1 and output_cached[0].person_profile_markdown == expected_content
     mock_llm.assert_called_once()  # Asserts it was only called during the FIRST execution
+
+    insights = await person_profile(dataset_name=dataset, names=name)
+    assert len(insights) == 1
+    assert insights[0].content() == expected_content
 
 
 @pytest.mark.asyncio
@@ -125,11 +130,13 @@ async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mock
     manifest.indexed_dataset_revision = "revision"
     manifest.save()
 
-    await _generate_single_profile(
+    insight = await _generate_single_profile(
         "sictic-members",
         person,
         include_dataset_context=False,
     )
+
+    assert insight.exists()
 
     mock_dossier.assert_not_awaited()
     prompt = mock_llm.call_args.kwargs["prompt"]

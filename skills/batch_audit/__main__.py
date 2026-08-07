@@ -2,7 +2,7 @@ from pathlib import Path
 
 import typer
 
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.batch_audit.batch_audit import batch_audit
 
@@ -29,7 +29,7 @@ def main(
         logger=logger,
         error_prefix="Execution failed",
     )
-    typer.echo(result.path)
+    typer.echo(format_insights(result))
 
 
 if __name__ == "__main__":

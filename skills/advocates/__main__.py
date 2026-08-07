@@ -1,5 +1,5 @@
 import typer
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.advocates.advocates import advocates
 
@@ -28,7 +28,7 @@ def main(
         logger=logger,
     )
     typer.echo("\n--- Advocates Result ---\n")
-    typer.echo(result)
+    typer.echo(format_insights(result))
 
 if __name__ == "__main__":
     app()

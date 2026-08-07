@@ -33,7 +33,7 @@ async def test_public_batch_audit_returns_json_insight(mock_env, monkeypatch):
         fake_dataset_chat,
     )
 
-    insight = await batch_audit(
+    [insight] = await batch_audit(
         "example-startup",
         """# Commercial
 

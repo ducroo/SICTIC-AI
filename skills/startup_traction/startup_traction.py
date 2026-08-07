@@ -1,5 +1,5 @@
 from lib.datasets.ingestion import sync_datasets
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
@@ -8,7 +8,7 @@ from skills.dataset_chat.dataset_chat import _fallback_trigger, dataset_chat
 
 logger = get_logger(__name__)
 
-async def startup_traction(startup_name: str) -> str:
+async def startup_traction(startup_name: str) -> InsightResult:
     """
     Extracts, analyzes, and summarizes all commercial traction and agreements (LoIs, MoUs, Pilot agreements) from a startup's data room into a structured overview table and synthesis.
     """
@@ -35,7 +35,7 @@ async def startup_traction(startup_name: str) -> str:
     reusable = insight.find_reusable()
     if reusable:
         logger.info(f"[{dataset_slug}] Using cached startup_traction from {reusable.path}")
-        return reusable.content()
+        return [reusable]
 
     result = await dataset_chat(
         dataset_name=dataset_slug,
@@ -53,4 +53,4 @@ async def startup_traction(startup_name: str) -> str:
 
     insight.save(result)
     logger.info(f"[{dataset_slug}] Successfully saved startup_traction to {insight.path}")
-    return result
+    return [insight]

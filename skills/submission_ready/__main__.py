@@ -2,7 +2,7 @@ from typing import Optional
 
 import typer
 
-from lib.cli import run_command
+from lib.cli import format_insights, run_command
 from lib.logger import get_logger
 from skills.submission_ready.submission_ready import submission_ready
 
@@ -29,10 +29,7 @@ def run_submission_ready(
         logger=logger,
         error_prefix="Execution failed",
     )
-    if isinstance(result, list):
-        typer.echo("\n".join(result))
-    else:
-        typer.echo(result)
+    typer.echo(format_insights(result))
 
 
 if __name__ == "__main__":

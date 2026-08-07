@@ -140,10 +140,19 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         insight = InsightFile(startup, "startup_profile", "manual")
         if not insight.exists():
             insight.save("# Fixture Startup Profile\n\nExample traction and market.")
-        return insight.content(), insight.path
+        return [insight]
 
     async def fake_investor_profile(*_args, **_kwargs):
-        return SimpleNamespace(source_dataset=fixtures.community, person_profiles=1, written=1)
+        insight = InsightFile(
+            fixtures.community,
+            "investor_profile",
+            "manual",
+            identifier=fixtures.person_linkedin_id,
+            subdir=True,
+        )
+        if not insight.exists():
+            insight.save("# Jane Doe\n\nInvestor fixture.")
+        return [insight]
 
     class FakeLinkedInResolver:
         def __init__(self, *_args, **_kwargs):

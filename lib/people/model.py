@@ -70,7 +70,7 @@ class Person:
     linkedin_profile: Dict[str, Any] = field(default_factory=dict)
     dossier: List[Chunk] = field(default_factory=list)
     mentions: List[Chunk] = field(default_factory=list)
-    person_profile: str = ""
+    person_profile_markdown: str = ""
 
     def __post_init__(self) -> None:
         self.linkedin_id = normalize_linkedin_id(self.linkedin_id)
@@ -159,8 +159,8 @@ class Person:
         if not self.linkedin_profile and other.linkedin_profile:
             self.linkedin_profile = other.linkedin_profile
             
-        if not self.person_profile and other.person_profile:
-            self.person_profile = other.person_profile
+        if not self.person_profile_markdown and other.person_profile_markdown:
+            self.person_profile_markdown = other.person_profile_markdown
             
         # Merge dictionary/list data
         if other.dossier:

@@ -4,6 +4,8 @@ import shlex
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, List
 
+from lib.cli import format_insights
+from lib.insights import InsightFile
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,10 +34,12 @@ def _format_result(result) -> str:
             lines.append(f"## {key}\n\n{value}")
         return "\n\n".join(lines)
     if isinstance(result, list):
+        if all(isinstance(item, InsightFile) for item in result):
+            return format_insights(result)
         rendered = []
         for item in result:
-            if hasattr(item, "person_profile"):
-                rendered.append(item.person_profile)
+            if hasattr(item, "person_profile_markdown"):
+                rendered.append(item.person_profile_markdown)
             else:
                 rendered.append(str(item))
         return "\n\n".join(rendered)
@@ -114,12 +118,12 @@ async def _batch_audit(args: List[str]) -> str:
     from skills.batch_audit.batch_audit import batch_audit
 
     checklist = Path(ns.checklist_file).read_text(encoding="utf-8")
-    insight = await batch_audit(
+    insights = await batch_audit(
         ns.dataset,
         checklist,
         skill_name=ns.skill_name,
     )
-    return _format_result(insight.path)
+    return _format_result(insights)
 
 
 async def _person_profile(args: List[str]) -> str:
@@ -201,8 +205,7 @@ async def _dd_checks(args: List[str]) -> str:
     ns = parser.parse_args(args)
     from skills.dd_checks.dd_checks import dd_checks
 
-    output_path = await dd_checks(ns.startup)
-    return f"DD checks complete. Output saved to {output_path}"
+    return _format_result(await dd_checks(ns.startup))
 
 
 async def _dd_priorities(args: List[str]) -> str:
@@ -211,8 +214,7 @@ async def _dd_priorities(args: List[str]) -> str:
     ns = parser.parse_args(args)
     from skills.dd_priorities.dd_priorities import dd_priorities
 
-    output_path = await dd_priorities(ns.startup)
-    return f"DD priorities complete. Output saved to {output_path}"
+    return _format_result(await dd_priorities(ns.startup))
 
 
 async def _submission_ready(args: List[str]) -> str:

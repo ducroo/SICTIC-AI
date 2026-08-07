@@ -28,6 +28,9 @@ Dealum. Do not use separately scraped website or LinkedIn content as evidence.
 8. Save the canonical JSON audit plus a timestamped rendered checklist and
    internal proposed action through `InsightFile`. Humans decide whether to
    contact the startup or change its Dealum stage; the skill does neither.
+9. Return a flat `list[InsightFile]` containing checklist then response for
+   each successful startup. The canonical JSON audits remain internal; any
+   generated failure report is appended to the returned list.
 
 The result is an Ops screening report, not a jury assessment. Do not evaluate
 business attractiveness, pitch quality, or investment readiness.

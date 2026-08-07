@@ -1,5 +1,5 @@
 import pytest
-from skills.person_profile.person_profile import person_profile
+from skills.person_profile.person_profile import person_profile_as_person_objects
 
 @pytest.mark.asyncio
 @pytest.mark.live
@@ -9,7 +9,7 @@ async def test_person_profile_avientus_integration():
     the full hydration of a Person profile including LinkedIn and Data Room mentions.
     """
     # 1. Execute Person Profile for Johannes Aicher
-    persons = await person_profile(dataset_name="avientus", names="Johannes Aicher")
+    persons = await person_profile_as_person_objects(dataset_name="avientus", names="Johannes Aicher")
     
     assert len(persons) == 1, "Should resolve to exactly one Person."
     p = persons[0]

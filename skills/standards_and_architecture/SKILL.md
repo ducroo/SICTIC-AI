@@ -56,7 +56,7 @@ hardcoding storage paths.
       linkedin_profile=dict,  # Full JSON payload returned by the scraper
       dossier=list,           # High-value complete Chunk documents (e.g., full resumes/CVs text)
       mentions=list,          # Isolated Chunk mentions where the person appears downstream
-      person_profile=str,     # Generated Markdown profile when available
+      person_profile_markdown=str, # Generated Markdown profile when available
   )
   ```
 * **Output Standards:**
@@ -204,13 +204,15 @@ in `lib/`.
   manual imports, and registry diagnosis.
 * `person_profile`, `investor_profile`, `startup_profile`, `team_profile`,
   `startup_traction`, `dd_checks`: Insight-producing profile and due-diligence
-  skills. They must save reports through `InsightFile`.
+  skills. They must save reports through `InsightFile` and their primary Python
+  APIs must return a flat `list[InsightFile]`, including cached results.
 * `ranking`: Shared ranking skill package used by matchmaker-style skills.
   Its `ranking_top_k.py`, `ranking_rationale.py`, and `ranking_persons.py`
   live under `skills/ranking`, not `lib/`.
 * `expert_search`, `potential_investors`, `advocates`, `suggested_startups`:
   Matching workflows that compose generated investor profiles, startup
-  profiles, dataset search, ranking, and per-investor insight outputs.
+  profiles, dataset search, ranking, and per-investor insight outputs. Their
+  primary Python APIs also return a flat `list[InsightFile]`.
 * `bulk_refresh`: Batch orchestration across active datasets and skills.
 * `dealum_import`: CLI wrapper around `lib.startups.dealum`.
 

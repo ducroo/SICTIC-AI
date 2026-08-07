@@ -1,23 +1,34 @@
 from typer.testing import CliRunner
 
 
+class FakeInsight:
+    def __init__(self, path: str, content: str):
+        self.path = path
+        self._content = content
+
+    def content(self):
+        return self._content
+
+
 def test_batch_audit_cli_forwards_calling_skill(mocker, tmp_path):
     from skills.batch_audit.__main__ import app
 
     checklist = tmp_path / "corporation.md"
     checklist.write_text("# 2 Corporation-General\n", encoding="utf-8")
 
-    class Result:
-        path = (
+    result_insight = FakeInsight(
+        (
             "storage/startups/avientus/insights/batch-audit/"
             "dd-checks-2-corporation-general-gemma4.json"
-        )
+        ),
+        "{}",
+    )
 
     async def fake_batch_audit(dataset, markdown, *, skill_name):
         assert dataset == "avientus"
         assert markdown == "# 2 Corporation-General\n"
         assert skill_name == "dd_checks"
-        return Result()
+        return [result_insight]
 
     mocker.patch(
         "skills.batch_audit.__main__.batch_audit",
@@ -50,7 +61,7 @@ def test_startup_traction_cli_awaits_async_function(mocker):
     from skills.startup_traction.__main__ import app
 
     async def fake_startup_traction(startup):
-        return f"traction for {startup}"
+        return [FakeInsight(f"insights/{startup}/traction.md", f"traction for {startup}")]
 
     mocker.patch("skills.startup_traction.__main__.startup_traction", side_effect=fake_startup_traction)
     result = CliRunner().invoke(app, ["--startup", "avientus"])
@@ -64,7 +75,7 @@ def test_dd_checks_cli_awaits_async_function(mocker):
     from skills.dd_checks.__main__ import app
 
     async def fake_dd_checks(startup):
-        return f"insights/{startup}/dd.md"
+        return [FakeInsight(f"insights/{startup}/dd.md", "DD checks complete")]
 
     mocker.patch("skills.dd_checks.__main__.dd_checks", side_effect=fake_dd_checks)
     result = CliRunner().invoke(app, ["--startup", "avientus"])
@@ -79,7 +90,12 @@ def test_dd_priorities_cli_awaits_async_function(mocker):
     from skills.dd_priorities.__main__ import app
 
     async def fake_dd_priorities(startup):
-        return f"insights/{startup}/dd-priorities.md"
+        return [
+            FakeInsight(
+                f"insights/{startup}/dd-priorities.md",
+                "DD priorities complete",
+            )
+        ]
 
     mocker.patch(
         "skills.dd_priorities.__main__.dd_priorities",
@@ -97,7 +113,12 @@ def test_submission_ready_cli_awaits_async_function(mocker):
     from skills.submission_ready.__main__ import app
 
     async def fake_submission_ready(startups):
-        return f"insights/{startups[0]}/submission-ready.md"
+        return [
+            FakeInsight(
+                f"insights/{startups[0]}/submission-ready.md",
+                "Submission ready",
+            )
+        ]
 
     mocker.patch(
         "skills.submission_ready.__main__.submission_ready",

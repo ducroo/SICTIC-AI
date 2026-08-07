@@ -26,9 +26,8 @@ async def test_investor_profile_builds_every_model_variant(mock_env):
 
     result = await investor_profile()
 
-    assert result.person_profiles == 2
-    assert result.written == 2
-    assert result.skipped == 0
+    assert len(result) == 2
+    assert all(insight.exists() for insight in result)
     assert storage.read_text(
         f"{output_dir}/urs-gubser-gemma4-31b-nvfp4.md"
     ) == (
@@ -54,7 +53,7 @@ async def test_investor_profile_adds_note_when_track_record_is_missing(mock_env)
     output = storage.read_text(
         "storage/community/sictic-members/insights/investor-profile/jane-doe-gemma4-31b-nvfp4.md"
     )
-    assert result.missing_track_records == 1
+    assert len(result) == 1
     assert output.endswith(
         "## Investment Track Record and Preferences\n\n"
         "No investment track record available, likely has not invested before.\n"
@@ -71,6 +70,4 @@ async def test_investor_profile_skips_filename_without_model(mock_env):
 
     result = await investor_profile()
 
-    assert result.person_profiles == 1
-    assert result.skipped == 1
-    assert result.written == 0
+    assert result == []

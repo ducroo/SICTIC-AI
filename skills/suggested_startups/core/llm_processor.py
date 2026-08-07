@@ -11,8 +11,10 @@ async def compile_startup_profiles(startups: List[str]) -> str:
     logger.info("Profiling startups for new evaluations...")
     for startup in startups:
         try:
-            profile_out, _ = await startup_profile(startup)
-            startup_profiles_text.append(f"STARTUP: {startup}\n{profile_out}\n")
+            [profile_insight] = await startup_profile(startup)
+            startup_profiles_text.append(
+                f"STARTUP: {startup}\n{profile_insight.content()}\n"
+            )
         except Exception as e:
             logger.error(f"Failed to profile startup {startup}: {e}")
             

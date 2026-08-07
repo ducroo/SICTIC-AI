@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from skills.person_profile.person_profile import person_profile
+from skills.person_profile.person_profile import person_profile_as_person_objects
 
 @pytest.mark.asyncio
 async def test_person_profile_routing_and_fuzzy_match():
@@ -43,7 +43,7 @@ async def test_person_profile_routing_and_fuzzy_match():
         mock_generate.return_value = "Mocked Report Content"
         
         # --- TEST 2.1: Full Dataset (names=None) ---
-        result_full = await person_profile(dataset_name, names=None)
+        result_full = await person_profile_as_person_objects(dataset_name, names=None)
         
         assert len(result_full) == 3
         assert any(p.full_name == "Johannes Aicher" for p in result_full)
@@ -51,7 +51,7 @@ async def test_person_profile_routing_and_fuzzy_match():
         mock_generate.reset_mock()
         
         # --- TEST 2.2: Exact Match ---
-        result_exact = await person_profile(dataset_name, names="Johannes Aicher")
+        result_exact = await person_profile_as_person_objects(dataset_name, names="Johannes Aicher")
         
         assert len(result_exact) == 1
         assert isinstance(result_exact[0], Person)
@@ -63,14 +63,14 @@ async def test_person_profile_routing_and_fuzzy_match():
         mock_generate.reset_mock()
         
         # --- TEST 2.3: Substring Match ---
-        result_sub = await person_profile(dataset_name, names=["Aicher", "Urs"])
+        result_sub = await person_profile_as_person_objects(dataset_name, names=["Aicher", "Urs"])
         
         assert len(result_sub) == 2
         assert mock_generate.call_count == 2
         mock_generate.reset_mock()
 
         # --- TEST 2.4: Fuzzy Match (Typos) ---
-        result_fuzzy = await person_profile(dataset_name, names="Johness Acher")
+        result_fuzzy = await person_profile_as_person_objects(dataset_name, names="Johness Acher")
         
         assert len(result_fuzzy) == 1
         assert mock_generate.call_count == 1
@@ -81,7 +81,7 @@ async def test_person_profile_routing_and_fuzzy_match():
         mock_generate.reset_mock()
         
         # --- TEST: Unmatched ---
-        result_miss = await person_profile(dataset_name, names="Batman")
+        result_miss = await person_profile_as_person_objects(dataset_name, names="Batman")
         
         assert len(result_miss) == 1
         assert mock_generate.call_count == 1

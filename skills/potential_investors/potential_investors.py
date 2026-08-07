@@ -3,7 +3,7 @@ from typing import List, Optional
 from lib.model_config import llm_model
 from lib.logger import get_logger
 from lib.slugify import slugify
-from lib.insights import InsightFile
+from lib.insights import InsightFile, InsightResult
 from skills.config_load.config_load import config_load
 from skills.startup_profile.startup_profile import startup_profile
 from skills.ranking.ranking_persons import ranking_persons
@@ -12,7 +12,7 @@ from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
-async def potential_investors(startup_name: str, target_investors: Optional[List[str]] = None, exclude_investors: Optional[List[str]] = None, top_k: int = 16) -> str:
+async def potential_investors(startup_name: str, target_investors: Optional[List[str]] = None, exclude_investors: Optional[List[str]] = None, top_k: int = 16) -> InsightResult:
     """
     Provides a ranked list of potential investors for a given startup based on quickselect ranking and LLM refinement.
     """
@@ -50,12 +50,13 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     reusable = insight.find_reusable()
     if reusable:
         logger.info(f"[{startup_slug}] Using cached potential investors from {reusable.path}")
-        return reusable.content()
+        return [reusable]
 
     # 1. Fetch Startup Profile
     logger.info(f"[{startup_slug}] Fetching startup profile...")
     try:
-        profile_content, _ = await startup_profile(startup_name)
+        [profile_insight] = await startup_profile(startup_name)
+        profile_content = profile_insight.content()
     except Exception as e:
         logger.error(f"[{startup_slug}] Failed to generate/fetch startup profile: {e}")
         raise RuntimeError(f"Failed to generate/fetch startup profile: {e}")
@@ -78,4 +79,4 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     insight.save(result)
     logger.info(f"[{startup_slug}] Potential investors search complete. Results saved to {insight.path}")
 
-    return result
+    return [insight]

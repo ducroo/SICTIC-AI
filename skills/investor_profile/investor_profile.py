@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import List
 
-from lib.insights import InsightFile, insight_base_name
+from lib.insights import InsightFile, InsightResult, insight_base_name
 from lib.logger import get_logger
 from lib.people.model import Person
 from lib.slugify import slugify
@@ -20,6 +20,7 @@ class InvestorProfileResult:
     unchanged: int = 0
     skipped: int = 0
     missing_track_records: int = 0
+    insights: InsightResult = field(default_factory=list)
 
 
 def _compose_investor_profile(person_profile: str, track_record: str | None) -> str:
@@ -36,7 +37,7 @@ def _compose_investor_profile(person_profile: str, track_record: str | None) -> 
     )
 
 
-async def investor_profile(
+async def _investor_profile_result(
     source_dataset: str = "sictic-members",
 ) -> InvestorProfileResult:
     """Build investor profiles by appending manual track records to person profiles."""
@@ -55,6 +56,7 @@ async def investor_profile(
     unchanged = 0
     skipped = 0
     missing_track_records = 0
+    insights: InsightResult = []
 
     for filename in filenames:
         stem = PurePosixPath(filename).stem
@@ -92,10 +94,12 @@ async def investor_profile(
             )
             if insight.exists() and insight.content() == content:
                 unchanged += 1
+                insights.append(insight)
                 continue
 
             insight.save(content)
             written += 1
+            insights.append(insight)
         except Exception as error:
             logger.warning(f"[{dataset_slug}] Skipping {filename}: {error}")
             skipped += 1
@@ -111,7 +115,16 @@ async def investor_profile(
         unchanged=unchanged,
         skipped=skipped,
         missing_track_records=missing_track_records,
+        insights=insights,
     )
+
+
+async def investor_profile(
+    source_dataset: str = "sictic-members",
+) -> InsightResult:
+    """Build investor profiles and return their managed insight artifacts."""
+    result = await _investor_profile_result(source_dataset)
+    return result.insights
 
 
 def read_investor_profiles(

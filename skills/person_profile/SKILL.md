@@ -29,9 +29,11 @@ description: Collate a comprehensive profile on a specific person by searching a
      * `return_full_docs=True`
      * `max_chunks=25`
 
-3. **Output Generation:** 
-   * Save the resulting synthesized profile string to the constructed output file path.
-   * Return the profile string.
+3. **Output Generation:**
+   * Save every synthesized profile through `InsightFile`.
+   * `person_profile(...)` returns a flat `list[InsightFile]`.
+   * `person_profile_as_person_objects(...)` runs the same workflow and returns
+     the populated `list[Person]` required by person-oriented composition.
 
 **CLI Interface:**
 * Expose this skill through the shared slash-command harness.
