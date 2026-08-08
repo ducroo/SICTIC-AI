@@ -187,7 +187,7 @@ async def batch_audit_json(
         extension="json",
         prompt_key=prompt_key,
     )
-    reusable = insight.find_reusable()
+    reusable = insight.find(selection="reusable")
     if reusable is not None:
         try:
             cached_audit = validate_audit_document(

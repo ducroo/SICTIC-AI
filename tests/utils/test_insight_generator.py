@@ -11,7 +11,7 @@ async def test_startup_traction_does_not_cache_insufficient_context(mock_env, mo
         dataset_location_for_domain("bewe", "startups").raw_rel
     )
     mocker.patch(
-        "skills.startup_traction.startup_traction.InsightFile.find_reusable",
+        "skills.startup_traction.startup_traction.InsightFile.find",
         return_value=None,
     )
     mocker.patch("skills.startup_traction.startup_traction.sync_datasets")

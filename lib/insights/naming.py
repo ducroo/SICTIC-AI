@@ -21,7 +21,7 @@ def strip_model_tag(filename: str) -> str:
     import re
 
     return re.sub(
-        r"-(gpt|claude|gemini|gemma|qwen|deepseek|llama|mixtral|phi|mistral)"
+        r"-(manual|gpt|claude|gemini|gemma|qwen|deepseek|llama|mixtral|phi|mistral)"
         r"[\w.-]*$",
         "",
         stem,

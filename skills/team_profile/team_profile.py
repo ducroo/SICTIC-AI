@@ -40,7 +40,7 @@ async def team_profile(startup_name: str) -> InsightResult:
         model=default_llm,
         prompt_key=prompt_key,
     )
-    reusable = insight.find_reusable()
+    reusable = insight.find(selection="reusable")
     if reusable:
         logger.info(f"[{dataset_name}] Using cached team profile from {reusable.path}")
         return [reusable]

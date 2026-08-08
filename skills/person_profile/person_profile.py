@@ -201,7 +201,7 @@ async def _generate_single_profile(
         subdir=True,
         prompt_key=query + llm_instructions,
     )
-    reusable = insight.find_reusable()
+    reusable = insight.find(selection="reusable")
     if reusable:
         person.person_profile_markdown = _ensure_profile_metadata_header(
             person,

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 from lib.datasets.paths import dataset_location_for_domain
-from lib.insights.discovery import StoredInsight, discover_insights
 from lib.insights.file import InsightFile
 from lib.logger import get_logger
 from lib.slugify import slugify
@@ -15,174 +13,118 @@ from lib.storage import get_storage
 logger = get_logger(__name__)
 
 
-@dataclass(frozen=True)
-class InsightHydrationResult:
-    target_dataset: str
-    target_path: str
-    insight: str
-    source_dataset: str | None
-    candidates: int = 0
-    entities: int = 0
-    selected: int = 0
-    synced: int = 0
-    removed: int = 0
-    unchanged: int = 0
-    dry_run: bool = False
-
-
-async def hydrate_dataset_from_insights(
-    insight_name: str,
-    source_dataset: str | None = None,
+async def dataset_from_insight(
+    target_dataset: str,
+    source_datasets: list[str] | None,
+    skill: str,
     *,
     dry_run: bool = False,
-) -> InsightHydrationResult:
-    """Hydrate a generated dataset from preferred stored insight versions."""
-    insight_slug = slugify(insight_name)
-    if source_dataset:
-        target_slug = slugify(f"{source_dataset}-{insight_slug}")
-    else:
-        target_slug = slugify(f"active-{insight_slug}")
+) -> list[InsightFile]:
+    """Reconcile a generated dataset from preferred stored insights."""
+    target_slug = slugify(target_dataset)
+    if not target_slug:
+        raise ValueError("target_dataset must not be empty.")
+
+    skill_slug = slugify(skill)
+    selected = InsightFile.find_all(
+        skill=skill_slug,
+        datasets=source_datasets,
+        selection="any",
+    )
     target_rel = dataset_location_for_domain(
         target_slug,
         "generated",
     ).raw_rel
 
     logger.info(
-        "Hydrating dataset '%s' from insight '%s'...",
+        "Reconciling generated dataset '%s' from %s selected '%s' "
+        "insights.",
         target_slug,
-        insight_slug,
+        len(selected),
+        skill_slug,
     )
+
+    desired: dict[str, InsightFile] = {}
+    for insight in selected:
+        relative_target = str(
+            PurePosixPath(insight.dataset) / insight.dataset_relative_path
+        )
+        if relative_target in desired:
+            raise ValueError(
+                f"Multiple insights map to target path {relative_target!r}."
+            )
+        desired[relative_target] = insight
 
     storage = get_storage()
-    if not storage.exists(target_rel):
+    if not dry_run and not storage.exists(target_rel):
         storage.mkdir(target_rel)
-        existing_files = {}
-    else:
-        existing_files = {
-            PurePosixPath(name).name: mtime
-            for name, mtime in storage.list_with_mtime(target_rel)
-        }
-
-    candidates = discover_insights(
-        insight_slug,
-        source_dataset=source_dataset,
-        exclude_dataset=target_slug,
+    existing = (
+        dict(storage.list_with_mtime(target_rel, recursive=True))
+        if storage.exists(target_rel)
+        else {}
     )
-    if not candidates:
-        logger.warning(
-            "No files matching insight '%s' found in specified sources.",
-            insight_slug,
-        )
-        return InsightHydrationResult(
-            target_dataset=target_slug,
-            target_path=target_rel,
-            insight=insight_slug,
-            source_dataset=source_dataset,
-            dry_run=dry_run,
-        )
 
-    logger.info(
-        "Found %s insight files to evaluate for syncing.",
-        len(candidates),
-    )
-    candidates_by_path = {candidate.path: candidate for candidate in candidates}
-    entity_to_candidates: dict[str, list[StoredInsight]] = {}
-    for candidate in candidates:
-        entity_to_candidates.setdefault(
-            candidate.identifier,
-            [],
-        ).append(candidate)
-
-    selected_count = 0
-    sync_count = 0
-    unchanged_count = 0
-    for identifier, entity_candidates in entity_to_candidates.items():
-        sample = entity_candidates[0]
-        selected = InsightFile(
-            dataset=sample.dataset,
-            skill=insight_slug,
-            model="manual",
-            identifier=identifier,
-            subdir=sample.subdir,
-        ).find_any()
-        if selected is None or selected.path not in candidates_by_path:
+    copied = 0
+    unchanged = 0
+    for relative_target, insight in desired.items():
+        destination = f"{target_rel}/{relative_target}"
+        target_mtime = existing.pop(relative_target, None)
+        source_mtime = storage.mtime(insight.path)
+        copy_required = (
+            target_mtime is None
+            or source_mtime is None
+            or source_mtime > target_mtime
+        )
+        if not copy_required:
+            unchanged += 1
+            logger.debug("Skipped up-to-date file %s.", destination)
             continue
-        selected_count += 1
 
-        candidate = candidates_by_path[selected.path]
-        target_file_rel = f"{target_rel}/{selected.filename}"
-        if selected.filename in existing_files:
-            target_mtime = existing_files.pop(selected.filename)
-            if target_mtime >= candidate.mtime - 1.0:
-                logger.debug(
-                    "Skipped %s (unchanged/up-to-date)",
-                    selected.filename,
-                )
-                unchanged_count += 1
-                continue
-
-        try:
-            if dry_run:
-                logger.info(
-                    "[dry-run] Would sync %s -> %s",
-                    selected.path,
-                    target_file_rel,
-                )
-            else:
-                storage.write_bytes(
-                    target_file_rel,
-                    storage.read_bytes(selected.path),
-                )
-            logger.debug(
-                "Synced %s -> %s",
-                selected.path,
-                target_file_rel,
+        if dry_run:
+            logger.info(
+                "[dry-run] Would copy %s -> %s",
+                insight.path,
+                destination,
             )
-            sync_count += 1
-        except Exception as error:
-            logger.error("Failed to sync %s: %s", selected.path, error)
+        else:
+            storage.write_bytes(destination, storage.read_bytes(insight.path))
+        copied += 1
 
-    orphan_count = 0
-    for orphan in list(existing_files):
-        orphan_rel = f"{target_rel}/{orphan}"
-        try:
-            if dry_run:
-                logger.info(
-                    "[dry-run] Would remove orphaned file %s",
-                    orphan_rel,
-                )
-            else:
-                storage.remove(orphan_rel)
-            orphan_count += 1
-        except Exception as error:
-            logger.warning(
-                "Failed to remove orphaned file %s: %s",
-                orphan,
-                error,
-            )
+    removed = 0
+    obsolete_directories = set()
+    desired_paths = set(desired)
+    for relative_orphan in sorted(existing):
+        orphan = f"{target_rel}/{relative_orphan}"
+        parent = PurePosixPath(relative_orphan).parent
+        while str(parent) != ".":
+            parent_text = str(parent)
+            if not any(
+                path.startswith(f"{parent_text}/")
+                for path in desired_paths
+            ):
+                obsolete_directories.add(parent_text)
+            parent = parent.parent
+        if dry_run:
+            logger.info("[dry-run] Would remove obsolete file %s", orphan)
+        else:
+            storage.remove(orphan)
+        removed += 1
+
+    if not dry_run:
+        for relative_directory in sorted(
+            obsolete_directories,
+            key=lambda value: len(PurePosixPath(value).parts),
+            reverse=True,
+        ):
+            storage.rmtree(f"{target_rel}/{relative_directory}")
 
     logger.info(
-        "Dataset hydration complete. %s files synced, %s removed, "
-        "%s unchanged.",
-        sync_count,
-        orphan_count,
-        unchanged_count,
+        "Dataset reconciliation complete: selected=%s copied=%s "
+        "removed=%s unchanged=%s dry_run=%s.",
+        len(selected),
+        copied,
+        removed,
+        unchanged,
+        dry_run,
     )
-    return InsightHydrationResult(
-        target_dataset=target_slug,
-        target_path=target_rel,
-        insight=insight_slug,
-        source_dataset=source_dataset,
-        candidates=len(candidates),
-        entities=len(entity_to_candidates),
-        selected=selected_count,
-        synced=sync_count,
-        removed=orphan_count,
-        unchanged=unchanged_count,
-        dry_run=dry_run,
-    )
-
-
-# Compatibility names for existing Python callers.
-DatasetFromInsightResult = InsightHydrationResult
-dataset_from_insight = hydrate_dataset_from_insights
+    return selected

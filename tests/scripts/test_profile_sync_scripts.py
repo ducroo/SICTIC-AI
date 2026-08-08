@@ -5,11 +5,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from lib.datasets.state import activate_dataset
 from lib.insights import (
-    InsightHydrationResult,
-    discover_insights,
-    hydrate_dataset_from_insights,
+    InsightFile,
+    dataset_from_insight,
 )
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location_for_domain
@@ -52,21 +50,50 @@ async def test_dataset_from_insight_selects_ranked_profile_and_removes_stale_fil
         "preferred gpt profile",
     )
     storage.write_text(
-        "storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md",
+        "storage/generated/sictic-members-person-profile/datasets/"
+        "sictic-members/insights/person-profile/urs-gubser-qwen3-8b.md",
         "stale derived profile",
     )
 
-    result = await hydrate_dataset_from_insights(
-        insight_name="person_profile",
-        source_dataset="sictic-members",
+    selected = await dataset_from_insight(
+        "sictic-members-person-profile",
+        ["sictic-members"],
+        "person_profile",
     )
 
-    assert result.selected == 1
-    assert result.synced == 1
-    assert result.removed == 1
-    assert storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
-    assert not storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
-    assert storage.read_text("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md") == "preferred gpt profile"
+    assert [insight.model for insight in selected] == ["ollama/gpt-5.4-mini"]
+    target = (
+        "storage/generated/sictic-members-person-profile/datasets/"
+        "sictic-members/insights/person-profile/"
+    )
+    assert storage.exists(f"{target}urs-gubser-gpt-5-4-mini.md")
+    assert not storage.exists(f"{target}urs-gubser-qwen3-8b.md")
+    assert storage.read_text(
+        f"{target}urs-gubser-gpt-5-4-mini.md"
+    ) == "preferred gpt profile"
+
+
+@pytest.mark.asyncio
+async def test_dataset_from_insight_selects_manual_root_insight(mock_env):
+    storage = get_storage()
+    _create_dataset("avientus", "startups")
+    storage.write_text(
+        "storage/startups/avientus/insights/"
+        "persons-in-dataset-avientus-manual.md",
+        "manual persons",
+    )
+
+    selected = await dataset_from_insight(
+        "avientus-persons-in-dataset",
+        ["avientus"],
+        "persons_in_dataset",
+    )
+
+    assert len(selected) == 1
+    assert storage.read_text(
+        "storage/generated/avientus-persons-in-dataset/datasets/"
+        "avientus/insights/persons-in-dataset-avientus-manual.md"
+    ) == "manual persons"
 
 
 @pytest.mark.asyncio
@@ -84,27 +111,27 @@ async def test_dataset_from_insight_dry_run_does_not_write_or_remove(mock_env, m
         "stale derived profile",
     )
 
-    result = await hydrate_dataset_from_insights(
-        insight_name="person_profile",
-        source_dataset="sictic-members",
+    selected = await dataset_from_insight(
+        "sictic-members-person-profile",
+        ["sictic-members"],
+        "person_profile",
         dry_run=True,
     )
 
-    assert result.dry_run is True
-    assert result.synced == 1
-    assert result.removed == 1
-    assert not storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-gpt-5-4-mini.md")
+    assert len(selected) == 1
+    assert not storage.exists(
+        "storage/generated/sictic-members-person-profile/datasets/"
+        "sictic-members/insights/person-profile/urs-gubser-gpt-5-4-mini.md"
+    )
     assert storage.exists("storage/generated/sictic-members-person-profile/datasets/urs-gubser-qwen3-8b.md")
 
 
 @pytest.mark.asyncio
-async def test_dataset_from_insight_without_source_scans_active_datasets(mock_env, monkeypatch):
+async def test_dataset_from_insight_without_sources_scans_all_datasets(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
     storage = get_storage()
     _create_dataset("avientus", "startups")
     _create_dataset("archived", "startups")
-    activate_dataset("avientus")
-
     storage.write_text(
         "storage/startups/avientus/insights/person-profile/jane-doe-gpt-5-4-mini.md",
         "active profile",
@@ -114,13 +141,126 @@ async def test_dataset_from_insight_without_source_scans_active_datasets(mock_en
         "archived profile",
     )
 
-    result = await hydrate_dataset_from_insights("person_profile")
+    selected = await dataset_from_insight(
+        "all-person-profile",
+        None,
+        "person_profile",
+    )
 
-    assert result.target_dataset == "active-person-profile"
-    assert result.target_path == "storage/generated/active-person-profile/datasets"
-    assert result.selected == 1
-    assert storage.exists("storage/generated/active-person-profile/datasets/jane-doe-gpt-5-4-mini.md")
-    assert not storage.exists("storage/generated/active-person-profile/datasets/john-doe-gpt-5-4-mini.md")
+    assert {insight.dataset for insight in selected} == {"avientus", "archived"}
+    target = "storage/generated/all-person-profile/datasets"
+    assert storage.exists(
+        f"{target}/avientus/insights/person-profile/"
+        "jane-doe-gpt-5-4-mini.md"
+    )
+    assert storage.exists(
+        f"{target}/archived/insights/person-profile/"
+        "john-doe-gpt-5-4-mini.md"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dataset_from_insight_copies_only_when_source_is_newer(
+    mock_env,
+    monkeypatch,
+):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
+    storage = get_storage()
+    _create_dataset("avientus", "startups")
+    source = (
+        "storage/startups/avientus/insights/"
+        "startup-profile-avientus-gpt-5-4-mini.md"
+    )
+    target = (
+        "storage/generated/avientus-startup-profile/datasets/avientus/"
+        "insights/startup-profile-avientus-gpt-5-4-mini.md"
+    )
+    storage.write_text(source, "new source")
+    storage.set_mtime(source, 200)
+    storage.write_text(target, "old target")
+    storage.set_mtime(target, 100)
+
+    await dataset_from_insight(
+        "avientus-startup-profile",
+        ["avientus"],
+        "startup_profile",
+    )
+    assert storage.read_text(target) == "new source"
+
+    storage.write_text(target, "newer target")
+    storage.set_mtime(target, 300)
+    await dataset_from_insight(
+        "avientus-startup-profile",
+        ["avientus"],
+        "startup_profile",
+    )
+    assert storage.read_text(target) == "newer target"
+
+
+@pytest.mark.asyncio
+async def test_dataset_from_insight_empty_sources_remove_outdated_files(mock_env):
+    storage = get_storage()
+    obsolete = (
+        "storage/generated/selected-person-profile/datasets/avientus/"
+        "insights/person-profile/obsolete-manual.md"
+    )
+    storage.write_text(obsolete, "obsolete")
+
+    selected = await dataset_from_insight(
+        "selected-person-profile",
+        [],
+        "person_profile",
+    )
+
+    assert selected == []
+    assert not storage.exists(obsolete)
+    assert not storage.is_dir(
+        "storage/generated/selected-person-profile/datasets/avientus"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dataset_from_insight_creates_empty_target_dataset(mock_env):
+    selected = await dataset_from_insight(
+        "empty-person-profile",
+        [],
+        "person_profile",
+    )
+
+    assert selected == []
+    assert get_storage().is_dir(
+        "storage/generated/empty-person-profile/datasets"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dataset_from_insight_preserves_json_run_hierarchy(
+    mock_env,
+    monkeypatch,
+):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
+    storage = get_storage()
+    _create_dataset("avientus", "startups")
+    source_relative = (
+        "insights/submission-ready/20260730T221500Z/"
+        "checklist-gpt-5-4-mini.json"
+    )
+    storage.write_text(
+        f"storage/startups/avientus/{source_relative}",
+        '{"status":"Pass"}',
+    )
+
+    selected = await dataset_from_insight(
+        "avientus-submission-ready",
+        ["avientus"],
+        "submission_ready",
+    )
+
+    assert len(selected) == 1
+    assert storage.read_text(
+        "storage/generated/avientus-submission-ready/datasets/"
+        f"avientus/{source_relative}"
+    ) == '{"status":"Pass"}'
 
 
 @pytest.mark.asyncio
@@ -148,7 +288,7 @@ async def test_sync_datasets_always_reconciles_current_state(mocker):
     ]
 
 
-def test_insight_discovery_returns_structured_records(mock_env, monkeypatch):
+def test_find_all_returns_selected_insight_files(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
     storage = get_storage()
     _create_dataset("sictic-members", "community")
@@ -158,63 +298,70 @@ def test_insight_discovery_returns_structured_records(mock_env, monkeypatch):
         "profile",
     )
 
-    records = discover_insights(
-        "person_profile",
-        source_dataset="sictic-members",
+    insights = InsightFile.find_all(
+        skill="person_profile",
+        datasets=["sictic-members"],
+        selection="any",
     )
 
-    assert len(records) == 1
-    assert records[0].dataset == "sictic-members"
-    assert records[0].skill == "person-profile"
-    assert records[0].identifier == "urs-gubser"
-    assert records[0].subdir is True
+    assert len(insights) == 1
+    assert insights[0].dataset == "sictic-members"
+    assert insights[0].skill == "person-profile"
+    assert insights[0].identifier == "urs-gubser"
+    assert insights[0].subdir is True
 
 
-def test_dataset_from_insight_cli_invokes_generic_hydration(mocker):
+def test_dataset_from_insight_cli_uses_explicit_contract(mocker):
     from skills.dataset_maintenance import __main__ as module
 
-    expected = InsightHydrationResult(
-        target_dataset="sictic-members-person-profile",
-        target_path="storage/generated/sictic-members-person-profile/datasets",
-        insight="person-profile",
-        source_dataset="sictic-members",
-        selected=2,
-        dry_run=True,
-    )
-
     calls = []
+    expected = [
+        InsightFile(
+            "sictic-members",
+            "person_profile",
+            "manual",
+            identifier="urs-gubser",
+            subdir=True,
+        )
+    ]
 
-    async def fake_hydration(**kwargs):
-        calls.append(kwargs)
+    async def fake_dataset_from_insight(*args, **kwargs):
+        calls.append((args, kwargs))
         return expected
 
     mocker.patch.object(
         module,
-        "hydrate_dataset_from_insights",
-        side_effect=fake_hydration,
+        "dataset_from_insight",
+        side_effect=fake_dataset_from_insight,
     )
 
     result = CliRunner().invoke(
         module.app,
         [
-            "from-insight",
-            "--insight-name",
-            "person_profile",
-            "--source-dataset",
+            "dataset-from-insight",
+            "--target-dataset",
+            "sictic-members-person-profile",
+            "--source-datasets",
             "sictic-members",
+            "--skill",
+            "person_profile",
             "--dry-run",
         ],
     )
 
     assert result.exit_code == 0
     assert calls == [
-        {
-            "insight_name": "person_profile",
-            "source_dataset": "sictic-members",
-            "dry_run": True,
-        }
+        (
+            (
+                "sictic-members-person-profile",
+                ["sictic-members"],
+                "person_profile",
+            ),
+            {"dry_run": True},
+        )
     ]
-    assert "Target path: storage/generated/sictic-members-person-profile/datasets" in result.output
+    assert "Selected insights: 1" in result.output
+    assert "urs-gubser-manual.md" in result.output
 
 
 def test_dataset_maintenance_lifecycle_cli_uses_dataset_option(mocker):
@@ -293,9 +440,9 @@ async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
         "skills.person_profile.person_profile.person_profile",
         return_value=[Person(full_name="Urs Gubser")],
     )
-    mock_hydrate = mocker.patch.object(
+    mock_dataset_from_insight = mocker.patch.object(
         script,
-        "hydrate_dataset_from_insights",
+        "dataset_from_insight",
     )
 
     result = await script.generate_member_profiles(
@@ -313,4 +460,4 @@ async def test_generate_member_profiles_can_skip_index_and_source_sync(mocker):
         names=["Urs Gubser"],
         include_dataset_context=False,
     )
-    mock_hydrate.assert_not_called()
+    mock_dataset_from_insight.assert_not_called()

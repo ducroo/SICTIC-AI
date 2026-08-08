@@ -20,8 +20,8 @@ python -m skills.dataset_maintenance activate --dataset avientus
 python -m skills.dataset_maintenance archive --dataset avientus
 python -m skills.dataset_maintenance create "Example Startup"
 python -m skills.dataset_maintenance delete --embeddings nomic-embed-text
-python -m skills.dataset_maintenance from-insight --insight person_profile
-python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members
+python -m skills.dataset_maintenance dataset-from-insight --target-dataset all-person-profile --skill person_profile
+python -m skills.dataset_maintenance dataset-from-insight --target-dataset sictic-members-investor-profile --source-datasets sictic-members --skill investor_profile
 python -m skills.dataset_maintenance migrate-startup-dossiers
 python -m skills.dataset_maintenance migrate-insight-manifests
 python -m skills.dataset_maintenance migrate-insight-manifests --apply

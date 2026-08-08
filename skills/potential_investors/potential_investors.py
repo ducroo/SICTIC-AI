@@ -7,7 +7,7 @@ from lib.insights import InsightFile, InsightResult
 from skills.config_load.config_load import config_load
 from skills.startup_profile.startup_profile import startup_profile
 from skills.ranking.ranking_persons import ranking_persons
-from lib.insights import hydrate_dataset_from_insights
+from lib.insights import dataset_from_insight
 from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
@@ -26,9 +26,10 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
 
     people_dataset = "sictic-members-investor-profile"
     logger.info(f"[{startup_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
-    await hydrate_dataset_from_insights(
-        insight_name="investor_profile",
-        source_dataset="sictic-members",
+    await dataset_from_insight(
+        "sictic-members-investor-profile",
+        ["sictic-members"],
+        "investor_profile",
     )
     await sync_datasets(
         [people_dataset, startup_slug],
@@ -47,7 +48,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         source_datasets=[people_dataset, startup_slug],
         prompt_key=objective_template,
     )
-    reusable = insight.find_reusable()
+    reusable = insight.find(selection="reusable")
     if reusable:
         logger.info(f"[{startup_slug}] Using cached potential investors from {reusable.path}")
         return [reusable]

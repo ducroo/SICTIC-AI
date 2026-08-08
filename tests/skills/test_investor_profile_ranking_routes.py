@@ -64,7 +64,7 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     args,
 ):
     _create_route_datasets(module)
-    mocker.patch.object(module.InsightFile, "find_reusable", return_value=None)
+    mocker.patch.object(module.InsightFile, "find", return_value=None)
     mocker.patch.object(module.InsightFile, "save")
     mocker.patch.object(module, "sync_datasets")
     if hasattr(module, "startup_profile"):
@@ -80,7 +80,7 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     )
     hydrate = mocker.patch.object(
         module,
-        "hydrate_dataset_from_insights",
+        "dataset_from_insight",
     )
     ranking = mocker.patch.object(
         module,
@@ -93,8 +93,9 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     assert len(result) == 1
     assert result[0].skill == func_name
     hydrate.assert_awaited_once_with(
-        insight_name="investor_profile",
-        source_dataset="sictic-members",
+        "sictic-members-investor-profile",
+        ["sictic-members"],
+        "investor_profile",
     )
     assert ranking.await_args.kwargs["dataset_name"] == "sictic-members-investor-profile"
 
@@ -136,7 +137,7 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
     excludes,
 ):
     _create_route_datasets(module)
-    mocker.patch.object(module.InsightFile, "find_reusable", return_value=None)
+    mocker.patch.object(module.InsightFile, "find", return_value=None)
     mocker.patch.object(module.InsightFile, "save")
     mocker.patch.object(module, "sync_datasets")
     if hasattr(module, "startup_profile"):
@@ -151,7 +152,7 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
             }
         },
     )
-    mocker.patch.object(module, "hydrate_dataset_from_insights")
+    mocker.patch.object(module, "dataset_from_insight")
     ranking = mocker.patch.object(
         module,
         "ranking_persons",

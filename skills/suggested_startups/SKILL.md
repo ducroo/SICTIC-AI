@@ -28,7 +28,7 @@ description: Rank a provided list of startups against a list of investors by mat
 
 3. **Per-Investor Insight Cache:**
    * For each investor, construct `lib.insights.InsightFile(dataset=dataset_slug, skill="suggested_startups", model=llm_model(), identifier=investor, subdir=True, source_datasets=datasets_to_check, prompt_key=prompt_template)`.
-   * Use `insight.find_reusable()` to skip investors whose suggested-startups report is already fresh.
+   * Use `insight.find(selection="reusable")` to skip investors whose suggested-startups report is already fresh.
 
 4. **Startup and Investor Profile Preparation:**
    * Compile startup profiles in memory with `compile_startup_profiles(startups)`, which calls `startup_profile(startup)` for each selected startup and combines the profile text into a single prompt context.

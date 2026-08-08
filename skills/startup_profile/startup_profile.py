@@ -41,7 +41,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> In
         prompt_key=query + llm_instructions,
     )
     if not files:
-        reusable = insight.find_reusable()
+        reusable = insight.find(selection="reusable")
         if reusable:
             return [reusable]
 

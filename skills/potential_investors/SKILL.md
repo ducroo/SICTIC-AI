@@ -18,13 +18,13 @@ description: This skill aims to find potential investors in the target startup. 
 1. **Dataset Preparation:**
    * Convert `startup_name` to a dataset slug with `slugify(...)`.
    * Resolve the startup dataset with `ensure_startup_dataset(...)`.
-   * Hydrate the generated `sictic-members-investor-profile` dataset from `investor_profile` insights using `hydrate_dataset_from_insights(insight_name="investor_profile", source_dataset="sictic-members")`.
+   * Build the generated `sictic-members-investor-profile` dataset with `dataset_from_insight("sictic-members-investor-profile", ["sictic-members"], "investor_profile")`.
    * Run `sync_datasets([people_dataset, startup_slug], raise_on_error=True)` so startup and investor-profile indexes are current.
 
 2. **Configuration & Insight Cache:**
    * Load `objective_template = config_load()["potential_investors"]["objective"]`.
    * Construct the output insight with `lib.insights.InsightFile(dataset=startup_slug, skill="potential_investors", model=llm_model(), source_datasets=[people_dataset, startup_slug], prompt_key=objective_template)`.
-   * Use `insight.find_reusable()` and `insight.content()` to reuse fresh cached results when available.
+   * Use `insight.find(selection="reusable")` and `insight.content()` to reuse fresh cached results when available.
 
 3. **Startup Profile & Ranking:**
    * Fetch or generate `startup_profile(startup_name)` and use the profile text as both the semantic query and the basis for the ranking objective.
