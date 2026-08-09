@@ -28,7 +28,7 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
 
 3. **Insight File & Caching:**
    * Construct the traction insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="startup_traction", model=llm_model(), prompt_key=query + llm_instructions)`.
-   * Use `insight.find_reusable()` and `insight.content()` to reuse a fresh existing traction report when available.
+   * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing traction report when available.
 
 4. **Data Retrieval, Synthesis & Output:**
    * Invoke `dataset_chat(dataset_name=dataset_slug, questions=query, llm_instructions=llm_instructions, max_chunks=100, strict_insufficient_context=False)`.

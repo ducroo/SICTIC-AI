@@ -135,11 +135,15 @@ freshness logic.
    * Use `lib.insights.InsightFile` for generated Markdown reports. Do not
      hardcode insight paths and do not use legacy `insight_filepath` or
      `insight_refresh` patterns.
-   * `InsightFile.find_reusable()` selects a fresh insight by checking manual
+   * `InsightFile.find(selection="reusable")` selects a fresh insight by checking manual
      overrides first, then ranked models whose prompt hash and source dataset
      revisions match the current state.
-   * `InsightFile.find_any()` selects the best available existing insight when
+   * `InsightFile.find(selection="any")` selects the best available existing insight when
      strict freshness is not required.
+   * `InsightFile.find_all(skill=..., datasets=..., selection="any")` discovers
+     stored logical insights and returns one selected `InsightFile` for each.
+     Bulk reusable selection is not supported because the expected prompt and
+     source datasets are not available during discovery.
    * `hydration.py` builds generated datasets from selected insight files, for
      example `storage/generated/sictic-members-investor-profile/datasets/`.
 
@@ -179,9 +183,10 @@ freshness logic.
      as the current people/LinkedIn boundary; do not introduce additional
      identity models.
 
-7. **Compatibility and Small Utilities**
-   * `lib.dataset_from_insight` is a compatibility export for
-     `lib.insights.hydration`.
+7. **Small Utilities**
+   * `lib.insights.dataset_from_insight(target_dataset, source_datasets,
+     skill)` reconciles a caller-named generated dataset and returns the
+     selected `list[InsightFile]`.
    * `lib.ephemeral_dataset` prepares temporary generated datasets in Qdrant.
    * `lib.json_parser`, `lib.litellm_cleanup`, and `lib.runtime_noise` are small
      cross-cutting helpers.

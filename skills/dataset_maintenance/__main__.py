@@ -5,11 +5,8 @@ from typing import Optional
 import typer
 
 from lib.cli import run_command
-from lib.insights import hydrate_dataset_from_insights
+from lib.insights import dataset_from_insight
 from lib.logger import get_logger
-from skills.dataset_maintenance.dataset_from_insight import (
-    print_hydration_result,
-)
 from skills.dataset_maintenance.maintenance import (
     activate_dataset_marker,
     archive_dataset_marker,
@@ -162,18 +159,23 @@ def migrate_insight_manifests_command(
         typer.echo(f"  {reason}: {count}")
 
 
-@app.command("from-insight")
-def from_insight_command(
-    insight_name: str = typer.Option(
+@app.command("dataset-from-insight")
+def dataset_from_insight_command(
+    target_dataset: str = typer.Option(
         ...,
-        "--insight-name",
-        "--insight",
-        help="Insight name to hydrate, e.g. person_profile.",
+        "--target-dataset",
+        help="Generated dataset to reconcile.",
     ),
-    source_dataset: Optional[str] = typer.Option(
+    source_datasets: Optional[str] = typer.Option(
         None,
+        "--source-datasets",
         "--source-dataset",
-        help="Optional source dataset whose insight folder should be scanned.",
+        help="Comma-separated source datasets. Omit to search all.",
+    ),
+    skill: str = typer.Option(
+        ...,
+        "--skill",
+        help="Insight skill to collect, e.g. person_profile.",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -181,16 +183,21 @@ def from_insight_command(
         help="Report what would change without writing files.",
     ),
 ) -> None:
-    result = run_command(
-        lambda: hydrate_dataset_from_insights(
-            insight_name=insight_name,
-            source_dataset=source_dataset,
+    selected = run_command(
+        lambda: dataset_from_insight(
+            target_dataset,
+            _parse_datasets(source_datasets)
+            if source_datasets is not None
+            else None,
+            skill,
             dry_run=dry_run,
         ),
         logger=logger,
-        error_prefix="Hydration failed",
+        error_prefix="Dataset-from-insight failed",
     )
-    print_hydration_result(result)
+    typer.echo(f"Selected insights: {len(selected)}")
+    for insight in selected:
+        typer.echo(insight.path)
 
 
 if __name__ == "__main__":

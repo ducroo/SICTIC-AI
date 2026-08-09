@@ -13,7 +13,7 @@ from typing import List, Optional
 import typer
 
 from lib.people.model import Person
-from lib.insights import hydrate_dataset_from_insights
+from lib.insights import dataset_from_insight
 from lib.slugify import slugify
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_insights_path
@@ -98,9 +98,10 @@ async def generate_member_profiles(
     )
 
     if not skip_index:
-        await hydrate_dataset_from_insights(
-            insight_name="person_profile",
-            source_dataset=dataset,
+        await dataset_from_insight(
+            f"{slugify(dataset)}-person-profile",
+            [dataset],
+            "person_profile",
         )
 
     return GenerateMemberProfilesResult(

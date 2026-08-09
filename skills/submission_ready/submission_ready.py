@@ -599,7 +599,7 @@ def _latest_existing_artifacts(
             identifier=f"submission_ready-{checklist_title}",
             subdir=True,
             extension="json",
-        ).find_any()
+        ).find(selection="any")
         if audit_insight is not None:
             audit = validate_audit_document(
                 json.loads(audit_insight.content())

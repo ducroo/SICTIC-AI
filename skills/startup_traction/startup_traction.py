@@ -32,7 +32,7 @@ async def startup_traction(startup_name: str) -> InsightResult:
         model=llm_model(),
         prompt_key=query + llm_instructions,
     )
-    reusable = insight.find_reusable()
+    reusable = insight.find(selection="reusable")
     if reusable:
         logger.info(f"[{dataset_slug}] Using cached startup_traction from {reusable.path}")
         return [reusable]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from lib.env import get_env_var
 from lib.insights.manifest import prompt_hash
@@ -8,6 +9,8 @@ from lib.insights.paths import model_slug
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
+
+InsightSelection = Literal["any", "reusable"]
 
 
 def ranked_models() -> list[tuple[str, str]]:
@@ -18,7 +21,15 @@ def ranked_models() -> list[tuple[str, str]]:
     ]
 
 
-def find_reusable(insight):
+def find(insight, *, selection: InsightSelection):
+    if selection == "any":
+        return _find_any(insight)
+    if selection == "reusable":
+        return _find_reusable(insight)
+    raise ValueError(f"Unsupported insight selection: {selection!r}")
+
+
+def _find_reusable(insight):
     manual = insight._candidate("manual")
     if manual.exists():
         logger.info("Using manual insight: %s", manual.path)
@@ -63,7 +74,7 @@ def is_reusable(insight) -> bool:
     )
 
 
-def find_any(insight):
+def _find_any(insight):
     from lib.storage import get_storage
 
     suffix = f".{insight.extension}"

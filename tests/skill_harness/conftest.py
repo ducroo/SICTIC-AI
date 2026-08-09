@@ -133,8 +133,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_ranking_persons(*_args, **_kwargs):
         return "| Rank | Person | Rationale |\n|---|---|---|\n| 1 | Jane Doe | Fixture match |"
 
-    async def fake_hydrate_dataset_from_insights(*_args, **_kwargs):
-        return SimpleNamespace(dataset_name=fixtures.generated, written=1)
+    async def fake_dataset_from_insight(*_args, **_kwargs):
+        return []
 
     async def fake_startup_profile(startup, *_args, **_kwargs):
         insight = InsightFile(startup, "startup_profile", "manual")
@@ -301,7 +301,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
 
     for module in [expert_search_mod, potential_investors_mod, advocates_mod]:
         monkeypatch.setattr(module, "ranking_persons", fake_ranking_persons)
-        monkeypatch.setattr(module, "hydrate_dataset_from_insights", fake_hydrate_dataset_from_insights)
+        monkeypatch.setattr(module, "dataset_from_insight", fake_dataset_from_insight)
 
     monkeypatch.setattr(suggested_startups_mod, "LinkedInResolver", FakeLinkedInResolver)
     monkeypatch.setattr(suggested_startups_mod, "compile_startup_profiles", fake_compile_startup_profiles)

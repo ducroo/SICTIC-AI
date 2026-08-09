@@ -9,6 +9,7 @@ from lib.insights.manifest import (
     load_insight_manifest,
     save_insight_entry,
 )
+from lib.insights.naming import insight_model_slug, strip_model_tag
 from lib.insights.paths import (
     insight_base,
     insight_directory,
@@ -16,7 +17,13 @@ from lib.insights.paths import (
     insight_manifest_path,
     model_slug,
 )
-from lib.insights.selection import find_any, find_reusable, is_reusable
+from lib.insights.selection import (
+    InsightSelection,
+    fallback_sort_key,
+    find,
+    is_reusable,
+    ranked_models,
+)
 from lib.logger import get_logger
 from lib.storage import get_storage
 
@@ -56,6 +63,8 @@ class InsightFile:
 
     @property
     def directory(self) -> str:
+        if self._path_override:
+            return str(PurePosixPath(self._path_override).parent)
         return insight_directory(
             self.dataset,
             self.skill,
@@ -65,6 +74,8 @@ class InsightFile:
 
     @property
     def filename(self) -> str:
+        if self._path_override:
+            return PurePosixPath(self._path_override).name
         return insight_filename(
             self.dataset,
             self.skill,
@@ -77,6 +88,17 @@ class InsightFile:
     @property
     def path(self) -> str:
         return self._path_override or f"{self.directory}/{self.filename}"
+
+    @property
+    def dataset_relative_path(self) -> str:
+        dataset_root = PurePosixPath(
+            insight_directory(
+                self.dataset,
+                self.skill,
+                subdir=False,
+            )
+        ).parent
+        return str(PurePosixPath(self.path).relative_to(dataset_root))
 
     @property
     def _base_name(self) -> str:
@@ -97,11 +119,108 @@ class InsightFile:
     def content(self) -> str:
         return get_storage().read_text(self.path)
 
-    def find_reusable(self) -> InsightFile | None:
-        return find_reusable(self)
+    def find(self, *, selection: InsightSelection) -> InsightFile | None:
+        return find(self, selection=selection)
 
-    def find_any(self) -> InsightFile | None:
-        return find_any(self)
+    @classmethod
+    def find_all(
+        cls,
+        *,
+        skill: str,
+        datasets: list[str] | None,
+        selection: InsightSelection,
+    ) -> list[InsightFile]:
+        """Return one selected file for every stored logical insight."""
+        if selection == "reusable":
+            raise NotImplementedError(
+                "InsightFile.find_all(selection='reusable') is not "
+                "supported: the expected source_datasets and prompt_key "
+                "are not known for each discovered insight. Construct each "
+                "expected InsightFile and call find(selection='reusable') "
+                "instead."
+            )
+        if selection != "any":
+            raise ValueError(f"Unsupported insight selection: {selection!r}")
+
+        from lib.insights.discovery import discover_insights
+
+        candidates = discover_insights(skill, datasets=datasets)
+        groups = {}
+        for candidate in candidates:
+            candidate_name = (
+                candidate.filename[len(candidate.skill) + 1 :]
+                if not candidate.subdir
+                else candidate.filename
+            )
+            identifier = strip_model_tag(candidate_name)
+            candidate_model = insight_model_slug(candidate.filename)
+            if not identifier or candidate_model is None:
+                logger.warning(
+                    "Cannot select insight candidate with an unrecognized "
+                    "model tag: %s",
+                    candidate.path,
+                )
+                continue
+            key = (
+                candidate.dataset,
+                candidate.skill,
+                candidate.parent,
+                identifier,
+                candidate.extension,
+            )
+            groups.setdefault(key, []).append(
+                (candidate, candidate_model, identifier)
+            )
+
+        selected = []
+        for key in sorted(groups):
+            group = groups[key]
+            resolved = next(
+                (item for item in group if item[1] == "manual"),
+                None,
+            )
+            selected_model = "manual"
+            if resolved is None:
+                for configured_model, configured_slug in ranked_models():
+                    resolved = next(
+                        (
+                            item
+                            for item in group
+                            if item[1] == configured_slug
+                        ),
+                        None,
+                    )
+                    if resolved is not None:
+                        selected_model = configured_model
+                        break
+            if resolved is None:
+                resolved = max(
+                    group,
+                    key=lambda item: fallback_sort_key(item[0].filename),
+                )
+                selected_model = resolved[1]
+
+            candidate, _candidate_model, identifier = resolved
+
+            selected.append(
+                cls(
+                    dataset=candidate.dataset,
+                    skill=candidate.skill,
+                    model=selected_model,
+                    identifier=identifier,
+                    subdir=candidate.subdir,
+                    extension=candidate.extension,
+                    _path_override=candidate.path,
+                )
+            )
+
+        logger.info(
+            "Found %s stored versions for %s logical insights; selected %s.",
+            len(candidates),
+            len(groups),
+            len(selected),
+        )
+        return selected
 
     def is_reusable(self) -> bool:
         return is_reusable(self)

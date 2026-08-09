@@ -11,7 +11,7 @@ async def test_startup_profile_does_not_cache_empty_context_response(mock_env, m
         dataset_location_for_domain("avientus", "startups").raw_rel
     )
     mocker.patch(
-        "skills.startup_profile.startup_profile.InsightFile.find_reusable",
+        "skills.startup_profile.startup_profile.InsightFile.find",
         return_value=None,
     )
     mocker.patch("skills.startup_profile.startup_profile.sync_datasets")
@@ -43,7 +43,7 @@ async def test_startup_profile_splits_query_lines_for_retrieval(mock_env, mocker
         dataset_location_for_domain("avientus", "startups").raw_rel
     )
     mocker.patch(
-        "skills.startup_profile.startup_profile.InsightFile.find_reusable",
+        "skills.startup_profile.startup_profile.InsightFile.find",
         return_value=None,
     )
     mocker.patch("skills.startup_profile.startup_profile.sync_datasets")

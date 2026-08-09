@@ -70,7 +70,7 @@ async def suggested_startups(dataset_name: str = "sictic_members", startups: Opt
             source_datasets=datasets_to_check,
             prompt_key=prompt_template,
         )
-        reusable = insight.find_reusable()
+        reusable = insight.find(selection="reusable")
         if reusable:
             logger.info(f"[{dataset_name}] Skipping {investor}: Cache up to date.")
             insights.append(reusable)

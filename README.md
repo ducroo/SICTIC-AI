@@ -215,7 +215,7 @@ Use these supported entry points:
 | Harness one-shot | Run one user-facing slash command and exit | `conda run -n sictic-env python -m skills.harness /startup_profile SpaceX` |
 | Harness interactive | Start the slash-command REPL for manual testing | `conda run -n sictic-env --no-capture-output python -m skills.harness` |
 | Skill module | Run one module's direct CLI and options | `conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex --skill startup_profile` |
-| Dataset maintenance | Maintained operational utility | `conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members` |
+| Dataset maintenance | Maintained operational utility | `conda run -n sictic-env python -m skills.dataset_maintenance dataset-from-insight --target-dataset sictic-members-investor-profile --source-datasets sictic-members --skill investor_profile` |
 | Script | Maintenance or migration operation documented by that script | `conda run -n sictic-env python scripts/generate_member_profiles.py --help` |
 
 Use the harness when the command exists in `/help` and you want the stable,
@@ -271,7 +271,7 @@ preferences.
 
 ```bash
 conda run -n sictic-env python -m skills.investor_profile
-conda run -n sictic-env python -m skills.dataset_maintenance from-insight --insight investor_profile --source-dataset sictic-members
+conda run -n sictic-env python -m skills.dataset_maintenance dataset-from-insight --target-dataset sictic-members-investor-profile --source-datasets sictic-members --skill investor_profile
 ```
 
 ### 2. Overnight Refresh

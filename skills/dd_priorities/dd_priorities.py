@@ -14,7 +14,7 @@ def _find_dd_checks_report(startup_slug: str) -> InsightFile:
             dataset=startup_slug,
             skill="dd_checks",
             model=llm_model(),
-        ).find_any()
+        ).find(selection="any")
     except FileNotFoundError:
         report = None
     if report is None:
@@ -48,7 +48,7 @@ async def dd_priorities(startup: str) -> InsightResult:
         model=llm_model(),
         prompt_key=prompt_key,
     )
-    reusable = output_insight.find_reusable()
+    reusable = output_insight.find(selection="reusable")
     if reusable:
         logger.info(
             "[%s] Using cached DD priorities from %s",

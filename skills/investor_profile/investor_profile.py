@@ -167,7 +167,7 @@ def read_investor_profiles(
             model="manual",
             identifier=matched.linkedin_id,
             subdir=True,
-        ).find_any()
+        ).find(selection="any")
         if selected is None:
             logger.warning(f"[{dataset_slug}] No investor profile found for '{name}'.")
             continue
