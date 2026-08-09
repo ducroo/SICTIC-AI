@@ -56,16 +56,6 @@ class SubmissionReadyResult:
     error: str | None = None
     insights: tuple[InsightFile, ...] = ()
 
-    def message(self) -> str:
-        if self.error:
-            return f"{self.startup}: {self.status}: {self.error}"
-        if self.response_path:
-            return (
-                f"{self.startup}: {self.status}. "
-                f"Proposed action: {self.response_path}"
-            )
-        return f"{self.startup}: {self.status}"
-
 
 def _run_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

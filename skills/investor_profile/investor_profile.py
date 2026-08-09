@@ -44,7 +44,6 @@ async def _investor_profile_result(
     dataset_slug = slugify(source_dataset)
     storage = get_storage()
     person_profile_dir = f"{dataset_insights_path(dataset_slug)}/person-profile"
-    investor_profile_dir = f"{dataset_insights_path(dataset_slug)}/investor-profile"
     track_record_dir = f"{dataset_raw_path(dataset_slug)}/track-record"
 
     if not storage.exists(person_profile_dir):

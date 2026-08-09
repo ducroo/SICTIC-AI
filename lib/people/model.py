@@ -1,6 +1,6 @@
 """Person identity, matching, merging, and serialization."""
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 import re
 from typing import Dict, List, Any, Iterable
 from rapidfuzz import fuzz
@@ -176,24 +176,3 @@ class Person:
                 if (c.document_name, c.page_number) not in existing_mentions:
                     self.mentions.append(c)
                     existing_mentions.add((c.document_name, c.page_number))
-
-    def to_dict(self) -> dict:
-        """For JSON serialization/caching."""
-        data = asdict(self)
-        data['dossier'] = [c.dict() if hasattr(c, 'dict') else c for c in self.dossier]
-        data['mentions'] = [c.dict() if hasattr(c, 'dict') else c for c in self.mentions]
-        return data
-
-    @classmethod
-    def from_dict(cls, data: dict) -> 'Person':
-        """Safely loads from JSON cache, ignoring unexpected keys."""
-        valid_keys = {f.name for f in cls.__dataclass_fields__.values()}
-        filtered_data = {k: v for k, v in data.items() if k in valid_keys}
-        
-        # Hydrate Chunks
-        if 'dossier' in filtered_data and isinstance(filtered_data['dossier'], list):
-            filtered_data['dossier'] = [Chunk(**c) if isinstance(c, dict) else c for c in filtered_data['dossier']]
-        if 'mentions' in filtered_data and isinstance(filtered_data['mentions'], list):
-            filtered_data['mentions'] = [Chunk(**c) if isinstance(c, dict) else c for c in filtered_data['mentions']]
-            
-        return cls(**filtered_data)
