@@ -32,7 +32,12 @@ async def test_dataset_chat_basic(mocker):
 
     # Assert
     assert output == "This is the LLM response."
-    mock_search.assert_called_once_with("test_dataset", "What is testing?", max_chunks=25)
+    mock_search.assert_called_once_with(
+        "test_dataset",
+        "What is testing?",
+        max_chunks=25,
+        raise_on_error=True,
+    )
     mock_llm.assert_called_once()
 
 @pytest.mark.asyncio
@@ -67,6 +72,7 @@ async def test_dataset_chat_separates_search_queries_from_prompt(mocker):
         "test_dataset",
         queries,
         max_chunks=25,
+        raise_on_error=True,
     )
     prompt = mock_llm.call_args.kwargs["prompt"]
     assert "Question: Why does testing matter?" in prompt

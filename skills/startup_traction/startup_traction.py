@@ -4,7 +4,7 @@ from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
 from skills.config_load.config_load import config_load
-from skills.dataset_chat.dataset_chat import _fallback_trigger, dataset_chat
+from skills.dataset_chat.dataset_chat import dataset_chat
 
 logger = get_logger(__name__)
 
@@ -45,12 +45,6 @@ async def startup_traction(startup_name: str) -> InsightResult:
         strict_insufficient_context=False,
     )
     result = result or "No relevant information found."
-    if result.strip() == _fallback_trigger():
-        raise ValueError(
-            f"Insufficient indexed context for startup_traction on dataset '{dataset_slug}'. "
-            "No insight was saved."
-        )
-
     insight.save(result)
     logger.info(f"[{dataset_slug}] Successfully saved startup_traction to {insight.path}")
     return [insight]

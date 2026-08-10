@@ -6,7 +6,7 @@ from skills.startup_profile.startup_profile import startup_profile
 
 
 @pytest.mark.asyncio
-async def test_startup_profile_does_not_cache_empty_context_response(mock_env, mocker):
+async def test_startup_profile_saves_empty_context_response(mock_env, mocker):
     get_storage().mkdir(
         dataset_location_for_domain("avientus", "startups").raw_rel
     )
@@ -31,10 +31,10 @@ async def test_startup_profile_does_not_cache_empty_context_response(mock_env, m
         "skills.startup_profile.startup_profile.dataset_chat",
         return_value="INSUFFICIENT_CONTEXT",
     )
-    with pytest.raises(ValueError, match="Insufficient indexed context"):
-        await startup_profile("Avientus")
+    result = await startup_profile("Avientus")
 
-    save.assert_not_called()
+    save.assert_called_once_with("INSUFFICIENT_CONTEXT")
+    assert len(result) == 1
 
 
 @pytest.mark.asyncio

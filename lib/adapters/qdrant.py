@@ -272,12 +272,25 @@ class QdrantAdapter:
                 raise RuntimeError(f"Upsert failed: {exc}") from exc
 
     def query(self, vector: list[float], *, limit: int):
-        return self.client.query_points(
+        if not self.collection_exists():
+            logger.warning(
+                "Qdrant collection %s does not exist; returning zero chunks.",
+                self.collection_name,
+            )
+            return []
+
+        points = self.client.query_points(
             collection_name=self.collection_name,
             query=vector,
             limit=limit,
             with_payload=True,
         ).points
+        if not points:
+            logger.warning(
+                "Qdrant collection %s exists but the query returned zero chunks.",
+                self.collection_name,
+            )
+        return points
 
     def delete_collection(self) -> None:
         self.client.delete_collection(self.collection_name)
