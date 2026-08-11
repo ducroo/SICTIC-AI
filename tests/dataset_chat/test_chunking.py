@@ -2,6 +2,8 @@ import hashlib
 import uuid
 from types import SimpleNamespace
 
+import pytest
+
 from lib.adapters.docling.converter import export_document_markdown
 from lib.datasets.chunking import split_markdown
 from lib.datasets.models import Chunk
@@ -61,6 +63,21 @@ def test_split_markdown_generates_stable_chunk_ids():
     ).hexdigest()
     assert first.chunk_id == str(uuid.UUID(hex=expected_hash))
     assert first.document_name == filename
+
+
+def test_split_markdown_rejects_dense_private_use_text():
+    encoded = "".join(chr(ord(char) + 0xF002) for char in "Approved")
+
+    with pytest.raises(ValueError, match="requires OCR"):
+        split_markdown(encoded, "encoded.pdf", 123456789.0)
+
+
+def test_split_markdown_replaces_sparse_private_use_symbols():
+    text = "Normal extracted text with a private-use symbol: \uf0a7"
+
+    chunks = split_markdown(text, "symbols.pdf", 123456789.0)
+
+    assert chunks[0].text == "Normal extracted text with a private-use symbol:"
 
 
 def test_chunk_to_md_omits_unknown_page():

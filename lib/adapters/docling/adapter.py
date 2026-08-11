@@ -4,7 +4,10 @@ import asyncio
 import os
 from typing import List
 
-from lib.adapters.docling.converter import convert_document
+from lib.adapters.docling.converter import (
+    convert_document,
+    convert_document_force_ocr,
+)
 from lib.adapters.docling.pdf import convert_repaired_pdf
 from lib.adapters.docling.rtf import convert_rtf
 from lib.adapters.docling.spreadsheets import (
@@ -17,6 +20,7 @@ from lib.adapters.docling.types import (
     ConversionStatus,
     DocumentConversionResult,
 )
+from lib.datasets.text_normalization import has_dense_private_use_encoding
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -131,10 +135,29 @@ class DoclingAdapter:
                 )
 
             try:
-                return await asyncio.to_thread(
+                text = await asyncio.to_thread(
                     self._convert_sync,
                     filepath,
                 )
+                if (
+                    lower_name.endswith(".pdf")
+                    and has_dense_private_use_encoding(text)
+                ):
+                    logger.warning(
+                        "Detected high-density private-use font encoding in "
+                        "%s. Retrying with full-page OCR.",
+                        filename,
+                    )
+                    text = await asyncio.to_thread(
+                        self._convert_force_ocr_sync,
+                        filepath,
+                    )
+                    if has_dense_private_use_encoding(text):
+                        raise RuntimeError(
+                            "Full-page OCR still produced high-density "
+                            "private-use characters."
+                        )
+                return text
             except Exception as error:
                 if lower_name.endswith(".pdf") and "page-dimensions" in str(
                     error
@@ -172,6 +195,10 @@ class DoclingAdapter:
     @staticmethod
     def _convert_sync(filepath: str) -> str:
         return convert_document(filepath)
+
+    @staticmethod
+    def _convert_force_ocr_sync(filepath: str) -> str:
+        return convert_document_force_ocr(filepath)
 
     @staticmethod
     def _convert_rtf_sync(filepath: str) -> str:
