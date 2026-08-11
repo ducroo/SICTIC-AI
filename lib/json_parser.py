@@ -59,17 +59,74 @@ def _escape_invalid_json_backslashes(json_str: str) -> str:
     return "".join(repaired)
 
 
+def _remove_trailing_json_commas(json_str: str) -> str:
+    """Remove commas before closing objects or arrays, but never inside strings."""
+    repaired = []
+    in_string = False
+    escaped = False
+    i = 0
+
+    while i < len(json_str):
+        char = json_str[i]
+
+        if in_string:
+            repaired.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            i += 1
+            continue
+
+        if char == '"':
+            in_string = True
+            repaired.append(char)
+            i += 1
+            continue
+
+        if char == ",":
+            next_idx = i + 1
+            while next_idx < len(json_str) and json_str[next_idx].isspace():
+                next_idx += 1
+            if next_idx < len(json_str) and json_str[next_idx] in "}]":
+                i += 1
+                continue
+
+        repaired.append(char)
+        i += 1
+
+    return "".join(repaired)
+
+
 def _loads_with_llm_repairs(json_str: str) -> dict | list:
     try:
         return json.loads(json_str)
     except json.JSONDecodeError as first_error:
+        repairs = []
+
         repaired = _escape_invalid_json_backslashes(json_str)
-        if repaired == json_str:
+        if repaired != json_str:
+            repairs.append("invalid backslashes")
+
+        without_trailing_commas = _remove_trailing_json_commas(repaired)
+        if without_trailing_commas != repaired:
+            repairs.append("trailing commas")
+        repaired = without_trailing_commas
+
+        if not repairs:
             raise first_error
         try:
-            return json.loads(repaired)
+            parsed = json.loads(repaired)
         except json.JSONDecodeError:
             raise first_error
+        logger.warning(
+            "Successfully repaired malformed JSON output (%s).",
+            ", ".join(repairs),
+        )
+        return parsed
+
 
 def repair_json_payload(raw_output: str) -> dict | list:
     """Extracts and parses JSON from a raw LLM string."""
