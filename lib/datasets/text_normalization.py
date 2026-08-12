@@ -6,7 +6,7 @@ import unicodedata
 
 
 _PRIVATE_USE_DENSITY_THRESHOLD = 0.1
-_PRESERVED_CONTROLS = {"\t", "\n", "\r"}
+_PRESERVED_CONTROLS = {"\t", "\n"}
 
 
 def has_dense_private_use_encoding(text: str) -> bool:
@@ -18,12 +18,17 @@ def has_dense_private_use_encoding(text: str) -> bool:
 
 
 def requires_text_normalization(text: str) -> bool:
-    """Return whether persisted extracted text contains excluded code points."""
-    return any(_is_excluded(ord(char)) for char in text)
+    """Return whether persisted extracted text is not in canonical form."""
+    return (
+        "\r" in text
+        or unicodedata.normalize("NFC", text) != text
+        or any(_is_excluded(ord(char)) for char in text)
+    )
 
 
 def normalize_extracted_text(text: str) -> str:
     """Normalize text and replace unsafe code points with spaces."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = unicodedata.normalize("NFC", text)
     if has_dense_private_use_encoding(text):
         raise ValueError(

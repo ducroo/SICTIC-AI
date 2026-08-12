@@ -27,10 +27,24 @@ def test_replaces_sparse_private_use_and_control_runs_with_spaces():
 
 
 def test_preserves_general_unicode_and_allowed_whitespace():
-    text = "Zürich — 東京 😊\tvalue\r\n"
+    text = "Zürich — 東京 😊\tvalue\n"
 
     assert not requires_text_normalization(text)
     assert normalize_extracted_text(text) == text
+
+
+def test_canonicalizes_carriage_return_line_endings():
+    text = "first\r\nsecond\rthird\n"
+
+    assert requires_text_normalization(text)
+    assert normalize_extracted_text(text) == "first\nsecond\nthird\n"
+
+
+def test_canonicalizes_decomposed_unicode():
+    text = "Zu\u0308rich"
+
+    assert requires_text_normalization(text)
+    assert normalize_extracted_text(text) == "Zürich"
 
 
 def test_rejects_unknown_dense_private_use_encoding():
