@@ -160,7 +160,7 @@ async def batch_audit_json(
         raise ValueError("missing_evidence_status must be in status_scale.")
 
     model = llm_model()
-    prompt_key = json.dumps(
+    config_key = json.dumps(
         {
             "schema_version": AUDIT_SCHEMA_VERSION,
             "checklist": checklist_markdown,
@@ -185,7 +185,7 @@ async def batch_audit_json(
         identifier=f"{skill_name}-{checklist.title}",
         subdir=True,
         extension="json",
-        prompt_key=prompt_key,
+        config_key=config_key,
     )
     reusable = insight.find(selection="reusable")
     if reusable is not None:

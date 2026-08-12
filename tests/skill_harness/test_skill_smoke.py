@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from lib.insights import InsightFile
+from lib.people.model import Person
 from lib.storage import get_storage
 from skills.harness.harness import dispatch_command
 from tests.skill_harness.cases import HARNESS_SMOKE_COMMANDS
@@ -126,6 +127,82 @@ async def test_ranking_style_skills_smoke(
     assert_insight_result(result)
     assert len(result) == 1
     assert expected in result[0].content()
+
+
+@pytest.mark.asyncio
+async def test_suggested_startups_does_not_save_invalid_response(
+    mocked_skill_boundaries,
+    monkeypatch,
+    caplog,
+):
+    import skills.suggested_startups.suggested_startups as module
+
+    async def invalid_response(*_args, **_kwargs):
+        raise ValueError("response does not match the schema")
+
+    monkeypatch.setattr(module, "generate_report", invalid_response)
+
+    result = await module.suggested_startups(
+        "sictic-members",
+        ["example-startup"],
+        ["Jane Doe"],
+        1,
+    )
+
+    assert result == []
+    assert "Failed to generate suggested startups for Jane Doe" in caplog.text
+    assert "0 cached, 0 generated, 1 failed" in caplog.text
+    assert not InsightFile(
+        "sictic-members",
+        "suggested_startups",
+        "ollama/test_model:1b",
+        identifier="Jane Doe",
+        subdir=True,
+    ).exists()
+
+
+@pytest.mark.asyncio
+async def test_suggested_startups_continues_after_investor_failure(
+    mocked_skill_boundaries,
+    monkeypatch,
+    caplog,
+):
+    import skills.suggested_startups.inputs as inputs
+    import skills.suggested_startups.suggested_startups as module
+
+    people = [
+        Person(full_name="Jane Doe", linkedin_id="jane-doe"),
+        Person(full_name="John Roe", linkedin_id="john-roe"),
+    ]
+    monkeypatch.setattr(inputs, "persons_in_dataset", lambda _dataset: people)
+    monkeypatch.setattr(
+        module,
+        "load_investor_profiles",
+        lambda *_args, **_kwargs: {
+            "jane-doe": "Jane profile",
+            "john-roe": "John profile",
+        },
+    )
+
+    async def generate_report(investor, *_args, **_kwargs):
+        if investor == "Jane Doe":
+            raise ValueError("duplicate startup")
+        return "# Startup Suggestions for John Roe\n\nValid report."
+
+    monkeypatch.setattr(module, "generate_report", generate_report)
+
+    result = await module.suggested_startups(
+        "sictic-members",
+        ["example-startup"],
+        ["Jane Doe", "John Roe"],
+        1,
+    )
+
+    assert len(result) == 1
+    assert result[0].identifier == "John Roe"
+    assert "Valid report" in result[0].content()
+    assert "Failed to generate suggested startups for Jane Doe" in caplog.text
+    assert "0 cached, 1 generated, 1 failed" in caplog.text
 
 
 @pytest.mark.asyncio

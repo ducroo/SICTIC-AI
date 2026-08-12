@@ -86,7 +86,7 @@ async def _investor_profile_result(
             model=source_model,
             identifier=linkedin_id,
             subdir=True,
-            prompt_key="compose person profile with investment track record",
+            config_key="compose person profile with investment track record",
         )
 
         try:

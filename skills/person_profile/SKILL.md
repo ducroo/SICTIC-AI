@@ -15,7 +15,7 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 1. **Insight File & Caching:**
    * Resolve the person to its canonical identifier through the standard person-resolution flow.
-   * Construct the profile insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="person_profile", model=<model>, identifier=<person_identifier>, subdir=True, prompt_key=<query_and_instructions>)`.
+   * Construct the profile insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="person_profile", model=<model>, identifier=<person_identifier>, subdir=True, config_key=<query_and_instructions>)`.
    * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing profile when available; otherwise generate the profile and persist it with `insight.save(...)`. Do not hardcode `<REPO_PATH>/insights/...` paths.
 
 2. **Data Retrieval & Synthesis:**

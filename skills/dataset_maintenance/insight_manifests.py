@@ -8,7 +8,10 @@ from lib.slugify import slugify
 from lib.storage import get_storage
 from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location, list_all_dataset_names
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import (
+    config_key as serialize_config_key,
+    config_load,
+)
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ def _person_name(content: str) -> str | None:
     return None
 
 
-def _prompt_key(
+def _config_key(
     skill: str,
     dataset: str,
     identifier: str,
@@ -96,7 +99,7 @@ def _prompt_key(
     if skill in {"expert-search", "potential-investors"}:
         return section.get("objective")
     if skill == "suggested-startups":
-        return section.get("suggested_startups_prompt")
+        return serialize_config_key(section)
     if skill == "investor-profile":
         return "compose person profile with investment track record"
     if skill == "dd-checks":
@@ -187,7 +190,7 @@ def migrate_insight_manifests(*, apply: bool = False) -> InsightMigrationResult:
                 continue
 
             content = storage.read_text(f"{location.insights_rel}/{relative_path}")
-            prompt_key = _prompt_key(
+            config_key = _config_key(
                 skill,
                 location.slug,
                 identifier,
@@ -195,7 +198,7 @@ def migrate_insight_manifests(*, apply: bool = False) -> InsightMigrationResult:
                 config,
             )
             source_datasets = _source_datasets(skill, location.slug)
-            if prompt_key is None or source_datasets is None:
+            if config_key is None or source_datasets is None:
                 skipped += 1
                 reason = f"dynamic-or-unknown:{skill}"
                 skipped_by_reason[reason] = skipped_by_reason.get(reason, 0) + 1
@@ -208,7 +211,7 @@ def migrate_insight_manifests(*, apply: bool = False) -> InsightMigrationResult:
                 identifier=identifier,
                 subdir=subdir,
                 source_datasets=source_datasets,
-                prompt_key=prompt_key,
+                config_key=config_key,
             )
             if apply:
                 insight.save(content)

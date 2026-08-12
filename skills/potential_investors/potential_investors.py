@@ -46,7 +46,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         skill="potential_investors",
         model=default_llm,
         source_datasets=[people_dataset, startup_slug],
-        prompt_key=objective_template,
+        config_key=objective_template,
     )
     reusable = insight.find(selection="reusable")
     if reusable:

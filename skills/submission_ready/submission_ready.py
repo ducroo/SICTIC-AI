@@ -120,7 +120,7 @@ def _insight_for_run(
     *,
     identifier: str,
     run_id: str,
-    prompt_key: str,
+    config_key: str,
 ) -> InsightFile:
     return InsightFile(
         dataset=startup_slug,
@@ -129,7 +129,7 @@ def _insight_for_run(
         identifier=identifier,
         subdir=True,
         run_id=run_id,
-        prompt_key=prompt_key,
+        config_key=config_key,
     )
 
 
@@ -137,7 +137,7 @@ def _reusable_run_insight(
     startup_slug: str,
     *,
     identifier: str,
-    prompt_key: str,
+    config_key: str,
 ) -> InsightFile | None:
     storage = get_storage()
     root = InsightFile(
@@ -146,7 +146,7 @@ def _reusable_run_insight(
         model=llm_model(),
         identifier=identifier,
         subdir=True,
-        prompt_key=prompt_key,
+        config_key=config_key,
     ).directory
     for run_id in reversed(storage.list(root)):
         run_path = f"{root}/{run_id}"
@@ -156,7 +156,7 @@ def _reusable_run_insight(
             startup_slug,
             identifier=identifier,
             run_id=run_id,
-            prompt_key=prompt_key,
+            config_key=config_key,
         )
         if candidate.is_reusable():
             return candidate
@@ -460,14 +460,14 @@ async def _process_candidate(
     reusable_response = _reusable_run_insight(
         startup_slug,
         identifier="response",
-        prompt_key=response_prompt,
+        config_key=response_prompt,
     )
     if reusable_response is not None:
         reusable_checklist = _insight_for_run(
             startup_slug,
             identifier="checklist",
             run_id=reusable_response.run_id,
-            prompt_key=checklist_prompt,
+            config_key=checklist_prompt,
         )
         if not reusable_checklist.exists():
             reusable_checklist.save(checklist_report)
@@ -484,7 +484,7 @@ async def _process_candidate(
         startup_slug,
         identifier="checklist",
         run_id=run_id,
-        prompt_key=checklist_prompt,
+        config_key=checklist_prompt,
     )
     checklist_insight.save(checklist_report)
 
@@ -498,7 +498,7 @@ async def _process_candidate(
         startup_slug,
         identifier="response",
         run_id=run_id,
-        prompt_key=response_prompt,
+        config_key=response_prompt,
     )
     response_insight.save(response_report)
     return SubmissionReadyResult(
@@ -551,7 +551,7 @@ def _save_failure_report(
         identifier="failures",
         subdir=True,
         run_id=run_id,
-        prompt_key="submission_ready failure report",
+        config_key="submission_ready failure report",
     )
     insight.save("\n".join(report) + "\n")
     return insight

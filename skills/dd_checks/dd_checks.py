@@ -128,7 +128,7 @@ async def dd_checks(startup: str) -> InsightResult:
         dd_config,
         batch_instructions,
     )
-    prompt_key = (
+    config_key = (
         dd_config["industry_type_query"]
         + dd_config["industry_type_llm_instructions"]
         + batch_instructions
@@ -141,7 +141,7 @@ async def dd_checks(startup: str) -> InsightResult:
         dataset=startup_slug,
         skill="dd_checks",
         model=llm_model(),
-        prompt_key=prompt_key,
+        config_key=config_key,
     )
     report = (
         f"# M&A Due Diligence Checks for {startup}\n\n"

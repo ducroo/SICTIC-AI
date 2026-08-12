@@ -23,7 +23,7 @@ description: This skill aims to find potential investors in the target startup. 
 
 2. **Configuration & Insight Cache:**
    * Load `objective_template = config_load()["potential_investors"]["objective"]`.
-   * Construct the output insight with `lib.insights.InsightFile(dataset=startup_slug, skill="potential_investors", model=llm_model(), source_datasets=[people_dataset, startup_slug], prompt_key=objective_template)`.
+   * Construct the output insight with `lib.insights.InsightFile(dataset=startup_slug, skill="potential_investors", model=llm_model(), source_datasets=[people_dataset, startup_slug], config_key=objective_template)`.
    * Use `insight.find(selection="reusable")` and `insight.content()` to reuse fresh cached results when available.
 
 3. **Startup Profile & Ranking:**

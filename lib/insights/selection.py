@@ -4,13 +4,18 @@ import re
 from typing import Literal
 
 from lib.env import get_env_var
-from lib.insights.manifest import prompt_hash
+from lib.insights.manifest import config_hash
 from lib.insights.paths import model_slug
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
 InsightSelection = Literal["any", "reusable"]
+
+
+def _stored_config_hash(entry: dict) -> str | None:
+    """Read current manifests while retaining legacy manifest compatibility."""
+    return entry.get("config_sha256") or entry.get("prompt_sha256")
 
 
 def ranked_models() -> list[tuple[str, str]]:
@@ -39,7 +44,7 @@ def _find_reusable(insight):
     expected_revisions = insight._dataset_revisions()
     if expected_revisions is None:
         return None
-    expected_prompt_hash = prompt_hash(insight.prompt_key)
+    expected_config_hash = config_hash(insight.config_key)
 
     for model, ranked_model_slug in ranked_models():
         candidate = insight._candidate(model)
@@ -50,7 +55,7 @@ def _find_reusable(insight):
             isinstance(entry, dict)
             and entry.get("model") == ranked_model_slug
             and entry.get("dataset_revisions") == expected_revisions
-            and entry.get("prompt_sha256") == expected_prompt_hash
+            and _stored_config_hash(entry) == expected_config_hash
         ):
             logger.info("Using reusable insight: %s", candidate.path)
             return candidate
@@ -58,7 +63,7 @@ def _find_reusable(insight):
 
 
 def is_reusable(insight) -> bool:
-    """Return whether this exact model/path is fresh for its prompt and data."""
+    """Return whether this exact model/path is fresh for its config and data."""
     if not insight.exists():
         return False
     manifest = insight._load_manifest()
@@ -70,7 +75,7 @@ def is_reusable(insight) -> bool:
         isinstance(entry, dict)
         and entry.get("model") == model_slug(insight.model)
         and entry.get("dataset_revisions") == expected_revisions
-        and entry.get("prompt_sha256") == prompt_hash(insight.prompt_key)
+        and _stored_config_hash(entry) == config_hash(insight.config_key)
     )
 
 

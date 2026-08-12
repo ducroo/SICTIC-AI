@@ -27,7 +27,7 @@ The skill executes a python script in the background that manages the process:
 5. **Output:** The JSON audit Insights are rendered through
    `json_to_markdown_table` and collated into one Markdown report, saved with
    `lib.insights.InsightFile(dataset=startup_slug, skill="dd_checks",
-   model=llm_model(), prompt_key=<industry_and_checklist_config>)`. The Python
+   model=llm_model(), config_key=<industry_and_checklist_config>)`. The Python
    API returns `[insight]`; the chapter JSON audits remain internal. Do not
    hardcode `<REPO_PATH>/insights/...` paths.
 

@@ -1,118 +1,155 @@
+"""Coordinate startup suggestions from stored investor and startup profiles."""
+
+from __future__ import annotations
+
+import asyncio
 from typing import List, Optional
 
-from skills.config_load.config_load import config_load
-from lib.logger import get_logger
-
-from lib.linkedin import LinkedInResolver
-from lib.insights import InsightFile, InsightResult
-from lib.slugify import slugify
-from skills.suggested_startups.core.llm_processor import compile_startup_profiles, process_single_investor
-from skills.investor_profile.investor_profile import investor_profile, read_investor_profiles
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import list_dataset_names
+from lib.insights import InsightFile, InsightResult
+from lib.logger import get_logger
+from lib.model_config import llm_model
+from lib.people.model import Person
+from skills.config_load.config_load import config_load
+from skills.suggested_startups.generation import (
+    compile_startup_profiles,
+    generate_report,
+)
+from skills.suggested_startups.inputs import (
+    STARTUP_PROFILES_DATASET,
+    SuggestedStartupsConfig,
+    SuggestedStartupsRequest,
+    load_investor_profiles,
+    load_skill_config,
+    load_startup_profiles,
+    resolve_request,
+)
 
 logger = get_logger(__name__)
 
-async def suggested_startups(dataset_name: str = "sictic_members", startups: Optional[List[str]] = None, investors: Optional[List[str]] = None, max_startups: int = 5) -> InsightResult:
-    """
-    Rank a provided list of startups against a list of investors by matching 
-    startup value propositions with investor professional backgrounds and interests.
-    Outputs a distinct file per investor in the suggested_startups folder.
-    """
-    from lib.model_config import llm_model
-    
-    dataset_slug = slugify(dataset_name)
-    
-    # Resolve default investors from the community LinkedIn cache.
-    if not investors:
-        linkedin_resolver = LinkedInResolver(dataset_slug)
-        investors = linkedin_resolver.get_all_persons()
-        
-    # Resolve default startups dynamically using config
-    if not startups:
-        config = config_load()
-        bulk_config = config.get("bulk_refresh", {})
-        community_datasets = [slugify(s) for s in bulk_config.get("community_datasets", ["sictic-members"])]
-        ignore_datasets = [slugify(s) for s in bulk_config.get("ignore_datasets", ["investor-profile", "person-profile"])]
 
-        discovered = []
-        for item in list_dataset_names("startups"):
-            item_slug = slugify(item)
-            if item_slug not in community_datasets and item_slug not in ignore_datasets:
-                discovered.append(item)
-        startups = discovered
-    
-    if not startups or not investors:
-        raise ValueError("Startups and investors lists cannot be empty after default resolution.")
-
-    try:
-        conf = config_load()
-        prompt_template = conf['suggested_startups']['suggested_startups_prompt']
-    except KeyError as e:
-        logger.error(f"[{dataset_name}] Missing configuration: {e}")
-        raise ValueError(f"Missing configuration for suggested_startups: {e}")
-
-    default_llm = llm_model()
-
-    # Filter investors whose cache is already up-to-date
-    investors_to_process = []
-    insights: InsightResult = []
-    datasets_to_check = [dataset_slug] + [slugify(s) for s in startups]
-    await sync_datasets(datasets_to_check, raise_on_error=True)
-
-    for investor in investors:
+def _partition_cached(
+    request: SuggestedStartupsRequest,
+    skill_config: SuggestedStartupsConfig,
+) -> tuple[InsightResult, list[tuple[Person, InsightFile]]]:
+    sources = [request.dataset, STARTUP_PROFILES_DATASET]
+    reusable: InsightResult = []
+    pending: list[tuple[Person, InsightFile]] = []
+    for person in request.investors:
         insight = InsightFile(
-            dataset=dataset_slug,
+            dataset=request.dataset,
             skill="suggested_startups",
-            model=default_llm,
-            identifier=investor,
+            model=llm_model(),
+            identifier=person.display_name,
             subdir=True,
-            source_datasets=datasets_to_check,
-            prompt_key=prompt_template,
+            source_datasets=sources,
+            config_key=skill_config.key,
         )
-        reusable = insight.find(selection="reusable")
-        if reusable:
-            logger.info(f"[{dataset_name}] Skipping {investor}: Cache up to date.")
-            insights.append(reusable)
-            continue
-            
-        investors_to_process.append((investor, insight))
-        
-    if not investors_to_process:
-        logger.info(f"[{dataset_name}] All investor suggestions are up to date. Exiting.")
+        cached = insight.find(selection="reusable")
+        if cached:
+            logger.info(
+                "[%s] Skipping %s: Cache up to date.",
+                request.dataset,
+                person.display_name,
+            )
+            reusable.append(cached)
+        else:
+            pending.append((person, insight))
+    return reusable, pending
+
+
+async def suggested_startups(
+    dataset_name: str = "sictic_members",
+    startups: Optional[List[str]] = None,
+    investors: Optional[List[str]] = None,
+    max_startups: int = 5,
+) -> InsightResult:
+    """Rank stored startup profiles for canonical investors in a dataset."""
+    config = config_load()
+    skill_config = load_skill_config(config)
+    request = resolve_request(
+        dataset_name,
+        startups,
+        investors,
+        max_startups,
+        config=config,
+        available_startups=list_dataset_names("startups"),
+    )
+
+    startup_profiles = await load_startup_profiles(request.startups)
+    await sync_datasets(
+        [request.dataset, STARTUP_PROFILES_DATASET],
+        raise_on_error=True,
+    )
+    insights, pending = _partition_cached(request, skill_config)
+    if not pending:
+        logger.info(
+            "[%s] Suggested-startups summary: %d cached, 0 generated, "
+            "0 failed.",
+            request.dataset,
+            len(insights),
+        )
         return insights
 
-    compiled_startups = await compile_startup_profiles(startups)
-    
-    names_to_process = [inv for inv, _ in investors_to_process]
-    logger.info(f"[{dataset_name}] Batch fetching investor profiles for {len(names_to_process)} investors...")
-    await investor_profile(source_dataset=dataset_slug)
-    investor_profiles_dict = read_investor_profiles(dataset_slug, names_to_process)
-    
-    import asyncio
+    pending_people = [person for person, _insight in pending]
+    investor_profiles = load_investor_profiles(
+        request.dataset,
+        pending_people,
+    )
+    startup_context = compile_startup_profiles(startup_profiles)
 
-    async def process_inv(investor, insight):
-        logger.info(f"[{dataset_name}] Processing investor: {investor}")
-        profile_text = investor_profiles_dict.get(investor)
-        
-        if not profile_text:
-            logger.error(f"[{dataset_name}] No detailed profile available for {investor}. Skipping.")
-            return None
-            
-        new_lines = await process_single_investor(investor, profile_text, compiled_startups, prompt_template, max_startups)
-        
-        if new_lines:
-            header = f"# Startup Suggestions for {investor}\n\n| Startup | Rationale |\n|---|---|\n"
-            content = header + "\n".join(new_lines)
-            insight.save(content)
-            logger.info(f"[{dataset_name}] Saved suggestions for {investor} to {insight.path}")
+    async def generate(
+        person: Person,
+        insight: InsightFile,
+    ) -> InsightFile | None:
+        logger.info(
+            "[%s] Processing investor: %s",
+            request.dataset,
+            person.display_name,
+        )
+        try:
+            report = await generate_report(
+                person.display_name,
+                investor_profiles[person.linkedin_id],
+                startup_context,
+                skill_config.prompt,
+                skill_config.response_schema,
+                request.startups,
+                request.max_startups,
+            )
+            insight.save(report)
+            logger.info(
+                "[%s] Saved suggestions for %s to %s",
+                request.dataset,
+                person.display_name,
+                insight.path,
+            )
             return insight
-        return None
-        
-    tasks = [process_inv(inv, insight) for inv, insight in investors_to_process]
-    generated = await asyncio.gather(*tasks)
-    insights.extend(insight for insight in generated if insight is not None)
+        except Exception:
+            logger.exception(
+                "[%s] Failed to generate suggested startups for %s. "
+                "No insight was saved.",
+                request.dataset,
+                person.display_name,
+            )
+            return None
 
-    logger.info(f"[{dataset_name}] Successfully finished suggested_startups.")
-    
+    generated_results = await asyncio.gather(
+        *(generate(person, insight) for person, insight in pending)
+    )
+    generated = [
+        insight for insight in generated_results if insight is not None
+    ]
+    cached_count = len(insights)
+    failed_count = len(pending) - len(generated)
+    insights.extend(generated)
+    logger.info(
+        "[%s] Suggested-startups summary: %d cached, %d generated, "
+        "%d failed.",
+        request.dataset,
+        cached_count,
+        len(generated),
+        failed_count,
+    )
     return insights

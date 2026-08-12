@@ -41,7 +41,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         identifier=event_name_slug,
         subdir=True,
         source_datasets=[people_dataset],
-        prompt_key=event_description + objective_template,
+        config_key=event_description + objective_template,
     )
     reusable = insight.find(selection="reusable")
     if reusable:
