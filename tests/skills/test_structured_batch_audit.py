@@ -90,6 +90,16 @@ async def test_structured_batch_audit_saves_json_insight(
         "Relevant terminology: chamber of commerce, registration number",
     ]
     assert "chamber of commerce" not in calls[0]["prompt"]
+    response_schema = calls[0]["response_format"]["json_schema"]["schema"]
+    assert calls[0]["response_format"]["json_schema"]["strict"] is True
+    assert response_schema["properties"]["status"]["enum"] == [
+        "Not Found",
+        "Critical",
+        "Borderline",
+        "Sufficient",
+        "Fine",
+    ]
+    assert '"status"' in calls[0]["prompt"]
 
 
 @pytest.mark.asyncio

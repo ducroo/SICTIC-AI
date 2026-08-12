@@ -19,6 +19,7 @@ dependencies:
   - aiohttp
   - google-api-python-client
   - google-auth-oauthlib
+  - jsonschema
   - litellm
   - polars
   - pydantic

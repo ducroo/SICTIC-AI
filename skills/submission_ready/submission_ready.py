@@ -15,7 +15,6 @@ from lib.datasets.paths import (
 )
 from lib.insights import InsightFile, InsightResult
 from lib.insights.paths import model_slug
-from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
@@ -27,11 +26,17 @@ from lib.startups.dealum import (
     reconcile_dealum_startup,
 )
 from lib.storage import get_storage
+from lib.structured_output import (
+    copy_schema,
+    json_schema_response_format,
+    parse_json_response,
+    schema_text,
+)
 from skills.batch_audit.batch_audit import batch_audit
 from skills.batch_audit.checklist import parse_checklist
 from skills.batch_audit.rendering import json_to_markdown_table
 from skills.batch_audit.schema import audit_errors, validate_audit_document
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import config_key, config_load
 from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
@@ -110,7 +115,7 @@ def _insight_for_run(
     *,
     identifier: str,
     run_id: str,
-    prompt_key: str,
+    config_key: str,
 ) -> InsightFile:
     return InsightFile(
         dataset=startup_slug,
@@ -119,7 +124,7 @@ def _insight_for_run(
         identifier=identifier,
         subdir=True,
         run_id=run_id,
-        prompt_key=prompt_key,
+        config_key=config_key,
     )
 
 
@@ -127,7 +132,7 @@ def _reusable_run_insight(
     startup_slug: str,
     *,
     identifier: str,
-    prompt_key: str,
+    config_key: str,
 ) -> InsightFile | None:
     storage = get_storage()
     root = InsightFile(
@@ -136,7 +141,7 @@ def _reusable_run_insight(
         model=llm_model(),
         identifier=identifier,
         subdir=True,
-        prompt_key=prompt_key,
+        config_key=config_key,
     ).directory
     for run_id in reversed(storage.list(root)):
         run_path = f"{root}/{run_id}"
@@ -146,7 +151,7 @@ def _reusable_run_insight(
             startup_slug,
             identifier=identifier,
             run_id=run_id,
-            prompt_key=prompt_key,
+            config_key=config_key,
         )
         if candidate.is_reusable():
             return candidate
@@ -162,10 +167,13 @@ def _normalize_concerns(value: Any, field: str) -> list[str]:
 def _parse_proposed_action(
     raw_response: str,
     stage: str,
+    response_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    result = repair_json_payload(raw_response)
-    if not isinstance(result, dict):
-        raise ValueError("The proposed action was not a JSON object.")
+    result = parse_json_response(
+        raw_response,
+        response_schema,
+        label="Submission-ready proposed action",
+    )
 
     action = str(result.get("proposed_action", "")).strip()
     allowed_actions = {
@@ -212,25 +220,66 @@ def _parse_proposed_action(
     }
 
 
+def _specialize_proposed_action_schema(
+    response_schema: dict[str, Any],
+    stage: str,
+) -> dict[str, Any]:
+    allowed_actions = {
+        "Application": [
+            "Move to Under review",
+            "Send concerns to startup",
+        ],
+        "Under review": [
+            "Move to Jury",
+            "Send concerns to startup",
+        ],
+    }[stage]
+    specialized = copy_schema(response_schema)
+    try:
+        specialized["properties"]["proposed_action"]["enum"] = (
+            allowed_actions
+        )
+    except (KeyError, TypeError) as error:
+        raise ValueError(
+            "submission_ready.response_schema must define "
+            "properties.proposed_action."
+        ) from error
+    return specialized
+
+
 async def _generate_proposed_action(
     *,
     stage: str,
     checklist_report: str,
     response_instructions: str,
-    response_schema: str,
+    response_schema: dict[str, Any],
 ) -> tuple[str, str]:
+    effective_schema = _specialize_proposed_action_schema(
+        response_schema,
+        stage,
+    )
     prompt = _proposed_action_prompt(
         stage=stage,
         checklist_report=checklist_report,
         response_instructions=response_instructions,
-        response_schema=response_schema,
+        response_schema=effective_schema,
     )
 
     async def execute() -> dict[str, Any]:
-        raw_response = await llm_chat(prompt)
+        raw_response = await llm_chat(
+            prompt,
+            response_format=json_schema_response_format(
+                "submission_ready_proposed_action",
+                effective_schema,
+            ),
+        )
         if not raw_response:
             raise ValueError("The proposed-action model returned no content.")
-        return _parse_proposed_action(raw_response, stage)
+        return _parse_proposed_action(
+            raw_response,
+            stage,
+            effective_schema,
+        )
 
     result = await _retry("Proposed-action analysis", execute)
     return _render_proposed_action(stage, result), prompt
@@ -241,14 +290,14 @@ def _proposed_action_prompt(
     stage: str,
     checklist_report: str,
     response_instructions: str,
-    response_schema: str,
+    response_schema: dict[str, Any],
 ) -> str:
     return "\n\n".join(
         [
             response_instructions,
             f"Current Dealum stage: {stage}",
             "Current submission checklist:\n" + checklist_report,
-            response_schema,
+            "Response JSON Schema:\n" + schema_text(response_schema),
         ]
     )
 
@@ -396,7 +445,7 @@ async def _process_candidate(
     adapter: DealumAdapter,
     force_refresh: bool,
     run_id: str,
-    check_config: dict[str, str],
+    check_config: dict[str, Any],
 ) -> SubmissionReadyResult:
     startup_slug = await _prepare_dataset(
         match,
@@ -437,27 +486,34 @@ async def _process_candidate(
         "investment-quality assessment.\n\n"
         f"{table}\n"
     )
-    checklist_prompt = (
-        f"Rendered from structured audit: {audit_insight.path}\n\n"
-        + audit_insight.content()
+    checklist_config_key = config_key(
+        check_config,
+        {
+            "artifact": "checklist",
+            "audit_path": audit_insight.path,
+            "audit": audit,
+        },
     )
-    response_prompt = _proposed_action_prompt(
-        stage=stage,
-        checklist_report=checklist_report,
-        response_instructions=check_config["response_instructions"],
-        response_schema=check_config["response_schema"],
+    response_config_key = config_key(
+        check_config,
+        {
+            "artifact": "response",
+            "stage": stage,
+            "audit_path": audit_insight.path,
+            "audit": audit,
+        },
     )
     reusable_response = _reusable_run_insight(
         startup_slug,
         identifier="response",
-        prompt_key=response_prompt,
+        config_key=response_config_key,
     )
     if reusable_response is not None:
         reusable_checklist = _insight_for_run(
             startup_slug,
             identifier="checklist",
             run_id=reusable_response.run_id,
-            prompt_key=checklist_prompt,
+            config_key=checklist_config_key,
         )
         if not reusable_checklist.exists():
             reusable_checklist.save(checklist_report)
@@ -474,11 +530,11 @@ async def _process_candidate(
         startup_slug,
         identifier="checklist",
         run_id=run_id,
-        prompt_key=checklist_prompt,
+        config_key=checklist_config_key,
     )
     checklist_insight.save(checklist_report)
 
-    response_report, response_prompt = await _generate_proposed_action(
+    response_report, _response_prompt = await _generate_proposed_action(
         stage=stage,
         checklist_report=checklist_report,
         response_instructions=check_config["response_instructions"],
@@ -488,7 +544,7 @@ async def _process_candidate(
         startup_slug,
         identifier="response",
         run_id=run_id,
-        prompt_key=response_prompt,
+        config_key=response_config_key,
     )
     response_insight.save(response_report)
     return SubmissionReadyResult(
@@ -541,7 +597,7 @@ def _save_failure_report(
         identifier="failures",
         subdir=True,
         run_id=run_id,
-        prompt_key="submission_ready failure report",
+        config_key="submission_ready failure report",
     )
     insight.save("\n".join(report) + "\n")
     return insight

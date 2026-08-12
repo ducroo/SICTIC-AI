@@ -4,7 +4,7 @@ from lib.model_config import llm_model
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.insights import InsightFile, InsightResult
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import config_key, config_load
 from skills.startup_profile.startup_profile import startup_profile
 from skills.ranking.ranking_persons import ranking_persons
 from lib.insights import dataset_from_insight
@@ -37,7 +37,8 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     )
 
     try:
-        objective_template = config_load()['potential_investors']['objective']
+        config = config_load()
+        objective_template = config['potential_investors']['objective']
     except Exception as e:
         logger.error(f"[{startup_slug}] Failed to load configuration: {e}")
         raise RuntimeError(f"Failed to load configuration: {e}")
@@ -46,7 +47,16 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         skill="potential_investors",
         model=default_llm,
         source_datasets=[people_dataset, startup_slug],
-        prompt_key=objective_template,
+        config_key=config_key(
+            config["potential_investors"],
+            config.get("ranking_top_k", {}),
+            config.get("ranking_rationale", {}),
+            {
+                "target_investors": target_investors,
+                "exclude_investors": exclude_investors,
+                "top_k": top_k,
+            },
+        ),
     )
     reusable = insight.find(selection="reusable")
     if reusable:

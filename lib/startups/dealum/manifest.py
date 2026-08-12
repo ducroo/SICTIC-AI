@@ -50,6 +50,14 @@ def read_manifest(
         return {}
 
 
+def dealum_url_for_startup(dataset_slug: str) -> str | None:
+    """Return the stored Dealum application URL for a startup, if any."""
+    url = read_manifest(dataset_slug).get("dealum_url")
+    if not isinstance(url, str) or not url.strip():
+        return None
+    return url.strip()
+
+
 def application_content_for_hash(
     application: dict[str, Any],
     *,

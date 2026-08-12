@@ -16,6 +16,10 @@ from lib.datasets.manifest import (
     ignored_parse_is_current as manifest_ignored_parse_is_current,
 )
 from lib.datasets.models import IngestionFailure, IngestionResult
+from lib.datasets.text_normalization import (
+    normalize_extracted_text,
+    requires_text_normalization,
+)
 from lib.datasets.source import (
     SourceDocument,
     parsed_filepath,
@@ -77,8 +81,10 @@ def _successful_parse_is_current(
         )
     ):
         return False
-    return state.get("parsed_sha256") == content_hash(
-        storage.read_text(parsed_path)
+    parsed_text = storage.read_text(parsed_path)
+    return (
+        not requires_text_normalization(parsed_text)
+        and state.get("parsed_sha256") == content_hash(parsed_text)
     )
 
 
@@ -88,9 +94,11 @@ def _can_adopt_legacy_parse(
     source: SourceDocument,
 ) -> bool:
     parsed_mtime = storage.mtime(parsed_path) or 0.0
+    if not storage.exists(parsed_path):
+        return False
     return (
-        storage.exists(parsed_path)
-        and parsed_mtime >= source.mtime
+        parsed_mtime >= source.mtime
+        and not requires_text_normalization(storage.read_text(parsed_path))
         and spreadsheet_cache_is_current(
             storage,
             parsed_path,
@@ -245,12 +253,13 @@ async def reconcile_conversions(
                 parsed_rel,
                 conversion.filename,
             )
-            storage.write_text(parsed_path, conversion.text)
+            parsed_text = normalize_extracted_text(conversion.text)
+            storage.write_text(parsed_path, parsed_text)
             state.update(
                 {
                     "source_sha256": source.sha256,
                     "source_mtime": source.mtime,
-                    "parsed_sha256": content_hash(conversion.text),
+                    "parsed_sha256": content_hash(parsed_text),
                     "parser_version": PARSER_VERSION,
                 }
             )

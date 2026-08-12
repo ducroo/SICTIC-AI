@@ -33,12 +33,12 @@ async def team_profile(startup_name: str) -> InsightResult:
         "linkedin_classification_prompt",
         "",
     )
-    prompt_key = str(resume_queries) + assessment_prompt + classification_instructions
+    config_key = str(resume_queries) + assessment_prompt + classification_instructions
     insight = InsightFile(
         dataset=dataset_name,
         skill="team_profile",
         model=default_llm,
-        prompt_key=prompt_key,
+        config_key=config_key,
     )
     reusable = insight.find(selection="reusable")
     if reusable:

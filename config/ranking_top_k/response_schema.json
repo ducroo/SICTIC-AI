@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ranked_profiles_ids": {
+      "type": "array",
+      "description": "Every supplied profile ID, ordered best to worst.",
+      "items": {"type": "string"}
+    }
+  },
+  "required": ["ranked_profiles_ids"]
+}

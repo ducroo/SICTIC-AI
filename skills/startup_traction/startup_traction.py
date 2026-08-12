@@ -30,7 +30,7 @@ async def startup_traction(startup_name: str) -> InsightResult:
         dataset=dataset_slug,
         skill="startup_traction",
         model=llm_model(),
-        prompt_key=query + llm_instructions,
+        config_key=query + llm_instructions,
     )
     reusable = insight.find(selection="reusable")
     if reusable:

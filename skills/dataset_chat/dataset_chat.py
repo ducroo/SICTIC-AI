@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from lib.env import get_env_var
 from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
@@ -31,6 +31,7 @@ async def dataset_chat(
     prompt: str,
     max_chunks: int = 25,
     strict_insufficient_context: bool = True,
+    response_format: Optional[Any] = None,
 ) -> Optional[str]:
     """Run one RAG using search queries and an independent LLM prompt."""
     if isinstance(queries, str):
@@ -94,4 +95,7 @@ async def dataset_chat(
         return "\n\n".join(prompt_parts)
 
     logger.info(f"[{dataset_name}] Handing off to llm_chat.")
-    return await llm_chat(prompt=build_prompt(chunks))
+    return await llm_chat(
+        prompt=build_prompt(chunks),
+        response_format=response_format,
+    )

@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 _RESOURCE_KEYS = ("docling", "embedding", "llm")
 _DEFAULT_WAIT_TIMEOUT = 3600.0
-_POLL_INTERVAL = 0.5
+_POLL_INTERVAL = 0.05
 # A lease held longer than this is treated as leaked and reclaimed even if
 # the owning process is still alive: a hung provider call never returns, so
 # pid-liveness alone cannot distinguish a stuck job from a long one.
@@ -48,6 +48,7 @@ class GatewayTimeoutError(TimeoutError):
 @dataclass(frozen=True)
 class ServiceLease:
     lease_id: str
+    request_id: str
     resource: str
     model: str
     pid: int
@@ -63,6 +64,7 @@ class ServiceRequest:
     pid: int
     process_start: str
     requested_at: float
+    max_concurrent: int
 
 
 def _repo_identity() -> str:
@@ -173,11 +175,11 @@ class ServicesGateway:
         actual_start = _process_start_token(pid)
         return actual_start is not None and actual_start == expected_start
 
-    def _read_state(self, handle) -> dict:
+    def _read_state(self, handle) -> tuple[dict, bool]:
         handle.seek(0)
         content = handle.read()
         if not content:
-            return self._empty_state()
+            return self._empty_state(), False
         try:
             state = json.loads(content)
         except (TypeError, json.JSONDecodeError) as error:
@@ -186,12 +188,12 @@ class ServicesGateway:
                 self.state_path,
                 error,
             )
-            return self._empty_state()
+            return self._empty_state(), True
 
         leases = state.get("leases")
         requests = state.get("requests", {})
         if not isinstance(leases, dict) or not isinstance(requests, dict):
-            return self._empty_state()
+            return self._empty_state(), True
         cleaned = self._empty_state()
         process_alive: dict[tuple[int, str], bool] = {}
         now = time.time()
@@ -243,7 +245,7 @@ class ServicesGateway:
                     if isinstance(request, dict)
                     and entry_is_alive(request)
                 ]
-        return cleaned
+        return cleaned, cleaned != state
 
     def _write_state(self, handle, state: dict) -> None:
         handle.seek(0)
@@ -257,9 +259,14 @@ class ServicesGateway:
         with self.state_path.open("a+", encoding="utf-8") as handle:
             fcntl.flock(handle, fcntl.LOCK_EX)
             try:
-                state = self._read_state(handle)
+                state, cleanup_required = self._read_state(handle)
+                state_before_action = json.dumps(state, sort_keys=True)
                 result = action(state)
-                self._write_state(handle, state)
+                if (
+                    cleanup_required
+                    or json.dumps(state, sort_keys=True) != state_before_action
+                ):
+                    self._write_state(handle, state)
                 return result
             finally:
                 fcntl.flock(handle, fcntl.LOCK_UN)
@@ -306,8 +313,6 @@ class ServicesGateway:
         self,
         state: dict,
         request: dict,
-        *,
-        max_concurrent: int,
     ) -> bool:
         model = str(request.get("model") or request.get("resource"))
         if (
@@ -322,7 +327,10 @@ class ServicesGateway:
             and len(active_models) >= self.ollama_max_loaded_models
         ):
             return False
-        return self._model_lease_count(state, model) < max_concurrent
+        capacity = int(
+            request.get("max_concurrent") or self.ollama_num_parallel
+        )
+        return self._model_lease_count(state, model) < capacity
 
     def _format_counts(
         self,
@@ -347,6 +355,8 @@ class ServicesGateway:
         self,
         resource: str,
         model: str,
+        *,
+        max_concurrent: int | None = None,
     ) -> tuple[ServiceRequest, dict[str, dict[str, int]], set[str]]:
         request = ServiceRequest(
             request_id=uuid.uuid4().hex,
@@ -355,6 +365,7 @@ class ServicesGateway:
             pid=os.getpid(),
             process_start=self._process_start,
             requested_at=time.time(),
+            max_concurrent=max_concurrent or self.ollama_num_parallel,
         )
 
         def register(state):
@@ -362,6 +373,40 @@ class ServicesGateway:
             return request, self._counts(state), self._active_models(state)
 
         return self._with_locked_state(register)
+
+    def _grant_available(self, state: dict) -> None:
+        """Grant every currently available slot in global FIFO order."""
+        while True:
+            request = next(
+                (
+                    item
+                    for item in self._pending_requests(state)
+                    if self._request_is_admissible(state, item)
+                ),
+                None,
+            )
+            if request is None:
+                return
+            resource = str(request["resource"])
+            request_id = str(request["request_id"])
+            state["requests"][resource] = [
+                item
+                for item in state["requests"][resource]
+                if item.get("request_id") != request_id
+            ]
+            state["leases"][resource].append(
+                asdict(
+                    ServiceLease(
+                        lease_id=uuid.uuid4().hex,
+                        request_id=request_id,
+                        resource=resource,
+                        model=str(request.get("model") or resource),
+                        pid=int(request["pid"]),
+                        process_start=str(request["process_start"]),
+                        acquired_at=time.time(),
+                    )
+                )
+            )
 
     def _try_acquire(
         self,
@@ -374,59 +419,34 @@ class ServicesGateway:
         set[str] | None,
     ]:
         resource = request.resource
-        lease = ServiceLease(
-            lease_id=uuid.uuid4().hex,
-            resource=resource,
-            model=request.model,
-            pid=os.getpid(),
-            process_start=self._process_start,
-            acquired_at=time.time(),
-        )
 
         def acquire(state):
             leases = state["leases"]
-            queue = state["requests"][resource]
-            queued_request = next(
+            granted = next(
                 (
                     item
-                    for item in queue
+                    for item in leases[resource]
                     if item.get("request_id") == request.request_id
                 ),
                 None,
             )
-            if queued_request is None:
+            if granted is None:
+                self._grant_available(state)
+                granted = next(
+                    (
+                        item
+                        for item in leases[resource]
+                        if item.get("request_id") == request.request_id
+                    ),
+                    None,
+                )
+            if granted is None:
                 return None, None, None
-
-            first_admissible = next(
-                (
-                    item
-                    for item in self._pending_requests(state)
-                    if self._request_is_admissible(
-                        state,
-                        item,
-                        max_concurrent=max_concurrent,
-                    )
-                ),
-                None,
+            return (
+                ServiceLease(**granted),
+                self._counts(state),
+                self._active_models(state),
             )
-            if (
-                first_admissible is None
-                or first_admissible.get("request_id") != request.request_id
-            ):
-                return None, None, None
-            if not self._request_is_admissible(
-                state,
-                queued_request,
-                max_concurrent=max_concurrent,
-            ):
-                return None, None, None
-            state["requests"][resource] = [
-                item
-                for item in queue
-                if item.get("request_id") != request.request_id
-            ]
-            leases[resource].append(asdict(lease))
-            return lease, self._counts(state), self._active_models(state)
 
         return self._with_locked_state(acquire)
 
@@ -436,6 +456,11 @@ class ServicesGateway:
             state["requests"][request.resource] = [
                 item
                 for item in queue
+                if item.get("request_id") != request.request_id
+            ]
+            state["leases"][request.resource] = [
+                item
+                for item in state["leases"][request.resource]
                 if item.get("request_id") != request.request_id
             ]
 
@@ -479,6 +504,7 @@ class ServicesGateway:
             self._register_request,
             resource,
             model_key,
+            max_concurrent=capacity,
         )
         logger.info(
             "Gateway request received: %s",

@@ -11,11 +11,12 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 _converter = None
+_force_ocr_converter = None
 _converter_init_lock = threading.Lock()
 _convert_lock = threading.Lock()
 
 
-def build_converter():
+def build_converter(*, force_full_page_ocr: bool = False):
     """Construct the Docling converter with platform-appropriate OCR."""
     from lib.runtime_noise import configure_runtime_noise
 
@@ -45,9 +46,9 @@ def build_converter():
     )
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     ocr_options = (
-        OcrMacOptions()
+        OcrMacOptions(force_full_page_ocr=force_full_page_ocr)
         if platform.system() == "Darwin"
-        else RapidOcrOptions()
+        else RapidOcrOptions(force_full_page_ocr=force_full_page_ocr)
     )
     pipeline_options = PdfPipelineOptions(
         do_ocr=True,
@@ -85,6 +86,19 @@ def get_converter():
     return _converter
 
 
+def get_force_ocr_converter():
+    global _force_ocr_converter
+    if _force_ocr_converter is not None:
+        return _force_ocr_converter
+    with _converter_init_lock:
+        if _force_ocr_converter is None:
+            logger.info(
+                "Initializing full-page OCR Docling DocumentConverter"
+            )
+            _force_ocr_converter = build_converter(force_full_page_ocr=True)
+    return _force_ocr_converter
+
+
 def export_document_markdown(document) -> str:
     """Export Markdown with explicit page markers when Docling has page data."""
     from lib.datasets.page_markers import format_page_marker
@@ -112,6 +126,13 @@ def export_document_markdown(document) -> str:
 
 def convert_document(filepath: str) -> str:
     converter = get_converter()
+    with _convert_lock:
+        result = converter.convert(filepath)
+    return export_document_markdown(result.document)
+
+
+def convert_document_force_ocr(filepath: str) -> str:
+    converter = get_force_ocr_converter()
     with _convert_lock:
         result = converter.convert(filepath)
     return export_document_markdown(result.document)

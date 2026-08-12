@@ -36,7 +36,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> In
         dataset=startup_slug,
         skill="startup_profile",
         model=default_llm,
-        prompt_key=query + llm_instructions,
+        config_key=query + llm_instructions,
     )
     if not files:
         reusable = insight.find(selection="reusable")

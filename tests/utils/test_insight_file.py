@@ -64,7 +64,7 @@ def test_json_extension_uses_existing_naming_and_freshness(mock_env):
         "ollama/qwen3:8b",
         identifier="Legal Due Diligence",
         extension="json",
-        prompt_key="structured checklist",
+        config_key="structured checklist",
     )
 
     insight.save('{"status": "Fine"}')
@@ -83,7 +83,7 @@ def test_find_with_any_selection_respects_json_extension(mock_env, monkeypatch):
         "ollama/old-model",
         identifier="Legal",
         extension="json",
-        prompt_key="prompt",
+        config_key="prompt",
     )
     generated.save("{}")
 
@@ -93,7 +93,7 @@ def test_find_with_any_selection_respects_json_extension(mock_env, monkeypatch):
         "ollama/new-model",
         identifier="Legal",
         extension="json",
-        prompt_key="prompt",
+        config_key="prompt",
     )
 
     assert requested.find(selection="any").path == generated.path
@@ -113,7 +113,7 @@ def test_find_with_reusable_selection_uses_ranked_model(mock_env, monkeypatch):
         "ollama/gpt-5.4-mini",
         identifier="Jane Doe",
         subdir=True,
-        prompt_key="queryinstructions",
+        config_key="queryinstructions",
     )
 
     generated.save("profile")
@@ -124,7 +124,7 @@ def test_find_with_reusable_selection_uses_ranked_model(mock_env, monkeypatch):
         "ollama/qwen3:8b",
         identifier="Jane Doe",
         subdir=True,
-        prompt_key="queryinstructions",
+        config_key="queryinstructions",
     )
     reusable = requested.find(selection="reusable")
 
@@ -139,24 +139,54 @@ def test_find_with_reusable_selection_uses_ranked_model(mock_env, monkeypatch):
     assert generated.path in manifest["entries"]
 
 
-def test_reusable_selection_rejects_changed_dataset_or_prompt(mock_env, monkeypatch):
+def test_reusable_selection_accepts_legacy_prompt_sha256_manifest(
+    mock_env,
+    monkeypatch,
+):
     monkeypatch.setenv("RANKED_LLMS", "ollama/qwen3:8b")
     location = _create_indexed_dataset("avientus", "startups", "revision-1")
     insight = InsightFile(
         "avientus",
         "startup_profile",
         "ollama/qwen3:8b",
-        prompt_key="old prompt",
+        config_key="legacy configuration",
     )
     insight.save("profile")
 
-    changed_prompt = InsightFile(
+    manifest_path = (
+        f"{location.parsed_root}/{location.slug}/insights/"
+        ".insight-manifest.json"
+    )
+    storage = get_storage()
+    manifest = json.loads(storage.read_text(manifest_path))
+    entry = manifest["entries"][insight.path]
+    entry["prompt_sha256"] = entry.pop("config_sha256")
+    storage.write_text(manifest_path, json.dumps(manifest))
+
+    assert insight.find(selection="reusable") is not None
+
+
+def test_reusable_selection_rejects_changed_dataset_or_config(
+    mock_env,
+    monkeypatch,
+):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/qwen3:8b")
+    location = _create_indexed_dataset("avientus", "startups", "revision-1")
+    insight = InsightFile(
         "avientus",
         "startup_profile",
         "ollama/qwen3:8b",
-        prompt_key="new prompt",
+        config_key="old configuration",
     )
-    assert changed_prompt.find(selection="reusable") is None
+    insight.save("profile")
+
+    changed_config = InsightFile(
+        "avientus",
+        "startup_profile",
+        "ollama/qwen3:8b",
+        config_key="new configuration",
+    )
+    assert changed_config.find(selection="reusable") is None
 
     manifest = IngestionManifest.load(get_storage(), location.parsed_rel)
     manifest.indexed_dataset_revision = "revision-2"
@@ -182,7 +212,7 @@ def test_manual_is_always_reusable_and_preferred(mock_env, monkeypatch):
         "ollama/qwen3:8b",
         identifier="Jane Doe",
         subdir=True,
-        prompt_key="changed",
+        config_key="changed",
     )
 
     assert requested.find(selection="reusable").path == manual.path
@@ -334,7 +364,7 @@ def test_find_all_returns_empty_list_when_nothing_matches(mock_env):
 def test_find_all_rejects_reusable_selection(mock_env):
     with pytest.raises(
         NotImplementedError,
-        match="expected source_datasets and prompt_key",
+        match="expected source_datasets and config_key",
     ):
         InsightFile.find_all(
             skill="startup_profile",
@@ -371,7 +401,7 @@ def test_save_prunes_missing_manifest_entries(mock_env):
         "avientus",
         "startup_profile",
         "model-one",
-        prompt_key="prompt",
+        config_key="prompt",
     )
     first.save("first")
     get_storage().remove(first.path)
@@ -380,7 +410,7 @@ def test_save_prunes_missing_manifest_entries(mock_env):
         "avientus",
         "startup_profile",
         "model-two",
-        prompt_key="prompt",
+        config_key="prompt",
     )
     second.save("second")
 
@@ -401,7 +431,7 @@ def test_save_without_dataset_revision_keeps_output_non_reusable(mock_env):
         "avientus",
         "startup_profile",
         "ollama/qwen3:8b",
-        prompt_key="prompt",
+        config_key="prompt",
     )
 
     insight.save("profile")
@@ -421,7 +451,7 @@ def test_save_same_content_preserves_output_mtime(mock_env):
         "avientus",
         "startup_profile",
         "ollama/qwen3:8b",
-        prompt_key="prompt",
+        config_key="prompt",
     )
     storage.write_text(insight.path, "profile")
     storage.set_mtime(insight.path, 123)
@@ -457,18 +487,18 @@ def test_timestamped_insight_can_be_reused_for_exact_model(mock_env):
         identifier="checklist",
         subdir=True,
         run_id="20260730T221500Z",
-        prompt_key="checklist prompt",
+        config_key="checklist prompt",
     )
     insight.save("checklist")
 
     assert insight.is_reusable() is True
-    changed_prompt = InsightFile(
+    changed_config = InsightFile(
         "avientus",
         "submission_ready",
         "ollama/test_model:1b",
         identifier="checklist",
         subdir=True,
         run_id="20260730T221500Z",
-        prompt_key="changed prompt",
+        config_key="changed configuration",
     )
-    assert changed_prompt.is_reusable() is False
+    assert changed_config.is_reusable() is False

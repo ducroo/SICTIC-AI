@@ -1,9 +1,9 @@
-import re
+from typing import Any
 
 from lib.model_config import llm_model
 from lib.insights import InsightFile, InsightResult
 from lib.storage import get_storage
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import config_key, config_load
 from skills.batch_audit.batch_audit import batch_audit
 from skills.batch_audit.rendering import json_to_markdown_table
 from skills.dataset_chat.dataset_chat import dataset_chat
@@ -11,30 +11,82 @@ from lib.slugify import slugify
 from lib.logger import get_logger
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_raw_path
+from lib.structured_output import (
+    copy_schema,
+    json_schema_response_format,
+    parse_json_response,
+    schema_text,
+)
+from skills.dataset_chat.dataset_chat import _fallback_trigger
 
 logger = get_logger(__name__)
 
 
-def parse_industry_type(response: str, allowed_industry_types: set[str]) -> str:
-    """Parse the explicit industry classification from the LLM response."""
-    allowed_by_lower = {item.lower(): item for item in allowed_industry_types}
-    match = re.search(r"(?im)^\s*industry\s+type\s*:\s*([A-Za-z][A-Za-z -]*)", response or "")
-    if match:
-        candidate = match.group(1).strip().split()[0].lower()
-        if candidate in allowed_by_lower:
-            return allowed_by_lower[candidate]
+def _industry_response_schema(
+    response_schema: dict[str, Any],
+    allowed_industry_types: set[str],
+) -> dict[str, Any]:
+    specialized = copy_schema(response_schema)
+    allowed = sorted(allowed_industry_types)
+    try:
+        specialized["properties"]["industry_type"]["enum"] = [
+            *allowed,
+            None,
+        ]
+    except (KeyError, TypeError) as error:
+        raise ValueError(
+            "dd_checks.industry_type_response_schema must define "
+            "properties.industry_type."
+        ) from error
+    return specialized
 
-    stripped = (response or "").strip().lower()
-    if stripped in allowed_by_lower:
-        return allowed_by_lower[stripped]
 
-    logger.warning(f"Could not parse industry type from response; defaulting to general: {response}")
-    return allowed_by_lower.get("general", "general")
+def parse_industry_type(
+    response: str,
+    allowed_industry_types: set[str],
+    response_schema: dict[str, Any],
+) -> str:
+    """Repair and validate a structured industry classification."""
+    allowed_by_lower = {
+        item.lower(): item for item in allowed_industry_types
+    }
+    effective_schema = _industry_response_schema(
+        response_schema,
+        set(allowed_by_lower),
+    )
+    result = parse_json_response(
+        response,
+        effective_schema,
+        label="DD industry-classification response",
+    )
+    industry_type = result["industry_type"]
+    if industry_type is None:
+        logger.warning(
+            "Industry classification had insufficient evidence; "
+            "defaulting to general."
+        )
+        return allowed_by_lower.get("general", "general")
+    evidence = [item.strip() for item in result["evidence"] if item.strip()]
+    if not evidence:
+        raise ValueError(
+            "Industry classification requires evidence when a type is selected."
+        )
+    return allowed_by_lower[industry_type.lower()]
 
 
 async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_industry_types: set) -> str:
     industry_prompt = dd_config['industry_type_query']
     industry_instructions = dd_config['industry_type_llm_instructions']
+    base_schema = dd_config["industry_type_response_schema"]
+    effective_schema = _industry_response_schema(
+        base_schema,
+        allowed_industry_types,
+    )
+    rendered_schema = schema_text(effective_schema)
+    industry_instructions = industry_instructions.replace(
+        "{{response_schema}}",
+        rendered_schema,
+    )
     industry_response = await dataset_chat(
         dataset_name=startup_name_lower,
         queries=industry_prompt,
@@ -42,10 +94,24 @@ async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_i
             f"Query: {industry_prompt}\n\n"
             f"Instructions: {industry_instructions}"
         ),
+        response_format=json_schema_response_format(
+            "dd_industry_classification",
+            effective_schema,
+        ),
     )
     
     logger.info(f"[{startup_name_lower}] Raw Industry Type LLM Response: {industry_response}")
-    return parse_industry_type(industry_response or "", allowed_industry_types)
+    if not industry_response or industry_response.strip() == _fallback_trigger():
+        logger.warning(
+            "[%s] No industry evidence returned; defaulting to general.",
+            startup_name_lower,
+        )
+        return "general"
+    return parse_industry_type(
+        industry_response,
+        allowed_industry_types,
+        base_schema,
+    )
 
 async def chapter_by_chapter(
     startup_name_lower: str,
@@ -128,20 +194,15 @@ async def dd_checks(startup: str) -> InsightResult:
         dd_config,
         batch_instructions,
     )
-    prompt_key = (
-        dd_config["industry_type_query"]
-        + dd_config["industry_type_llm_instructions"]
-        + batch_instructions
-        + "\n".join(
-            f"{key}:{value}"
-            for key, value in sorted(checklists.items())
-        )
+    effective_config_key = config_key(
+        dd_config,
+        config["batch_audit"],
     )
     insight = InsightFile(
         dataset=startup_slug,
         skill="dd_checks",
         model=llm_model(),
-        prompt_key=prompt_key,
+        config_key=effective_config_key,
     )
     report = (
         f"# M&A Due Diligence Checks for {startup}\n\n"

@@ -199,7 +199,7 @@ async def _generate_single_profile(
         model=default_llm,
         identifier=identifier,
         subdir=True,
-        prompt_key=query + llm_instructions,
+        config_key=query + llm_instructions,
     )
     reusable = insight.find(selection="reusable")
     if reusable:

@@ -27,7 +27,19 @@ async def test_ollama_requests_always_include_computed_num_ctx(monkeypatch, mock
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "8192")
     mocker.patch.object(module.gateway, "request_completion", side_effect=fake_completion)
 
-    result = await module.llm_chat("short prompt")
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "fixture",
+            "strict": True,
+            "schema": {"type": "object"},
+        },
+    }
+    result = await module.llm_chat(
+        "short prompt",
+        response_format=response_format,
+    )
 
     assert result == "ok"
     assert captured["num_ctx"] == 4096
+    assert captured["response_format"] == response_format

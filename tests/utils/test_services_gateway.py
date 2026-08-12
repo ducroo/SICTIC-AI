@@ -39,6 +39,12 @@ def test_default_state_path_is_repo_scoped_and_machine_local():
     assert len(path.parent.name) == 16
 
 
+def test_default_poll_interval_is_fifty_milliseconds(tmp_path):
+    gateway = ServicesGateway(state_path=tmp_path / "gateway.json")
+
+    assert gateway.poll_interval == 0.05
+
+
 def test_gateway_initialization_has_no_file_side_effect(clean_gateway):
     assert not clean_gateway.state_path.exists()
 
@@ -125,7 +131,7 @@ async def test_gateway_concurrency_limits_are_per_model(clean_gateway, mocker):
 
 
 @pytest.mark.asyncio
-async def test_first_runnable_request_wins_globally(
+async def test_first_poll_grants_all_available_slots_in_fifo_order(
     clean_gateway,
 ):
     first = clean_gateway._register_request("llm", "first-model")[0]
@@ -136,13 +142,94 @@ async def test_first_runnable_request_wins_globally(
         max_concurrent=2,
     )
 
-    assert second_lease is None
+    assert second_lease is not None
+    state = clean_gateway.snapshot()
+    granted = sorted(
+        (
+            lease
+            for leases in state["leases"].values()
+            for lease in leases
+        ),
+        key=lambda lease: lease["acquired_at"],
+    )
+    assert [lease["request_id"] for lease in granted] == [
+        first.request_id,
+        second.request_id,
+    ]
+    assert all(not queue for queue in state["requests"].values())
 
     first_lease, _, _ = clean_gateway._try_acquire(first, max_concurrent=2)
 
     assert first_lease is not None
-    clean_gateway._remove_request(second)
+    clean_gateway._release(second_lease)
     clean_gateway._release(first_lease)
+
+
+def test_unsuccessful_acquisition_does_not_rewrite_state(
+    clean_gateway,
+    mocker,
+):
+    first = clean_gateway._register_request(
+        "embedding",
+        "embedding-model",
+        max_concurrent=1,
+    )[0]
+    waiting = clean_gateway._register_request(
+        "embedding",
+        "embedding-model",
+        max_concurrent=1,
+    )[0]
+    first_lease, _, _ = clean_gateway._try_acquire(
+        first,
+        max_concurrent=1,
+    )
+    assert first_lease is not None
+    write_state = mocker.patch.object(
+        clean_gateway,
+        "_write_state",
+        wraps=clean_gateway._write_state,
+    )
+
+    blocked, _, _ = clean_gateway._try_acquire(
+        waiting,
+        max_concurrent=1,
+    )
+
+    assert blocked is None
+    write_state.assert_not_called()
+    clean_gateway._remove_request(waiting)
+    clean_gateway._release(first_lease)
+
+
+def test_one_poll_fills_embedding_capacity(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=16,
+        ollama_max_loaded_models=1,
+    )
+    requests = [
+        gateway._register_request("embedding", "embedding-model")[0]
+        for _ in range(100)
+    ]
+
+    first_lease, _, _ = gateway._try_acquire(
+        requests[0],
+        max_concurrent=16,
+    )
+
+    assert first_lease is not None
+    assert len(_leases(gateway, "embedding")) == 16
+    assert len(_requests(gateway, "embedding")) == 84
+    gateway._release(first_lease)
+    for request in requests[1:16]:
+        lease, _, _ = gateway._try_acquire(
+            request,
+            max_concurrent=16,
+        )
+        assert lease is not None
+        gateway._release(lease)
+    for request in requests[16:]:
+        gateway._remove_request(request)
 
 
 @pytest.mark.asyncio

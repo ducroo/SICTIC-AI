@@ -7,9 +7,11 @@ from langchain_text_splitters import MarkdownTextSplitter
 
 from lib.datasets.models import Chunk
 from lib.datasets.page_markers import split_text_by_pages
+from lib.datasets.text_normalization import normalize_extracted_text
 
 
 def split_markdown(text: str, filename: str, mod_time: float) -> list[Chunk]:
+    text = normalize_extracted_text(text)
     splitter = MarkdownTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks: list[Chunk] = []
     for page_number, section_text in split_text_by_pages(text):

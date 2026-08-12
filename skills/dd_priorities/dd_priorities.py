@@ -41,12 +41,12 @@ async def dd_priorities(startup: str) -> InsightResult:
         "{{startup}}",
         startup,
     )
-    prompt_key = f"{instructions}\n\n{source_report}"
+    config_key = f"{instructions}\n\n{source_report}"
     output_insight = InsightFile(
         dataset=startup_slug,
         skill="dd_priorities",
         model=llm_model(),
-        prompt_key=prompt_key,
+        config_key=config_key,
     )
     reusable = output_insight.find(selection="reusable")
     if reusable:

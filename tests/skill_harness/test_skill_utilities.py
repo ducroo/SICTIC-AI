@@ -32,7 +32,7 @@ async def test_llm_chat_uses_gateway_without_live_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ranking_rank_chunk_appends_missing_ids(monkeypatch):
+async def test_ranking_rank_chunk_rejects_missing_ids(monkeypatch):
     import skills.ranking.ranking_top_k as ranking_top_k_mod
 
     monkeypatch.setattr(
@@ -42,12 +42,27 @@ async def test_ranking_rank_chunk_appends_missing_ids(monkeypatch):
             "ranking_top_k": {
                 "ranking_instructions": (
                     "{{objective}}\n{{profiles_text}}\n{{n_profiles}}\n{{IDs_profiles}}"
-                )
+                ),
+                "response_schema": {
+                    "type": "object",
+                    "properties": {
+                        "ranked_profiles_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        }
+                    },
+                    "required": ["ranked_profiles_ids"],
+                },
             }
         },
     )
 
     async def fake_llm_chat(*_args, **_kwargs):
+        schema = _kwargs["response_format"]["json_schema"]["schema"]
+        assert schema["properties"]["ranked_profiles_ids"]["minItems"] == 2
+        assert schema["properties"]["ranked_profiles_ids"]["items"][
+            "enum"
+        ] == ["a", "b"]
         return '{"ranked_profiles_ids": ["b"]}'
 
     monkeypatch.setattr(ranking_top_k_mod, "llm_chat", fake_llm_chat)
@@ -57,7 +72,48 @@ async def test_ranking_rank_chunk_appends_missing_ids(monkeypatch):
         {"a": "Profile A", "b": "Profile B"},
     )
 
-    assert result == ["b", "a"]
+    assert result == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_ranking_rank_chunk_rejects_duplicate_ids(monkeypatch):
+    import json
+    from pathlib import Path
+
+    import skills.ranking.ranking_top_k as ranking_top_k_mod
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "config/ranking_top_k/response_schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "config_load",
+        lambda: {
+            "ranking_top_k": {
+                "ranking_instructions": "{{response_schema}}",
+                "response_schema": schema,
+            }
+        },
+    )
+
+    async def duplicate_response(*_args, **_kwargs):
+        return '{"ranked_profiles_ids":["b","b"]}'
+
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "llm_chat",
+        duplicate_response,
+    )
+
+    result = await ranking_top_k_mod.rank_chunk(
+        "fixture objective",
+        {"a": "Profile A", "b": "Profile B"},
+    )
+
+    assert result == ["a", "b"]
 
 
 @pytest.mark.asyncio
