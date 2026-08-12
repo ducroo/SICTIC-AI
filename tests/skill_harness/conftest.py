@@ -113,6 +113,13 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return []
 
     async def fake_dataset_chat(*_args, **_kwargs):
+        response_format = _kwargs.get("response_format") or {}
+        schema = response_format.get("json_schema", {}).get("schema", {})
+        if "industry_type" in schema.get("properties", {}):
+            return (
+                '{"industry_type":"general","confidence":80,'
+                '"evidence":["Fixture company evidence."]}'
+            )
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'
 
     async def fake_structured_audit_chat(*_args, **kwargs):

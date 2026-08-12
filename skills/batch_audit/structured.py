@@ -6,10 +6,15 @@ from datetime import datetime, timezone
 from typing import Any
 
 from lib.insights import InsightFile
-from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
+from lib.structured_output import (
+    copy_schema,
+    json_schema_response_format,
+    parse_json_response,
+    schema_text,
+)
 from skills.batch_audit.checklist import ChecklistCheck, parse_checklist
 from skills.batch_audit.schema import (
     AUDIT_SCHEMA_VERSION,
@@ -17,6 +22,7 @@ from skills.batch_audit.schema import (
     validate_audit_document,
 )
 from skills.dataset_chat.dataset_chat import _fallback_trigger, dataset_chat
+from skills.config_load.config_load import config_key, config_load
 
 logger = get_logger(__name__)
 
@@ -37,11 +43,14 @@ def _string_list(value: Any, field: str) -> list[str]:
 
 def _parse_check_response(
     raw_response: str,
+    response_schema: dict[str, Any],
     status_scale: list[str],
 ) -> dict[str, Any]:
-    result = repair_json_payload(raw_response)
-    if not isinstance(result, dict):
-        raise ValueError("The audit response was not a JSON object.")
+    result = parse_json_response(
+        raw_response,
+        response_schema,
+        label="Batch-audit response",
+    )
     status = str(result.get("status", "")).strip()
     if status not in status_scale:
         raise ValueError(
@@ -75,11 +84,40 @@ def _retrieval_queries(check: ChecklistCheck) -> list[str]:
     return queries
 
 
-def _llm_prompt(check: ChecklistCheck, llm_instructions: str) -> str:
+def _llm_prompt(
+    check: ChecklistCheck,
+    llm_instructions: str,
+    response_schema: dict[str, Any],
+) -> str:
+    rendered_schema = schema_text(response_schema)
+    if "{{response_schema}}" in llm_instructions:
+        instructions = llm_instructions.replace(
+            "{{response_schema}}",
+            rendered_schema,
+        )
+    else:
+        instructions = (
+            f"{llm_instructions}\n\nResponse JSON Schema:\n"
+            f"{rendered_schema}"
+        )
     return (
         f"Check to perform:\n{check.description}\n\n"
-        f"Instructions:\n{llm_instructions}"
+        f"Instructions:\n{instructions}"
     )
+
+
+def _specialize_response_schema(
+    response_schema: dict[str, Any],
+    status_scale: list[str],
+) -> dict[str, Any]:
+    specialized = copy_schema(response_schema)
+    try:
+        specialized["properties"]["status"]["enum"] = status_scale
+    except (KeyError, TypeError) as error:
+        raise ValueError(
+            "Batch-audit response schema must define properties.status."
+        ) from error
+    return specialized
 
 
 def _missing_evidence_result(status: str) -> dict[str, Any]:
@@ -108,6 +146,7 @@ async def _run_check(
     dataset_name: str,
     check: ChecklistCheck,
     llm_instructions: str,
+    response_schema: dict[str, Any],
     status_scale: list[str],
     missing_evidence_status: str,
 ) -> dict[str, Any]:
@@ -117,12 +156,24 @@ async def _run_check(
             raw_response = await dataset_chat(
                 dataset_name=dataset_name,
                 queries=_retrieval_queries(check),
-                prompt=_llm_prompt(check, llm_instructions),
+                prompt=_llm_prompt(
+                    check,
+                    llm_instructions,
+                    response_schema,
+                ),
                 strict_insufficient_context=False,
+                response_format=json_schema_response_format(
+                    "batch_audit_check",
+                    response_schema,
+                ),
             )
             if not raw_response or raw_response.strip() == _fallback_trigger():
                 return _missing_evidence_result(missing_evidence_status)
-            return _parse_check_response(raw_response, status_scale)
+            return _parse_check_response(
+                raw_response,
+                response_schema,
+                status_scale,
+            )
         except Exception as error:
             errors.append(str(error))
             logger.warning(
@@ -159,10 +210,21 @@ async def batch_audit_json(
     if missing_evidence_status not in status_scale:
         raise ValueError("missing_evidence_status must be in status_scale.")
 
+    batch_config = config_load()["batch_audit"]
+    base_schema = batch_config["response_schema"]
+    if not isinstance(base_schema, dict):
+        raise ValueError("batch_audit.response_schema must be a JSON object.")
+    response_schema = _specialize_response_schema(
+        base_schema,
+        status_scale,
+    )
+
     model = llm_model()
-    config_key = json.dumps(
+    effective_config_key = config_key(
+        batch_config,
         {
             "schema_version": AUDIT_SCHEMA_VERSION,
+            "skill_name": skill_name,
             "checklist": checklist_markdown,
             "llm_instructions": llm_instructions,
             "status_scale": status_scale,
@@ -175,8 +237,6 @@ async def batch_audit_json(
                 for chapter in checklist.chapters
             ],
         },
-        ensure_ascii=False,
-        sort_keys=True,
     )
     insight = InsightFile(
         dataset=slugify(dataset_name),
@@ -185,7 +245,7 @@ async def batch_audit_json(
         identifier=f"{skill_name}-{checklist.title}",
         subdir=True,
         extension="json",
-        config_key=config_key,
+        config_key=effective_config_key,
     )
     reusable = insight.find(selection="reusable")
     if reusable is not None:
@@ -217,6 +277,7 @@ async def batch_audit_json(
                     dataset_name,
                     check,
                     llm_instructions,
+                    response_schema,
                     status_scale,
                     missing_evidence_status,
                 )

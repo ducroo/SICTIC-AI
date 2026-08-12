@@ -1,66 +1,104 @@
-from typing import Dict, Any, List
-from pydantic import BaseModel
+from typing import Any, Dict, List
 
-from skills.llm_chat.llm_chat import llm_chat
-from skills.config_load.config_load import config_load
-from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
+from lib.structured_output import (
+    copy_schema,
+    json_schema_response_format,
+    parse_json_response,
+    schema_text,
+)
+from skills.config_load.config_load import config_load
+from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
 
-class ProfileRationale(BaseModel):
-    id: str
-    rationale: str
 
-class BatchRationaleResult(BaseModel):
-    results: List[ProfileRationale]
+def _specialize_schema(
+    response_schema: dict[str, Any],
+    profile_ids: list[str],
+) -> dict[str, Any]:
+    specialized = copy_schema(response_schema)
+    try:
+        results = specialized["properties"]["results"]
+        results["minItems"] = len(profile_ids)
+        results["maxItems"] = len(profile_ids)
+        results["items"]["properties"]["id"]["enum"] = profile_ids
+    except (KeyError, TypeError) as error:
+        raise ValueError(
+            "ranking_rationale.response_schema must define "
+            "properties.results.items.properties.id."
+        ) from error
+    return specialized
+
+
+def _rationale_lookup(
+    results: list[dict[str, Any]],
+    expected_ids: list[str],
+) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for result in results:
+        profile_id = result["id"]
+        if profile_id in lookup:
+            raise ValueError(f"Duplicate rationale ID {profile_id!r}.")
+        rationale = result["rationale"].strip()
+        if not rationale:
+            raise ValueError(f"Rationale for {profile_id!r} is empty.")
+        lookup[profile_id] = rationale
+    if set(lookup) != set(expected_ids):
+        missing = [item for item in expected_ids if item not in lookup]
+        raise ValueError("Missing rationale IDs: " + ", ".join(missing))
+    return lookup
+
 
 async def ranking_rationale(
-    ranked_items: List[Dict[str, Any]], 
-    objective: str
+    ranked_items: List[Dict[str, Any]],
+    objective: str,
 ) -> List[Dict[str, Any]]:
-    """
-    Augments ranked_items with concise ranking rationales.
-    Person identity fields are supplied by the Person metadata, not by the LLM.
-    """
+    """Add concise rationales while preserving canonical profile identity."""
     if not ranked_items:
         return []
 
-    config = config_load()
-    prompt = config['ranking_rationale']['rationale_instructions']
+    section = config_load()["ranking_rationale"]
+    profile_ids = [item["id"] for item in ranked_items]
+    response_schema = _specialize_schema(
+        section["response_schema"],
+        profile_ids,
+    )
+    profiles_text = "\n\n---\n\n".join(
+        f"### Rank {item['rank']} | Profile ID: {item['id']}\n\n"
+        f"{item.get('text', 'Content missing.')}"
+        for item in ranked_items
+    )
+    prompt = (
+        section["rationale_instructions"]
+        .replace("{{objective}}", objective)
+        .replace("{{profiles_text}}", profiles_text)
+        .replace("{{response_schema}}", schema_text(response_schema))
+    )
 
-    profiles_text = []
-    # ranked_items comes strictly ordered with final ranks already populated.
-    for item in ranked_items:
-        item_id = item["id"]
-        content = item.get("text", "Content missing.")
-        profiles_text.append(f"### Rank {item['rank']} | Profile ID: {item_id}\n\n{content}")
-        
-    prompt = prompt.replace("{{objective}}", objective)
-    prompt = prompt.replace("{{profiles_text}}", "\n\n---\n\n".join(profiles_text))
-    
     try:
-        response_content = await llm_chat(prompt, response_format=BatchRationaleResult)
+        response_content = await llm_chat(
+            prompt,
+            response_format=json_schema_response_format(
+                "profile_rationales",
+                response_schema,
+            ),
+        )
         if not response_content:
-            return ranked_items
-
-        parsed_dict = repair_json_payload(response_content)
-        parsed_data = BatchRationaleResult.model_validate(parsed_dict)
-
-        rationale_lookup = {r.id: r.rationale for r in parsed_data.results}
-
-        # Merge the results back into the original ranked_items list
+            raise ValueError("Rationale model returned no content.")
+        parsed = parse_json_response(
+            response_content,
+            response_schema,
+            label="Ranking-rationale response",
+        )
+        rationale_lookup = _rationale_lookup(
+            parsed["results"],
+            profile_ids,
+        )
         for item in ranked_items:
-            item_id = item["id"]
-            if item_id in rationale_lookup:
-                item["rationale"] = rationale_lookup[item_id]
-            else:
-                item["rationale"] = "Rationale missing from LLM response."
-
-    except Exception as e:
-        logger.error(f"Error in ranking_rationale: {e}")
-        # Ensure we always return the original structure even if the LLM call fails
+            item["rationale"] = rationale_lookup[item["id"]]
+    except Exception as error:
+        logger.error("Error in ranking_rationale: %s", error)
         for item in ranked_items:
             item["rationale"] = "Error generating rationale."
-
     return ranked_items

@@ -15,7 +15,7 @@ Use this skill when asked to perform due diligence, run a DD checklist, or revie
 
 The skill executes a python script in the background that manages the process:
 
-1. **Profiling (First Step):** Uses `dataset_chat` to identify the startup's industry type. It dynamically extracts the allowed industry types from the checklist keys and uses the prompts located at `config['dd_checks']['industry_type_query']` and `config['dd_checks']['industry_type_llm_instructions']`.
+1. **Profiling (First Step):** Uses `dataset_chat` to identify the startup's industry type. It dynamically extracts the allowed industry types from the checklist keys, injects them into `industry_type_response_schema`, supplies that schema to LiteLLM, repairs the returned JSON, and validates it locally.
 2. **Checklist Selection & Extraction:** 
    1. The script reads the available checklist keys from `config['dd_checks']['checklists']`. These keys are formatted as `<chapter>_<industry_type>` (e.g., `1_elevator_general`).
    2. It distills the unique chapters from these keys.
@@ -27,7 +27,7 @@ The skill executes a python script in the background that manages the process:
 5. **Output:** The JSON audit Insights are rendered through
    `json_to_markdown_table` and collated into one Markdown report, saved with
    `lib.insights.InsightFile(dataset=startup_slug, skill="dd_checks",
-   model=llm_model(), config_key=<industry_and_checklist_config>)`. The Python
+   model=llm_model(), config_key=config_key(dd_config, batch_config))`. The Python
    API returns `[insight]`; the chapter JSON audits remain internal. Do not
    hardcode `<REPO_PATH>/insights/...` paths.
 

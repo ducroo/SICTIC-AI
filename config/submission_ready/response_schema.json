@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "proposed_action": {
+      "type": "string",
+      "description": "Action permitted for the current Dealum stage."
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "eligibility_concerns": {
+      "type": "array",
+      "items": {"type": "string"},
+      "maxItems": 8
+    },
+    "missing_or_inconsistent_information": {
+      "type": "array",
+      "items": {"type": "string"},
+      "maxItems": 8
+    }
+  },
+  "required": [
+    "proposed_action",
+    "rationale",
+    "eligibility_concerns",
+    "missing_or_inconsistent_information"
+  ]
+}

@@ -1,11 +1,20 @@
 import json
 
 import pytest
+from pathlib import Path
 
 from lib.datasets.paths import dataset_location_for_domain
 from lib.storage import get_storage
 from skills.batch_audit.batch_audit import batch_audit
 from skills.dd_checks.dd_checks import find_industry_type, parse_industry_type
+
+
+INDUSTRY_SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "config/dd_checks/industry_type_response_schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 @pytest.mark.asyncio
@@ -55,19 +64,32 @@ Is there evidence of customer traction?
     assert audit["chapters"][0]["checks"][0]["status"] == "Fine"
 
 
-def test_parse_industry_type_uses_explicit_label_not_rationale():
-    response = (
-        "Industry Type: Software Confidence Score: 95%\n"
-        "The rationale mentions Biology only as a contrasting category."
+def test_parse_industry_type_validates_structured_response():
+    response = json.dumps(
+        {
+            "industry_type": "software",
+            "confidence": 95,
+            "evidence": ["The product is delivered as SaaS."],
+        }
     )
 
-    result = parse_industry_type(response, {"biology", "hardware", "software", "general"})
+    result = parse_industry_type(
+        response,
+        {"biology", "hardware", "software", "general"},
+        INDUSTRY_SCHEMA,
+    )
 
     assert result == "software"
 
 
-def test_parse_industry_type_defaults_to_general_when_unparseable():
-    result = parse_industry_type("No clear answer", {"biology", "hardware", "software", "general"})
+def test_parse_industry_type_defaults_to_general_for_null_classification():
+    result = parse_industry_type(
+        json.dumps(
+            {"industry_type": None, "confidence": 0, "evidence": []}
+        ),
+        {"biology", "hardware", "software", "general"},
+        INDUSTRY_SCHEMA,
+    )
 
     assert result == "general"
 
@@ -78,7 +100,13 @@ async def test_find_industry_type_uses_default_retrieval_chunk_count(monkeypatch
 
     async def fake_dataset_chat(*args, **kwargs):
         calls["kwargs"] = kwargs
-        return "Industry Type: Hardware Confidence Score: 95%"
+        return json.dumps(
+            {
+                "industry_type": "hardware",
+                "confidence": 95,
+                "evidence": ["The company manufactures a device."],
+            }
+        )
 
     monkeypatch.setattr("skills.dd_checks.dd_checks.dataset_chat", fake_dataset_chat)
 
@@ -87,9 +115,18 @@ async def test_find_industry_type_uses_default_retrieval_chunk_count(monkeypatch
         {
             "industry_type_query": "classify the startup",
             "industry_type_llm_instructions": "choose one industry type",
+            "industry_type_response_schema": INDUSTRY_SCHEMA,
         },
         {"biology", "general", "hardware", "software"},
     )
 
     assert result == "hardware"
     assert "max_chunks" not in calls["kwargs"]
+    schema = calls["kwargs"]["response_format"]["json_schema"]["schema"]
+    assert schema["properties"]["industry_type"]["enum"] == [
+        "biology",
+        "general",
+        "hardware",
+        "software",
+        None,
+    ]

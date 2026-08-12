@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import SchemaError, ValidationError
-
-from lib.json_parser import repair_json_payload
 from lib.slugify import slugify
+from lib.structured_output import (
+    copy_schema,
+    json_schema_response_format,
+    parse_json_response,
+)
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ def specialize_schema(
     candidate_startups: list[str],
     max_startups: int,
 ) -> dict[str, Any]:
-    specialized = deepcopy(response_schema)
+    specialized = copy_schema(response_schema)
     try:
         suggestions = specialized["properties"]["suggestions"]
         properties = suggestions["items"]["properties"]
@@ -43,14 +43,10 @@ def specialize_schema(
 
 
 def response_format(schema: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "suggested_startups_response",
-            "strict": True,
-            "schema": schema,
-        },
-    }
+    return json_schema_response_format(
+        "suggested_startups_response",
+        schema,
+    )
 
 
 def parse_suggestions(
@@ -59,36 +55,16 @@ def parse_suggestions(
     candidate_startups: list[str],
     max_startups: int,
 ) -> list[Suggestion]:
-    parsed = repair_json_payload(raw_response)
-    _validate_schema(parsed, schema)
+    parsed = parse_json_response(
+        raw_response,
+        schema,
+        label="Suggested-startups response",
+    )
     return _validate_business_rules(
         parsed["suggestions"],
         candidate_startups,
         max_startups,
     )
-
-
-def _validation_path(error: ValidationError) -> str:
-    path = "$"
-    for part in error.absolute_path:
-        path += f"[{part}]" if isinstance(part, int) else f".{part}"
-    return path
-
-
-def _validate_schema(parsed: object, schema: dict[str, Any]) -> None:
-    try:
-        validator = Draft202012Validator(schema)
-        validator.check_schema(schema)
-        validator.validate(parsed)
-    except SchemaError as error:
-        raise ValueError(
-            f"Invalid suggested-startups response schema: {error}"
-        ) from error
-    except ValidationError as error:
-        raise ValueError(
-            "Suggested-startups response does not match the schema at "
-            f"{_validation_path(error)}: {error.message}"
-        ) from error
 
 
 def _validate_business_rules(

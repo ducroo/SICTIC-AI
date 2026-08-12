@@ -1,6 +1,16 @@
 import pytest
+import json
+from pathlib import Path
 
 from skills.ranking.ranking_rationale import ranking_rationale
+
+
+RESPONSE_SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "config/ranking_rationale/response_schema.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 @pytest.mark.asyncio
@@ -10,6 +20,7 @@ async def test_ranking_rationale_only_uses_id_and_rationale(mocker):
         return_value={
             "ranking_rationale": {
                 "rationale_instructions": "{{objective}}\n{{profiles_text}}",
+                "response_schema": RESPONSE_SCHEMA,
             }
         },
     )
@@ -24,3 +35,8 @@ async def test_ranking_rationale_only_uses_id_and_rationale(mocker):
     assert result == [{"id": "urs-gubser", "text": "Profile text", "rank": 1, "rationale": "Strong fit."}]
     assert "profile_name" not in result[0]
     assert "balanced_rationale_for_ranking" not in result[0]
+    response_format = mock_llm.await_args.kwargs["response_format"]
+    schema = response_format["json_schema"]["schema"]
+    assert schema["properties"]["results"]["minItems"] == 1
+    result_id = schema["properties"]["results"]["items"]["properties"]["id"]
+    assert result_id["enum"] == ["urs-gubser"]

@@ -76,7 +76,15 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     mocker.patch.object(
         module,
         "config_load",
-        return_value={config_key: {"objective": "Objective {{startup_profile}}{{overview_event}}"}},
+        return_value={
+            config_key: {
+                "objective": "Objective {{startup_profile}}{{overview_event}}"
+            },
+            "ranking_top_k": {"ranking_instructions": "ranking-v1"},
+            "ranking_rationale": {
+                "rationale_instructions": "rationale-v1"
+            },
+        },
     )
     hydrate = mocker.patch.object(
         module,
@@ -98,6 +106,8 @@ async def test_ranking_skill_uses_investor_profile_dataset(
         "investor_profile",
     )
     assert ranking.await_args.kwargs["dataset_name"] == "sictic-members-investor-profile"
+    assert "ranking-v1" in result[0].config_key
+    assert "rationale-v1" in result[0].config_key
 
 
 @pytest.mark.asyncio
