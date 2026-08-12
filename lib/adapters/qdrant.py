@@ -131,21 +131,6 @@ class QdrantAdapter:
         info = self.collection_info()
         return int(getattr(info, "points_count", 0) or 0) if info else 0
 
-    def dataset_available(self) -> bool:
-        try:
-            count = self.client.count(
-                collection_name=self.collection_name,
-                exact=False,
-            )
-            return count.count > 0
-        except Exception as exc:
-            logger.warning(
-                "Failed to check Qdrant dataset availability for %s: %s",
-                self.collection_name,
-                exc,
-            )
-            return False
-
     def get_document_mtimes(
         self,
         *,
@@ -287,12 +272,25 @@ class QdrantAdapter:
                 raise RuntimeError(f"Upsert failed: {exc}") from exc
 
     def query(self, vector: list[float], *, limit: int):
-        return self.client.query_points(
+        if not self.collection_exists():
+            logger.warning(
+                "Qdrant collection %s does not exist; returning zero chunks.",
+                self.collection_name,
+            )
+            return []
+
+        points = self.client.query_points(
             collection_name=self.collection_name,
             query=vector,
             limit=limit,
             with_payload=True,
         ).points
+        if not points:
+            logger.warning(
+                "Qdrant collection %s exists but the query returned zero chunks.",
+                self.collection_name,
+            )
+        return points
 
     def delete_collection(self) -> None:
         self.client.delete_collection(self.collection_name)

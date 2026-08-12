@@ -12,8 +12,6 @@ from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
-_INSUFFICIENT_CONTEXT = "INSUFFICIENT_CONTEXT"
-
 
 async def startup_profile(startup: str, files: Optional[List[str]] = None) -> InsightResult:
     """
@@ -60,11 +58,5 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> In
 
     if profile_output is None:
         raise ValueError("LLM returned None for the profile output.")
-    if _INSUFFICIENT_CONTEXT in profile_output.strip():
-        raise ValueError(
-            f"Insufficient indexed context for startup '{startup_slug}'. "
-            "Check dataset sync, parsed markdown, and Qdrant ingestion before generating a profile."
-        )
-
     insight.save(profile_output)
     return [insight]

@@ -4,6 +4,7 @@ from pathlib import PurePosixPath
 import re
 
 from lib.insights.locking import write_if_changed
+from lib.insights.context import INSUFFICIENT_CONTEXT
 from lib.insights.manifest import (
     dataset_revisions,
     load_insight_manifest,
@@ -118,6 +119,10 @@ class InsightFile:
 
     def content(self) -> str:
         return get_storage().read_text(self.path)
+
+    def has_insufficient_context(self) -> bool:
+        """Return whether this insight records an insufficient-context result."""
+        return self.content().strip() == INSUFFICIENT_CONTEXT
 
     def find(self, *, selection: InsightSelection) -> InsightFile | None:
         return find(self, selection=selection)

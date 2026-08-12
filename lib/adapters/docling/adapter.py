@@ -11,9 +11,7 @@ from lib.adapters.docling.converter import (
 from lib.adapters.docling.pdf import convert_repaired_pdf
 from lib.adapters.docling.rtf import convert_rtf
 from lib.adapters.docling.spreadsheets import (
-    convert_openpyxl,
     convert_spreadsheet,
-    convert_xls,
     is_spreadsheet_filename,
 )
 from lib.adapters.docling.types import (
@@ -211,14 +209,6 @@ class DoclingAdapter:
     @staticmethod
     def _convert_spreadsheet_sync(filepath: str) -> str:
         return convert_spreadsheet(filepath)
-
-    @staticmethod
-    def _convert_openpyxl_sync(filepath: str) -> str:
-        return convert_openpyxl(filepath)
-
-    @staticmethod
-    def _convert_xls_sync(filepath: str) -> str:
-        return convert_xls(filepath)
 
 
 def _short_error(error: Exception, limit: int = 500) -> str:

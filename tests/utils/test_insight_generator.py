@@ -6,7 +6,7 @@ from skills.startup_traction.startup_traction import startup_traction
 
 
 @pytest.mark.asyncio
-async def test_startup_traction_does_not_cache_insufficient_context(mock_env, mocker):
+async def test_startup_traction_saves_insufficient_context(mock_env, mocker):
     get_storage().mkdir(
         dataset_location_for_domain("bewe", "startups").raw_rel
     )
@@ -32,7 +32,7 @@ async def test_startup_traction_does_not_cache_insufficient_context(mock_env, mo
         "skills.startup_traction.startup_traction.dataset_chat",
         return_value="INSUFFICIENT_CONTEXT",
     )
-    with pytest.raises(ValueError, match="Insufficient indexed context"):
-        await startup_traction("bewe")
+    result = await startup_traction("bewe")
 
-    save.assert_not_called()
+    save.assert_called_once_with("INSUFFICIENT_CONTEXT")
+    assert len(result) == 1

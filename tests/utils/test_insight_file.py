@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import pytest
 
-from lib.insights import InsightFile, strip_model_tag
+from lib.insights import INSUFFICIENT_CONTEXT, InsightFile, strip_model_tag
 from lib.insights.discovery import discover_insights
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location_for_domain
@@ -36,6 +36,18 @@ def test_paths_match_existing_convention(mock_env):
         "storage/startups/daav/insights/"
         "startup-profile-daav-gemma4-31b-nvfp4.md"
     )
+
+
+def test_insufficient_context_helper_supports_mixed_results(mock_env):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insufficient = InsightFile("avientus", "startup_profile", "model-a")
+    valid = InsightFile("avientus", "startup_traction", "model-a")
+    insufficient.save(INSUFFICIENT_CONTEXT)
+    valid.save("# Traction\n\nCustomer evidence.")
+
+    results = [insufficient, valid]
+
+    assert [item.has_insufficient_context() for item in results] == [True, False]
 
 
 def test_strip_model_tag_recognizes_manual_insight(mock_env):

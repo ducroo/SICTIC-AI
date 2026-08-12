@@ -58,20 +58,6 @@ def dealum_url_for_startup(dataset_slug: str) -> str | None:
     return url.strip()
 
 
-def file_metadata_changed(
-    previous: dict[str, Any],
-    current: dict[str, Any],
-) -> bool:
-    if not previous:
-        return True
-    return any(
-        current.get(key)
-        and previous.get(key)
-        and current.get(key) != previous.get(key)
-        for key in ("resolved_url", "content_length", "etag")
-    )
-
-
 def application_content_for_hash(
     application: dict[str, Any],
     *,

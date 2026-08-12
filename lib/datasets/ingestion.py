@@ -7,16 +7,13 @@ from typing import List
 
 from lib.datasets.conversion import (
     reconcile_conversions,
-    spreadsheet_cache_is_current,
 )
-from lib.datasets.indexing import reconcile_index, replace_document
+from lib.datasets.indexing import reconcile_index
 from lib.datasets.manifest import IngestionManifest
 from lib.datasets.models import IngestionFailure, IngestionResult
 from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
 from lib.datasets.source import (
     SourceDocument,
-    list_source_files,
-    parsed_filepath,
     snapshot_source_files,
 )
 from lib.logger import get_logger
@@ -110,16 +107,6 @@ async def _sync_single_dataset(dataset_name: str) -> IngestionResult:
     )
     return result
 
-
-# Transitional aliases for older internal imports. New code should import from
-# source.py, conversion.py, or indexing.py according to ownership.
-_list_source_files = list_source_files
-_snapshot_source_files = snapshot_source_files
-_parsed_filepath = parsed_filepath
-_spreadsheet_cache_is_current = spreadsheet_cache_is_current
-_sync_ocr_to_disk = reconcile_conversions
-_sync_disk_to_qdrant = reconcile_index
-_replace_document = replace_document
 
 __all__ = [
     "IngestionFailure",

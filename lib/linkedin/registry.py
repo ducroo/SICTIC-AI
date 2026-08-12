@@ -95,13 +95,6 @@ class LinkedInRegistry:
                 self.save(entries)
                 return entries
 
-    def entries_for_dataset(self, dataset: str) -> dict[str, dict]:
-        return {
-            key: value
-            for key, value in self.load().items()
-            if dataset in value.get("datasets", [])
-        }
-
     def find(
         self,
         key: str,

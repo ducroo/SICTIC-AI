@@ -4,6 +4,7 @@ from skills.llm_chat.llm_chat import llm_chat
 from skills.config_load.config_load import config_load
 from lib.datasets.search import dataset_search
 from lib.logger import get_logger
+from lib.insights import INSUFFICIENT_CONTEXT
 
 logger = get_logger(__name__)
 
@@ -13,7 +14,7 @@ def _fallback_trigger() -> str:
         config = config_load()
         return config['dataset_chat']['fallback_trigger'].replace('\\_', '_')
     except KeyError:
-        return 'INSUFFICIENT_CONTEXT'
+        return INSUFFICIENT_CONTEXT
 
 
 def _context_budget_chars() -> int:
@@ -48,6 +49,7 @@ async def dataset_chat(
         dataset_name,
         search_queries,
         max_chunks=max_chunks,
+        raise_on_error=True,
     )
     if not chunks:
         logger.warning(f"[{dataset_name}] No chunks retrieved; refusing empty-context LLM answer.")

@@ -14,7 +14,6 @@ from lib.slugify import slugify
 logger = get_logger(__name__)
 
 _LINKEDIN_URL_PATTERN = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
-_MANUAL_TABLE_HEADER = ["full-name", "linkedin-id", "email-addresses"]
 
 
 def _manual_header_key(value: str) -> str:

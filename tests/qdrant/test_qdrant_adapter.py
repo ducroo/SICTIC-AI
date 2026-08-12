@@ -84,6 +84,7 @@ def test_query_passes_vector_and_limit_to_qdrant():
     adapter = object.__new__(QdrantAdapter)
     adapter.client = MagicMock()
     adapter.collection_name = "test-collection"
+    adapter.collection_exists = lambda: True
     expected = [SimpleNamespace(id="one")]
     adapter.client.query_points.return_value = SimpleNamespace(points=expected)
 
@@ -96,3 +97,52 @@ def test_query_passes_vector_and_limit_to_qdrant():
         limit=25,
         with_payload=True,
     )
+
+
+def _query_adapter(client, *, exists: bool) -> QdrantAdapter:
+    adapter = object.__new__(QdrantAdapter)
+    adapter.client = client
+    adapter.collection_name = "proud-technology-test-embedding"
+    adapter.collection_exists = lambda: exists
+    return adapter
+
+
+def test_query_returns_zero_chunks_and_warns_when_collection_is_missing(mocker):
+    client = mocker.Mock()
+    adapter = _query_adapter(client, exists=False)
+    warning = mocker.patch("lib.adapters.qdrant.logger.warning")
+
+    assert adapter.query([1.0], limit=25) == []
+
+    client.query_points.assert_not_called()
+    warning.assert_called_once_with(
+        "Qdrant collection %s does not exist; returning zero chunks.",
+        adapter.collection_name,
+    )
+
+
+def test_query_returns_zero_chunks_and_warns_when_collection_is_empty(mocker):
+    client = mocker.Mock()
+    client.query_points.return_value = SimpleNamespace(points=[])
+    adapter = _query_adapter(client, exists=True)
+    warning = mocker.patch("lib.adapters.qdrant.logger.warning")
+
+    assert adapter.query([1.0], limit=25) == []
+
+    warning.assert_called_once_with(
+        "Qdrant collection %s exists but the query returned zero chunks.",
+        adapter.collection_name,
+    )
+
+
+def test_query_propagates_qdrant_failures(mocker):
+    client = mocker.Mock()
+    client.query_points.side_effect = RuntimeError("Qdrant unavailable")
+    adapter = _query_adapter(client, exists=True)
+
+    try:
+        adapter.query([1.0], limit=25)
+    except RuntimeError as error:
+        assert str(error) == "Qdrant unavailable"
+    else:
+        raise AssertionError("Expected the Qdrant failure to propagate")
