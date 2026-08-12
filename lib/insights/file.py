@@ -41,7 +41,7 @@ class InsightFile:
         identifier: str | None = None,
         subdir: bool = False,
         source_datasets: list[str] | None = None,
-        prompt_key: str | None = None,
+        config_key: str | None = None,
         *,
         run_id: str | None = None,
         extension: str = "md",
@@ -54,7 +54,7 @@ class InsightFile:
         self.subdir = subdir
         self.run_id = run_id
         self.source_datasets = source_datasets or [dataset]
-        self.prompt_key = prompt_key or ""
+        self.config_key = config_key or ""
         normalized_extension = extension.removeprefix(".").lower()
         if not re.fullmatch(r"[a-z0-9]+", normalized_extension):
             raise ValueError(f"Invalid insight extension: {extension!r}")
@@ -134,7 +134,7 @@ class InsightFile:
         if selection == "reusable":
             raise NotImplementedError(
                 "InsightFile.find_all(selection='reusable') is not "
-                "supported: the expected source_datasets and prompt_key "
+                "supported: the expected source_datasets and config_key "
                 "are not known for each discovered insight. Construct each "
                 "expected InsightFile and call find(selection='reusable') "
                 "instead."
@@ -248,7 +248,7 @@ class InsightFile:
             insight_path=self.path,
             model=model_slug(self.model),
             revisions=revisions,
-            prompt_key=self.prompt_key,
+            config_key=self.config_key,
         )
 
     def _candidate(self, model: str) -> InsightFile:
@@ -260,7 +260,7 @@ class InsightFile:
             subdir=self.subdir,
             run_id=self.run_id,
             source_datasets=self.source_datasets,
-            prompt_key=self.prompt_key,
+            config_key=self.config_key,
             extension=self.extension,
         )
 
@@ -275,7 +275,7 @@ class InsightFile:
             subdir=self.subdir,
             run_id=self.run_id,
             source_datasets=self.source_datasets,
-            prompt_key=self.prompt_key,
+            config_key=self.config_key,
             extension=self.extension,
             _path_override=f"{self.directory}/{filename}",
         )

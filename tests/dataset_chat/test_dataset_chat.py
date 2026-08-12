@@ -74,6 +74,42 @@ async def test_dataset_chat_separates_search_queries_from_prompt(mocker):
 
 
 @pytest.mark.asyncio
+async def test_dataset_chat_forwards_response_format(mocker):
+    from lib.datasets.models import Chunk
+
+    mocker.patch(
+        "skills.dataset_chat.dataset_chat.dataset_search",
+        return_value=[
+            Chunk(
+                chunk_id="1",
+                document_name="test.md",
+                page_number=1,
+                last_modified=0.0,
+                text="Evidence.",
+                score=1.0,
+            )
+        ],
+    )
+    mock_llm = mocker.patch(
+        "skills.dataset_chat.dataset_chat.llm_chat",
+        return_value='{"answer":"yes"}',
+    )
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {"name": "answer", "schema": {}},
+    }
+
+    await dataset_chat(
+        "test",
+        "query",
+        "prompt",
+        response_format=response_format,
+    )
+
+    assert mock_llm.await_args.kwargs["response_format"] is response_format
+
+
+@pytest.mark.asyncio
 async def test_dataset_chat_refuses_empty_context(mocker):
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
     mock_search.return_value = []

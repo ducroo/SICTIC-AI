@@ -207,6 +207,69 @@ async def test_spreadsheet_processing_bypasses_docling_converter(monkeypatch, tm
     assert text == "compact values\n"
 
 
+@pytest.mark.asyncio
+async def test_pdf_with_dense_private_use_text_retries_with_full_page_ocr(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "encoded.pdf"
+    path.write_bytes(b"%PDF encoded font")
+    encoded = "".join(chr(0xE100 + index) for index in range(20))
+
+    @asynccontextmanager
+    async def slot(*_args, **_kwargs):
+        yield None
+
+    monkeypatch.setattr("lib.services_gateway.gateway.slot", slot)
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_sync",
+        staticmethod(lambda _path: encoded),
+    )
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_force_ocr_sync",
+        staticmethod(lambda _path: "Readable OCR text."),
+    )
+
+    text = await DoclingAdapter()._process_single_file(str(path), path.name)
+
+    assert text == "Readable OCR text."
+
+
+@pytest.mark.asyncio
+async def test_pdf_fails_when_full_page_ocr_remains_private_use(
+    monkeypatch,
+    tmp_path,
+):
+    path = tmp_path / "encoded.pdf"
+    path.write_bytes(b"%PDF encoded font")
+    encoded = "".join(chr(0xE100 + index) for index in range(20))
+
+    @asynccontextmanager
+    async def slot(*_args, **_kwargs):
+        yield None
+
+    monkeypatch.setattr("lib.services_gateway.gateway.slot", slot)
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_sync",
+        staticmethod(lambda _path: encoded),
+    )
+    monkeypatch.setattr(
+        DoclingAdapter,
+        "_convert_force_ocr_sync",
+        staticmethod(lambda _path: encoded),
+    )
+
+    with pytest.raises(RuntimeError, match="Full-page OCR still produced"):
+        await DoclingAdapter()._process_single_file(
+            str(path),
+            path.name,
+            raise_on_error=True,
+        )
+
+
 def test_repaired_pdf_conversion_runs_ghostscript_then_docling(monkeypatch, tmp_path):
     source = tmp_path / "source.pdf"
     source.write_bytes(b"%PDF-1.4\n%%EOF\n")

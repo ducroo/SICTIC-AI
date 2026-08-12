@@ -8,6 +8,7 @@ from lib.storage import get_storage
 from skills.submission_ready.submission_ready import (
     SubmissionReadyResult,
     _canonical_stage,
+    _generate_proposed_action,
     _parse_proposed_action,
     _process_candidate,
     _render_proposed_action,
@@ -110,7 +111,28 @@ def _check_config():
         ),
         "llm_instructions": "instructions",
         "response_instructions": "response",
-        "response_schema": "schema",
+        "response_schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "proposed_action": {"type": "string"},
+                "rationale": {"type": "string", "minLength": 1},
+                "eligibility_concerns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "missing_or_inconsistent_information": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": [
+                "proposed_action",
+                "rationale",
+                "eligibility_concerns",
+                "missing_or_inconsistent_information",
+            ],
+        },
     }
 
 
@@ -166,7 +188,16 @@ def test_parse_proposed_action_enforces_eight_concern_limit():
     }
 
     with pytest.raises(ValueError, match="more than 8 concerns"):
-        _parse_proposed_action(str(payload).replace("'", '"'), "Application")
+        schema = _check_config()["response_schema"]
+        schema["properties"]["proposed_action"]["enum"] = [
+            "Move to Under review",
+            "Send concerns to startup",
+        ]
+        _parse_proposed_action(
+            str(payload).replace("'", '"'),
+            "Application",
+            schema,
+        )
 
 
 def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
@@ -187,6 +218,43 @@ def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
         "## Missing or inconsistent information\n\n- None identified."
         in report
     )
+
+
+@pytest.mark.asyncio
+async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
+    captured = {}
+
+    async def fake_llm_chat(prompt, response_format):
+        captured["prompt"] = prompt
+        captured["response_format"] = response_format
+        return json.dumps(
+            {
+                "proposed_action": "Move to Jury",
+                "rationale": "The submission is complete.",
+                "eligibility_concerns": [],
+                "missing_or_inconsistent_information": [],
+            }
+        )
+
+    monkeypatch.setattr(
+        "skills.submission_ready.submission_ready.llm_chat",
+        fake_llm_chat,
+    )
+
+    report, _prompt = await _generate_proposed_action(
+        stage="Under review",
+        checklist_report="All checks pass.",
+        response_instructions="Recommend an action.",
+        response_schema=_check_config()["response_schema"],
+    )
+
+    schema = captured["response_format"]["json_schema"]["schema"]
+    assert schema["properties"]["proposed_action"]["enum"] == [
+        "Move to Jury",
+        "Send concerns to startup",
+    ]
+    assert '"proposed_action"' in captured["prompt"]
+    assert "Move to Jury" in report
 
 
 @pytest.mark.asyncio

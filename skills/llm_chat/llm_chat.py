@@ -39,8 +39,7 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
     kwargs.update({"messages": messages, "timeout": 3600.0})
     
     if response_format:
-        if not is_ollama:
-            kwargs["response_format"] = response_format
+        kwargs["response_format"] = response_format
 
     if is_ollama:
         kwargs["num_ctx"] = ctx

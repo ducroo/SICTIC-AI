@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "industry_type": {
+      "type": ["string", "null"],
+      "description": "Best matching configured industry type, or null when evidence is insufficient."
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"type": "string"},
+      "maxItems": 3
+    }
+  },
+  "required": ["industry_type", "confidence", "evidence"]
+}

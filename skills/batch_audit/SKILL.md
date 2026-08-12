@@ -22,6 +22,12 @@ the common fields `number`, `check`, `status`, `rationale`, `source_documents`,
 and `proposed_next_steps_and_questions`. Technical failures are recorded in the
 separate `error` field.
 
+The base LLM response schema lives beside the instructions in
+`config/batch_audit/response_schema.json`. The runtime status scale is injected
+into a copy of that schema, which is supplied to LiteLLM and validated locally
+after JSON repair. Insight freshness uses `config_key()` over the complete
+batch-audit config plus the calling skill's checklist and runtime options.
+
 ## Usage
 
 ```bash

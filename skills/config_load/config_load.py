@@ -8,6 +8,17 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+def config_key(*sections: object) -> str:
+    """Return a stable cache key for one or more effective config sections."""
+    return json.dumps(
+        sections,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
 def _repo_root() -> Path:
     return Path(get_env_var("REPO_PATH")).expanduser()
 
@@ -24,28 +35,38 @@ def _local_data_root() -> Path:
         raise ValueError(f"LOCAL_DATA_PATH must be absolute, got: {configured}")
     return root
 
+
 def _local_cache_paths() -> tuple[Path, Path]:
     """Local config cache lives under LOCAL_DATA_PATH/cache."""
     cache_dir = _local_data_root() / "cache"
     cache_file = cache_dir / "config.json"
     return cache_dir, cache_file
 
-def _build_tree_from_local_files(md_files: list[Path], source_dir: Path) -> Dict[str, Any]:
-    """Given a list of local .md file Paths, build the nested config dict.
+
+def _build_tree_from_local_files(
+    config_files: list[Path],
+    source_dir: Path,
+) -> Dict[str, Any]:
+    """Build the nested config dictionary from Markdown and JSON files.
+
     Directory entries are inferred from path segments relative to source_dir.
     """
     tree: Dict[str, Any] = {}
-    for filepath in md_files:
+    for filepath in sorted(config_files):
         # Get the path relative to the config/ root
         try:
             relpath = filepath.relative_to(source_dir)
         except ValueError:
-            logger.warning(f"File {filepath} is not relative to {source_dir}. Skipping.")
+            logger.warning(
+                "File %s is not relative to %s. Skipping.",
+                filepath,
+                source_dir,
+            )
             continue
-            
+
         parts = relpath.parts
         stem = filepath.stem
-        
+
         cur = tree
         # Traverse/create the nested dictionary structure using directory names
         for segment in parts[:-1]:
@@ -54,16 +75,31 @@ def _build_tree_from_local_files(md_files: list[Path], source_dir: Path) -> Dict
                 existing = {}
                 cur[segment] = existing
             cur = existing
-            
+
+        if stem in cur:
+            raise ValueError(
+                f"Duplicate config key {stem!r} from {filepath}."
+            )
+
         try:
             content = filepath.read_text(encoding="utf-8").strip()
-        except Exception as e:
-            logger.warning(f"Failed to read local config file {filepath}: {e}")
-            content = ""
-            
-        cur[stem] = content
-        
+        except OSError as error:
+            raise ValueError(
+                f"Failed to read local config file {filepath}: {error}"
+            ) from error
+
+        if filepath.suffix == ".json":
+            try:
+                cur[stem] = json.loads(content)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"Invalid JSON config file {filepath}: {error}"
+                ) from error
+        else:
+            cur[stem] = content
+
     return tree
+
 
 def config_load() -> Dict[str, Any]:
     source_dir = _source_dir()
@@ -73,15 +109,23 @@ def config_load() -> Dict[str, Any]:
         logger.error(f"Cannot find local config directory at {source_dir}.")
         return {}
 
-    # Find every .md file recursively in the local config directory
-    md_files = list(source_dir.rglob("*.md"))
-    
-    if not md_files:
-        logger.error(f"Cannot rebuild cache: no .md files found in {source_dir}.")
+    config_files = [
+        path
+        for pattern in ("*.md", "*.json")
+        for path in source_dir.rglob(pattern)
+    ]
+
+    if not config_files:
+        logger.error(
+            f"Cannot rebuild cache: no config files found in {source_dir}."
+        )
         return {}
 
     # Find the most recently modified file to check against the cache
-    latest_source_mtime = max((f.stat().st_mtime for f in md_files), default=0.0)
+    latest_source_mtime = max(
+        (path.stat().st_mtime for path in config_files),
+        default=0.0,
+    )
 
     # Fresh cache hit?
     if cache_file.exists():
@@ -89,18 +133,27 @@ def config_load() -> Dict[str, Any]:
         if cache_mtime >= latest_source_mtime:
             try:
                 return json.loads(cache_file.read_text(encoding="utf-8"))
-            except Exception as e:
-                logger.error(f"Failed to load existing cache file: {e}. Rebuilding...")
+            except (OSError, json.JSONDecodeError) as error:
+                logger.error(
+                    "Failed to load existing cache file: %s. Rebuilding...",
+                    error,
+                )
 
     # Rebuild from local Git files
-    config_data = _build_tree_from_local_files(md_files, source_dir)
+    config_data = _build_tree_from_local_files(config_files, source_dir)
 
     # Persist to local cache
     cache_dir.mkdir(parents=True, exist_ok=True)
     try:
-        cache_file.write_text(json.dumps(config_data, indent=4), encoding="utf-8")
-        logger.info(f"Rebuilt config cache successfully from {len(md_files)} local files.")
-    except OSError as e:
-        logger.error(f"Error writing cache file: {e}")
+        cache_file.write_text(
+            json.dumps(config_data, indent=4),
+            encoding="utf-8",
+        )
+        logger.info(
+            "Rebuilt config cache successfully from %d local files.",
+            len(config_files),
+        )
+    except OSError as error:
+        logger.error("Error writing cache file: %s", error)
 
     return config_data

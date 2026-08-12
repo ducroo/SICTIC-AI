@@ -16,7 +16,7 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
 
 2. **Configuration & Insight Cache:**
    * Load `resume_queries`, `team_assessment_prompt`, and optional `linkedin_classification_prompt` from `config_load()["team_profile"]`.
-   * Build an output insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="team_profile", model=llm_model(), prompt_key=<resume_queries_and_prompts>)`.
+   * Build an output insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="team_profile", model=llm_model(), config_key=<resume_queries_and_prompts>)`.
    * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing team profile when available.
 
 3. **Person Discovery & Profile Reuse:**

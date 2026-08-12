@@ -4,7 +4,7 @@ from lib.model_config import llm_model
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.insights import InsightFile, InsightResult
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import config_key, config_load
 from skills.ranking.ranking_persons import ranking_persons
 from lib.insights import dataset_from_insight
 from lib.datasets.ingestion import sync_datasets
@@ -41,7 +41,17 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         identifier=event_name_slug,
         subdir=True,
         source_datasets=[people_dataset],
-        prompt_key=event_description + objective_template,
+        config_key=config_key(
+            config["advocates"],
+            config.get("ranking_top_k", {}),
+            config.get("ranking_rationale", {}),
+            {
+                "event_description": event_description,
+                "target_members": target_members,
+                "exclude_members": exclude_members,
+                "top_k": top_k,
+            },
+        ),
     )
     reusable = insight.find(selection="reusable")
     if reusable:

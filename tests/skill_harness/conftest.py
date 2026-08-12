@@ -113,6 +113,13 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return []
 
     async def fake_dataset_chat(*_args, **_kwargs):
+        response_format = _kwargs.get("response_format") or {}
+        schema = response_format.get("json_schema", {}).get("schema", {})
+        if "industry_type" in schema.get("properties", {}):
+            return (
+                '{"industry_type":"general","confidence":80,'
+                '"evidence":["Fixture company evidence."]}'
+            )
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'
 
     async def fake_structured_audit_chat(*_args, **kwargs):
@@ -142,18 +149,6 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
             insight.save("# Fixture Startup Profile\n\nExample traction and market.")
         return [insight]
 
-    async def fake_investor_profile(*_args, **_kwargs):
-        insight = InsightFile(
-            fixtures.community,
-            "investor_profile",
-            "manual",
-            identifier=fixtures.person_linkedin_id,
-            subdir=True,
-        )
-        if not insight.exists():
-            insight.save("# Jane Doe\n\nInvestor fixture.")
-        return [insight]
-
     class FakeLinkedInResolver:
         def __init__(self, *_args, **_kwargs):
             pass
@@ -181,14 +176,35 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_dataset_search(*_args, **_kwargs):
         return []
 
-    async def fake_compile_startup_profiles(startups):
-        return {startup: f"# {startup}\n\nFixture startup profile." for startup in startups}
+    def fake_compile_startup_profiles(startup_profiles):
+        return "\n".join(
+            f"STARTUP: {profile.dataset}\n# Fixture startup profile."
+            for profile in startup_profiles
+        )
 
-    async def fake_process_single_investor(*_args, **_kwargs):
-        return ["| example-startup | Fixture rationale |"]
+    async def fake_startup_profiles_from_insight(*_args, **_kwargs):
+        _create_dataset("available-startup-profiles", "generated")
+        insight = InsightFile(
+            fixtures.startup,
+            "startup_profile",
+            "manual",
+        )
+        if not insight.exists():
+            insight.save("# Fixture Startup Profile")
+        return [insight]
 
-    def fake_read_investor_profiles(*_args, **_kwargs):
-        return {fixtures.person_name: "# Jane Doe\n\nInvestor fixture."}
+    async def fake_generate_report(*_args, **_kwargs):
+        return (
+            "# Startup Suggestions for Jane Doe\n\n"
+            "| Startup | Rationale |\n"
+            "|---|---|\n"
+            "| example-startup | Fixture rationale |"
+        )
+
+    def fake_load_investor_profiles(*_args, **_kwargs):
+        return {
+            fixtures.person_linkedin_id: "# Jane Doe\n\nInvestor fixture."
+        }
 
     async def fake_ensure_startup_dataset(startup, **_kwargs):
         return SimpleNamespace(dataset_slug="example-startup", dataset_exists=True)
@@ -234,10 +250,18 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     suggested_startups_mod = importlib.import_module(
         "skills.suggested_startups.suggested_startups"
     )
+    suggested_startups_inputs = importlib.import_module(
+        "skills.suggested_startups.inputs"
+    )
     team_profile_mod = importlib.import_module("skills.team_profile.team_profile")
 
     monkeypatch.setattr(startup_sources, "ensure_startup_dataset", fake_ensure_startup_dataset)
     monkeypatch.setattr(people_discovery, "persons_in_dataset", fake_persons_in_dataset)
+    monkeypatch.setattr(
+        suggested_startups_inputs,
+        "persons_in_dataset",
+        fake_persons_in_dataset,
+    )
 
     for module in [
         startup_profile_mod,
@@ -303,10 +327,17 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         monkeypatch.setattr(module, "ranking_persons", fake_ranking_persons)
         monkeypatch.setattr(module, "dataset_from_insight", fake_dataset_from_insight)
 
-    monkeypatch.setattr(suggested_startups_mod, "LinkedInResolver", FakeLinkedInResolver)
+    monkeypatch.setattr(
+        suggested_startups_mod,
+        "load_startup_profiles",
+        fake_startup_profiles_from_insight,
+    )
     monkeypatch.setattr(suggested_startups_mod, "compile_startup_profiles", fake_compile_startup_profiles)
-    monkeypatch.setattr(suggested_startups_mod, "process_single_investor", fake_process_single_investor)
-    monkeypatch.setattr(suggested_startups_mod, "investor_profile", fake_investor_profile)
-    monkeypatch.setattr(suggested_startups_mod, "read_investor_profiles", fake_read_investor_profiles)
+    monkeypatch.setattr(suggested_startups_mod, "generate_report", fake_generate_report)
+    monkeypatch.setattr(
+        suggested_startups_mod,
+        "load_investor_profiles",
+        fake_load_investor_profiles,
+    )
 
     return fixtures

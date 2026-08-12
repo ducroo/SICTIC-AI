@@ -1,143 +1,185 @@
 import asyncio
 import random
-from typing import Dict, List, Any, Tuple
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Tuple
 
-from skills.llm_chat.llm_chat import llm_chat
-from skills.config_load.config_load import config_load
-from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
+from lib.structured_output import (
+    copy_schema,
+    json_schema_response_format,
+    parse_json_response,
+    schema_text,
+)
+from skills.config_load.config_load import config_load
+from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
 
-class RankedProfilesResult(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
 
-    ranked_profile_ids: List[str] = Field(
-        description="List of profile IDs ordered from best to worst",
-        alias="ranked_profiles_ids"
-    )
+def _specialize_schema(
+    response_schema: dict[str, Any],
+    profile_ids: list[str],
+) -> dict[str, Any]:
+    specialized = copy_schema(response_schema)
+    try:
+        ranked_ids = specialized["properties"]["ranked_profiles_ids"]
+        ranked_ids["items"]["enum"] = profile_ids
+        ranked_ids["minItems"] = len(profile_ids)
+        ranked_ids["maxItems"] = len(profile_ids)
+    except (KeyError, TypeError) as error:
+        raise ValueError(
+            "ranking_top_k.response_schema must define "
+            "properties.ranked_profiles_ids.items."
+        ) from error
+    return specialized
+
+
+def _validate_ranked_ids(
+    ranked_ids: list[str],
+    expected_ids: list[str],
+) -> list[str]:
+    if len(set(ranked_ids)) != len(ranked_ids):
+        raise ValueError("Top-k ranking contains duplicate profile IDs.")
+    if set(ranked_ids) != set(expected_ids):
+        missing = [item for item in expected_ids if item not in ranked_ids]
+        unexpected = [item for item in ranked_ids if item not in expected_ids]
+        raise ValueError(
+            "Top-k ranking IDs do not match the candidates; "
+            f"missing={missing}, unexpected={unexpected}."
+        )
+    return ranked_ids
+
 
 async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
-    """Ranks a small set of profiles using LLM and returns sorted profile IDs."""
+    """Rank a small set of profiles and return all IDs best to worst."""
     profile_ids = list(profiles.keys())
     if len(profile_ids) <= 1:
         return profile_ids
-        
-    config = config_load()
-    prompt = config["ranking_top_k"]["ranking_instructions"]
-        
-    profiles_text = "\n\n".join([f"ID: {i}\n{profiles[i]}" for i in profile_ids])
-    prompt = prompt.replace("{{profiles_text}}", profiles_text)
-    prompt = prompt.replace("{{objective}}", objective)
-    prompt = prompt.replace("{{n_profiles}}", str(len(profiles)))
-    prompt = prompt.replace("{{IDs_profiles}}", ", ".join(profile_ids))
-    
-    try:
-        response_content = await llm_chat(prompt, response_format=RankedProfilesResult)
-        if not response_content:
-            return profile_ids # fallback: original order
-            
-        parsed_dict = repair_json_payload(response_content)
-        parsed_data = RankedProfilesResult.model_validate(parsed_dict)
-        
-        valid_ranked = [i for i in parsed_data.ranked_profile_ids if i in profiles]
-        # Append any missing ones at the end
-        for pid in profile_ids:
-            if pid not in valid_ranked:
-                valid_ranked.append(pid)
-                
-        return valid_ranked
-    except Exception as e:
-        logger.error(f"Error in rank_chunk: {e}")
-        return profile_ids # fallback
 
-async def ranking_top_k(objective: str, all_profiles: Dict[str, str], top_k: int = 8) -> Tuple[List[Dict[str, Any]], int]:
-    """
-    Finds the top_k profiles from all_profiles using a 4-bucket Swiss tournament.
-    Returns a tuple containing:
-    - A sorted list of dictionaries with keys: 'id', 'text', 'rank'.
-    - The actual_top_k.
-    """
-    logger.info(f"Starting 4-bucket Swiss tournament ranking_top_k with {len(all_profiles)} candidates for top_k={top_k}.")
-    
-    # 1. Initialize 4 random buckets
+    section = config_load()["ranking_top_k"]
+    response_schema = _specialize_schema(
+        section["response_schema"],
+        profile_ids,
+    )
+    profiles_text = "\n\n".join(
+        f"ID: {profile_id}\n{profiles[profile_id]}"
+        for profile_id in profile_ids
+    )
+    prompt = (
+        section["ranking_instructions"]
+        .replace("{{profiles_text}}", profiles_text)
+        .replace("{{objective}}", objective)
+        .replace("{{n_profiles}}", str(len(profiles)))
+        .replace("{{IDs_profiles}}", ", ".join(profile_ids))
+        .replace("{{response_schema}}", schema_text(response_schema))
+    )
+
+    try:
+        response_content = await llm_chat(
+            prompt,
+            response_format=json_schema_response_format(
+                "ranked_profile_ids",
+                response_schema,
+            ),
+        )
+        if not response_content:
+            raise ValueError("Ranking model returned no content.")
+        parsed = parse_json_response(
+            response_content,
+            response_schema,
+            label="Top-k ranking response",
+        )
+        return _validate_ranked_ids(
+            parsed["ranked_profiles_ids"],
+            profile_ids,
+        )
+    except Exception as error:
+        logger.error("Error in rank_chunk: %s", error)
+        return profile_ids
+
+
+async def ranking_top_k(
+    objective: str,
+    all_profiles: Dict[str, str],
+    top_k: int = 8,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Find top profiles using a four-bucket Swiss tournament."""
+    logger.info(
+        "Starting 4-bucket Swiss tournament ranking_top_k with %d "
+        "candidates for top_k=%d.",
+        len(all_profiles),
+        top_k,
+    )
     active_profiles = list(all_profiles.keys())
     random.shuffle(active_profiles)
-    
     buckets = [[] for _ in range(4)]
-    for i, pid in enumerate(active_profiles):
-        buckets[i % 4].append(pid)
-        
-    # 2. Tournament loop
+    for index, profile_id in enumerate(active_profiles):
+        buckets[index % 4].append(profile_id)
+
     while True:
-        total_remaining = sum(len(b) for b in buckets)
-        logger.info(f"Swiss iteration: {total_remaining} active profiles.")
-        
-        # Pull elements to form chunks of 8 (up to 2 from each bucket)
+        total_remaining = sum(len(bucket) for bucket in buckets)
+        logger.info("Swiss iteration: %d active profiles.", total_remaining)
         chunks = []
         current_chunk = []
-        
-        # Keep drawing until all buckets are empty
-        while any(len(b) > 0 for b in buckets):
-            for b in buckets:
-                # Take up to 2 elements from this bucket
+        while any(buckets):
+            for bucket in buckets:
                 for _ in range(2):
-                    if b:
-                        current_chunk.append(b.pop(0))
-                        
-            # If we've gathered 8, or if we've exhausted all buckets but have a remainder chunk
-            if len(current_chunk) == 8 or (not any(len(b) > 0 for b in buckets) and len(current_chunk) > 0):
+                    if bucket:
+                        current_chunk.append(bucket.pop(0))
+            if len(current_chunk) == 8 or (
+                not any(buckets) and current_chunk
+            ):
                 chunks.append(current_chunk)
                 current_chunk = []
-                
-        # Rank the chunks concurrently
-        tasks = []
-        for chunk in chunks:
-            chunk_profiles = {pid: all_profiles[pid] for pid in chunk}
-            tasks.append(rank_chunk(objective, chunk_profiles))
-            
-        chunk_rankings = await asyncio.gather(*tasks)
-        
-        # Distribute into 8 temporary buckets based on rank
+
+        chunk_rankings = await asyncio.gather(
+            *(
+                rank_chunk(
+                    objective,
+                    {profile_id: all_profiles[profile_id] for profile_id in chunk},
+                )
+                for chunk in chunks
+            )
+        )
         temp_buckets = [[] for _ in range(8)]
         for ranked_chunk in chunk_rankings:
-            n = len(ranked_chunk)
-            for i, pid in enumerate(ranked_chunk):
-                bucket_idx = int(i * 8 / n) if n > 0 else 0
-                bucket_idx = min(7, bucket_idx)
-                temp_buckets[bucket_idx].append(pid)
-                
-        # Calculate total candidates currently in temp_buckets
-        total_in_temp = sum(len(b) for b in temp_buckets)
-        
-        # Stop condition: if the total number of profiles we just ranked is less than 2*top_k
+            count = len(ranked_chunk)
+            for index, profile_id in enumerate(ranked_chunk):
+                bucket_index = int(index * 8 / count) if count else 0
+                temp_buckets[min(7, bucket_index)].append(profile_id)
+
+        total_in_temp = sum(len(bucket) for bucket in temp_buckets)
         if total_in_temp < 2 * top_k:
-            logger.info(f"Stopping condition met: {total_in_temp} profiles is less than 2 * top_k ({2 * top_k}).")
-            # Flatten all 8 temp buckets (from best to worst)
-            final_active_profiles = []
-            for b in temp_buckets:
-                final_active_profiles.extend(b)
+            logger.info(
+                "Stopping condition met: %d profiles is less than "
+                "2 * top_k (%d).",
+                total_in_temp,
+                2 * top_k,
+            )
+            final_active_profiles = [
+                profile_id
+                for bucket in temp_buckets
+                for profile_id in bucket
+            ]
             break
-            
-        # Otherwise, dismiss bottom 4 buckets and set top 4 buckets as the new active buckets
-        for i in range(4):
-            buckets[i] = temp_buckets[i]
-            # Shuffle slightly within the bucket to prevent fixed pairings in the next round
-            random.shuffle(buckets[i])
-            
-    logger.info(f"Swiss tournament completed. Executing final ranking on {len(final_active_profiles)} survivors.")
-    
-    # Do one final definitive ranking on the remaining pool
-    final_profiles_dict = {pid: all_profiles[pid] for pid in final_active_profiles}
-    final_sorted_ids = await rank_chunk(objective, final_profiles_dict)
-    
-    ranked_results = []
-    for rank_idx, pid in enumerate(final_sorted_ids[:top_k]):
-        ranked_results.append({
-            "id": pid,
-            "text": all_profiles[pid],
-            "rank": rank_idx + 1
-        })
-        
-    return ranked_results, len(ranked_results)
+        for index in range(4):
+            buckets[index] = temp_buckets[index]
+            random.shuffle(buckets[index])
+
+    logger.info(
+        "Swiss tournament completed. Executing final ranking on %d survivors.",
+        len(final_active_profiles),
+    )
+    final_profiles = {
+        profile_id: all_profiles[profile_id]
+        for profile_id in final_active_profiles
+    }
+    final_sorted_ids = await rank_chunk(objective, final_profiles)
+    results = [
+        {
+            "id": profile_id,
+            "text": all_profiles[profile_id],
+            "rank": index + 1,
+        }
+        for index, profile_id in enumerate(final_sorted_ids[:top_k])
+    ]
+    return results, len(results)

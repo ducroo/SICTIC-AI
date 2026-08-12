@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Assessment status selected from the configured scale."
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_documents": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "proposed_next_steps_and_questions": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "required": [
+    "status",
+    "rationale",
+    "source_documents",
+    "proposed_next_steps_and_questions"
+  ]
+}

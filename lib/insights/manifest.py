@@ -16,8 +16,8 @@ MANIFEST_VERSION = 1
 
 
 @lru_cache(maxsize=256)
-def prompt_hash(prompt_key: str) -> str:
-    return hashlib.sha256(prompt_key.encode("utf-8")).hexdigest()
+def config_hash(config_key: str) -> str:
+    return hashlib.sha256(config_key.encode("utf-8")).hexdigest()
 
 
 def dataset_revisions(
@@ -61,7 +61,7 @@ def save_insight_entry(
     insight_path: str,
     model: str,
     revisions: dict[str, str],
-    prompt_key: str,
+    config_key: str,
 ) -> None:
     local_manifest = Path(storage.local_path(manifest_path))
     with manifest_write_lock(local_manifest):
@@ -74,7 +74,7 @@ def save_insight_entry(
         manifest["entries"][insight_path] = {
             "model": model,
             "dataset_revisions": revisions,
-            "prompt_sha256": prompt_hash(prompt_key),
+            "config_sha256": config_hash(config_key),
         }
         atomic_write(
             local_manifest,

@@ -18,8 +18,9 @@ Dealum. Do not use separately scraped website or LinkedIn content as evidence.
 4. Reuse the freshness-tracked JSON audit when substantive submission content
    is unchanged. A stage-only change creates a new response without rerunning
    the audit checks.
-5. Load the policy, structured Markdown checklist, and output instructions from
-   `config/submission_ready/`.
+5. Load the policy, structured Markdown checklist, output instructions, and
+   JSON response schema from `config/submission_ready/`. Constrain the proposed
+   actions in the schema to those permitted for the current Dealum stage.
 6. Run every checklist item through `batch_audit` with the `Pass`, `Fail`, and
    `Unclear` status scale, then render the common Markdown table through
    `json_to_markdown_table`.
@@ -28,6 +29,8 @@ Dealum. Do not use separately scraped website or LinkedIn content as evidence.
 8. Save the canonical JSON audit plus a timestamped rendered checklist and
    internal proposed action through `InsightFile`. Humans decide whether to
    contact the startup or change its Dealum stage; the skill does neither.
+   Use `config_key()` over the complete submission-ready configuration, stage,
+   and canonical audit when evaluating artifact freshness.
 9. Return a flat `list[InsightFile]` containing checklist then response for
    each successful startup. The canonical JSON audits remain internal; any
    generated failure report is appended to the returned list.
