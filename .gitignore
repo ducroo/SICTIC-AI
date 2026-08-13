@@ -23,6 +23,7 @@ __pycache__/
 .storage/
 .storage-mirror/
 .installed-skills/
+.openclaw-skills/
 gdrive-mirror/
 gdrive-sync/.state/
 gdrive-sync/logs/
