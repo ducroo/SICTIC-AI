@@ -51,7 +51,8 @@ def llm_endpoint() -> ModelEndpoint:
     return ModelEndpoint(
         model=model,
         base_url=_base_url_for_model(model, _first_env("LLM_BASE_URL")),
-        api_key=_first_env("LLM_API_KEY"),
+        # OPENAI_API_KEY is the common Cloud Agent / provider secret name.
+        api_key=_first_env("LLM_API_KEY", "OPENAI_API_KEY"),
     )
 
 
@@ -60,7 +61,8 @@ def embedding_endpoint() -> ModelEndpoint:
     return ModelEndpoint(
         model=model,
         base_url=_base_url_for_model(model, _first_env("EMBEDDING_BASE_URL")),
-        api_key=_first_env("EMBEDDING_API_KEY"),
+        # OpenRouter embeddings may use EMBEDDING_API_KEY or OPENROUTER_API_KEY.
+        api_key=_first_env("EMBEDDING_API_KEY", "OPENROUTER_API_KEY"),
     )
 
 

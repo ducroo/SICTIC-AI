@@ -40,3 +40,27 @@ def test_ollama_endpoint_uses_ollama_host_when_base_url_is_blank(monkeypatch):
 
     assert endpoint.model == "ollama/qwen3:8b"
     assert endpoint.base_url == "http://ollama.example.test:11434"
+
+
+def test_llm_endpoint_falls_back_to_openai_api_key(monkeypatch):
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-4o-mini")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
+
+    endpoint = llm_endpoint()
+
+    assert endpoint.api_key == "openai-secret"
+    assert endpoint.base_url is None
+
+
+def test_embedding_endpoint_falls_back_to_openrouter_api_key(monkeypatch):
+    monkeypatch.setenv("EMBEDDING_MODEL", "openrouter/openai/text-embedding-3-small")
+    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
+    monkeypatch.delenv("EMBEDDING_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-secret")
+
+    endpoint = embedding_endpoint()
+
+    assert endpoint.api_key == "openrouter-secret"
+    assert endpoint.base_url is None

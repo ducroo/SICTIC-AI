@@ -42,6 +42,7 @@ def build_converter(*, force_full_page_ocr: bool = False):
     api_key = (
         os.environ.get("VLM_API_KEY")
         or os.environ.get("LLM_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
         or ""
     )
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
