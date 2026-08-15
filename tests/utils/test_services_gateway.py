@@ -51,9 +51,9 @@ def test_gateway_initialization_has_no_file_side_effect(clean_gateway):
     state = clean_gateway.snapshot()
 
     assert state == {
-        "version": 4,
-        "leases": {"docling": [], "embedding": [], "llm": []},
-        "requests": {"docling": [], "embedding": [], "llm": []},
+        "version": 5,
+        "leases": {"docling": [], "embedding": [], "llm": [], "rerank": []},
+        "requests": {"docling": [], "embedding": [], "llm": [], "rerank": []},
     }
 
 
@@ -424,13 +424,13 @@ async def test_gateway_logs_counts_when_request_arrives_and_starts(
 
     assert (
         "Gateway request received: LLM 0 running, 1 waiting | "
-        "embedding 0 running, 0 waiting | docling 0 running, 0 waiting | "
-        "models 0/2 loaded"
+        "embedding 0 running, 0 waiting | rerank 0 running, 0 waiting | "
+        "docling 0 running, 0 waiting | models 0/2 loaded"
     ) in caplog.text
     assert (
         "Gateway job started: LLM 1 running, 0 waiting | "
-        "embedding 0 running, 0 waiting | docling 0 running, 0 waiting | "
-        "models 1/2 loaded"
+        "embedding 0 running, 0 waiting | rerank 0 running, 0 waiting | "
+        "docling 0 running, 0 waiting | models 1/2 loaded"
     ) in caplog.text
 
 

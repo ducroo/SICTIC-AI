@@ -105,14 +105,19 @@ class IngestionManifest:
             embedding_model = state.get("indexed_embedding_model")
             if not all((parsed_sha, chunker_version, embedding_model)):
                 continue
-            indexed_documents.append(
-                {
-                    "filename": filename,
-                    "parsed_sha256": parsed_sha,
-                    "chunker_version": chunker_version,
-                    "embedding_model": embedding_model,
-                }
-            )
+            document = {
+                "filename": filename,
+                "parsed_sha256": parsed_sha,
+                "chunker_version": chunker_version,
+                "embedding_model": embedding_model,
+            }
+            # Only recorded once sparse vectors exist, so datasets that have
+            # not been rebuilt for hybrid search keep their current revision
+            # and their reusable insights.
+            sparse_version = state.get("indexed_sparse_version")
+            if sparse_version:
+                document["sparse_version"] = sparse_version
+            indexed_documents.append(document)
 
         self.indexed_dataset_revision = content_hash(
             json.dumps(

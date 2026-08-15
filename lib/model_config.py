@@ -66,6 +66,18 @@ def embedding_endpoint() -> ModelEndpoint:
     )
 
 
+def rerank_endpoint() -> Optional[ModelEndpoint]:
+    """Cross-encoder reranking endpoint, or None when reranking is disabled."""
+    model = _optional_env("RERANK_MODEL")
+    if not model:
+        return None
+    return ModelEndpoint(
+        model=model,
+        base_url=_first_env("RERANK_BASE_URL"),
+        api_key=_first_env("RERANK_API_KEY"),
+    )
+
+
 def llm_model() -> str:
     return llm_endpoint().model
 

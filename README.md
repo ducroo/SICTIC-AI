@@ -151,6 +151,9 @@ configure these variables:
 |14| `EMBEDDING_BASE_URL` | Base URL for the embedding endpoint; blank uses the provider default | `http://localhost:11434` |
 |15| `EMBEDDING_API_KEY` | API key for the embedding endpoint when needed | blank for local Ollama |
 |16| `RANKED_LLMS` | If insights md files were created with several models, the preferred ranking for re-use. (CSV list) | see `.env-template` |
+|17| `RERANK_MODEL` | Optional cross-encoder that rescores retrieved chunks; blank disables reranking | `infinity/BAAI/bge-reranker-v2-m3` |
+|18| `RERANK_BASE_URL` | Base URL for the reranking endpoint | `http://localhost:7997` |
+|19| `RERANK_API_KEY` | API key for the reranking endpoint when needed | blank for a local reranker |
 
 *(Note: The other variables in `.env-template` are explained inline. You don't need to change them).*
 
@@ -424,6 +427,55 @@ python -m skills.dataset_maintenance diagnose
 python -m skills.dataset_maintenance prune
 python -m skills.dataset_maintenance prune --apply
 python -m skills.dataset_maintenance migrate-startup-dossiers
+python -m skills.dataset_maintenance rebuild-index --dataset avientus
 ```
 
 Pruning is dry-run by default.
+
+## Retrieval
+
+Search over a data room runs in three stages.
+
+**1. Hybrid retrieval.** Every question is matched twice against the same Qdrant
+collection: once as a dense embedding, and once as BM25 keyword terms. Qdrant
+fuses the two rankings with reciprocal rank fusion. The dense side handles
+paraphrases, and the BM25 side handles the exact strings that matter in a data
+room and that a small local embedding model tends to blur, such as
+`Inventionsabtretungserklärung`, `Art. 332 OR`, or a specific patent number.
+BM25 needs no extra model or service: Qdrant computes the inverse document
+frequency itself, so only term frequencies are stored alongside each chunk.
+
+**2. Optional reranking.** When `RERANK_MODEL` is set, a cross-encoder rescores
+the retrieved candidates by reading the question and the chunk together. This is
+off by default. A local reranker keeps confidential documents on the machine,
+for example a self-hosted [Infinity](https://github.com/michaelfeil/infinity)
+server:
+
+```bash
+RERANK_MODEL="infinity/BAAI/bge-reranker-v2-m3"
+RERANK_BASE_URL=http://localhost:7997
+```
+
+If the reranker is unreachable or fails, retrieval keeps the fusion order and
+logs a warning, so search never breaks because of it.
+
+**3. Diversification.** Retrieval runs wider than the requested chunk count
+(`RETRIEVAL_CANDIDATE_MULTIPLIER`) and then caps how much of the answer a single
+document may occupy (`RETRIEVAL_MAX_DOCUMENT_SHARE`). This stops one long
+document, such as a 200-page shareholder agreement, from filling the whole
+context and hiding the cap table. Chunks above the cap are demoted rather than
+dropped, so the requested number of chunks is still returned.
+
+### Upgrading an existing index
+
+Qdrant cannot add sparse vectors to a collection that was created without them,
+so datasets indexed before hybrid search keep working as dense-only search until
+their collection is rebuilt:
+
+```bash
+python -m skills.dataset_maintenance rebuild-index --dataset avientus
+```
+
+This drops the Qdrant collection and re-embeds the dataset. Parsed Markdown is
+kept, so documents are never sent through Docling again. Rebuilding is the
+expensive step for a large data room; run it once per dataset when convenient.

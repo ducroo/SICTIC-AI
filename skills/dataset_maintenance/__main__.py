@@ -5,6 +5,7 @@ from typing import Optional
 import typer
 
 from lib.cli import run_command
+from lib.datasets.ingestion import sync_datasets
 from lib.insights import dataset_from_insight
 from lib.logger import get_logger
 from skills.dataset_maintenance.maintenance import (
@@ -13,6 +14,7 @@ from skills.dataset_maintenance.maintenance import (
     delete_dataset_index,
     diagnose_qdrant_collections,
     prune_orphaned_qdrant_collections,
+    rebuild_dataset_index,
 )
 from lib.startups.dossier import ensure_startup_dossier
 from skills.dataset_maintenance.startup_dossiers import migrate_startup_dossiers
@@ -73,6 +75,46 @@ def delete_command(
     )
     for collection in collections:
         typer.echo(f"Deleted: {collection}")
+
+
+@app.command("rebuild-index")
+def rebuild_index_command(
+    dataset: str = typer.Option(..., "--dataset", "-d"),
+    embeddings: Optional[str] = typer.Option(None, "--embeddings", "-e"),
+    sync: bool = typer.Option(
+        True,
+        "--sync/--no-sync",
+        help="Re-index immediately after dropping the collection.",
+    ),
+) -> None:
+    """Recreate a dataset index so it gains BM25 vectors for hybrid search."""
+    rebuilds = run_command(
+        lambda: [
+            rebuild_dataset_index(item, embeddings)
+            for item in _parse_datasets(dataset)
+        ],
+        logger=logger,
+        error_prefix="Rebuild failed",
+    )
+    for rebuild in rebuilds:
+        typer.echo(
+            f"Reset: {rebuild.dataset} (collection={rebuild.collection}, "
+            f"deleted={rebuild.collection_deleted}, "
+            f"documents={rebuild.documents_reset})"
+        )
+    if not sync:
+        typer.echo("Skipped re-indexing. Run a sync to rebuild the index.")
+        return
+    run_command(
+        lambda: sync_datasets(
+            [rebuild.dataset for rebuild in rebuilds],
+            raise_on_error=True,
+        ),
+        logger=logger,
+        error_prefix="Rebuild sync failed",
+    )
+    for rebuild in rebuilds:
+        typer.echo(f"Rebuilt index: {rebuild.dataset}")
 
 
 @app.command("activate")

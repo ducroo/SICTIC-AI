@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from lib.datasets.sparse import SparseVectorData
 from lib.env import get_env_var
 from lib.logger import get_logger
 from lib.model_config import embedding_model
@@ -16,13 +17,24 @@ with suppress_native_stderr():
         Distance,
         FieldCondition,
         Filter,
+        Fusion,
+        FusionQuery,
         MatchValue,
+        Modifier,
         PointIdsList,
         PointStruct,
+        Prefetch,
+        SparseVector,
+        SparseVectorParams,
         VectorParams,
     )
 
 logger = get_logger(__name__)
+
+# Dense vectors stay on Qdrant's default unnamed vector so that collections
+# created before hybrid search remain queryable without migration.
+DENSE_VECTOR_NAME = ""
+SPARSE_VECTOR_NAME = "bm25"
 
 
 class QdrantAdmin:
@@ -64,6 +76,7 @@ class QdrantAdapter:
     ):
         self.client = QdrantClient(url=get_env_var("QDRANT_HOST"))
         self.collection_name = self.collection_for(collection_name)
+        self._sparse_enabled: bool | None = None
         if vector_size is not None:
             self.ensure_collection(vector_size)
 
@@ -106,7 +119,25 @@ class QdrantAdapter:
                 size=vector_size,
                 distance=Distance.COSINE,
             ),
+            sparse_vectors_config={
+                SPARSE_VECTOR_NAME: SparseVectorParams(modifier=Modifier.IDF)
+            },
         )
+        self._sparse_enabled = None
+
+    def sparse_enabled(self) -> bool:
+        """Whether this collection stores BM25 sparse vectors for hybrid search.
+
+        Collections created before hybrid search have no sparse vector
+        configuration, and Qdrant cannot add one to an existing collection.
+        Those collections stay dense-only until they are rebuilt.
+        """
+        if self._sparse_enabled is None:
+            info = self.collection_info()
+            params = getattr(getattr(info, "config", None), "params", None)
+            sparse_vectors = getattr(params, "sparse_vectors", None) or {}
+            self._sparse_enabled = SPARSE_VECTOR_NAME in sparse_vectors
+        return self._sparse_enabled
 
     def collection_info(self):
         try:
@@ -238,6 +269,20 @@ class QdrantAdapter:
                     f"Failed to delete existing chunks for {document_name}: {exc}"
                 ) from exc
 
+    @staticmethod
+    def _point_vector(point: dict):
+        """Return the dense vector, or a named map when sparse data is present."""
+        sparse: SparseVectorData | None = point.get("sparse")
+        if sparse is None:
+            return point["vector"]
+        return {
+            DENSE_VECTOR_NAME: point["vector"],
+            SPARSE_VECTOR_NAME: SparseVector(
+                indices=list(sparse.indices),
+                values=list(sparse.values),
+            ),
+        }
+
     def upsert_points(
         self,
         points: list[dict],
@@ -247,7 +292,7 @@ class QdrantAdapter:
         qdrant_points = [
             PointStruct(
                 id=point["id"],
-                vector=point["vector"],
+                vector=self._point_vector(point),
                 payload=point["payload"],
             )
             for point in points
@@ -292,5 +337,53 @@ class QdrantAdapter:
             )
         return points
 
+    def query_hybrid(
+        self,
+        vector: list[float],
+        sparse: SparseVectorData,
+        *,
+        limit: int,
+        candidate_limit: int | None = None,
+    ):
+        """Fuse dense and BM25 rankings with reciprocal rank fusion in Qdrant."""
+        if not sparse or not self.sparse_enabled():
+            return self.query(vector, limit=limit)
+        if not self.collection_exists():
+            logger.warning(
+                "Qdrant collection %s does not exist; returning zero chunks.",
+                self.collection_name,
+            )
+            return []
+
+        branch_limit = candidate_limit or limit
+        points = self.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[
+                Prefetch(
+                    query=vector,
+                    using=DENSE_VECTOR_NAME,
+                    limit=branch_limit,
+                ),
+                Prefetch(
+                    query=SparseVector(
+                        indices=list(sparse.indices),
+                        values=list(sparse.values),
+                    ),
+                    using=SPARSE_VECTOR_NAME,
+                    limit=branch_limit,
+                ),
+            ],
+            query=FusionQuery(fusion=Fusion.RRF),
+            limit=limit,
+            with_payload=True,
+        ).points
+        if not points:
+            logger.warning(
+                "Qdrant collection %s exists but the query returned zero chunks.",
+                self.collection_name,
+            )
+        return points
+
     def delete_collection(self) -> None:
         self.client.delete_collection(self.collection_name)
+        self._sparse_enabled = None
