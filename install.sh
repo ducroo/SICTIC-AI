@@ -16,15 +16,17 @@
 #      If yes, updates it with --prune (removes deps no longer listed).
 #   2. Registers the repository root in the environment's site-packages using
 #      a generated .pth file, without invoking project dependency resolution.
-#   3. Copies every skill directory into <target>/<name>/. Existing installed
-#      skill directories are preserved under <target>/.skill-copy-backups/.
+#   3. Optionally copies every skill directory into <target>/<name>/. Existing
+#      installed skill directories are preserved under
+#      <target>/.skill-copy-backups/. Leave the target blank to work directly
+#      from the repository without installing agent-discoverable skill copies.
 #
 # Usage:
 #   ./install.sh                                      # interactive install
 #   ./install.sh --target /path/to/openclaw/skills    # optional target override
 #   ./install.sh --rebuild-env                        # force a fresh conda env
 #   ./install.sh --skip-env                           # skip steps 1+2
-#   ./install.sh --non-interactive --target ...       # do not prompt for .env values
+#   ./install.sh --non-interactive [--target ...]     # do not prompt for .env values
 
 set -eu
 
@@ -81,31 +83,27 @@ if [ -z "$TARGET" ]; then
         if [ -z "$target_default" ]; then
             target_default=$(env_file_get WORKSPACE_PATH "$REPO_ROOT/.env" || true)
         fi
-        while [ -z "$TARGET" ]; do
-            if [ -n "$target_default" ]; then
-                printf 'Installed skills path [%s]: ' "$target_default"
-            else
-                printf 'Installed skills path: '
-            fi
-            IFS= read -r target_answer || target_answer=""
-            if [ -z "$target_answer" ]; then
-                target_answer="$target_default"
-            fi
-            TARGET="$target_answer"
-            if [ -z "$TARGET" ]; then
-                echo "  INSTALLED_SKILLS_PATH is required."
-            fi
-        done
-    else
-        echo "install.sh: --target is required with --non-interactive." >&2
-        usage
-        exit 2
+        if [ -n "$target_default" ]; then
+            printf 'Installed skills path [%s] (type "none" for repository-only): ' "$target_default"
+        else
+            printf 'Installed skills path [none]: '
+        fi
+        IFS= read -r target_answer || target_answer=""
+        if [ -z "$target_answer" ]; then
+            target_answer="$target_default"
+        fi
+        case "$(printf '%s' "$target_answer" | tr '[:upper:]' '[:lower:]')" in
+            none) TARGET="" ;;
+            *) TARGET="$target_answer" ;;
+        esac
     fi
 fi
 
 # Ensure TARGET resolves to an absolute path for user-facing metadata.
-mkdir -p "$TARGET"
-TARGET="$(cd "$TARGET" && pwd)"
+if [ -n "$TARGET" ]; then
+    mkdir -p "$TARGET"
+    TARGET="$(cd "$TARGET" && pwd)"
+fi
 
 if [ ! -d "$REPO_ROOT/skills" ]; then
     echo "install.sh: $REPO_ROOT/skills not found." >&2
@@ -200,7 +198,11 @@ backup_existing_skill() {
 
 echo "Installing SICTIC-AI (conda variant)"
 echo "  source:   $REPO_ROOT"
-echo "  target:   $TARGET"
+if [ -n "$TARGET" ]; then
+    echo "  target:   $TARGET"
+else
+    echo "  target:   none (repository-only)"
+fi
 echo "  env name: $ENV_NAME"
 echo "  env file: $ENV_FILE"
 echo "  skills:   copy"
@@ -289,29 +291,34 @@ fi
 # ---------------------------------------------------------------------------
 # Step 3: install skills
 # ---------------------------------------------------------------------------
-echo "[3/3] Copying skills into $TARGET ..."
+if [ -n "$TARGET" ]; then
+    echo "[3/3] Copying skills into $TARGET ..."
+else
+    echo "[3/3] Skill copies: skipped (repository-only mode)"
+fi
 
 INSTALLED_LIST=""
 installed_count=0
 
-for src in "$REPO_ROOT/skills"/*/; do
-    src="${src%/}"
-    name=$(basename "$src")
-    [ -f "$src/SKILL.md" ] || continue
+if [ -n "$TARGET" ]; then
+    for src in "$REPO_ROOT/skills"/*/; do
+        src="${src%/}"
+        name=$(basename "$src")
+        [ -f "$src/SKILL.md" ] || continue
 
-    dst="$TARGET/$name"
+        dst="$TARGET/$name"
 
-    if [ -e "$dst" ] || [ -L "$dst" ]; then
-        backup_existing_skill "$dst"
-    fi
-    copy_skill_dir "$src" "$dst"
+        if [ -e "$dst" ] || [ -L "$dst" ]; then
+            backup_existing_skill "$dst"
+        fi
+        copy_skill_dir "$src" "$dst"
 
-    INSTALLED_LIST="$INSTALLED_LIST $name "
-    installed_count=$((installed_count + 1))
-    echo "       + $name"
-done
+        INSTALLED_LIST="$INSTALLED_LIST $name "
+        installed_count=$((installed_count + 1))
+        echo "       + $name"
+    done
 
-cat > "$TARGET/_SICTIC_AI.md" <<EOF
+    cat > "$TARGET/_SICTIC_AI.md" <<EOF
 # SICTIC-AI skills
 
 These skill directories are installed from \`$REPO_ROOT/skills/\` by:
@@ -331,7 +338,8 @@ from \`environment.yml\`.
 Each SKILL.md "Usage" section contains a harness slash command.
 EOF
 
-echo "       Installed $installed_count skill(s)."
+    echo "       Installed $installed_count skill(s)."
+fi
 
 # ---------------------------------------------------------------------------
 # Step 4: interactive .env setup
@@ -487,21 +495,31 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     echo
 
     ask_env "REPO_PATH" "Repository path" "$REPO_ROOT" 1 0
-    ask_env "INSTALLED_SKILLS_PATH" "Installed skills path" "$TARGET" 1 0
-    ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/.storage" 1 0
+    env_set "INSTALLED_SKILLS_PATH" "$TARGET"
+    ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/local_storage" 1 0
     ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$REPO_ROOT" 1 0
-    ask_env "CLOUD_PROVIDER" "Cloud provider (blank or google)" "" 0 0
-    cloud_provider=$(env_get CLOUD_PROVIDER || true)
-    case "$(printf '%s' "$cloud_provider" | tr '[:upper:]' '[:lower:]')" in
-        "") ;;
-        google)
-            ask_env "CLOUD_STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-            ;;
+    cloud_provider_current=$(env_get CLOUD_PROVIDER || true)
+    if [ -n "$cloud_provider_current" ]; then
+        printf 'Cloud provider [current: %s] (google or none): ' "$cloud_provider_current"
+    else
+        printf 'Cloud provider [none] (google or none): '
+    fi
+    IFS= read -r cloud_provider_answer || cloud_provider_answer=""
+    if [ -z "$cloud_provider_answer" ]; then
+        cloud_provider_answer="$cloud_provider_current"
+    fi
+    case "$(printf '%s' "$cloud_provider_answer" | tr '[:upper:]' '[:lower:]')" in
+        ""|none) env_set "CLOUD_PROVIDER" "" ;;
+        google) env_set "CLOUD_PROVIDER" "google" ;;
         *)
-            echo "  CLOUD_PROVIDER must be blank or google." >&2
+            echo "  CLOUD_PROVIDER must be google or none." >&2
             exit 1
             ;;
     esac
+    cloud_provider=$(env_get CLOUD_PROVIDER || true)
+    if [ "$cloud_provider" = "google" ]; then
+        ask_env "CLOUD_STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
+    fi
 
     ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
     ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_get OLLAMA_HOST || true)" 1 0
@@ -533,8 +551,10 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_get OLLAMA_MAX_LOADED_MODELS || true)" 1 0
     ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_get OLLAMA_KV_CACHE_TYPE || true)" 0 0
     ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_get OLLAMA_FLASH_ATTENTION || true)" 0 0
-    ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
-    ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
+    if [ "$cloud_provider" = "google" ]; then
+        ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
+        ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
+    fi
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
     ask_env "APIFY_KEY" "Apify API key (blank if unused)" "$(env_get APIFY_KEY || true)" 0 1
     ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "$(env_get DEALUM_API_KEY || true)" 0 1
@@ -543,8 +563,8 @@ if [ "$INTERACTIVE" -eq 1 ]; then
 else
     echo "[4/4] .env prompts skipped (--non-interactive)."
     if [ -z "$(env_get REPO_PATH || true)" ]; then env_set "REPO_PATH" "$REPO_ROOT"; fi
-    if [ -z "$(env_get INSTALLED_SKILLS_PATH || true)" ]; then env_set "INSTALLED_SKILLS_PATH" "$TARGET"; fi
-    if [ -z "$(env_get LOCAL_STORAGE_PATH || true)" ]; then env_set "LOCAL_STORAGE_PATH" "$REPO_ROOT/.storage"; fi
+    env_set "INSTALLED_SKILLS_PATH" "$TARGET"
+    if [ -z "$(env_get LOCAL_STORAGE_PATH || true)" ]; then env_set "LOCAL_STORAGE_PATH" "$REPO_ROOT/local_storage"; fi
     if [ -z "$(env_get LOCAL_DATA_PATH || true)" ]; then env_set "LOCAL_DATA_PATH" "$REPO_ROOT"; fi
 fi
 
