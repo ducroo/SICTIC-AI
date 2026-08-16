@@ -1,11 +1,11 @@
 import os
 from typing import List
 
+from lib.adapters.vector_store import get_vector_store
 from lib.datasets.ingestion import sync_datasets
-from lib.adapters.qdrant import QdrantAdapter
+from lib.datasets.paths import dataset_location_for_domain
 from lib.logger import get_logger
 from lib.storage import get_storage
-from lib.datasets.paths import dataset_location_for_domain
 
 logger = get_logger(__name__)
 
@@ -27,8 +27,8 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     storage.rmtree(raw_dataset_rel)
     storage.rmtree(parsed_dataset_rel)
     try:
-        qdrant = QdrantAdapter(temp_name)
-        qdrant.delete_collection()
+        store = get_vector_store(temp_name)
+        store.delete_collection()
     except Exception as e:
         logger.debug(f"Could not delete collection during cleanup (might not exist): {e}")
 
@@ -41,7 +41,7 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
         else:
             logger.warning(f"Provided file does not exist: {file_path}")
 
-    # 3. Ingest: Parse to markdown and embed in Qdrant
+    # 3. Ingest: Parse to markdown and embed in the configured vector store
     logger.info(f"Ingesting ephemeral dataset '{temp_name}'...")
     await sync_datasets([temp_name], raise_on_error=True)
 

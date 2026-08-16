@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Per-boot Cloud Agent start: materialize GDrive/Dealum secrets, bring up Qdrant.
-# Docling is an in-process library. Skips Ollama; embeddings/LLM use API keys.
+# Per-boot Cloud Agent start: materialize GDrive/Dealum secrets, bring up Qdrant
+# unless VECTOR_STORE=firestore. Docling / LlamaParse are in-process libraries.
+# Skips Ollama; embeddings/LLM use API keys.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -44,10 +45,30 @@ else
   materialize_gdrive_secrets
 fi
 
+vector_store="${VECTOR_STORE:-qdrant}"
+if [ -f "$REPO_ROOT/.env" ]; then
+  from_env="$(
+    grep -E '^[[:space:]]*VECTOR_STORE[[:space:]]*=' "$REPO_ROOT/.env" \
+      | tail -n 1 \
+      | cut -d= -f2- \
+      | tr -d '"' \
+      | tr -d "'" \
+      | tr -d '[:space:]'
+  )"
+  if [ -n "$from_env" ]; then
+    vector_store="$from_env"
+  fi
+fi
+
+if [ "$vector_store" = "firestore" ]; then
+  echo "cloud-agent-start: VECTOR_STORE=firestore; skipping local Qdrant"
+  exit 0
+fi
+
 ./launch.sh start qdrant
 
 # Wait until Qdrant answers.
-host="${QDRANT_HOST:-http://localhost:6333}"
+host="${QDRANT_HOST:-[REDACTED]}"
 for _ in $(seq 1 60); do
   if curl -fsS "$host/readyz" >/dev/null 2>&1 || curl -fsS "$host/" >/dev/null 2>&1; then
     echo "cloud-agent-start: qdrant ready at $host"

@@ -19,7 +19,10 @@ seed_dotenv_secrets() {
     return 0
   fi
 
-  for key in DEALUM_API_KEY DEALUM_DEALROOM_ID; do
+  for key in DEALUM_API_KEY DEALUM_DEALROOM_ID \
+    LLAMA_CLOUD_API_KEY LLAMA_PARSE_TIER LLAMA_PARSE_VERSION \
+    DOCUMENT_PARSER VECTOR_STORE FIREBASE_PROJECT_ID \
+    FIREBASE_SERVICE_ACCOUNT_JSON; do
     value="${!key:-}"
     if [ -n "$value" ]; then
       env_set "$key" "$value" "$env_path"

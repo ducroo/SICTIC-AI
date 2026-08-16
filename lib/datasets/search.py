@@ -1,9 +1,9 @@
 """Semantic search over an ingested dataset."""
 
+from lib.adapters.vector_store import get_vector_store
 from lib.datasets.embeddings import EmbeddingService
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.models import Chunk
-from lib.adapters.qdrant import QdrantAdapter
 from lib.logger import get_logger
 from lib.slugify import slugify
 
@@ -32,9 +32,9 @@ async def dataset_search(
     try:
         embeddings = EmbeddingService()
         vectors = await embeddings.embed_many(queries)
-        qdrant = QdrantAdapter(dataset_slug)
+        store = get_vector_store(dataset_slug)
         result_lists = [
-            qdrant.query(vector, limit=max_chunks)
+            store.query(vector, limit=max_chunks)
             for vector in vectors
         ]
     except Exception as exc:

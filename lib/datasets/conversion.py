@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from lib.adapters.docling import (
     ConversionStatus,
-    DoclingAdapter,
     SPREADSHEET_MARKDOWN_MARKER,
     is_spreadsheet_filename,
 )
+from lib.adapters.document_parser import get_document_parser
 from lib.datasets.manifest import (
     MANIFEST_FILENAME,
     PARSER_VERSION,
@@ -196,9 +196,9 @@ async def reconcile_conversions(
     except Exception:
         max_concurrent = 10
 
-    docling = DoclingAdapter(concurrency_limit=max_concurrent)
+    parser = get_document_parser(concurrency_limit=max_concurrent)
     completed = 0
-    async for conversion in docling.extract_documents(files_to_convert):
+    async for conversion in parser.extract_documents(files_to_convert):
         completed += 1
         source = source_by_name[conversion.filename]
         state = manifest.state(conversion.filename)

@@ -73,7 +73,7 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
             )
         ]
     )
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=failed_adapter)
+    mocker.patch.object(conversion, "get_document_parser", return_value=failed_adapter)
 
     first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -92,7 +92,7 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
             )
         ]
     )
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=successful_adapter)
+    mocker.patch.object(conversion, "get_document_parser", return_value=successful_adapter)
 
     second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -138,7 +138,7 @@ async def test_empty_conversion_is_ignored_cleans_stale_state_and_is_not_retried
             )
         ]
     )
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=adapter)
+    mocker.patch.object(conversion, "get_document_parser", return_value=adapter)
 
     first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
     second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
@@ -178,7 +178,7 @@ async def test_ignored_conversion_removes_existing_qdrant_document(tmp_path, moc
     qdrant = mocker.Mock()
     qdrant.collection_exists.return_value = True
     qdrant.get_document_mtimes.return_value = {"image-only.pdf": source_document.mtime}
-    mocker.patch.object(indexing, "QdrantAdapter", return_value=qdrant)
+    mocker.patch.object(indexing, "get_vector_store", return_value=qdrant)
 
     embeddings = mocker.Mock()
     embeddings.model = "test-model"
@@ -242,7 +242,7 @@ async def test_failed_index_does_not_advance_manifest_checkpoint(tmp_path, mocke
     qdrant.collection_exists.return_value = True
     qdrant.get_document_mtimes.return_value = {"report.md": 0.0}
     qdrant.ensure_collection.return_value = None
-    mocker.patch.object(indexing, "QdrantAdapter", return_value=qdrant)
+    mocker.patch.object(indexing, "get_vector_store", return_value=qdrant)
 
     embeddings = mocker.Mock()
     embeddings.model = "test-model"

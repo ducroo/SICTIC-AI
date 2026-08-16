@@ -8,7 +8,7 @@ from lib.datasets.source import parsed_filepath
 @pytest.mark.asyncio
 async def test_dataset_search_embeds_query_and_passes_limit_to_qdrant(mocker):
     mocker.patch("lib.datasets.search.sync_datasets")
-    mock_adapter = mocker.patch("lib.datasets.search.QdrantAdapter")
+    mock_adapter = mocker.patch("lib.datasets.search.get_vector_store")
     embedding_service = mocker.patch(
         "lib.datasets.search.EmbeddingService"
     )
@@ -31,7 +31,7 @@ async def test_dataset_search_embeds_query_and_passes_limit_to_qdrant(mocker):
 @pytest.mark.asyncio
 async def test_dataset_search_normalizes_ids_from_legacy_and_current_payloads(mocker):
     mocker.patch("lib.datasets.search.sync_datasets")
-    mock_adapter = mocker.patch("lib.datasets.search.QdrantAdapter")
+    mock_adapter = mocker.patch("lib.datasets.search.get_vector_store")
     embedding_service = mocker.patch(
         "lib.datasets.search.EmbeddingService"
     )

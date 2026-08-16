@@ -31,6 +31,9 @@ dependencies:
   - striprtf=0.0.29
   - typer
   - xlrd
+  # Optional SaaS backends (DOCUMENT_PARSER=llamaparse / VECTOR_STORE=firestore).
+  - google-cloud-firestore
+  - google-auth
 
   # === Test deps ===
   - pytest
@@ -42,6 +45,7 @@ dependencies:
       - apify-client
       - langchain-text-splitters
       - ollama
+      - 'llama-cloud>=2.8'
       - 'docling[ocrmac]==2.96.1; platform_system == "Darwin"'
       - 'docling==2.96.1; platform_system != "Darwin"'
       - 'onnxruntime; platform_system != "Darwin"'
