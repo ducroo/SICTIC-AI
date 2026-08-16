@@ -41,10 +41,42 @@ env_set() {
   mv "$tmp" "$path"
 }
 
+# Write a secret that holds JSON content to a file; print the path on stdout.
+# Accepts either GDRIVE_*_JSON or a GDRIVE_* value that already looks like JSON.
+materialize_json_secret() {
+  local content="$1"
+  local dest="$2"
+  if [ -z "$content" ]; then
+    return 1
+  fi
+  case "$content" in
+    \{*) ;;
+    *)
+      # Already a path to an existing file.
+      if [ -f "$content" ]; then
+        printf '%s\n' "$content"
+        return 0
+      fi
+      return 1
+      ;;
+  esac
+  mkdir -p "$(dirname "$dest")"
+  # Avoid echoing secret content; write via python for reliable UTF-8 JSON files.
+  CONTENT="$content" DEST="$dest" python3 - <<'PY'
+import os
+from pathlib import Path
+path = Path(os.environ["DEST"])
+path.write_text(os.environ["CONTENT"], encoding="utf-8")
+path.chmod(0o600)
+print(path)
+PY
+}
+
 seed_cloud_env() {
   local env_path="$REPO_ROOT/.env"
   local template="$REPO_ROOT/.env-template"
   local skills_target="${INSTALLED_SKILLS_PATH:-$REPO_ROOT/.openclaw-skills}"
+  local creds_path token_path materialized
 
   if [ ! -f "$env_path" ]; then
     cp "$template" "$env_path"
@@ -59,13 +91,19 @@ seed_cloud_env() {
 
   # Prefer OpenAI for text/vision; OpenRouter for embeddings (no local Ollama).
   env_set "LLM_MODEL" "${LLM_MODEL:-openai/gpt-4o-mini}" "$env_path"
-  env_set "LLM_BASE_URL" "${LLM_BASE_URL:-}" "$env_path"
+  env_set "LLM_BASE_URL" "${LLM_BASE_URL:-https://api.openai.com/v1}" "$env_path"
   env_set "VLM_MODEL" "${VLM_MODEL:-openai/gpt-4o-mini}" "$env_path"
-  env_set "VLM_BASE_URL" "${VLM_BASE_URL:-}" "$env_path"
+  env_set "VLM_BASE_URL" "${VLM_BASE_URL:-https://api.openai.com/v1}" "$env_path"
   env_set "EMBEDDING_MODEL" "${EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}" "$env_path"
-  env_set "EMBEDDING_BASE_URL" "${EMBEDDING_BASE_URL:-}" "$env_path"
+  env_set "EMBEDDING_BASE_URL" "${EMBEDDING_BASE_URL:-https://openrouter.ai/api/v1}" "$env_path"
   env_set "RANKED_LLMS" "${RANKED_LLMS:-openai/gpt-4o-mini}" "$env_path"
-  env_set "CLOUD_PROVIDER" "${CLOUD_PROVIDER:-}" "$env_path"
+
+  if [ -n "${CLOUD_STORAGE_PATH:-}" ]; then
+    env_set "CLOUD_STORAGE_PATH" "$CLOUD_STORAGE_PATH" "$env_path"
+    env_set "CLOUD_PROVIDER" "${CLOUD_PROVIDER:-google}" "$env_path"
+  else
+    env_set "CLOUD_PROVIDER" "${CLOUD_PROVIDER:-}" "$env_path"
+  fi
 
   # Map Cloud Agent secrets into .env when present (never print values).
   if [ -n "${LLM_API_KEY:-}" ]; then
@@ -84,6 +122,16 @@ seed_cloud_env() {
     env_set "EMBEDDING_API_KEY" "$EMBEDDING_API_KEY" "$env_path"
   elif [ -n "${OPENROUTER_API_KEY:-}" ]; then
     env_set "EMBEDDING_API_KEY" "$OPENROUTER_API_KEY" "$env_path"
+  fi
+
+  # GDrive: secrets UI holds JSON blobs; runtime code expects file paths.
+  creds_path="$HOME/.openclaw/gdrive-ops-credentials.json"
+  token_path="$HOME/.openclaw/gdrive-ops-token.json"
+  if materialized=$(materialize_json_secret "${GDRIVE_CREDENTIALS_JSON:-${GDRIVE_CREDENTIALS:-}}" "$creds_path"); then
+    env_set "GDRIVE_CREDENTIALS" "$materialized" "$env_path"
+  fi
+  if materialized=$(materialize_json_secret "${GDRIVE_TOKEN_JSON:-${GDRIVE_TOKEN:-}}" "$token_path"); then
+    env_set "GDRIVE_TOKEN" "$materialized" "$env_path"
   fi
 }
 
