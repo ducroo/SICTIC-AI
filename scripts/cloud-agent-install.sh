@@ -85,6 +85,16 @@ seed_cloud_env() {
   elif [ -n "${OPENROUTER_API_KEY:-}" ]; then
     env_set "EMBEDDING_API_KEY" "$OPENROUTER_API_KEY" "$env_path"
   fi
+
+  # Dealum: copy injected secrets so empty .env-template keys cannot wipe them.
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
+  seed_dotenv_secrets "$env_path"
+
+  # GDrive: secrets UI holds JSON; runtime expects paths. Prefer *_JSON.
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
+  materialize_gdrive_secrets "$env_path"
 }
 
 ensure_conda
