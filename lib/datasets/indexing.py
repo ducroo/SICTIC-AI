@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lib.adapters.qdrant import QdrantAdapter
+from lib.adapters.vector_store import VectorStore, get_vector_store
 from lib.datasets.chunking import split_markdown
 from lib.datasets.embeddings import EmbeddingService
 from lib.datasets.manifest import (
@@ -34,17 +34,17 @@ async def reconcile_index(
     manifest: IngestionManifest | None = None,
     result: IngestionResult | None = None,
 ) -> IngestionResult:
-    """Reconcile successfully parsed documents to Qdrant."""
+    """Reconcile successfully parsed documents to the configured vector store."""
     dataset_slug = slugify(dataset_name)
     storage = get_storage()
     sources = sources or snapshot_source_files(storage, raw_rel)
     manifest = manifest or IngestionManifest.load(storage, parsed_rel)
     result = result or IngestionResult(dataset=dataset_slug)
     embeddings = EmbeddingService()
-    qdrant = QdrantAdapter(dataset_slug)
-    collection_exists = qdrant.collection_exists()
+    store = get_vector_store(dataset_slug)
+    collection_exists = store.collection_exists()
     db_mtimes = (
-        qdrant.get_document_mtimes(raise_on_error=True)
+        store.get_document_mtimes(raise_on_error=True)
         if collection_exists
         else {}
     )
@@ -58,9 +58,9 @@ async def reconcile_index(
         )
     }
     for orphan in sorted(set(db_mtimes) - indexable_source_names):
-        qdrant.delete_document(orphan, raise_on_error=True)
+        store.delete_document(orphan, raise_on_error=True)
         result.removed_qdrant += 1
-        logger.info("[%s] Removed Qdrant orphan %s.", dataset_slug, orphan)
+        logger.info("[%s] Removed vector-store orphan %s.", dataset_slug, orphan)
 
     files_to_index: list[tuple[SourceDocument, str, str]] = []
     for source in sources:
@@ -116,7 +116,7 @@ async def reconcile_index(
 
     non_empty_files = [item for item in files_to_index if item[2].strip()]
     if non_empty_files:
-        qdrant.ensure_collection(embeddings.vector_size())
+        store.ensure_collection(embeddings.vector_size())
         collection_exists = True
 
     logger.info(
@@ -136,7 +136,7 @@ async def reconcile_index(
             )
             if collection_exists:
                 await replace_document(
-                    qdrant,
+                    store,
                     embeddings,
                     source.filename,
                     chunks,
@@ -182,13 +182,13 @@ async def reconcile_index(
 
 
 async def replace_document(
-    qdrant: QdrantAdapter,
+    store: VectorStore,
     embeddings: EmbeddingService,
     filename: str,
     chunks,
 ) -> None:
     """Upsert a complete replacement before removing obsolete chunk IDs."""
-    existing_ids = qdrant.get_document_point_ids(filename)
+    existing_ids = store.get_document_point_ids(filename)
     vectors = await embeddings.embed_many([chunk.text for chunk in chunks])
     points = []
     for chunk, vector in zip(chunks, vectors):
@@ -202,7 +202,7 @@ async def replace_document(
                 "payload": payload,
             }
         )
-    qdrant.upsert_points(points)
-    qdrant.delete_point_ids(
+    store.upsert_points(points)
+    store.delete_point_ids(
         existing_ids - {point["id"] for point in points}
     )

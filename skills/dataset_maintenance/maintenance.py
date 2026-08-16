@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from lib.adapters.qdrant import QdrantAdapter, QdrantAdmin
+from lib.adapters.vector_store import (
+    VectorStoreAdmin,
+    collection_for,
+    get_vector_store_admin,
+)
 from lib.logger import get_logger
 from lib.model_config import embedding_model
 from lib.slugify import slugify
@@ -24,12 +28,12 @@ class CollectionDiagnostic:
 def orphaned_qdrant_collections(
     embeddings: Optional[str] = None,
     *,
-    admin: QdrantAdmin | None = None,
+    admin: VectorStoreAdmin | None = None,
 ) -> list[str]:
     model = embeddings or embedding_model()
     suffix = f"-{slugify(model.split('/')[-1])}"
     present_datasets = set(list_all_dataset_names())
-    collections = (admin or QdrantAdmin()).list_collections()
+    collections = (admin or get_vector_store_admin()).list_collections()
     return sorted(
         collection
         for collection in collections
@@ -41,13 +45,13 @@ def orphaned_qdrant_collections(
 def diagnose_qdrant_collections(
     embeddings: Optional[str] = None,
     *,
-    admin: QdrantAdmin | None = None,
+    admin: VectorStoreAdmin | None = None,
 ) -> list[CollectionDiagnostic]:
     model = embeddings or embedding_model()
     suffix = f"-{slugify(model.split('/')[-1])}"
     present_datasets = set(list_all_dataset_names())
     diagnostics = []
-    for collection in sorted((admin or QdrantAdmin()).list_collections()):
+    for collection in sorted((admin or get_vector_store_admin()).list_collections()):
         if not collection.endswith(suffix):
             continue
         dataset = collection[:-len(suffix)]
@@ -65,17 +69,17 @@ def prune_orphaned_qdrant_collections(
     embeddings: Optional[str] = None,
     *,
     apply: bool = False,
-    admin: QdrantAdmin | None = None,
+    admin: VectorStoreAdmin | None = None,
 ) -> list[str]:
-    qdrant_admin = admin or QdrantAdmin()
+    store_admin = admin or get_vector_store_admin()
     orphans = orphaned_qdrant_collections(
         embeddings,
-        admin=qdrant_admin,
+        admin=store_admin,
     )
     if apply:
         for collection in orphans:
-            qdrant_admin.delete_collection(collection)
-            logger.info("Deleted orphaned Qdrant collection: %s", collection)
+            store_admin.delete_collection(collection)
+            logger.info("Deleted orphaned vector collection: %s", collection)
     return orphans
 
 
@@ -88,7 +92,7 @@ def delete_dataset_index(
             "Must provide either a dataset or an embeddings target to delete."
         )
 
-    admin = QdrantAdmin()
+    admin = get_vector_store_admin()
     all_collections = admin.list_collections()
     deleted = []
 
@@ -109,7 +113,7 @@ def delete_dataset_index(
         return deleted
 
     if dataset and embeddings:
-        collection = QdrantAdapter.collection_for(
+        collection = collection_for(
             slugify(dataset),
             embeddings,
         )

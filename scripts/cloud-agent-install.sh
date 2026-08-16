@@ -66,6 +66,8 @@ seed_cloud_env() {
   env_set "EMBEDDING_BASE_URL" "${EMBEDDING_BASE_URL:-}" "$env_path"
   env_set "RANKED_LLMS" "${RANKED_LLMS:-openai/gpt-4o-mini}" "$env_path"
   env_set "CLOUD_PROVIDER" "${CLOUD_PROVIDER:-}" "$env_path"
+  env_set "DOCUMENT_PARSER" "${DOCUMENT_PARSER:-docling}" "$env_path"
+  env_set "VECTOR_STORE" "${VECTOR_STORE:-qdrant}" "$env_path"
 
   # Map Cloud Agent secrets into .env when present (never print values).
   if [ -n "${LLM_API_KEY:-}" ]; then
@@ -108,9 +110,22 @@ mkdir -p "$SKILLS_TARGET"
 
 # Prefetch the Qdrant binary so start is fast after snapshot (do not leave a
 # process running from install — Cloud Agent start owns the daemon).
-if [ ! -x "$REPO_ROOT/qdrant/qdrant" ]; then
+# Skip when VECTOR_STORE=firestore (SaaS spike path).
+VECTOR_STORE_VALUE="${VECTOR_STORE:-qdrant}"
+if [ -f "$REPO_ROOT/.env" ]; then
+  VECTOR_STORE_VALUE="$(
+    grep -E '^[[:space:]]*VECTOR_STORE[[:space:]]*=' "$REPO_ROOT/.env" \
+      | tail -n 1 \
+      | cut -d= -f2- \
+      | tr -d '"' \
+      | tr -d "'" \
+      | tr -d '[:space:]'
+  )"
+  VECTOR_STORE_VALUE="${VECTOR_STORE_VALUE:-qdrant}"
+fi
+if [ "${VECTOR_STORE_VALUE}" != "firestore" ] && [ ! -x "$REPO_ROOT/qdrant/qdrant" ]; then
   ./launch.sh start qdrant
   ./launch.sh stop qdrant || true
 fi
 
-echo "cloud-agent-install: done (conda env + Docling + skills + Qdrant binary)"
+echo "cloud-agent-install: done (conda env + skills + optional Qdrant binary)"
