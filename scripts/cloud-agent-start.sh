@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Per-boot Cloud Agent start: materialize GDrive secrets, bring up Qdrant.
+# Per-boot Cloud Agent start: materialize GDrive/Dealum secrets, bring up Qdrant.
 # Docling is an in-process library. Skips Ollama; embeddings/LLM use API keys.
 set -euo pipefail
 
@@ -12,7 +12,7 @@ if ! command -v conda >/dev/null 2>&1 && [ -x "$HOME/miniforge3/bin/conda" ]; th
 fi
 
 # Builds skip install on later boots; secrets are injected per pod, so refresh
-# GDrive credential files and .env path pointers on every start.
+# GDrive credential files, Dealum keys, and .env path pointers on every start.
 env_set() {
   local key="$1"
   local value="$2"
@@ -35,8 +35,11 @@ env_set() {
 
 # shellcheck disable=SC1091
 source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
+# shellcheck disable=SC1091
+source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
 if [ -f "$REPO_ROOT/.env" ]; then
   materialize_gdrive_secrets "$REPO_ROOT/.env"
+  seed_dotenv_secrets "$REPO_ROOT/.env"
 else
   materialize_gdrive_secrets
 fi

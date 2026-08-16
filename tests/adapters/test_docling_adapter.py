@@ -318,3 +318,13 @@ def test_chat_completions_model_strips_ollama_prefix_only_for_ollama_host():
     assert _chat_completions_model("http://localhost:8080/v1", "ollama/qwen3-vl:8b") == (
         "ollama/qwen3-vl:8b"
     )
+
+
+def test_picture_description_params_use_max_completion_tokens():
+    from lib.adapters.docling.converter import picture_description_params
+
+    assert picture_description_params("gpt-5.6-luna") == {
+        "model": "gpt-5.6-luna",
+        "max_completion_tokens": 200,
+    }
+    assert "max_tokens" not in picture_description_params("gpt-4o-mini")
