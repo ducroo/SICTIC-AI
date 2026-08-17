@@ -14,6 +14,8 @@ from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
 
+DEFAULT_BATCH_SIZE = 16
+
 
 def _specialize_schema(
     response_schema: dict[str, Any],
@@ -73,47 +75,51 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
         .replace("{{response_schema}}", schema_text(response_schema))
     )
 
-    try:
-        response_content = await llm_chat(
-            prompt,
-            response_format=json_schema_response_format(
-                "ranked_profile_ids",
-                response_schema,
-            ),
-        )
-        if not response_content:
-            raise ValueError("Ranking model returned no content.")
-        parsed = parse_json_response(
-            response_content,
+    response_content = await llm_chat(
+        prompt,
+        response_format=json_schema_response_format(
+            "ranked_profile_ids",
             response_schema,
-            label="Top-k ranking response",
-        )
-        return _validate_ranked_ids(
-            parsed["ranked_profiles_ids"],
-            profile_ids,
-        )
-    except Exception as error:
-        logger.error("Error in rank_chunk: %s", error)
-        return profile_ids
+        ),
+    )
+    if not response_content:
+        raise ValueError("Ranking model returned no content.")
+    parsed = parse_json_response(
+        response_content,
+        response_schema,
+        label="Top-k ranking response",
+    )
+    return _validate_ranked_ids(
+        parsed["ranked_profiles_ids"],
+        profile_ids,
+    )
 
 
 async def ranking_top_k(
     objective: str,
     all_profiles: Dict[str, str],
     top_k: int = 8,
+    batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> Tuple[List[Dict[str, Any]], int]:
-    """Find top profiles using a four-bucket Swiss tournament."""
+    """Find top profiles using a bucketed Swiss tournament."""
+    if top_k < 1:
+        raise ValueError("top_k must be at least 1.")
+    if batch_size < 2 or batch_size % 2:
+        raise ValueError("batch_size must be an even integer of at least 2.")
+
     logger.info(
-        "Starting 4-bucket Swiss tournament ranking_top_k with %d "
-        "candidates for top_k=%d.",
+        "Starting Swiss tournament ranking_top_k with %d candidates, "
+        "top_k=%d, and batch_size=%d.",
         len(all_profiles),
         top_k,
+        batch_size,
     )
     active_profiles = list(all_profiles.keys())
     random.shuffle(active_profiles)
-    buckets = [[] for _ in range(4)]
+    advancing_bucket_count = batch_size // 2
+    buckets = [[] for _ in range(advancing_bucket_count)]
     for index, profile_id in enumerate(active_profiles):
-        buckets[index % 4].append(profile_id)
+        buckets[index % advancing_bucket_count].append(profile_id)
 
     while True:
         total_remaining = sum(len(bucket) for bucket in buckets)
@@ -125,7 +131,7 @@ async def ranking_top_k(
                 for _ in range(2):
                     if bucket:
                         current_chunk.append(bucket.pop(0))
-            if len(current_chunk) == 8 or (
+            if len(current_chunk) == batch_size or (
                 not any(buckets) and current_chunk
             ):
                 chunks.append(current_chunk)
@@ -140,12 +146,14 @@ async def ranking_top_k(
                 for chunk in chunks
             )
         )
-        temp_buckets = [[] for _ in range(8)]
+        temp_buckets = [[] for _ in range(batch_size)]
         for ranked_chunk in chunk_rankings:
             count = len(ranked_chunk)
             for index, profile_id in enumerate(ranked_chunk):
-                bucket_index = int(index * 8 / count) if count else 0
-                temp_buckets[min(7, bucket_index)].append(profile_id)
+                bucket_index = int(index * batch_size / count) if count else 0
+                temp_buckets[min(batch_size - 1, bucket_index)].append(
+                    profile_id
+                )
 
         total_in_temp = sum(len(bucket) for bucket in temp_buckets)
         if total_in_temp < 2 * top_k:
@@ -161,7 +169,7 @@ async def ranking_top_k(
                 for profile_id in bucket
             ]
             break
-        for index in range(4):
+        for index in range(advancing_bucket_count):
             buckets[index] = temp_buckets[index]
             random.shuffle(buckets[index])
 

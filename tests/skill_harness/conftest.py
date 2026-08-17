@@ -177,10 +177,10 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return []
 
     def fake_compile_startup_profiles(startup_profiles):
-        return "\n".join(
-            f"STARTUP: {profile.dataset}\n# Fixture startup profile."
+        return {
+            profile.dataset: "# Fixture startup profile."
             for profile in startup_profiles
-        )
+        }
 
     async def fake_startup_profiles_from_insight(*_args, **_kwargs):
         _create_dataset("available-startup-profiles", "generated")

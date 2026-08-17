@@ -1,6 +1,5 @@
 from typing import Any, Dict, List
 
-from lib.logger import get_logger
 from lib.structured_output import (
     copy_schema,
     json_schema_response_format,
@@ -9,8 +8,6 @@ from lib.structured_output import (
 )
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
-
-logger = get_logger(__name__)
 
 
 def _specialize_schema(
@@ -76,29 +73,24 @@ async def ranking_rationale(
         .replace("{{response_schema}}", schema_text(response_schema))
     )
 
-    try:
-        response_content = await llm_chat(
-            prompt,
-            response_format=json_schema_response_format(
-                "profile_rationales",
-                response_schema,
-            ),
-        )
-        if not response_content:
-            raise ValueError("Rationale model returned no content.")
-        parsed = parse_json_response(
-            response_content,
+    response_content = await llm_chat(
+        prompt,
+        response_format=json_schema_response_format(
+            "profile_rationales",
             response_schema,
-            label="Ranking-rationale response",
-        )
-        rationale_lookup = _rationale_lookup(
-            parsed["results"],
-            profile_ids,
-        )
-        for item in ranked_items:
-            item["rationale"] = rationale_lookup[item["id"]]
-    except Exception as error:
-        logger.error("Error in ranking_rationale: %s", error)
-        for item in ranked_items:
-            item["rationale"] = "Error generating rationale."
+        ),
+    )
+    if not response_content:
+        raise ValueError("Rationale model returned no content.")
+    parsed = parse_json_response(
+        response_content,
+        response_schema,
+        label="Ranking-rationale response",
+    )
+    rationale_lookup = _rationale_lookup(
+        parsed["results"],
+        profile_ids,
+    )
+    for item in ranked_items:
+        item["rationale"] = rationale_lookup[item["id"]]
     return ranked_items

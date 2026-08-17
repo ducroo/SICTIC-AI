@@ -20,7 +20,6 @@ STARTUP_PROFILES_DATASET = "available-startup-profiles"
 @dataclass(frozen=True)
 class SuggestedStartupsConfig:
     prompt: str
-    response_schema: dict
     key: str
 
 
@@ -36,20 +35,19 @@ def load_skill_config(config: dict) -> SuggestedStartupsConfig:
     try:
         section = config["suggested_startups"]
         prompt = section["suggested_startups_prompt"]
-        response_schema = section["response_schema"]
+        ranking_top_k = config["ranking_top_k"]
+        ranking_rationale = config["ranking_rationale"]
     except KeyError as error:
         raise ValueError(
             f"Missing configuration for suggested_startups: {error}"
         ) from error
-    if not isinstance(prompt, str) or not isinstance(response_schema, dict):
+    if not isinstance(prompt, str):
         raise ValueError(
-            "suggested_startups requires a Markdown prompt and JSON "
-            "response schema."
+            "suggested_startups requires a Markdown objective prompt."
         )
     return SuggestedStartupsConfig(
         prompt=prompt,
-        response_schema=response_schema,
-        key=config_key(section),
+        key=config_key(section, ranking_top_k, ranking_rationale),
     )
 
 

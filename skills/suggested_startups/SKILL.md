@@ -22,8 +22,8 @@ description: Rank a provided list of startups against a list of investors by mat
    * If `startups` is empty, discover startup datasets with `list_dataset_names("startups")`, excluding configured community and ignored datasets from `config_load()["bulk_refresh"]`.
 
 2. **Configuration & Sync:**
-   * Load the prompt and JSON response schema from `config_load()["suggested_startups"]`.
-   * Build one `config_key()` from the complete suggested-startups config section so future config files participate in Insight freshness automatically.
+   * Load the strategic-fit objective from `config_load()["suggested_startups"]`.
+   * Build one `config_key()` from the complete suggested-startups, `ranking_top_k`, and `ranking_rationale` config sections plus the selected startups and `max_startups`.
    * Build `datasets_to_check = [dataset_slug, "available-startup-profiles"]`.
    * Run `sync_datasets(datasets_to_check, raise_on_error=True)` so investor and selected startup-profile indexes are current.
 
@@ -33,12 +33,12 @@ description: Rank a provided list of startups against a list of investors by mat
 
 4. **Stored Profile Preparation:**
    * Select startup-profile insights with `dataset_from_insight("available-startup-profiles", startups, "startup_profile")`; fail before any LLM call if a requested profile is missing or duplicated.
-   * Compile those selected `InsightFile` objects into one prompt context without regenerating startup profiles.
+   * Compile those selected `InsightFile` objects into an ID-to-profile mapping without regenerating startup profiles.
    * Load each pending investor's stored investor profile by canonical LinkedIn ID; fail before any LLM call if any profile is missing. Do not refresh investor profiles as a side effect.
 
 5. **Per-Investor Startup Selection:**
-   * For each pending investor, call `generate_report` with the stored profile, prompt, schema, candidate startups, and `max_startups`.
-   * Supply the schema to LiteLLM as a strict structured-output response format, always run `repair_json_payload`, then apply JSON Schema and request-specific business validation.
+   * For each pending investor, rank every selected startup profile with `ranking_top_k`, using its default batch size, the stored investor profile as the objective context, and `max_startups` as `top_k`.
+   * Generate balanced rationales for the finalists with `ranking_rationale`, preserving canonical startup IDs throughout.
 
 6. **Output Generation:**
    * Save one Markdown table per investor with `insight.save(content)` only after all validation succeeds.
@@ -51,5 +51,5 @@ description: Rank a provided list of startups against a list of investors by mat
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness /suggested_startups --startups "<startup1>,<startup2>" --investors "<name1>,<name2>"
+conda run -n sictic-env python -m skills.harness /suggested_startups --startups "<startup1>,<startup2>" --investor "<name1>,<name2>"
 ```

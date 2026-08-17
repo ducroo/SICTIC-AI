@@ -10,7 +10,7 @@ description: Rank people or other supported entities against a specific objectiv
 without parsing Markdown.
 
 **Description:**
-Core engine to rank entities (like SICTIC members) against a specific objective using an LLM-powered Swiss tournament algorithm. It acts as the unified backend for skills like `expert_search` and `potential_investors`.
+Core engine to rank entities (like SICTIC members or startup profiles) against a specific objective using an LLM-powered Swiss tournament algorithm. It ranks candidates in batches of 16 by default and acts as the unified backend for skills like `expert_search`, `potential_investors`, and `suggested_startups`.
 
 **Available Targets:**
 * `persons`: Resolves member profiles, runs a semantic search to filter candidates, and ranks them.

@@ -7,6 +7,22 @@ from lib.people.model import Person
 from skills.suggested_startups import inputs
 
 
+def test_skill_config_key_includes_shared_ranking_configuration():
+    config = {
+        "suggested_startups": {
+            "suggested_startups_prompt": "Assess {{investor_profile}}",
+        },
+        "ranking_top_k": {"ranking_instructions": "rank-v1"},
+        "ranking_rationale": {"rationale_instructions": "explain-v1"},
+    }
+
+    first = inputs.load_skill_config(config)
+    config["ranking_top_k"]["ranking_instructions"] = "rank-v2"
+    second = inputs.load_skill_config(config)
+
+    assert first.key != second.key
+
+
 def test_default_investors_preserve_canonical_people(monkeypatch):
     roster = [
         Person(full_name="Zakery Kline", linkedin_id="zakery-k-41221449"),

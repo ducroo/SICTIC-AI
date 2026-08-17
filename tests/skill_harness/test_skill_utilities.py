@@ -67,12 +67,11 @@ async def test_ranking_rank_chunk_rejects_missing_ids(monkeypatch):
 
     monkeypatch.setattr(ranking_top_k_mod, "llm_chat", fake_llm_chat)
 
-    result = await ranking_top_k_mod.rank_chunk(
-        "fixture objective",
-        {"a": "Profile A", "b": "Profile B"},
-    )
-
-    assert result == ["a", "b"]
+    with pytest.raises(ValueError, match="does not match the schema"):
+        await ranking_top_k_mod.rank_chunk(
+            "fixture objective",
+            {"a": "Profile A", "b": "Profile B"},
+        )
 
 
 @pytest.mark.asyncio
@@ -108,12 +107,11 @@ async def test_ranking_rank_chunk_rejects_duplicate_ids(monkeypatch):
         duplicate_response,
     )
 
-    result = await ranking_top_k_mod.rank_chunk(
-        "fixture objective",
-        {"a": "Profile A", "b": "Profile B"},
-    )
-
-    assert result == ["a", "b"]
+    with pytest.raises(ValueError, match="duplicate profile IDs"):
+        await ranking_top_k_mod.rank_chunk(
+            "fixture objective",
+            {"a": "Profile A", "b": "Profile B"},
+        )
 
 
 @pytest.mark.asyncio

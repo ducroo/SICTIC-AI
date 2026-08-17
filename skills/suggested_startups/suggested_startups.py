@@ -11,7 +11,7 @@ from lib.insights import InsightFile, InsightResult
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.people.model import Person
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import config_key, config_load
 from skills.suggested_startups.generation import (
     compile_startup_profiles,
     generate_report,
@@ -34,6 +34,13 @@ def _partition_cached(
     skill_config: SuggestedStartupsConfig,
 ) -> tuple[InsightResult, list[tuple[Person, InsightFile]]]:
     sources = [request.dataset, STARTUP_PROFILES_DATASET]
+    request_key = config_key(
+        skill_config.key,
+        {
+            "startups": request.startups,
+            "max_startups": request.max_startups,
+        },
+    )
     reusable: InsightResult = []
     pending: list[tuple[Person, InsightFile]] = []
     for person in request.investors:
@@ -44,7 +51,7 @@ def _partition_cached(
             identifier=person.display_name,
             subdir=True,
             source_datasets=sources,
-            config_key=skill_config.key,
+            config_key=request_key,
         )
         cached = insight.find(selection="reusable")
         if cached:
@@ -97,7 +104,7 @@ async def suggested_startups(
         request.dataset,
         pending_people,
     )
-    startup_context = compile_startup_profiles(startup_profiles)
+    compiled_startup_profiles = compile_startup_profiles(startup_profiles)
 
     async def generate(
         person: Person,
@@ -112,10 +119,8 @@ async def suggested_startups(
             report = await generate_report(
                 person.display_name,
                 investor_profiles[person.linkedin_id],
-                startup_context,
+                compiled_startup_profiles,
                 skill_config.prompt,
-                skill_config.response_schema,
-                request.startups,
                 request.max_startups,
             )
             insight.save(report)
