@@ -13,6 +13,17 @@ def test_legacy_spreadsheet_cache_is_stale():
     assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is False
 
 
+def test_previous_compact_spreadsheet_cache_is_stale():
+    storage = SimpleNamespace(
+        exists=lambda _path: True,
+        read_text=lambda _path: (
+            "<!-- sictic-spreadsheet: compact-values-v1 -->\n\n## Sheet\n"
+        ),
+    )
+
+    assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is False
+
+
 def test_versioned_spreadsheet_cache_is_current():
     storage = SimpleNamespace(
         exists=lambda _path: True,
