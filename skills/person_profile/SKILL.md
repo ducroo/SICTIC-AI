@@ -42,4 +42,8 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 ```bash
 conda run -n sictic-env python -m skills.harness /person_profile "<DATASET_NAME>" "<NAME>"
+
+conda run -n sictic-env python -m skills.person_profile \
+  --dataset "<DATASET_NAME>" \
+  --person "<NAME_1>, <NAME_2>"
 ```

@@ -39,6 +39,7 @@ def _compose_investor_profile(person_profile: str, track_record: str | None) -> 
 
 async def _investor_profile_result(
     source_dataset: str = "sictic-members",
+    names: list[str] | None = None,
 ) -> InvestorProfileResult:
     """Build investor profiles by appending manual track records to person profiles."""
     dataset_slug = slugify(source_dataset)
@@ -52,11 +53,20 @@ async def _investor_profile_result(
 
     from lib.people.discovery import persons_in_dataset
 
-    member_ids = {
-        member.linkedin_id
-        for member in persons_in_dataset(dataset_slug)
-        if member.linkedin_id
-    }
+    members = persons_in_dataset(dataset_slug)
+    if names is None:
+        selected_members = members
+    else:
+        selected_members = []
+        for name in names:
+            matched = Person(full_name=name).find_best_match(members)
+            if matched is None:
+                logger.warning(f"[{dataset_slug}] No member found for investor '{name}'.")
+                continue
+            if matched not in selected_members:
+                selected_members.append(matched)
+
+    member_ids = {member.linkedin_id for member in selected_members if member.linkedin_id}
     filenames = [
         filename
         for filename in storage.list(person_profile_dir, suffix=".md")
@@ -131,9 +141,10 @@ async def _investor_profile_result(
 
 async def investor_profile(
     source_dataset: str = "sictic-members",
+    names: list[str] | None = None,
 ) -> InsightResult:
     """Build investor profiles and return their managed insight artifacts."""
-    result = await _investor_profile_result(source_dataset)
+    result = await _investor_profile_result(source_dataset, names=names)
     return result.insights
 
 

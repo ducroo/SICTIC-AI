@@ -1,4 +1,5 @@
 import typer
+from typing import Optional
 
 from lib.cli import format_insights, run_command
 from lib.logger import get_logger
@@ -10,10 +11,24 @@ app = typer.Typer(help="CLI for person_profile skill")
 @app.command()
 def main(
     dataset: str = typer.Option(..., "--dataset", "-d", help="The target dataset to search."),
-    person: str = typer.Option(None, "--person", "-p", help="The person's name (e.g. 'John Doe'). Leave empty to profile all persons in the dataset.")
+    person: Optional[str] = typer.Option(
+        None,
+        "--person",
+        "-p",
+        help=(
+            "Comma-separated person names to profile; "
+            "omit it to profile everyone in the dataset."
+        ),
+    ),
 ):
+    names = None
+    if person is not None:
+        names = [name.strip() for name in person.split(",") if name.strip()]
+        if not names:
+            raise typer.BadParameter("Provide at least one person name.")
+
     insights = run_command(
-        lambda: person_profile(dataset_name=dataset, names=person),
+        lambda: person_profile(dataset_name=dataset, names=names),
         logger=logger,
     )
     typer.echo(format_insights(insights))

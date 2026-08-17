@@ -93,3 +93,25 @@ async def test_investor_profile_skips_filename_without_model(mock_env):
         result = await investor_profile()
 
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_investor_profile_filters_requested_people(mock_env):
+    storage = get_storage()
+    person_dir = "storage/community/sictic-members/insights/person-profile"
+    output_dir = "storage/community/sictic-members/insights/investor-profile"
+    storage.write_text(f"{person_dir}/jane-doe-qwen3-8b.md", "Jane profile.")
+    storage.write_text(f"{person_dir}/john-doe-qwen3-8b.md", "John profile.")
+
+    with patch(
+        "lib.people.discovery.persons_in_dataset",
+        return_value=[
+            Person(full_name="Jane Doe", linkedin_id="jane-doe"),
+            Person(full_name="John Doe", linkedin_id="john-doe"),
+        ],
+    ):
+        result = await investor_profile(names=["Jane Doe"])
+
+    assert len(result) == 1
+    assert storage.exists(f"{output_dir}/jane-doe-qwen3-8b.md")
+    assert not storage.exists(f"{output_dir}/john-doe-qwen3-8b.md")
