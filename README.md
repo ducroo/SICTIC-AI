@@ -282,6 +282,7 @@ at `LOCAL_DATA_PATH`.
 | **`<LOCAL_DATA_PATH>/`** | **Machine-local parsed data and disposable runtime data.** |
 | ↳ `./docling_data/` | Durable parsed documents; not synchronized to cloud storage. |
 | ↳ `./cache/` | Disposable runtime cache and temporary state. |
+| ↳ `./cache/services-gateway.json` | Shared concurrency state for LLM, embedding, and Docling jobs. |
 | `<REPO_PATH>/gdrive_sync_state/` | Durable Google Drive synchronization state; do not delete as cache. |
 
 For example, place a pitch deck in

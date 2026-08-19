@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
-import hashlib
 import json
 import os
-import platform
 import subprocess
 import time
 import uuid
@@ -67,29 +65,16 @@ class ServiceRequest:
     max_concurrent: int
 
 
-def _repo_identity() -> str:
-    repo_root = Path(
-        os.environ.get("REPO_PATH") or Path(__file__).resolve().parents[1]
-    ).expanduser().resolve()
-    return hashlib.sha256(str(repo_root).encode("utf-8")).hexdigest()[:16]
-
-
 def default_gateway_state_path() -> Path:
-    """Return a machine-local state path for macOS, Linux, and WSL2."""
-    if platform.system() == "Darwin":
-        cache_root = Path.home() / "Library" / "Caches"
-    else:
-        runtime_root = os.environ.get("XDG_RUNTIME_DIR")
-        if runtime_root:
-            cache_root = Path(runtime_root)
-        else:
-            cache_root = Path(
-                os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")
-            )
+    """Return the gateway state path under the repository-local cache."""
+    local_data_root = (
+        os.environ.get("LOCAL_DATA_PATH")
+        or os.environ.get("REPO_PATH")
+        or Path(__file__).resolve().parents[1]
+    )
     return (
-        cache_root
-        / "sictic-ai"
-        / _repo_identity()
+        Path(local_data_root).expanduser().resolve()
+        / "cache"
         / "services-gateway.json"
     )
 

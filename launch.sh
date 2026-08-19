@@ -139,6 +139,12 @@ start_qdrant() {
         fi
     fi
 
+    local qdrant_nofile_limit="${QDRANT_NOFILE_LIMIT:-65536}"
+    if ! ulimit -n "$qdrant_nofile_limit"; then
+        echo "ERROR: Unable to raise the open-file limit to $qdrant_nofile_limit for Qdrant." >&2
+        return 1
+    fi
+
     echo "Starting qdrant..."
     mkdir -p qdrant_data
     QDRANT__STORAGE__STORAGE_PATH="./qdrant_data" \
