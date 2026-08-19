@@ -21,18 +21,17 @@ description: Rank a provided list of startups against a list of investors by mat
    * Resolve investors to canonical `Person` objects from `persons_in_dataset(dataset_slug)` and preserve their LinkedIn IDs throughout profile lookup.
    * If `startups` is empty, discover startup datasets with `list_dataset_names("startups")`, excluding configured community and ignored datasets from `config_load()["bulk_refresh"]`.
 
-2. **Configuration & Sync:**
+2. **Configuration:**
    * Load the strategic-fit objective from `config_load()["suggested_startups"]`.
    * Build one `config_key()` from the complete suggested-startups, `ranking_top_k`, and `ranking_rationale` config sections plus the selected startups and `max_startups`.
-   * Build `datasets_to_check = [dataset_slug, "available-startup-profiles"]`.
-   * Run `sync_datasets(datasets_to_check, raise_on_error=True)` so investor and selected startup-profile indexes are current.
+   * Do not copy, parse, embed, or index investor or startup-profile insights.
 
-3. **Per-Investor Insight Cache:**
-   * For each investor, construct `lib.insights.InsightFile(dataset=dataset_slug, skill="suggested_startups", model=llm_model(), identifier=investor, subdir=True, source_datasets=datasets_to_check, config_key=suggested_config_key)`.
-   * Use `insight.find(selection="reusable")` to skip investors whose suggested-startups report is already fresh.
+3. **Per-Investor Output:**
+   * For each investor, construct `lib.insights.InsightFile(dataset=dataset_slug, skill="suggested_startups", model=llm_model(), identifier=investor, subdir=True, config_key=suggested_config_key)`.
+   * Recompute the ranking whenever the skill is explicitly invoked; ranking outputs do not participate in dataset-revision freshness caching.
 
 4. **Stored Profile Preparation:**
-   * Select startup-profile insights with `dataset_from_insight("available-startup-profiles", startups, "startup_profile")`; fail before any LLM call if a requested profile is missing or duplicated.
+   * Select startup-profile insights with `select_insights(startups, "startup_profile")`; fail before any LLM call if a requested profile is missing or duplicated.
    * Compile those selected `InsightFile` objects into an ID-to-profile mapping without regenerating startup profiles.
    * Load each pending investor's stored investor profile by canonical LinkedIn ID; fail before any LLM call if any profile is missing. Do not refresh investor profiles as a side effect.
 
@@ -43,8 +42,8 @@ description: Rank a provided list of startups against a list of investors by mat
 6. **Output Generation:**
    * Save one Markdown table per investor with `insight.save(content)` only after all validation succeeds.
    * Catch generation, validation, and save errors per investor. Log the full error, do not save that investor's invalid output, and continue processing the remaining investors.
-   * Log a final summary with cached, generated, and failed counts. Keep this operational summary out of the return value.
-   * Log each `insight.path` and return all generated or reusable artifacts as
+   * Log a final summary with generated and failed counts. Keep this operational summary out of the return value.
+   * Log each `insight.path` and return all generated artifacts as
      a flat `list[InsightFile]`. Do not hardcode `<REPO_PATH>/insights/...`
      paths.
 

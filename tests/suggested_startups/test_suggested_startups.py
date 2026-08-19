@@ -71,10 +71,10 @@ async def test_load_startup_profiles_preserves_requested_order(monkeypatch):
         InsightFile("alpha", "startup_profile", "manual"),
     ]
 
-    async def selected(*_args, **_kwargs):
+    def selected(*_args, **_kwargs):
         return profiles
 
-    monkeypatch.setattr(inputs, "dataset_from_insight", selected)
+    monkeypatch.setattr(inputs, "select_insights", selected)
 
     result = await inputs.load_startup_profiles(["alpha", "beta"])
 
@@ -83,10 +83,10 @@ async def test_load_startup_profiles_preserves_requested_order(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_load_startup_profiles_rejects_missing_profile(monkeypatch):
-    async def selected(*_args, **_kwargs):
+    def selected(*_args, **_kwargs):
         return [InsightFile("alpha", "startup_profile", "manual")]
 
-    monkeypatch.setattr(inputs, "dataset_from_insight", selected)
+    monkeypatch.setattr(inputs, "select_insights", selected)
 
     with pytest.raises(
         ValueError,

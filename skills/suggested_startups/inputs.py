@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lib.insights import InsightFile, dataset_from_insight
+from lib.insights import InsightFile, select_insights
 from lib.linkedin_ids import normalize_linkedin_id
 from lib.logger import get_logger
 from lib.people.discovery import persons_in_dataset
@@ -160,11 +160,7 @@ def _resolve_investors(
 async def load_startup_profiles(
     startups: list[str],
 ) -> list[InsightFile]:
-    selected = await dataset_from_insight(
-        STARTUP_PROFILES_DATASET,
-        startups,
-        "startup_profile",
-    )
+    selected = select_insights(startups, "startup_profile")
     by_dataset: dict[str, InsightFile] = {}
     for profile in selected:
         dataset = slugify(profile.dataset)

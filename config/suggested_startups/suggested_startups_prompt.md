@@ -7,6 +7,7 @@
 Rank the supplied startup profiles from best to worst fit for this investor. A "fit" is defined by how closely the startup's industry, technology, or current operational challenges align with the investor's professional experience, past roles, and demonstrated expertise.
 
 **Guidelines for Ranking:**
-1.  **Alignment:** Look for overlaps in industry (e.g., MedTech), technology (e.g., Computer Vision), or functional expertise (e.g., scaling B2B sales).
-2.  **Default Fallback:** If the investor profile is sparse or lacks specific interests, prioritize **Swiss Deeptech** startups and general high-growth potential within the Swiss ecosystem.
-3.  **Critical Perspective:** Be objective and critical. Consider both where the investor's background aligns and where it does not align or is most needed to fill a gap.
+1.  **Exclude Previously Seen Startups:** The investor profile may contain an `Interest in startups` section derived from the investor's track record. Treat every startup named anywhere in that section—regardless of interest category or status—as already known to the investor and therefore ineligible for suggestion. Do not use these entries as positive evidence of fit. Rank any matching candidate below every eligible startup so that it is excluded from the final suggestions.
+2.  **Alignment:** Look for overlaps in industry (e.g., MedTech), technology (e.g., Computer Vision), or functional expertise (e.g., scaling B2B sales).
+3.  **Default Fallback:** If the investor profile is sparse or lacks specific interests, prioritize **Swiss Deeptech** startups and general high-growth potential within the Swiss ecosystem.
+4.  **Critical Perspective:** Be objective and critical. Consider both where the investor's background aligns and where it does not align or is most needed to fill a gap.
