@@ -7,8 +7,6 @@ from lib.insights import InsightFile, InsightResult
 from skills.config_load.config_load import config_key, config_load
 from skills.startup_profile.startup_profile import startup_profile
 from skills.ranking.ranking_persons import ranking_persons
-from lib.insights import dataset_from_insight
-from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
@@ -24,18 +22,6 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     startup_name = startup_slug
     default_llm = llm_model()
     
-    people_dataset = "sictic-members-investor-profile"
-    logger.info(f"[{startup_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
-    await dataset_from_insight(
-        "sictic-members-investor-profile",
-        ["sictic-members"],
-        "investor_profile",
-    )
-    await sync_datasets(
-        [people_dataset, startup_slug],
-        raise_on_error=True,
-    )
-
     try:
         config = config_load()
         objective_template = config['expert_search']['objective']
@@ -46,7 +32,6 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
         dataset=startup_slug,
         skill="expert_search",
         model=default_llm,
-        source_datasets=[people_dataset, startup_slug],
         config_key=config_key(
             config["expert_search"],
             config.get("ranking_top_k", {}),
@@ -58,11 +43,6 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
             },
         ),
     )
-    reusable = insight.find(selection="reusable")
-    if reusable:
-        logger.info(f"[{startup_slug}] Using cached expert search from {reusable.path}")
-        return [reusable]
-
     # 1. Fetch Startup Profile
     logger.info(f"[{startup_slug}] Fetching startup profile...")
     try:
@@ -78,9 +58,9 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     logger.info(f"[{startup_slug}] Invoking ranking_persons engine for expert search...")
     
     result = await ranking_persons(
-        dataset_name=people_dataset,
+        source_datasets=["sictic-members"],
+        skill="investor_profile",
         objective=objective,
-        query=profile_content,
         candidates=target_experts,
         optout=exclude_experts,
         top_k=top_k

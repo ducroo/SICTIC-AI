@@ -1,11 +1,9 @@
-from pathlib import PurePosixPath
 from typing import Any, List, Optional
 
-from lib.insights import strip_model_tag
+from lib.insights import InsightFile, select_insights
 from lib.logger import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.model import Person, normalize_email_addresses
-from lib.datasets.search import dataset_search
 from lib.slugify import slugify
 from skills.ranking.ranking_rationale import ranking_rationale
 from skills.ranking.ranking_top_k import ranking_top_k
@@ -110,16 +108,17 @@ def render_person_ranking(rows: List[dict[str, Any]]) -> str:
 
 
 async def rank_person_rows(
-    dataset_name: str = "sictic-members-investor-profile",
+    source_datasets: Optional[List[str]] = None,
+    skill: str = "investor_profile",
     objective: str = "",
-    query: str = "",
     candidates: Optional[List[str]] = None,
     optout: Optional[List[str]] = None,
     top_k: int = 8,
     member_dataset: str = "sictic-members",
 ) -> List[dict[str, Any]]:
     """Rank member profiles and return structured rows."""
-    dataset_name = slugify(dataset_name)
+    if source_datasets is None:
+        source_datasets = [member_dataset]
     members = persons_in_dataset(member_dataset)
     if not members:
         raise RuntimeError(f"No persons found in member dataset '{member_dataset}'.")
@@ -144,37 +143,29 @@ async def rank_person_rows(
     if not members_by_linkedin:
         raise RuntimeError("No selected members have LinkedIn IDs for profile ranking.")
 
-    cutoff_m = top_k * 8
-    logger.info(
-        "Starting semantic search on dataset '%s' across %d selected members.",
-        dataset_name,
-        len(members_by_linkedin),
-    )
-    chunks = await dataset_search(
-        dataset_name=dataset_name,
-        query=query,
-        max_chunks=cutoff_m * 20,
-        raise_on_error=True,
-    )
-    if not chunks:
-        raise RuntimeError(
-            f"No documents found in dataset {dataset_name} during semantic search."
-        )
-
+    profiles = select_insights(source_datasets, skill)
     profile_text_by_id: dict[str, str] = {}
-    for chunk in chunks:
-        filename = PurePosixPath(chunk.document_name).name
-        linkedin_id = strip_model_tag(filename)
+    profile_files_by_id: dict[str, InsightFile] = {}
+    for profile in profiles:
+        linkedin_id = profile.identifier
+        if not linkedin_id:
+            logger.warning("Skipping profile without an identifier: %s", profile.path)
+            continue
         if linkedin_id not in members_by_linkedin:
             continue
-        profile_text_by_id.setdefault(linkedin_id, "")
-        profile_text_by_id[linkedin_id] += chunk.to_md() + "\n\n"
-        if len(profile_text_by_id) >= cutoff_m:
-            break
+        if linkedin_id in profile_files_by_id:
+            raise ValueError(
+                f"Multiple selected profiles found for '{linkedin_id}': "
+                f"{profile_files_by_id[linkedin_id].path}, {profile.path}"
+            )
+        profile_files_by_id[linkedin_id] = profile
+
+    for linkedin_id, profile in profile_files_by_id.items():
+        profile_text_by_id[linkedin_id] = profile.content()
 
     if not profile_text_by_id:
         raise RuntimeError(
-            "No profile documents remained after matching search results to "
+            "No profile documents remained after matching selected insights to "
             "the selected sictic-members roster."
         )
 
@@ -226,9 +217,9 @@ async def rank_person_rows(
 
 
 async def ranking_persons(
-    dataset_name: str = "sictic-members-investor-profile",
+    source_datasets: Optional[List[str]] = None,
+    skill: str = "investor_profile",
     objective: str = "",
-    query: str = "",
     candidates: Optional[List[str]] = None,
     optout: Optional[List[str]] = None,
     top_k: int = 8,
@@ -236,14 +227,14 @@ async def ranking_persons(
 ) -> str:
     """Rank member profiles and return a Markdown report."""
     rows = await rank_person_rows(
-        dataset_name=dataset_name,
+        source_datasets=source_datasets,
+        skill=skill,
         objective=objective,
-        query=query,
         candidates=candidates,
         optout=optout,
         top_k=top_k,
         member_dataset=member_dataset,
     )
     result = render_person_ranking(rows)
-    logger.info("[%s] ranking_persons complete.", slugify(dataset_name))
+    logger.info("[%s] ranking_persons complete.", slugify(skill))
     return result

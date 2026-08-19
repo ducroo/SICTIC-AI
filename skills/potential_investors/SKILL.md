@@ -15,21 +15,20 @@ description: This skill aims to find potential investors in the target startup. 
 
 **Procedure:**
 
-1. **Dataset Preparation:**
+1. **Profile Preparation:**
    * Convert `startup_name` to a dataset slug with `slugify(...)`.
    * Resolve the startup dataset with `ensure_startup_dataset(...)`.
-   * Build the generated `sictic-members-investor-profile` dataset with `dataset_from_insight("sictic-members-investor-profile", ["sictic-members"], "investor_profile")`.
-   * Run `sync_datasets([people_dataset, startup_slug], raise_on_error=True)` so startup and investor-profile indexes are current.
+   * Select the preferred stored `investor_profile` insight for each member directly from `sictic-members`; do not copy, parse, embed, or index these profiles.
 
 2. **Configuration & Insight Cache:**
    * Load the potential-investor objective plus both shared ranking config sections.
    * Construct the output insight with a `config_key()` covering those complete sections and the runtime target, exclusion, and `top_k` options.
-   * Use `insight.find(selection="reusable")` and `insight.content()` to reuse fresh cached results when available.
+   * Ranking outputs are recomputed when this skill is explicitly invoked; they do not participate in dataset-revision freshness caching.
 
 3. **Startup Profile & Ranking:**
-   * Fetch or generate `startup_profile(startup_name)` and use the profile text as both the semantic query and the basis for the ranking objective.
+   * Fetch or generate `startup_profile(startup_name)` and use the profile text as the basis for the ranking objective.
    * Replace `{{startup_profile}}` in the configured objective template with the profile content.
-   * Call `ranking_persons(dataset_name=people_dataset, objective=objective, query=profile_content, candidates=target_investors, optout=exclude_investors, top_k=top_k)`.
+   * Call `ranking_persons(source_datasets=["sictic-members"], skill="investor_profile", objective=objective, candidates=target_investors, optout=exclude_investors, top_k=top_k)`.
    * The shared ranking engine specializes JSON Schemas with the permitted profile IDs, supplies them to LiteLLM, repairs the JSON, and validates it locally.
 
 4. **Output Generation:**

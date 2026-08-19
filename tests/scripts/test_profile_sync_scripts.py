@@ -8,12 +8,30 @@ from typer.testing import CliRunner
 from lib.insights import (
     InsightFile,
     dataset_from_insight,
+    select_insights,
 )
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location_for_domain
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_select_insights_does_not_materialize_dataset(mock_env, monkeypatch):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/gpt-5.4-mini")
+    storage = get_storage()
+    _create_dataset("sictic-members", "community")
+    storage.write_text(
+        "storage/community/sictic-members/insights/person-profile/"
+        "urs-gubser-gpt-5-4-mini.md",
+        "preferred profile",
+    )
+
+    selected = select_insights(["sictic-members"], "person_profile")
+
+    assert len(selected) == 1
+    assert selected[0].identifier == "urs-gubser"
+    assert not storage.exists("storage/generated/sictic-members-person-profile")
 
 
 def _create_dataset(name: str, domain: str):

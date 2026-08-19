@@ -55,7 +55,7 @@ def _create_route_datasets(module):
         ),
     ],
 )
-async def test_ranking_skill_uses_investor_profile_dataset(
+async def test_ranking_skill_uses_investor_profile_insights(
     mock_env,
     mocker,
     module,
@@ -64,9 +64,7 @@ async def test_ranking_skill_uses_investor_profile_dataset(
     args,
 ):
     _create_route_datasets(module)
-    mocker.patch.object(module.InsightFile, "find", return_value=None)
     mocker.patch.object(module.InsightFile, "save")
-    mocker.patch.object(module, "sync_datasets")
     if hasattr(module, "startup_profile"):
         mocker.patch.object(
             module,
@@ -86,10 +84,6 @@ async def test_ranking_skill_uses_investor_profile_dataset(
             },
         },
     )
-    hydrate = mocker.patch.object(
-        module,
-        "dataset_from_insight",
-    )
     ranking = mocker.patch.object(
         module,
         "ranking_persons",
@@ -100,12 +94,8 @@ async def test_ranking_skill_uses_investor_profile_dataset(
 
     assert len(result) == 1
     assert result[0].skill == func_name
-    hydrate.assert_awaited_once_with(
-        "sictic-members-investor-profile",
-        ["sictic-members"],
-        "investor_profile",
-    )
-    assert ranking.await_args.kwargs["dataset_name"] == "sictic-members-investor-profile"
+    assert ranking.await_args.kwargs["source_datasets"] == ["sictic-members"]
+    assert ranking.await_args.kwargs["skill"] == "investor_profile"
     assert "ranking-v1" in result[0].config_key
     assert "rationale-v1" in result[0].config_key
 
@@ -147,9 +137,7 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
     excludes,
 ):
     _create_route_datasets(module)
-    mocker.patch.object(module.InsightFile, "find", return_value=None)
     mocker.patch.object(module.InsightFile, "save")
-    mocker.patch.object(module, "sync_datasets")
     if hasattr(module, "startup_profile"):
         mocker.patch.object(module, "startup_profile", side_effect=_fake_startup_profile)
     config_key = func_name
@@ -162,7 +150,6 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
             }
         },
     )
-    mocker.patch.object(module, "dataset_from_insight")
     ranking = mocker.patch.object(
         module,
         "ranking_persons",

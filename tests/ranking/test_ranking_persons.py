@@ -1,7 +1,6 @@
 import pytest
 
 from lib.people.model import Person
-from lib.datasets.models import Chunk
 from skills.ranking.ranking_persons import (
     _resolve_members,
     rank_person_rows,
@@ -44,18 +43,16 @@ async def test_rank_person_rows_uses_roster_metadata_and_linkedin_id(mock_env, m
         "skills.ranking.ranking_persons.persons_in_dataset",
         return_value=MEMBERS,
     )
-    mocker.patch(
-        "skills.ranking.ranking_persons.dataset_search",
-        return_value=[
-            Chunk(
-                chunk_id="1",
-                document_name="urs-gubser-gemma4-31b-nvfp4.md",
-                page_number=1,
-                last_modified=0,
-                text="Profile body without metadata headers",
-                score=1.0,
-            )
-        ],
+    class FakeProfile:
+        identifier = "urs-gubser"
+        path = "investor-profile/urs-gubser-model.md"
+
+        def content(self):
+            return "Profile body without metadata headers"
+
+    select = mocker.patch(
+        "skills.ranking.ranking_persons.select_insights",
+        return_value=[FakeProfile()],
     )
     mocker.patch(
         "skills.ranking.ranking_persons.ranking_top_k",
@@ -77,12 +74,14 @@ async def test_rank_person_rows_uses_roster_metadata_and_linkedin_id(mock_env, m
     )
 
     rows = await rank_person_rows(
-        dataset_name="sictic-members-investor-profile",
+        source_datasets=["sictic-members"],
+        skill="investor_profile",
         objective="Find experts",
-        query="expert",
         candidates=["Urs Gubser"],
         top_k=1,
     )
+
+    select.assert_called_once_with(["sictic-members"], "investor_profile")
 
     assert rows == [
         {
@@ -96,6 +95,56 @@ async def test_rank_person_rows_uses_roster_metadata_and_linkedin_id(mock_env, m
             "rationale": "Strong fit.",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_rank_person_rows_filters_people_before_reading_profiles(mock_env, mocker):
+    mocker.patch(
+        "skills.ranking.ranking_persons.persons_in_dataset",
+        return_value=MEMBERS,
+    )
+
+    class FakeProfile:
+        def __init__(self, identifier):
+            self.identifier = identifier
+            self.path = f"investor-profile/{identifier}-model.md"
+
+        def content(self):
+            if self.identifier == "jane-doe":
+                raise AssertionError("excluded profile must not be read")
+            return "Urs profile"
+
+    mocker.patch(
+        "skills.ranking.ranking_persons.select_insights",
+        return_value=[FakeProfile("urs-gubser"), FakeProfile("jane-doe")],
+    )
+    ranking = mocker.patch(
+        "skills.ranking.ranking_persons.ranking_top_k",
+        return_value=([{"id": "urs-gubser", "text": "Urs profile", "rank": 1}], 1),
+    )
+    mocker.patch(
+        "skills.ranking.ranking_persons.ranking_rationale",
+        return_value=[
+            {
+                "id": "urs-gubser",
+                "text": "Urs profile",
+                "rank": 1,
+                "rationale": "Strong fit.",
+            }
+        ],
+    )
+
+    await rank_person_rows(
+        candidates=["Urs Gubser", "Jane Doe"],
+        optout=["jane@sictic.ch"],
+        top_k=1,
+    )
+
+    assert ranking.await_args.kwargs["all_profiles"] == {
+        "urs-gubser": "Urs profile"
+    }
+
+
 @pytest.mark.asyncio
 async def test_ranking_persons_renders_structured_rows_as_markdown(mock_env, mocker):
     mocker.patch(
@@ -115,9 +164,7 @@ async def test_ranking_persons_renders_structured_rows_as_markdown(mock_env, moc
     )
 
     result = await ranking_persons(
-        dataset_name="sictic-members-investor-profile",
         objective="Find experts",
-        query="expert",
         top_k=1,
     )
 
