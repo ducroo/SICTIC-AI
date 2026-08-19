@@ -59,7 +59,7 @@ def build_converter(*, force_full_page_ocr: bool = False):
         picture_description_options=PictureDescriptionApiOptions(
             url=chat_completions_url(vlm_base_url),
             headers=headers,
-            params={"model": vlm_model, "max_tokens": 200},
+            params=picture_description_params(vlm_model),
             prompt="Describe this image in a few sentences.",
             timeout=600,
         ),
@@ -137,6 +137,15 @@ def convert_document_force_ocr(filepath: str) -> str:
     with _convert_lock:
         result = converter.convert(filepath)
     return export_document_markdown(result.document)
+
+
+def picture_description_params(model: str) -> dict[str, object]:
+    """Chat-completions extras for Docling picture descriptions.
+
+    Newer OpenAI models (including gpt-5.6-luna) reject `max_tokens` and
+    require `max_completion_tokens`.
+    """
+    return {"model": model, "max_completion_tokens": 200}
 
 
 def chat_completions_url(base_url: str) -> str:
