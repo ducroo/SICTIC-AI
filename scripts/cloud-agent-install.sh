@@ -66,8 +66,27 @@ seed_cloud_env() {
   env_set "EMBEDDING_BASE_URL" "${EMBEDDING_BASE_URL:-}" "$env_path"
   env_set "RANKED_LLMS" "${RANKED_LLMS:-openai/gpt-4o-mini}" "$env_path"
   env_set "CLOUD_PROVIDER" "${CLOUD_PROVIDER:-}" "$env_path"
-  env_set "DOCUMENT_PARSER" "${DOCUMENT_PARSER:-docling}" "$env_path"
-  env_set "VECTOR_STORE" "${VECTOR_STORE:-qdrant}" "$env_path"
+
+  # Auto-select SaaS spike backends when Cloud Agent secrets are present.
+  # Explicit DOCUMENT_PARSER / VECTOR_STORE env values still win.
+  local document_parser="${DOCUMENT_PARSER:-}"
+  local vector_store="${VECTOR_STORE:-}"
+  if [ -z "$document_parser" ]; then
+    if [ -n "${LLAMA_CLOUD_API_KEY:-}" ]; then
+      document_parser="llamaparse"
+    else
+      document_parser="docling"
+    fi
+  fi
+  if [ -z "$vector_store" ]; then
+    if [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ] || [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
+      vector_store="firestore"
+    else
+      vector_store="qdrant"
+    fi
+  fi
+  env_set "DOCUMENT_PARSER" "$document_parser" "$env_path"
+  env_set "VECTOR_STORE" "$vector_store" "$env_path"
 
   # Map Cloud Agent secrets into .env when present (never print values).
   if [ -n "${LLM_API_KEY:-}" ]; then
@@ -88,7 +107,8 @@ seed_cloud_env() {
     env_set "EMBEDDING_API_KEY" "$OPENROUTER_API_KEY" "$env_path"
   fi
 
-  # Dealum: copy injected secrets so empty .env-template keys cannot wipe them.
+  # Dealum + LlamaParse/Firestore: copy injected secrets so empty template keys
+  # cannot wipe them. lib/env.py loads .env with override=True.
   # shellcheck disable=SC1091
   source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
   seed_dotenv_secrets "$env_path"

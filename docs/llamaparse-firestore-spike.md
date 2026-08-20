@@ -4,6 +4,10 @@ Experimental backends for dataset ingestion and semantic search. Defaults stay
 `DOCUMENT_PARSER=docling` and `VECTOR_STORE=qdrant`. Flip the env vars below to
 try SaaS LlamaParse and Firestore vector search without removing the local path.
 
+Cloud Agent `install`/`start` auto-select `llamaparse` / `firestore` when
+`LLAMA_CLOUD_API_KEY` and Firebase secrets are present (unless you override
+`DOCUMENT_PARSER` / `VECTOR_STORE` explicitly).
+
 ## Enable the spike
 
 ```bash
