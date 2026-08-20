@@ -14,9 +14,21 @@ def main(
         "--source-dataset",
         help="Community dataset containing person profiles and track records.",
     ),
+    person: str | None = typer.Option(
+        None,
+        "--person",
+        "-p",
+        help="Comma-separated person names; omit to build profiles for all members.",
+    ),
 ):
+    names = None
+    if person is not None:
+        names = [name.strip() for name in person.split(",") if name.strip()]
+        if not names:
+            raise typer.BadParameter("Provide at least one person name.")
+
     result = run_command(
-        lambda: investor_profile(source_dataset=source_dataset),
+        lambda: investor_profile(source_dataset=source_dataset, names=names),
         logger=logger,
         error_prefix="Execution failed",
     )

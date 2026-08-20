@@ -96,7 +96,8 @@ freshness logic.
    * `lib.logger`: Centralized logging to `logs/sictic-ai.log`.
    * `lib.model_config`: Runtime model and endpoint configuration.
    * `lib.services_gateway`: IPC gateway for concurrency control across LLM,
-     embedding, and Docling calls.
+     embedding, and Docling calls. Its shared state lives at
+     `<LOCAL_DATA_PATH>/cache/services-gateway.json`.
    * `lib.slugify`: Canonical filename and identifier slugification.
    * `lib.storage`: Relative-path storage abstraction. Application data is
      routed to `LOCAL_STORAGE_PATH`; machine-local runtime data under `cache/`
@@ -184,9 +185,12 @@ freshness logic.
      identity models.
 
 7. **Small Utilities**
+   * `lib.insights.select_insights(source_datasets, skill)` returns the
+     preferred stored file for every logical insight without materializing or
+     ingesting a dataset.
    * `lib.insights.dataset_from_insight(target_dataset, source_datasets,
-     skill)` reconciles a caller-named generated dataset and returns the
-     selected `list[InsightFile]`.
+     skill)` uses that selection to reconcile a caller-named generated dataset
+     and returns the selected `list[InsightFile]`.
    * `lib.ephemeral_dataset` prepares temporary generated datasets in Qdrant.
    * `lib.json_parser`, `lib.litellm_cleanup`, and `lib.runtime_noise` are small
      cross-cutting helpers.
@@ -215,9 +219,9 @@ in `lib/`.
   Its `ranking_top_k.py`, `ranking_rationale.py`, and `ranking_persons.py`
   live under `skills/ranking`, not `lib/`.
 * `expert_search`, `potential_investors`, `advocates`, `suggested_startups`:
-  Matching workflows that compose generated investor profiles, startup
-  profiles, dataset search, ranking, and per-investor insight outputs. Their
-  primary Python APIs also return a flat `list[InsightFile]`.
+  Matching workflows that select stored investor or startup profiles and rank
+  their contents directly without generated-dataset ingestion. Their primary
+  Python APIs also return a flat `list[InsightFile]`.
 * `bulk_refresh`: Batch orchestration across active datasets and skills.
 * `dealum_import`: CLI wrapper around `lib.startups.dealum`.
 

@@ -181,6 +181,7 @@ async def reconcile_conversions(
             }
         )
 
+    files_to_convert.sort(key=lambda item: item["local_path"].stat().st_size)
     manifest.save()
     if not files_to_convert:
         logger.info("[%s] No source files require conversion.", dataset_name)

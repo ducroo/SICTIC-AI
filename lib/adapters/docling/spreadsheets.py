@@ -6,7 +6,7 @@ logger = get_logger(__name__)
 
 SPREADSHEET_EXTENSIONS = (".xls", ".xlsx", ".xlsm")
 SPREADSHEET_MARKDOWN_MARKER = (
-    "<!-- sictic-spreadsheet: compact-values-v1 -->"
+    "<!-- sictic-spreadsheet: compact-values-v2 -->"
 )
 
 
@@ -23,6 +23,7 @@ def convert_spreadsheet(filepath: str) -> str:
 
 def convert_openpyxl(filepath: str) -> str:
     from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
 
     values_wb = load_workbook(filepath, read_only=False, data_only=True)
     formulas_wb = load_workbook(filepath, read_only=False, data_only=False)
@@ -33,9 +34,26 @@ def convert_openpyxl(filepath: str) -> str:
             values_wb.worksheets,
             formulas_wb.worksheets,
         ):
+            if values_ws.sheet_state != "visible":
+                continue
+
+            def is_hidden(row: int, column: int) -> bool:
+                row_dimension = values_ws.row_dimensions.get(row)
+                if row_dimension is not None and row_dimension.hidden:
+                    return True
+                column_dimension = values_ws.column_dimensions.get(
+                    get_column_letter(column)
+                )
+                return bool(
+                    column_dimension is not None
+                    and column_dimension.hidden
+                )
+
             row_cells: dict[int, dict[int, str]] = {}
-            for row, col in values_ws._cells:
-                value = values_ws.cell(row=row, column=col).value
+            for (row, col), cell in values_ws._cells.items():
+                if is_hidden(row, col) or cell.data_type == "e":
+                    continue
+                value = cell.value
                 text = (
                     ""
                     if value is None
@@ -43,12 +61,16 @@ def convert_openpyxl(filepath: str) -> str:
                 )
                 if text:
                     row_cells.setdefault(row, {})[col] = text
-            for row, col in formulas_ws._cells:
-                formula_cell = formulas_ws.cell(row=row, column=col)
+            for (row, col), formula_cell in formulas_ws._cells.items():
+                if is_hidden(row, col):
+                    continue
+                cached_cell = values_ws._cells.get((row, col))
                 if (
                     formula_cell.data_type == "f"
-                    and values_ws.cell(row=row, column=col).value
-                    in (None, "")
+                    and (
+                        cached_cell is None
+                        or cached_cell.value in (None, "")
+                    )
                 ):
                     missing_cached_formulas += 1
 
@@ -92,8 +114,19 @@ def convert_xls(filepath: str) -> str:
         for sheet in workbook.sheets():
             rows = []
             for row_index in range(sheet.nrows):
+                row_info = sheet.rowinfo_map.get(row_index)
+                if row_info is not None and row_info.hidden:
+                    continue
                 values = [
-                    xls_cell_text(sheet.cell_value(row_index, column_index))
+                    ""
+                    if (
+                        (column_info := sheet.colinfo_map.get(column_index))
+                        is not None
+                        and column_info.hidden
+                    )
+                    else xls_cell_text(
+                        sheet.cell_value(row_index, column_index)
+                    )
                     for column_index in range(sheet.ncols)
                 ]
                 while values and not values[-1]:

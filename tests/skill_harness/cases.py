@@ -52,7 +52,7 @@ HARNESS_SMOKE_COMMANDS = {
     "/advocates": "/advocates fixture-event --description Fixture event",
     "/suggested_startups": (
         "/suggested_startups --startups example-startup "
-        "--investors Jane Doe --max-startups 1"
+        "--investor Jane Doe --max-startups 1"
     ),
     "/dd_checks": "/dd_checks example-startup",
     "/dd_priorities": "/dd_priorities example-startup",

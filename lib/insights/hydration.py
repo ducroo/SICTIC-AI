@@ -13,6 +13,19 @@ from lib.storage import get_storage
 logger = get_logger(__name__)
 
 
+def select_insights(
+    source_datasets: list[str] | None,
+    skill: str,
+) -> list[InsightFile]:
+    """Select the preferred stored file for each logical insight."""
+    skill_slug = slugify(skill)
+    return InsightFile.find_all(
+        skill=skill_slug,
+        datasets=source_datasets,
+        selection="any",
+    )
+
+
 async def dataset_from_insight(
     target_dataset: str,
     source_datasets: list[str] | None,
@@ -26,11 +39,7 @@ async def dataset_from_insight(
         raise ValueError("target_dataset must not be empty.")
 
     skill_slug = slugify(skill)
-    selected = InsightFile.find_all(
-        skill=skill_slug,
-        datasets=source_datasets,
-        selection="any",
-    )
+    selected = select_insights(source_datasets, skill_slug)
     target_rel = dataset_location_for_domain(
         target_slug,
         "generated",

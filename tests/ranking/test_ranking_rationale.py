@@ -40,3 +40,26 @@ async def test_ranking_rationale_only_uses_id_and_rationale(mocker):
     assert schema["properties"]["results"]["minItems"] == 1
     result_id = schema["properties"]["results"]["items"]["properties"]["id"]
     assert result_id["enum"] == ["urs-gubser"]
+
+
+@pytest.mark.asyncio
+async def test_ranking_rationale_propagates_invalid_response(mocker):
+    mocker.patch(
+        "skills.ranking.ranking_rationale.config_load",
+        return_value={
+            "ranking_rationale": {
+                "rationale_instructions": "{{objective}}\n{{profiles_text}}",
+                "response_schema": RESPONSE_SCHEMA,
+            }
+        },
+    )
+    mocker.patch(
+        "skills.ranking.ranking_rationale.llm_chat",
+        return_value='{"results": []}',
+    )
+
+    with pytest.raises(ValueError, match="schema|Missing rationale IDs"):
+        await ranking_rationale(
+            [{"id": "urs-gubser", "text": "Profile", "rank": 1}],
+            objective="Find experts",
+        )

@@ -180,6 +180,34 @@ def test_spreadsheet_conversion_omits_formulas_without_cached_values(tmp_path):
     assert "=40+60" not in markdown
 
 
+def test_spreadsheet_conversion_omits_hidden_content_and_errors(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "visible"
+    sheet["A1"] = "Revenue"
+    sheet["A2"] = "hidden row"
+    sheet.row_dimensions[2].hidden = True
+    sheet["B1"] = "hidden column"
+    sheet.column_dimensions["B"].hidden = True
+    sheet["C1"] = "#DIV/0!"
+    sheet["C1"].data_type = "e"
+
+    hidden_sheet = workbook.create_sheet("hidden sheet")
+    hidden_sheet.sheet_state = "hidden"
+    hidden_sheet["A1"] = "hidden worksheet"
+
+    path = tmp_path / "hidden-content.xlsx"
+    workbook.save(path)
+
+    markdown = DoclingAdapter._convert_spreadsheet_sync(str(path))
+
+    assert "Revenue" in markdown
+    assert "hidden row" not in markdown
+    assert "hidden column" not in markdown
+    assert "#DIV/0!" not in markdown
+    assert "hidden worksheet" not in markdown
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("extension", [".xls", ".xlsx", ".xlsm"])
 async def test_spreadsheet_processing_bypasses_docling_converter(monkeypatch, tmp_path, extension):

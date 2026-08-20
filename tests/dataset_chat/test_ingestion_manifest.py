@@ -18,6 +18,36 @@ async def _results(items):
         yield item
 
 
+@pytest.mark.asyncio
+async def test_conversion_schedules_smallest_sources_first(tmp_path, mocker):
+    storage = LocalStorage(tmp_path)
+    raw_rel = "datasets/example"
+    parsed_rel = "cache/datasets2md/example"
+    storage.write_bytes(f"{raw_rel}/large.pdf", b"large source")
+    storage.write_bytes(f"{raw_rel}/small.pdf", b"x")
+    storage.write_bytes(f"{raw_rel}/medium.pdf", b"mid")
+    mocker.patch.object(conversion, "get_storage", return_value=storage)
+
+    observed = []
+    adapter = mocker.Mock()
+
+    async def extract_documents(items):
+        observed.extend(item["filename"] for item in items)
+        for item in items:
+            yield DocumentConversionResult(
+                filename=item["filename"],
+                status=ConversionStatus.SUCCESS,
+                text=item["filename"],
+            )
+
+    adapter.extract_documents.side_effect = extract_documents
+    mocker.patch.object(conversion, "DoclingAdapter", return_value=adapter)
+
+    await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
+
+    assert observed == ["small.pdf", "medium.pdf", "large.pdf"]
+
+
 def test_indexed_dataset_revision_is_stable_and_persisted(tmp_path):
     storage = LocalStorage(tmp_path)
     manifest = IngestionManifest(storage, "cache/datasets2md/example")
@@ -267,3 +297,52 @@ async def test_failed_index_does_not_advance_manifest_checkpoint(tmp_path, mocke
     state = loaded.documents["report.md"]
     assert state["indexed_parsed_sha256"] == "old-index"
     assert loaded.indexed_dataset_revision == old_revision
+
+
+@pytest.mark.asyncio
+async def test_oversized_document_is_skipped_without_embedding(tmp_path, mocker):
+    storage = LocalStorage(tmp_path)
+    raw_rel = "datasets/example"
+    parsed_rel = "cache/datasets2md/example"
+    storage.write_text(f"{raw_rel}/oversized.md", "source")
+    oversized_text = "x" * (indexing.MAX_CHARACTERS_PER_DOCUMENT + 1)
+    storage.write_text(f"{parsed_rel}/oversized.md", oversized_text)
+    source_document = source.snapshot_source_files(storage, raw_rel)[0]
+
+    manifest = IngestionManifest(storage, parsed_rel)
+    manifest.documents["oversized.md"] = {
+        "source_sha256": source_document.sha256,
+        "source_mtime": source_document.mtime,
+        "parsed_sha256": content_hash(oversized_text),
+        "parser_version": PARSER_VERSION,
+    }
+    manifest.save()
+    mocker.patch.object(indexing, "get_storage", return_value=storage)
+
+    qdrant = mocker.Mock()
+    qdrant.collection_exists.return_value = True
+    qdrant.get_document_mtimes.return_value = {"oversized.md": 0.0}
+    mocker.patch.object(indexing, "QdrantAdapter", return_value=qdrant)
+
+    embeddings = mocker.Mock()
+    embeddings.model = "test-model"
+    mocker.patch.object(indexing, "EmbeddingService", return_value=embeddings)
+
+    result = await indexing.reconcile_index(
+        "example",
+        raw_rel,
+        parsed_rel,
+        sources=[source_document],
+        manifest=manifest,
+    )
+
+    assert result.failures == []
+    assert result.ignored == 1
+    embeddings.embed_many.assert_not_called()
+    qdrant.delete_document.assert_called_once_with(
+        "oversized.md",
+        raise_on_error=True,
+    )
+    state = IngestionManifest.load(storage, parsed_rel).documents["oversized.md"]
+    assert state["indexed_parsed_sha256"] == content_hash(oversized_text)
+    assert "500,000-character limit" in state["index_ignored_reason"]

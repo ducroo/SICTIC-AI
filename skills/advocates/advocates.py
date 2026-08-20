@@ -6,8 +6,6 @@ from lib.slugify import slugify
 from lib.insights import InsightFile, InsightResult
 from skills.config_load.config_load import config_key, config_load
 from skills.ranking.ranking_persons import ranking_persons
-from lib.insights import dataset_from_insight
-from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
 
@@ -18,15 +16,6 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     event_name_slug = slugify(event_name)
     default_llm = llm_model()
     
-    people_dataset = "sictic-members-investor-profile"
-    logger.info(f"[{event_name_slug}] Hydrating '{people_dataset}' dataset from 'sictic-members'...")
-    await dataset_from_insight(
-        "sictic-members-investor-profile",
-        ["sictic-members"],
-        "investor_profile",
-    )
-    await sync_datasets([people_dataset], raise_on_error=True)
-
     try:
         config = config_load()
         objective_template = config['advocates']['objective']
@@ -40,7 +29,6 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         model=default_llm,
         identifier=event_name_slug,
         subdir=True,
-        source_datasets=[people_dataset],
         config_key=config_key(
             config["advocates"],
             config.get("ranking_top_k", {}),
@@ -53,20 +41,15 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
             },
         ),
     )
-    reusable = insight.find(selection="reusable")
-    if reusable:
-        logger.info(f"[{event_name_slug}] Using cached advocates from {reusable.path}")
-        return [reusable]
-
     objective = objective_template.replace("{{overview_event}}", event_description)
 
     # 2. Call ranking_persons Engine
     logger.info(f"[{event_name_slug}] Invoking ranking_persons engine for advocates...")
     
     result = await ranking_persons(
-        dataset_name=people_dataset,
+        source_datasets=["sictic-members"],
+        skill="investor_profile",
         objective=objective,
-        query=event_description,
         candidates=target_members,
         optout=exclude_members,
         top_k=top_k

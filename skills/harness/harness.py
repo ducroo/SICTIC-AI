@@ -187,14 +187,14 @@ async def _advocates(args: List[str]) -> str:
 async def _suggested_startups(args: List[str]) -> str:
     parser = _parser("/suggested_startups")
     parser.add_argument("--startups", "-s")
-    parser.add_argument("--investors", "-i")
+    parser.add_argument("--investor", "-i")
     parser.add_argument("--max-startups", "-m", type=int, default=5)
     ns = parser.parse_args(args)
     from skills.suggested_startups.suggested_startups import suggested_startups
 
     return _format_result(await suggested_startups(
         startups=_parse_csv(ns.startups),
-        investors=_parse_csv(ns.investors),
+        investors=_parse_csv(ns.investor),
         max_startups=ns.max_startups,
     ))
 
@@ -259,7 +259,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/expert_search", "/expert_search <startup>", "Rank relevant experts.", _expert_search),
         HarnessCommand("/potential_investors", "/potential_investors <startup>", "Rank potential investors.", _potential_investors),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
-        HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
+        HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investor x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand(
             "/submission_ready",
             "/submission_ready [startup ...]",

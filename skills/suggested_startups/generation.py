@@ -1,80 +1,73 @@
-"""Prompt construction, LLM execution, and report rendering."""
+"""Startup-profile ranking and report rendering."""
 
 from __future__ import annotations
 
-import json
+from dataclasses import dataclass
 
 from lib.insights import InsightFile
 from lib.logger import get_logger
 from lib.startups.dealum.manifest import dealum_url_for_startup
-from skills.llm_chat.llm_chat import llm_chat
-from skills.suggested_startups.response import (
-    Suggestion,
-    parse_suggestions,
-    response_format,
-    specialize_schema,
-)
+from skills.ranking.ranking_rationale import ranking_rationale
+from skills.ranking.ranking_top_k import ranking_top_k
 
 logger = get_logger(__name__)
 
 
-def compile_startup_profiles(profiles: list[InsightFile]) -> str:
+@dataclass(frozen=True)
+class Suggestion:
+    startup_name: str
+    rank: int
+    rationale: str
+
+
+def compile_startup_profiles(profiles: list[InsightFile]) -> dict[str, str]:
     logger.info(
         "Compiling %d selected startup profiles for evaluation...",
         len(profiles),
     )
-    return "\n".join(
-        f"STARTUP: {profile.dataset}\n{profile.content()}\n"
-        for profile in profiles
-    )
+    compiled: dict[str, str] = {}
+    for profile in profiles:
+        if profile.dataset in compiled:
+            raise ValueError(
+                f"Duplicate startup profile ID {profile.dataset!r}."
+            )
+        compiled[profile.dataset] = profile.content()
+    return compiled
 
 
 async def generate_report(
     investor: str,
     investor_profile: str,
-    startup_context: str,
-    prompt_template: str,
-    response_schema: dict,
-    candidate_startups: list[str],
+    startup_profiles: dict[str, str],
+    objective_template: str,
     max_startups: int,
 ) -> str:
-    schema = specialize_schema(
-        response_schema,
-        candidate_startups,
-        max_startups,
+    objective = objective_template.replace(
+        "{{investor_profile}}",
+        f"=== INVESTOR PROFILE: {investor} ===\n{investor_profile}",
     )
-    prompt = (
-        prompt_template.replace(
-            "{{investor_profile}}",
-            f"=== INVESTOR PROFILE: {investor} ===\n{investor_profile}",
-        )
-        .replace("{{startup_profiles}}", startup_context)
-        .replace(
-            "{{response_schema}}",
-            json.dumps(schema, ensure_ascii=False, indent=2),
-        )
-        .replace("{{max_startups}}", str(max_startups))
+    logger.info(
+        "Ranking %d startups for %s...",
+        len(startup_profiles),
+        investor,
     )
-    logger.info("Ranking startups for %s...", investor)
-    raw_response = await llm_chat(
-        prompt=prompt,
-        response_format=response_format(schema),
+    ranked_items, _actual_top_k = await ranking_top_k(
+        objective=objective,
+        all_profiles=startup_profiles,
+        top_k=max_startups,
     )
-    if not raw_response:
-        raise ValueError(
-            f"Suggested-startups model returned no content for {investor}."
+    ranked_items = await ranking_rationale(
+        ranked_items=ranked_items,
+        objective=objective,
+    )
+    suggestions = [
+        Suggestion(
+            startup_name=item["id"],
+            rank=item["rank"],
+            rationale=item["rationale"],
         )
-    try:
-        suggestions = parse_suggestions(
-            raw_response,
-            schema,
-            candidate_startups,
-            max_startups,
-        )
-    except (TypeError, ValueError) as error:
-        raise ValueError(
-            f"Invalid suggested-startups response for {investor}: {error}"
-        ) from error
+        for item in ranked_items
+    ]
     return render_report(investor, suggestions)
 
 

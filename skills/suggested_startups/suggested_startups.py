@@ -5,19 +5,17 @@ from __future__ import annotations
 import asyncio
 from typing import List, Optional
 
-from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import list_dataset_names
 from lib.insights import InsightFile, InsightResult
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.people.model import Person
-from skills.config_load.config_load import config_load
+from skills.config_load.config_load import config_key, config_load
 from skills.suggested_startups.generation import (
     compile_startup_profiles,
     generate_report,
 )
 from skills.suggested_startups.inputs import (
-    STARTUP_PROFILES_DATASET,
     SuggestedStartupsConfig,
     SuggestedStartupsRequest,
     load_investor_profiles,
@@ -29,12 +27,17 @@ from skills.suggested_startups.inputs import (
 logger = get_logger(__name__)
 
 
-def _partition_cached(
+def _prepare_outputs(
     request: SuggestedStartupsRequest,
     skill_config: SuggestedStartupsConfig,
-) -> tuple[InsightResult, list[tuple[Person, InsightFile]]]:
-    sources = [request.dataset, STARTUP_PROFILES_DATASET]
-    reusable: InsightResult = []
+) -> list[tuple[Person, InsightFile]]:
+    request_key = config_key(
+        skill_config.key,
+        {
+            "startups": request.startups,
+            "max_startups": request.max_startups,
+        },
+    )
     pending: list[tuple[Person, InsightFile]] = []
     for person in request.investors:
         insight = InsightFile(
@@ -43,20 +46,10 @@ def _partition_cached(
             model=llm_model(),
             identifier=person.display_name,
             subdir=True,
-            source_datasets=sources,
-            config_key=skill_config.key,
+            config_key=request_key,
         )
-        cached = insight.find(selection="reusable")
-        if cached:
-            logger.info(
-                "[%s] Skipping %s: Cache up to date.",
-                request.dataset,
-                person.display_name,
-            )
-            reusable.append(cached)
-        else:
-            pending.append((person, insight))
-    return reusable, pending
+        pending.append((person, insight))
+    return pending
 
 
 async def suggested_startups(
@@ -78,26 +71,14 @@ async def suggested_startups(
     )
 
     startup_profiles = await load_startup_profiles(request.startups)
-    await sync_datasets(
-        [request.dataset, STARTUP_PROFILES_DATASET],
-        raise_on_error=True,
-    )
-    insights, pending = _partition_cached(request, skill_config)
-    if not pending:
-        logger.info(
-            "[%s] Suggested-startups summary: %d cached, 0 generated, "
-            "0 failed.",
-            request.dataset,
-            len(insights),
-        )
-        return insights
+    pending = _prepare_outputs(request, skill_config)
 
     pending_people = [person for person, _insight in pending]
     investor_profiles = load_investor_profiles(
         request.dataset,
         pending_people,
     )
-    startup_context = compile_startup_profiles(startup_profiles)
+    compiled_startup_profiles = compile_startup_profiles(startup_profiles)
 
     async def generate(
         person: Person,
@@ -112,10 +93,8 @@ async def suggested_startups(
             report = await generate_report(
                 person.display_name,
                 investor_profiles[person.linkedin_id],
-                startup_context,
+                compiled_startup_profiles,
                 skill_config.prompt,
-                skill_config.response_schema,
-                request.startups,
                 request.max_startups,
             )
             insight.save(report)
@@ -141,15 +120,11 @@ async def suggested_startups(
     generated = [
         insight for insight in generated_results if insight is not None
     ]
-    cached_count = len(insights)
     failed_count = len(pending) - len(generated)
-    insights.extend(generated)
     logger.info(
-        "[%s] Suggested-startups summary: %d cached, %d generated, "
-        "%d failed.",
+        "[%s] Suggested-startups summary: %d generated, %d failed.",
         request.dataset,
-        cached_count,
         len(generated),
         failed_count,
     )
-    return insights
+    return generated

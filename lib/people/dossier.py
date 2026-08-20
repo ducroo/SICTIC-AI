@@ -7,6 +7,7 @@ from typing import List, Tuple
 from lib.datasets.models import Chunk
 from lib.datasets.paths import dataset_parsed_path
 from lib.datasets.search import dataset_search
+from lib.datasets.source import parsed_filepath
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
@@ -124,8 +125,9 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
             person_in_filename(doc_name, person_name)
             or is_personal_document(doc_name)
         )
-        # Qdrant stores the original document name. The Markdown parser appends .md
-        full_md_path = f"{parsed_root}/{doc_name}.md"
+        # Qdrant stores the original document name. Resolve its parsed path
+        # through the same convention used by conversion and indexing.
+        full_md_path = parsed_filepath(parsed_root, doc_name)
         
         if should_expand and storage.exists(full_md_path):
             full_text = storage.read_text(full_md_path)

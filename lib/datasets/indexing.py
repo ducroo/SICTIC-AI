@@ -24,6 +24,9 @@ from lib.storage import get_storage
 
 logger = get_logger(__name__)
 
+MAX_CHUNKS_PER_DOCUMENT = 500
+MAX_CHARACTERS_PER_DOCUMENT = 500_000
+
 
 async def reconcile_index(
     dataset_name: str,
@@ -129,11 +132,63 @@ async def reconcile_index(
         start=1,
     ):
         try:
+            if len(text) > MAX_CHARACTERS_PER_DOCUMENT:
+                _skip_oversized_document(
+                    qdrant=qdrant,
+                    collection_exists=collection_exists,
+                    source=source,
+                    state=manifest.state(source.filename),
+                    embeddings=embeddings,
+                    parsed_text=text,
+                    reason=(
+                        f"{len(text):,} characters exceeds the "
+                        f"{MAX_CHARACTERS_PER_DOCUMENT:,}-character limit"
+                    ),
+                )
+                result.ignored += 1
+                logger.warning(
+                    "[%s] Skipped indexing %s/%s for %s: document has "
+                    "%s characters (limit %s).",
+                    dataset_slug,
+                    index,
+                    len(files_to_index),
+                    source.filename,
+                    f"{len(text):,}",
+                    f"{MAX_CHARACTERS_PER_DOCUMENT:,}",
+                )
+                manifest.save()
+                continue
             chunks = (
                 split_markdown(text, source.filename, source.mtime)
                 if text.strip()
                 else []
             )
+            if len(chunks) > MAX_CHUNKS_PER_DOCUMENT:
+                _skip_oversized_document(
+                    qdrant=qdrant,
+                    collection_exists=collection_exists,
+                    source=source,
+                    state=manifest.state(source.filename),
+                    embeddings=embeddings,
+                    parsed_text=text,
+                    reason=(
+                        f"{len(chunks):,} chunks exceeds the "
+                        f"{MAX_CHUNKS_PER_DOCUMENT:,}-chunk limit"
+                    ),
+                )
+                result.ignored += 1
+                logger.warning(
+                    "[%s] Skipped indexing %s/%s for %s: document has "
+                    "%s chunks (limit %s).",
+                    dataset_slug,
+                    index,
+                    len(files_to_index),
+                    source.filename,
+                    f"{len(chunks):,}",
+                    f"{MAX_CHUNKS_PER_DOCUMENT:,}",
+                )
+                manifest.save()
+                continue
             if collection_exists:
                 await replace_document(
                     qdrant,
@@ -149,6 +204,7 @@ async def reconcile_index(
                     "indexed_embedding_model": embeddings.model,
                 }
             )
+            state.pop("index_ignored_reason", None)
             result.indexed += 1
             logger.info(
                 "[%s] Indexed %s/%s: %s (%s chunks)",
@@ -179,6 +235,29 @@ async def reconcile_index(
     manifest.update_indexed_dataset_revision()
     manifest.save()
     return result
+
+
+def _skip_oversized_document(
+    *,
+    qdrant: QdrantAdapter,
+    collection_exists: bool,
+    source: SourceDocument,
+    state: dict,
+    embeddings: EmbeddingService,
+    parsed_text: str,
+    reason: str,
+) -> None:
+    """Checkpoint a deliberately omitted document without stale vectors."""
+    if collection_exists:
+        qdrant.delete_document(source.filename, raise_on_error=True)
+    state.update(
+        {
+            "indexed_parsed_sha256": content_hash(parsed_text),
+            "indexed_chunker_version": CHUNKER_VERSION,
+            "indexed_embedding_model": embeddings.model,
+            "index_ignored_reason": reason,
+        }
+    )
 
 
 async def replace_document(

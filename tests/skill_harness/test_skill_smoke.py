@@ -151,7 +151,7 @@ async def test_suggested_startups_does_not_save_invalid_response(
 
     assert result == []
     assert "Failed to generate suggested startups for Jane Doe" in caplog.text
-    assert "0 cached, 0 generated, 1 failed" in caplog.text
+    assert "0 generated, 1 failed" in caplog.text
     assert not InsightFile(
         "sictic-members",
         "suggested_startups",
@@ -202,7 +202,7 @@ async def test_suggested_startups_continues_after_investor_failure(
     assert result[0].identifier == "John Roe"
     assert "Valid report" in result[0].content()
     assert "Failed to generate suggested startups for Jane Doe" in caplog.text
-    assert "0 cached, 1 generated, 1 failed" in caplog.text
+    assert "1 generated, 1 failed" in caplog.text
 
 
 @pytest.mark.asyncio

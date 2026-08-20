@@ -108,7 +108,7 @@ class DealumAdapter:
 
 
 def _extract_urls(value: str) -> list[str]:
-    return re.findall(r"https?://[^\s\"'<>]+", value)
+    return re.findall(r'https?://[^\s"<>]+', value)
 
 
 def safe_filename_from_url(url: str) -> str:

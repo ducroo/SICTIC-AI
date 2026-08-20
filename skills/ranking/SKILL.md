@@ -1,6 +1,6 @@
 ---
 name: ranking
-description: Rank people or other supported entities against a specific objective using semantic candidate filtering and LLM-based comparison. Use as a backend utility for workflows that need structured ranked rows or a Markdown ranking report, such as expert search or potential-investor matching.
+description: Rank people or other supported entities against a specific objective using selected stored insights and LLM-based comparison. Use as a backend utility for workflows that need structured ranked rows or a Markdown ranking report, such as expert search or potential-investor matching.
 ---
 
 # Skill: Ranking
@@ -10,10 +10,10 @@ description: Rank people or other supported entities against a specific objectiv
 without parsing Markdown.
 
 **Description:**
-Core engine to rank entities (like SICTIC members) against a specific objective using an LLM-powered Swiss tournament algorithm. It acts as the unified backend for skills like `expert_search` and `potential_investors`.
+Core engine to rank entities (like SICTIC members or startup profiles) against a specific objective using an LLM-powered Swiss tournament algorithm. It ranks candidates in batches of 16 by default and acts as the unified backend for skills like `expert_search`, `potential_investors`, and `suggested_startups`.
 
 **Available Targets:**
-* `persons`: Resolves member profiles, runs a semantic search to filter candidates, and ranks them.
+* `persons`: Resolves candidates and opt-outs against the canonical member roster, selects their stored profiles, and ranks them directly.
 
 **Usage:**
 `ranking` is a backend utility and is not exposed as a harness slash command.
@@ -24,7 +24,7 @@ conda run -n sictic-env python -m skills.harness /potential_investors "<STARTUP_
 ```
 
 Run the ranking module directly only when debugging ranking behavior.
-Provide an objective and optionally a semantic query:
+Provide an objective:
 ```bash
-conda run -n sictic-env python -m skills.ranking --target persons --objective "Looking for someone with deep expertise in B2B SaaS sales" --query "B2B SaaS Sales" --top_k 8
+conda run -n sictic-env python -m skills.ranking --target persons --objective "Looking for someone with deep expertise in B2B SaaS sales" --top_k 8
 ```

@@ -31,12 +31,11 @@ def _requests(gateway, resource):
     return gateway.snapshot()["requests"][resource]
 
 
-def test_default_state_path_is_repo_scoped_and_machine_local():
+def test_default_state_path_uses_local_data_cache(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCAL_DATA_PATH", str(tmp_path))
     path = default_gateway_state_path()
 
-    assert "sictic-ai" in path.parts
-    assert path.name == "services-gateway.json"
-    assert len(path.parent.name) == 16
+    assert path == tmp_path / "cache" / "services-gateway.json"
 
 
 def test_default_poll_interval_is_fifty_milliseconds(tmp_path):
