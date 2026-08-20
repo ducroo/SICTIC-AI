@@ -23,6 +23,7 @@ SKILL_COVERAGE = {
     "person_profile": "local-smoke",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
+    "sha_review": "local-smoke",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
     "startup_traction": "local-smoke",
@@ -57,4 +58,5 @@ HARNESS_SMOKE_COMMANDS = {
     "/dd_checks": "/dd_checks example-startup",
     "/dd_priorities": "/dd_priorities example-startup",
     "/submission_ready": "/submission_ready example-startup",
+    "/sha_review": "/sha_review example-startup",
 }

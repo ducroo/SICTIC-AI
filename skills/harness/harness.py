@@ -217,6 +217,15 @@ async def _dd_priorities(args: List[str]) -> str:
     return _format_result(await dd_priorities(ns.startup))
 
 
+async def _sha_review(args: List[str]) -> str:
+    parser = _parser("/sha_review")
+    parser.add_argument("dataset")
+    ns = parser.parse_args(args)
+    from skills.sha_review.sha_review import sha_review
+
+    return _format_result(await sha_review(ns.dataset))
+
+
 async def _submission_ready(args: List[str]) -> str:
     parser = _parser("/submission_ready")
     parser.add_argument("startups", nargs="*")
@@ -268,6 +277,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         ),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
         HarnessCommand("/dd_priorities", "/dd_priorities <startup>", "Prioritize an existing DD checks report.", _dd_priorities),
+        HarnessCommand("/sha_review", "/sha_review <dataset>", "Review a startup Shareholders' Agreement.", _sha_review),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}

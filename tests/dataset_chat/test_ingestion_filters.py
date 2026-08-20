@@ -4,8 +4,10 @@ from lib.datasets.source import list_source_files
 class FakeStorage:
     def list_with_mtime(self, rel, *, recursive=False):
         return [
+            (".DS_Store", 0.5),
             ("application.md", 1.0),
             ("dealum/documents/deck.pdf", 2.0),
+            ("dealum/documents/.DS_Store", 2.5),
             ("dealum/documents/logo.svg", 3.0),
             ("dealum/documents/screenshot.PNG", 4.0),
             ("dealum/manifest.json", 5.0),
