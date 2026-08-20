@@ -73,20 +73,25 @@ seed_cloud_env() {
   local vector_store="${VECTOR_STORE:-}"
   if [ -z "$document_parser" ]; then
     if [ -n "${LLAMA_CLOUD_API_KEY:-}" ]; then
-      document_parser="llamaparse"
+      document_parser="llamaparse"  # pragma: allowlist secret
     else
       document_parser="docling"
     fi
   fi
   if [ -z "$vector_store" ]; then
     if [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ] || [ -n "${FIREBASE_PROJECT_ID:-}" ]; then
-      vector_store="firestore"
+      vector_store="firestore"  # pragma: allowlist secret
     else
       vector_store="qdrant"
     fi
   fi
   env_set "DOCUMENT_PARSER" "$document_parser" "$env_path"
   env_set "VECTOR_STORE" "$vector_store" "$env_path"
+  if [ "$vector_store" = "firestore" ] && [ -z "${FIRESTORE_EMBEDDING_DIMENSIONS:-}" ]; then  # pragma: allowlist secret
+    # Firestore KNN rejects vectors larger than 2048; OpenAI v3 models can  # pragma: allowlist secret
+    # emit 3072. Shorten to 1536 unless the pod already set a value.
+    env_set "FIRESTORE_EMBEDDING_DIMENSIONS" "1536" "$env_path"  # pragma: allowlist secret
+  fi
 
   # Map Cloud Agent secrets into .env when present (never print values).
   if [ -n "${LLM_API_KEY:-}" ]; then
@@ -107,7 +112,7 @@ seed_cloud_env() {
     env_set "EMBEDDING_API_KEY" "$OPENROUTER_API_KEY" "$env_path"
   fi
 
-  # Dealum + LlamaParse/Firestore: copy injected secrets so empty template keys
+  # Dealum + LlamaParse/Firestore: copy injected secrets so empty template keys  # pragma: allowlist secret
   # cannot wipe them. lib/env.py loads .env with override=True.
   # shellcheck disable=SC1091
   source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
@@ -117,6 +122,11 @@ seed_cloud_env() {
   # shellcheck disable=SC1091
   source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
   materialize_gdrive_secrets "$env_path"
+
+  # Firebase SA JSON stays out of .env; ADC file is rewritten every boot.
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/scripts/cloud-agent-firebase-secrets.sh"
+  materialize_firebase_secrets "$env_path"
 }
 
 ensure_conda
@@ -130,7 +140,7 @@ mkdir -p "$SKILLS_TARGET"
 
 # Prefetch the Qdrant binary so start is fast after snapshot (do not leave a
 # process running from install — Cloud Agent start owns the daemon).
-# Skip when VECTOR_STORE=firestore (SaaS spike path).
+# Skip when VECTOR_STORE=firestore (SaaS spike path).  # pragma: allowlist secret
 VECTOR_STORE_VALUE="${VECTOR_STORE:-qdrant}"
 if [ -f "$REPO_ROOT/.env" ]; then
   VECTOR_STORE_VALUE="$(
@@ -144,7 +154,7 @@ if [ -f "$REPO_ROOT/.env" ]; then
   )"
   VECTOR_STORE_VALUE="${VECTOR_STORE_VALUE:-qdrant}"
 fi
-if [ "${VECTOR_STORE_VALUE}" != "firestore" ] && [ ! -x "$REPO_ROOT/qdrant/qdrant" ]; then
+if [ "${VECTOR_STORE_VALUE}" != "firestore" ] && [ ! -x "$REPO_ROOT/qdrant/qdrant" ]; then  # pragma: allowlist secret
   ./launch.sh start qdrant
   ./launch.sh stop qdrant || true
 fi

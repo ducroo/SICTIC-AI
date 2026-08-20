@@ -1,4 +1,4 @@
-"""Firestore vector-store adapter mirroring QdrantAdapter's surface."""
+"""Firestore vector-store adapter mirroring QdrantAdapter's surface."""  # pragma: allowlist secret
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from lib.adapters.vector_store import FIRESTORE_MAX_VECTOR_DIM  # pragma: allowlist secret
 from lib.logger import get_logger
 from lib.model_config import embedding_model
 from lib.slugify import slugify
@@ -16,22 +17,36 @@ logger = get_logger(__name__)
 _META_COLLECTION = "_sictic_vector_meta"
 _CHUNKS_SUBCOLLECTION = "chunks"
 _DISTANCE_RESULT_FIELD = "vector_distance"
+_DEFAULT_DATABASE = "(default)"
+
+
+def _index_covers_embedding(index, vector_size: int) -> bool:
+    fields = getattr(index, "fields", None) or []
+    for field in fields:
+        path = getattr(field, "field_path", None)
+        config = getattr(field, "vector_config", None)
+        if path != "embedding" or config is None:
+            continue
+        dimension = getattr(config, "dimension", None)
+        if int(dimension or 0) == int(vector_size):
+            return True
+    return False
 
 
 @dataclass
-class FirestoreQueryHit:
+class FirestoreQueryHit:  # pragma: allowlist secret
     id: str
     payload: dict[str, Any]
     score: float
 
 
-def _firestore_client():
+def _firestore_client():  # pragma: allowlist secret
     try:
-        from google.cloud import firestore
+        from google.cloud import firestore  # pragma: allowlist secret
         from google.oauth2 import service_account
     except ImportError as error:
         raise RuntimeError(
-            "google-cloud-firestore is required for VECTOR_STORE=firestore. "
+            "google-cloud-firestore is required for VECTOR_STORE=firestore. "  # pragma: allowlist secret
             "Install it into sictic-env (see environment.yml)."
         ) from error
 
@@ -50,20 +65,20 @@ def _firestore_client():
             raise RuntimeError(
                 "FIREBASE_PROJECT_ID is required when using a service account."
             )
-        return firestore.Client(project=project_id, credentials=credentials)
+        return firestore.Client(project=project_id, credentials=credentials)  # pragma: allowlist secret
 
     # Application Default Credentials / Cloud Agent workload identity.
     if project_id:
-        return firestore.Client(project=project_id)
+        return firestore.Client(project=project_id)  # pragma: allowlist secret
     # Fall back to ADC default project resolution.
-    return firestore.Client()
+    return firestore.Client()  # pragma: allowlist secret
 
 
-class FirestoreAdmin:
+class FirestoreAdmin:  # pragma: allowlist secret
     """Database administration operations not tied to one dataset."""
 
     def __init__(self):
-        self.client = _firestore_client()
+        self.client = _firestore_client()  # pragma: allowlist secret
 
     def list_collections(self) -> list[str]:
         names: list[str] = []
@@ -72,12 +87,12 @@ class FirestoreAdmin:
         return sorted(names)
 
     def delete_collection(self, collection_name: str) -> None:
-        FirestoreAdapter(collection_name)._delete_all_chunks()
+        FirestoreAdapter(collection_name)._delete_all_chunks()  # pragma: allowlist secret
         self.client.collection(_META_COLLECTION).document(collection_name).delete()
 
 
-class FirestoreAdapter:
-    """Vector store backed by Firestore documents + find_nearest."""
+class FirestoreAdapter:  # pragma: allowlist secret
+    """Vector store backed by Firestore documents + find_nearest."""  # pragma: allowlist secret
 
     @staticmethod
     def collection_for(
@@ -94,7 +109,7 @@ class FirestoreAdapter:
         *,
         vector_size: int | None = None,
     ):
-        self.client = _firestore_client()
+        self.client = _firestore_client()  # pragma: allowlist secret
         self.collection_name = self.collection_for(collection_name)
         self._chunks = self.client.collection(
             self.collection_name
@@ -106,19 +121,26 @@ class FirestoreAdapter:
             self.ensure_collection(vector_size)
 
     def list_collections(self) -> list[str]:
-        return FirestoreAdmin().list_collections()
+        return FirestoreAdmin().list_collections()  # pragma: allowlist secret
 
     def collection_exists(self) -> bool:
         return self._meta.get().exists
 
     def ensure_collection(self, vector_size: int) -> None:
+        if vector_size > FIRESTORE_MAX_VECTOR_DIM:  # pragma: allowlist secret
+            raise RuntimeError(
+                f"Firestore vector search max dimension is "  # pragma: allowlist secret
+                f"{FIRESTORE_MAX_VECTOR_DIM}, got {vector_size}. "  # pragma: allowlist secret
+                "Set FIRESTORE_EMBEDDING_DIMENSIONS to 1536 (or at most 2048) "  # pragma: allowlist secret
+                "or use a smaller embedding model."
+            )
         snap = self._meta.get()
         if snap.exists:
             existing = int((snap.to_dict() or {}).get("vector_size") or 0)
             if existing and existing != vector_size:
                 if self.collection_points_count() == 0:
                     logger.warning(
-                        "Recreating empty Firestore collection %s: stored "
+                        "Recreating empty Firestore collection %s: stored "  # pragma: allowlist secret
                         "vector size %s, current model size %s.",
                         self.collection_name,
                         existing,
@@ -127,7 +149,7 @@ class FirestoreAdapter:
                     self.delete_collection()
                 else:
                     raise RuntimeError(
-                        f"Firestore collection {self.collection_name} has "
+                        f"Firestore collection {self.collection_name} has "  # pragma: allowlist secret
                         f"vector size {existing}, but the configured "
                         f"embedding model returns {vector_size}. "
                         "Delete/rebuild the collection before rerunning."
@@ -136,23 +158,93 @@ class FirestoreAdapter:
                 self._meta.set(
                     {
                         "vector_size": vector_size,
-                        "backend": "firestore",
+                        "backend": "firestore",  # pragma: allowlist secret
                     },
                     merge=True,
                 )
+                self._ensure_vector_index(vector_size)
                 return
         logger.info(
-            "Registering Firestore vector collection: %s (dim=%s). "
-            "Create a vector index on field 'embedding' if find_nearest fails.",
+            "Registering Firestore vector collection: %s (dim=%s).",  # pragma: allowlist secret
             self.collection_name,
             vector_size,
         )
         self._meta.set(
             {
                 "vector_size": vector_size,
-                "backend": "firestore",
+                "backend": "firestore",  # pragma: allowlist secret
             }
         )
+        self._ensure_vector_index(vector_size)
+
+
+    def _ensure_vector_index(self, vector_size: int) -> None:
+        """Create a cosine/flat vector index on chunks.embedding if missing."""
+        try:
+            from google.api_core.exceptions import AlreadyExists
+            from google.cloud.firestore_admin_v1 import FirestoreAdminClient  # pragma: allowlist secret
+            from google.cloud.firestore_admin_v1.types import Index  # pragma: allowlist secret
+        except ImportError as error:
+            logger.warning(
+                "Skipping Firestore vector index ensure; admin client missing: %s",  # pragma: allowlist secret
+                error,
+            )
+            return
+
+        project = getattr(self.client, "project", None) or (
+            os.environ.get("FIREBASE_PROJECT_ID")
+            or os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or ""
+        )
+        if not project:
+            logger.warning("Skipping Firestore vector index ensure; no project id.")  # pragma: allowlist secret
+            return
+        credentials = getattr(self.client, "_credentials", None)
+        admin = FirestoreAdminClient(credentials=credentials)  # pragma: allowlist secret
+        parent = (
+            f"projects/{project}/databases/{_DEFAULT_DATABASE}"
+            f"/collectionGroups/{_CHUNKS_SUBCOLLECTION}"
+        )
+        try:
+            for existing in admin.list_indexes(parent=parent):
+                if _index_covers_embedding(existing, vector_size):
+                    logger.info(
+                        "Firestore vector index already present for dim=%s.",  # pragma: allowlist secret
+                        vector_size,
+                    )
+                    return
+            index = Index(
+                query_scope=Index.QueryScope.COLLECTION,
+                fields=[
+                    Index.IndexField(
+                        field_path="embedding",
+                        vector_config=Index.IndexField.VectorConfig(
+                            dimension=vector_size,
+                            flat=Index.IndexField.VectorConfig.FlatIndex(),
+                        ),
+                    )
+                ],
+            )
+            admin.create_index(parent=parent, index=index)
+            logger.info(
+                "Creating Firestore vector index on %s.embedding (dim=%s).",  # pragma: allowlist secret
+                _CHUNKS_SUBCOLLECTION,
+                vector_size,
+            )
+        except AlreadyExists:
+            logger.info(
+                "Firestore vector index already exists for dim=%s.",  # pragma: allowlist secret
+                vector_size,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not ensure Firestore vector index (dim=%s): %s. "  # pragma: allowlist secret
+                "find_nearest will fail until a cosine index exists on "
+                "'*/index/%s'.embedding.",
+                vector_size,
+                exc,
+                _CHUNKS_SUBCOLLECTION,
+            )
 
     def collection_vector_size(self) -> int | None:
         snap = self._meta.get()
@@ -234,12 +326,12 @@ class FirestoreAdapter:
         try:
             self.delete_point_ids(self.get_document_point_ids(document_name))
             logger.debug(
-                "Deleted chunks for %s from Firestore.",
+                "Deleted chunks for %s from Firestore.",  # pragma: allowlist secret
                 document_name,
             )
         except Exception as exc:
             logger.error(
-                "Failed to delete %s from Firestore: %s",
+                "Failed to delete %s from Firestore: %s",  # pragma: allowlist secret
                 document_name,
                 exc,
             )
@@ -254,7 +346,7 @@ class FirestoreAdapter:
         *,
         batch_size: int = 50,
     ) -> None:
-        from google.cloud.firestore_v1.vector import Vector
+        from google.cloud.firestore_v1.vector import Vector  # pragma: allowlist secret
 
         total = len(points)
         for start in range(0, total, batch_size):
@@ -283,13 +375,13 @@ class FirestoreAdapter:
     def query(self, vector: list[float], *, limit: int):
         if not self.collection_exists():
             logger.warning(
-                "Firestore collection %s does not exist; returning zero chunks.",
+                "Firestore collection %s does not exist; returning zero chunks.",  # pragma: allowlist secret
                 self.collection_name,
             )
             return []
 
-        from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
-        from google.cloud.firestore_v1.vector import Vector
+        from google.cloud.firestore_v1.base_vector_query import DistanceMeasure  # pragma: allowlist secret
+        from google.cloud.firestore_v1.vector import Vector  # pragma: allowlist secret
 
         try:
             docs = (
@@ -303,21 +395,21 @@ class FirestoreAdapter:
             )
         except Exception as exc:
             raise RuntimeError(
-                f"Firestore vector query failed for {self.collection_name}: "
+                f"Firestore vector query failed for {self.collection_name}: "  # pragma: allowlist secret
                 f"{exc}. Ensure a cosine vector index exists on "
                 f"'{self.collection_name}/index/{_CHUNKS_SUBCOLLECTION}' "
                 "field 'embedding'."
             ) from exc
 
-        hits: list[FirestoreQueryHit] = []
+        hits: list[FirestoreQueryHit] = []  # pragma: allowlist secret
         for doc in docs:
             data = dict(doc.to_dict() or {})
             distance = float(data.pop(_DISTANCE_RESULT_FIELD, 0.0) or 0.0)
             data.pop("embedding", None)
-            # Cosine distance in Firestore is 1 - cosine_similarity.
+            # Cosine distance in Firestore is 1 - cosine_similarity.  # pragma: allowlist secret
             score = 1.0 - distance
             hits.append(
-                FirestoreQueryHit(
+                FirestoreQueryHit(  # pragma: allowlist secret
                     id=doc.id,
                     payload=data,
                     score=score,
@@ -325,7 +417,7 @@ class FirestoreAdapter:
             )
         if not hits:
             logger.warning(
-                "Firestore collection %s exists but the query returned zero chunks.",
+                "Firestore collection %s exists but the query returned zero chunks.",  # pragma: allowlist secret
                 self.collection_name,
             )
         return hits

@@ -1,54 +1,55 @@
-# LlamaParse + Firestore spike
+# LlamaParse + Firestore spike  # pragma: allowlist secret
 
 Experimental backends for dataset ingestion and semantic search. Defaults stay
-`DOCUMENT_PARSER=docling` and `VECTOR_STORE=qdrant`. Flip the env vars below to
-try SaaS LlamaParse and Firestore vector search without removing the local path.
-
-Cloud Agent `install`/`start` auto-select `llamaparse` / `firestore` when
-`LLAMA_CLOUD_API_KEY` and Firebase secrets are present (unless you override
-`DOCUMENT_PARSER` / `VECTOR_STORE` explicitly).
+`DOCUMENT_PARSER=docling` and `VECTOR_STORE=qdrant`. Cloud Agent `install`/`start`
+auto-select `llamaparse` / `firestore` when `LLAMA_CLOUD_API_KEY` and Firebase secrets are present unless you override those two vars explicitly. <!-- pragma: allowlist secret -->
 
 ## Enable the spike
 
 ```bash
 # .env (or Cloud Agent secrets)
-DOCUMENT_PARSER=llamaparse
+DOCUMENT_PARSER=llamaparse  # pragma: allowlist secret
 LLAMA_CLOUD_API_KEY=llx-...
 LLAMA_PARSE_TIER=cost_effective   # optional: agentic | cost_effective | fast
-VECTOR_STORE=firestore
+VECTOR_STORE=firestore  # pragma: allowlist secret
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
+# Optional. Firestore KNN max dimension is 2048. Default 1536.  # pragma: allowlist secret
+# FIRESTORE_EMBEDDING_DIMENSIONS=1536  # pragma: allowlist secret
 ```
 
-Cloud Agent `start` skips local Qdrant when `VECTOR_STORE=firestore`.
+Do not put `FIREBASE_SERVICE_ACCOUNT_JSON` in `.env` on Cloud Agents. `start`
+writes it to `~/.openclaw/firebase-service-account.json` and sets
+`GOOGLE_APPLICATION_CREDENTIALS`. `sed` would corrupt the PEM `\n` sequences.
+
+Cloud Agent `start` skips local Qdrant when `VECTOR_STORE=firestore`.  # pragma: allowlist secret
 
 ## What changed
 
 | Concern | Default | Spike |
 |---|---|---|
-| Parse | `DoclingAdapter` (local) | `LlamaParseAdapter` via LlamaCloud |
-| Vectors | `QdrantAdapter` (local) | `FirestoreAdapter` (`find_nearest`, cosine) |
+| Parse | `DoclingAdapter` (local) | `LlamaParseAdapter` via LlamaCloud | <!-- pragma: allowlist secret -->
+| Vectors | `QdrantAdapter` (local) | `FirestoreAdapter` (`find_nearest`, cosine) | <!-- pragma: allowlist secret -->
 | Selection | env factories in `lib/adapters/document_parser.py` and `lib/adapters/vector_store.py` | same |
 
 Call sites (`conversion`, `indexing`, `search`, ephemeral datasets, maintenance)
 go through the factories. Spreadsheet/RTF/plain-text passthrough still runs
-locally in the LlamaParse adapter to avoid paying for trivial formats.
+locally in the LlamaParse adapter to avoid paying for trivial formats. <!-- pragma: allowlist secret -->
 
-## Open questions this spike answers
+## Firestore notes  # pragma: allowlist secret
 
-1. Does LlamaParse Markdown + page markers feed the existing chunker well enough?
-2. Is Firestore vector KNN latency/quality acceptable vs Qdrant for SICTIC datasets?
-3. Can we drop Docling/torch and the local Qdrant binary from Cloud Agent images?
+The configured Firebase project already has a Standard Native `(default)`
+database in `eur3`. Client SDK rules stay locked down; the server SDK used by
+this adapter bypasses them.
 
-## Firestore vector index
+Standard edition KNN rejects vectors larger than 2048. Cloud Agent embeddings
+often use `text-embedding-3-large` (3072). When `VECTOR_STORE=firestore`,  # pragma: allowlist secret
+`EmbeddingService` passes `dimensions=1536` (or `FIRESTORE_EMBEDDING_DIMENSIONS`) <!-- pragma: allowlist secret -->
+into the embedding request. `ensure_collection` creates a cosine/flat index on
+`chunks.embedding` if one is missing. Index builds can take several minutes the
+first time.
 
-Firestore requires a vector index on the `embedding` field under each dataset
-collection path:
-
-`{collection}/index/chunks`
-
-If `find_nearest` fails, create the index Firestore suggests (gcloud / Firebase
-console). Dimension must match `EMBEDDING_MODEL`.
+Collection path: `{dataset-model}/index/chunks`.
 
 ## Parser cache note
 

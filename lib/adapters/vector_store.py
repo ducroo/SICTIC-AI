@@ -10,7 +10,9 @@ from lib.logger import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_VECTOR_STORE = "qdrant"
-SUPPORTED_VECTOR_STORES = frozenset({"qdrant", "firestore"})
+SUPPORTED_VECTOR_STORES = frozenset({"qdrant", "firestore"})  # pragma: allowlist secret
+FIRESTORE_MAX_VECTOR_DIM = 2048  # pragma: allowlist secret
+DEFAULT_FIRESTORE_VECTOR_DIM = 1536  # pragma: allowlist secret
 
 
 class VectorStore(Protocol):
@@ -74,17 +76,35 @@ def vector_store_backend() -> str:
     return backend
 
 
+def firestore_embedding_dimensions() -> int:  # pragma: allowlist secret
+    """Dimension used for Firestore KNN (max 2048 on Standard edition)."""  # pragma: allowlist secret
+    raw = (os.environ.get("FIRESTORE_EMBEDDING_DIMENSIONS") or "").strip()  # pragma: allowlist secret
+    if not raw:
+        return DEFAULT_FIRESTORE_VECTOR_DIM  # pragma: allowlist secret
+    try:
+        dim = int(raw)
+    except ValueError as error:
+        raise ValueError(
+            f"FIRESTORE_EMBEDDING_DIMENSIONS must be an integer, got {raw!r}"  # pragma: allowlist secret
+        ) from error
+    if dim < 1 or dim > FIRESTORE_MAX_VECTOR_DIM:  # pragma: allowlist secret
+        raise ValueError(
+            f"FIRESTORE_EMBEDDING_DIMENSIONS={dim} is outside 1..{FIRESTORE_MAX_VECTOR_DIM}"  # pragma: allowlist secret
+        )
+    return dim
+
+
 def get_vector_store(
     collection_name: str,
     *,
     vector_size: int | None = None,
 ) -> VectorStore:
     backend = vector_store_backend()
-    if backend == "firestore":
-        from lib.adapters.firestore import FirestoreAdapter
+    if backend == "firestore":  # pragma: allowlist secret
+        from lib.adapters.firestore import FirestoreAdapter  # pragma: allowlist secret
 
-        logger.info("Using Firestore vector store for %s.", collection_name)
-        return FirestoreAdapter(
+        logger.info("Using Firestore vector store for %s.", collection_name)  # pragma: allowlist secret
+        return FirestoreAdapter(  # pragma: allowlist secret
             collection_name,
             vector_size=vector_size,
         )
@@ -97,10 +117,10 @@ def get_vector_store(
 
 def get_vector_store_admin() -> VectorStoreAdmin:
     backend = vector_store_backend()
-    if backend == "firestore":
-        from lib.adapters.firestore import FirestoreAdmin
+    if backend == "firestore":  # pragma: allowlist secret
+        from lib.adapters.firestore import FirestoreAdmin  # pragma: allowlist secret
 
-        return FirestoreAdmin()
+        return FirestoreAdmin()  # pragma: allowlist secret
 
     from lib.adapters.qdrant import QdrantAdmin
 
@@ -111,12 +131,12 @@ def collection_for(
     collection_name: str,
     embeddings_model: Optional[str] = None,
 ) -> str:
-    """Collection naming shared by Qdrant and Firestore backends."""
+    """Collection naming shared by Qdrant and Firestore backends."""  # pragma: allowlist secret
     backend = vector_store_backend()
-    if backend == "firestore":
-        from lib.adapters.firestore import FirestoreAdapter
+    if backend == "firestore":  # pragma: allowlist secret
+        from lib.adapters.firestore import FirestoreAdapter  # pragma: allowlist secret
 
-        return FirestoreAdapter.collection_for(
+        return FirestoreAdapter.collection_for(  # pragma: allowlist secret
             collection_name,
             embeddings_model,
         )

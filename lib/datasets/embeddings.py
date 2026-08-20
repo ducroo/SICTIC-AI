@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from lib.adapters.vector_store import firestore_embedding_dimensions, vector_store_backend  # pragma: allowlist secret
 from lib.logger import get_logger
 from lib.model_config import embedding_endpoint, embedding_model
 from lib.services_gateway import gateway
@@ -18,10 +19,16 @@ class EmbeddingService:
         self.model = embedding_model()
         self.endpoint = embedding_endpoint()
 
+    def _litellm_kwargs(self) -> dict:
+        kwargs = self.endpoint.litellm_kwargs()
+        if vector_store_backend() == "firestore":  # pragma: allowlist secret
+            kwargs["dimensions"] = firestore_embedding_dimensions()  # pragma: allowlist secret
+        return kwargs
+
     def vector_size(self) -> int:
         import litellm
 
-        kwargs = self.endpoint.litellm_kwargs()
+        kwargs = self._litellm_kwargs()
         cache_key = (self.model, repr(sorted(kwargs.items())))
         cached_size = _vector_size_cache.get(cache_key)
         if cached_size is not None:
@@ -45,7 +52,7 @@ class EmbeddingService:
             ) from exc
 
     async def embed(self, text: str) -> list[float]:
-        kwargs = self.endpoint.litellm_kwargs()
+        kwargs = self._litellm_kwargs()
         kwargs["input"] = [text]
         try:
             response = await gateway.request_embedding(kwargs)
