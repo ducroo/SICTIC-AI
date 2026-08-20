@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "type": ["string", "null"],
+      "description": "Exact originating path of the latest signed Shareholders' Agreement, or null when none can be identified."
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["High", "Medium", "Low", "None"],
+      "description": "Confidence that path identifies the latest signed Shareholders' Agreement."
+    },
+    "paths_for_alternative_candidates": {
+      "type": "array",
+      "description": "Exact originating paths of plausible alternative candidates, ordered from most to least likely.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free-form explanation covering the document's subject, internal date, signature evidence, and preference over alternatives."
+    }
+  },
+  "required": [
+    "path",
+    "confidence",
+    "paths_for_alternative_candidates",
+    "reason"
+  ]
+}

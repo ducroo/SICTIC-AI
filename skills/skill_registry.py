@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from skills.dd_checks.dd_checks import dd_checks
 from skills.dd_priorities.dd_priorities import dd_priorities
+from skills.sha_review.sha_review import sha_review
 from skills.submission_ready.submission_ready import submission_ready
 from skills.expert_search.expert_search import expert_search
 from skills.investor_profile.investor_profile import investor_profile
@@ -63,6 +64,10 @@ SKILL_REGISTRY = {
         func=dd_priorities,
         domains=frozenset({"startups"}),
         depends_on=("dd-checks",),
+    ),
+    "sha-review": SkillSpec(
+        func=sha_review,
+        domains=frozenset({"startups"}),
     ),
     "submission-ready": SkillSpec(
         func=submission_ready,

@@ -40,6 +40,7 @@ IGNORED_EXTENSIONS = (
     ".gdraw",
 )
 IGNORED_FILENAMES = {
+    ".DS_Store",
     "__active_dataset__.md",
     "__archived_dataset__.md",
     "application.raw.json",

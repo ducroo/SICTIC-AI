@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -115,6 +116,12 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     async def fake_dataset_chat(*_args, **_kwargs):
         response_format = _kwargs.get("response_format") or {}
         schema = response_format.get("json_schema", {}).get("schema", {})
+        if "path" in schema.get("properties", {}):
+            return (
+                '{"path":"fixture.md","confidence":"High",'
+                '"paths_for_alternative_candidates":[],'
+                '"reason":"Fixture signed SHA."}'
+            )
         if "industry_type" in schema.get("properties", {}):
             return (
                 '{"industry_type":"general","confidence":80,'
@@ -123,9 +130,14 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'
 
     async def fake_structured_audit_chat(*_args, **kwargs):
+        response_format = kwargs.get("response_format") or {}
+        schema = response_format.get("json_schema", {}).get("schema", {})
+        statuses = schema.get("properties", {}).get("status", {}).get("enum", [])
         status = (
-            "Pass"
-            if "Pass | Fail | Unclear" in kwargs.get("prompt", "")
+            "balanced"
+            if "balanced" in statuses
+            else "Pass"
+            if "Pass" in statuses
             else "Fine"
         )
         return (
@@ -135,6 +147,24 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         )
 
     async def fake_llm_chat(*_args, **_kwargs):
+        response_format = _kwargs.get("response_format") or {}
+        schema = response_format.get("json_schema", {}).get("schema", {})
+        if schema.get("type") == "array":
+            keys = (
+                schema.get("items", {})
+                .get("properties", {})
+                .get("template_key", {})
+                .get("enum", [])
+            )
+            return json.dumps(
+                [
+                    {
+                        "template_key": key,
+                        "rationale_for_rank": "Fixture ranking rationale.",
+                    }
+                    for key in keys
+                ]
+            )
         return "Fixture LLM profile."
 
     async def fake_ranking_persons(*_args, **_kwargs):
@@ -236,6 +266,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     dd_priorities_mod = importlib.import_module(
         "skills.dd_priorities.dd_priorities"
     )
+    sha_review_mod = importlib.import_module("skills.sha_review.sha_review")
     expert_search_mod = importlib.import_module("skills.expert_search.expert_search")
     investor_profile_mod = importlib.import_module("skills.investor_profile.investor_profile")
     person_profile_mod = importlib.import_module("skills.person_profile.person_profile")
@@ -266,6 +297,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         person_profile_mod,
         team_profile_mod,
         dd_checks_mod,
+        sha_review_mod,
         submission_ready_mod,
         expert_search_mod,
         potential_investors_mod,
@@ -279,7 +311,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(startup_traction_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dataset_chat_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dd_checks_mod, "dataset_chat", fake_dataset_chat)
+    monkeypatch.setattr(sha_review_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dd_priorities_mod, "llm_chat", fake_llm_chat)
+    monkeypatch.setattr(sha_review_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(
         structured_batch_audit_mod,
         "dataset_chat",
