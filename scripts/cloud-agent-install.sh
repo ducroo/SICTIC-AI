@@ -134,12 +134,13 @@ mkdir -p "$SKILLS_TARGET"
 VECTOR_STORE_VALUE="${VECTOR_STORE:-qdrant}"
 if [ -f "$REPO_ROOT/.env" ]; then
   VECTOR_STORE_VALUE="$(
-    grep -E '^[[:space:]]*VECTOR_STORE[[:space:]]*=' "$REPO_ROOT/.env" \
+    grep -E '^[[:space:]]*VECTOR_STORE[[:space:]]*=' "$REPO_ROOT/.env" 2>/dev/null \
       | tail -n 1 \
       | cut -d= -f2- \
       | tr -d '"' \
       | tr -d "'" \
-      | tr -d '[:space:]'
+      | tr -d '[:space:]' \
+      || true
   )"
   VECTOR_STORE_VALUE="${VECTOR_STORE_VALUE:-qdrant}"
 fi

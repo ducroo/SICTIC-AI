@@ -40,14 +40,13 @@ source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
 source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
 
 # Prefer SaaS spike backends when secrets are present on this pod.
+# Explicit process-env DOCUMENT_PARSER=docling / VECTOR_STORE=qdrant still wins.
 if [ -f "$REPO_ROOT/.env" ]; then
-  if [ -n "${LLAMA_CLOUD_API_KEY:-}" ] && ! grep -q '^[[:space:]]*DOCUMENT_PARSER[[:space:]]*=' "$REPO_ROOT/.env"; then
-    env_set "DOCUMENT_PARSER" "llamaparse" "$REPO_ROOT/.env"
-  elif [ -n "${LLAMA_CLOUD_API_KEY:-}" ] && [ -z "${DOCUMENT_PARSER:-}" ]; then
+  if [ -n "${LLAMA_CLOUD_API_KEY:-}" ] && [ "${DOCUMENT_PARSER:-}" != "docling" ]; then
     env_set "DOCUMENT_PARSER" "llamaparse" "$REPO_ROOT/.env"
   fi
   if { [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ] || [ -n "${FIREBASE_PROJECT_ID:-}" ]; } \
-    && [ -z "${VECTOR_STORE:-}" ]; then
+    && [ "${VECTOR_STORE:-}" != "qdrant" ]; then
     env_set "VECTOR_STORE" "firestore" "$REPO_ROOT/.env"
   fi
   materialize_gdrive_secrets "$REPO_ROOT/.env"
@@ -60,12 +59,13 @@ fi
 vector_store="${VECTOR_STORE:-}"
 if [ -z "$vector_store" ] && [ -f "$REPO_ROOT/.env" ]; then
   vector_store="$(
-    grep -E '^[[:space:]]*VECTOR_STORE[[:space:]]*=' "$REPO_ROOT/.env" \
+    grep -E '^[[:space:]]*VECTOR_STORE[[:space:]]*=' "$REPO_ROOT/.env" 2>/dev/null \
       | tail -n 1 \
       | cut -d= -f2- \
       | tr -d '"' \
       | tr -d "'" \
-      | tr -d '[:space:]'
+      | tr -d '[:space:]' \
+      || true
   )"
 fi
 vector_store="${vector_store:-qdrant}"
