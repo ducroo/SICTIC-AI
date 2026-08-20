@@ -178,7 +178,7 @@ async def test_dataset_from_insight_without_sources_scans_all_datasets(mock_env,
 
 
 @pytest.mark.asyncio
-async def test_dataset_from_insight_copies_only_when_source_is_newer(
+async def test_dataset_from_insight_copies_only_when_content_differs(
     mock_env,
     monkeypatch,
 ):
@@ -205,14 +205,24 @@ async def test_dataset_from_insight_copies_only_when_source_is_newer(
     )
     assert storage.read_text(target) == "new source"
 
-    storage.write_text(target, "newer target")
-    storage.set_mtime(target, 300)
+    storage.set_mtime(target, 100)
+    storage.set_mtime(source, 300)
+    target_mtime = storage.mtime(target)
     await dataset_from_insight(
         "avientus-startup-profile",
         ["avientus"],
         "startup_profile",
     )
-    assert storage.read_text(target) == "newer target"
+    assert storage.mtime(target) == target_mtime
+
+    storage.write_text(target, "newer target")
+    storage.set_mtime(target, 400)
+    await dataset_from_insight(
+        "avientus-startup-profile",
+        ["avientus"],
+        "startup_profile",
+    )
+    assert storage.read_text(target) == "new source"
 
 
 @pytest.mark.asyncio

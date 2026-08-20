@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
+from lib.datasets.manifest import content_hash
 from lib.datasets.paths import dataset_location_for_domain
 from lib.insights.file import InsightFile
 from lib.logger import get_logger
@@ -77,13 +78,11 @@ async def dataset_from_insight(
     unchanged = 0
     for relative_target, insight in desired.items():
         destination = f"{target_rel}/{relative_target}"
-        target_mtime = existing.pop(relative_target, None)
-        source_mtime = storage.mtime(insight.path)
-        copy_required = (
-            target_mtime is None
-            or source_mtime is None
-            or source_mtime > target_mtime
-        )
+        target_exists = existing.pop(relative_target, None) is not None
+        source_bytes = storage.read_bytes(insight.path)
+        copy_required = not target_exists or content_hash(
+            source_bytes
+        ) != content_hash(storage.read_bytes(destination))
         if not copy_required:
             unchanged += 1
             logger.debug("Skipped up-to-date file %s.", destination)
@@ -96,7 +95,7 @@ async def dataset_from_insight(
                 destination,
             )
         else:
-            storage.write_bytes(destination, storage.read_bytes(insight.path))
+            storage.write_bytes(destination, source_bytes)
         copied += 1
 
     removed = 0
