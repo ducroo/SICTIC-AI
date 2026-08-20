@@ -73,6 +73,7 @@ def test_insight_skill_apis_declare_uniform_result_contract():
         "investor_profile": "skills.investor_profile.investor_profile",
         "person_profile": "skills.person_profile.person_profile",
         "potential_investors": "skills.potential_investors.potential_investors",
+        "sha_review": "skills.sha_review.sha_review",
         "startup_profile": "skills.startup_profile.startup_profile",
         "startup_traction": "skills.startup_traction.startup_traction",
         "submission_ready": "skills.submission_ready.submission_ready",

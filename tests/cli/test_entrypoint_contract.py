@@ -64,6 +64,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.person_profile.__main__",
         "skills.potential_investors.__main__",
         "skills.ranking.__main__",
+        "skills.sha_review.__main__",
         "skills.startup_profile.__main__",
         "skills.startup_traction.__main__",
         "skills.startup_website_import.__main__",

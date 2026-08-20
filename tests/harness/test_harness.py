@@ -76,6 +76,7 @@ def test_harness_help_lists_core_commands():
     assert "/submission_ready [startup ...]" in text
     assert "/dd_checks <startup>" in text
     assert "/dd_priorities <startup>" in text
+    assert "/sha_review <dataset>" in text
     assert "/dealum_import <startup>" in text
 
 
