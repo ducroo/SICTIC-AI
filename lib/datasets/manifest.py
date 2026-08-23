@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 MANIFEST_FILENAME = ".ingestion-manifest.json"
 MANIFEST_VERSION = 1
 PARSER_VERSION = "docling-page-markers-v1"
-CHUNKER_VERSION = "markdown-1000-100-v1"
+CHUNKER_VERSION = "markdown-1000-100-table-aware-v2"
 
 
 def content_hash(content: bytes | str) -> str:
