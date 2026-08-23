@@ -1,5 +1,6 @@
 import asyncio
 import random
+from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 from lib.logger import get_logger
@@ -15,6 +16,19 @@ from skills.llm_chat.llm_chat import llm_chat
 logger = get_logger(__name__)
 
 DEFAULT_BATCH_SIZE = 16
+_RANKING_ATTEMPTS = 2
+
+
+@dataclass(frozen=True)
+class RankingInspection:
+    ranked_ids: list[str]
+    duplicates: list[str]
+    missing: list[str]
+    repaired_ids: list[str]
+
+    @property
+    def valid(self) -> bool:
+        return not self.duplicates and not self.missing
 
 
 def _specialize_schema(
@@ -35,20 +49,36 @@ def _specialize_schema(
     return specialized
 
 
-def _validate_ranked_ids(
+def _inspect_ranked_ids(
     ranked_ids: list[str],
     expected_ids: list[str],
-) -> list[str]:
-    if len(set(ranked_ids)) != len(ranked_ids):
-        raise ValueError("Top-k ranking contains duplicate profile IDs.")
-    if set(ranked_ids) != set(expected_ids):
-        missing = [item for item in expected_ids if item not in ranked_ids]
-        unexpected = [item for item in ranked_ids if item not in expected_ids]
+) -> RankingInspection:
+    expected = set(expected_ids)
+    unexpected = [item for item in ranked_ids if item not in expected]
+    if unexpected:
         raise ValueError(
             "Top-k ranking IDs do not match the candidates; "
-            f"missing={missing}, unexpected={unexpected}."
+            f"unexpected={unexpected}."
         )
-    return ranked_ids
+
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    repaired: list[str] = []
+    for profile_id in ranked_ids:
+        if profile_id in seen:
+            if profile_id not in duplicates:
+                duplicates.append(profile_id)
+            continue
+        seen.add(profile_id)
+        repaired.append(profile_id)
+    missing = [profile_id for profile_id in expected_ids if profile_id not in seen]
+    repaired.extend(missing)
+    return RankingInspection(
+        ranked_ids=list(ranked_ids),
+        duplicates=duplicates,
+        missing=missing,
+        repaired_ids=repaired,
+    )
 
 
 async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
@@ -74,25 +104,59 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
         .replace("{{IDs_profiles}}", ", ".join(profile_ids))
         .replace("{{response_schema}}", schema_text(response_schema))
     )
+    prompt += (
+        "\n\nReturn every supplied profile ID exactly once; "
+        "do not repeat or omit IDs."
+    )
 
-    response_content = await llm_chat(
-        prompt,
-        response_format=json_schema_response_format(
-            "ranked_profile_ids",
+    duplicate_inspection: RankingInspection | None = None
+    for attempt in range(1, _RANKING_ATTEMPTS + 1):
+        response_content = await llm_chat(
+            prompt,
+            response_format=json_schema_response_format(
+                "ranked_profile_ids",
+                response_schema,
+            ),
+        )
+        if not response_content:
+            raise ValueError("Ranking model returned no content.")
+        parsed = parse_json_response(
+            response_content,
             response_schema,
-        ),
-    )
-    if not response_content:
-        raise ValueError("Ranking model returned no content.")
-    parsed = parse_json_response(
-        response_content,
-        response_schema,
-        label="Top-k ranking response",
-    )
-    return _validate_ranked_ids(
-        parsed["ranked_profiles_ids"],
+            label="Top-k ranking response",
+        )
+        inspection = _inspect_ranked_ids(
+            parsed["ranked_profiles_ids"],
+            profile_ids,
+        )
+        if inspection.valid:
+            return inspection.ranked_ids
+        duplicate_inspection = inspection
+        if attempt < _RANKING_ATTEMPTS:
+            logger.warning(
+                "Ranking model returned duplicate IDs; retrying chunk "
+                "(%s/%s); duplicates=%s, missing=%s.",
+                attempt,
+                _RANKING_ATTEMPTS,
+                inspection.duplicates,
+                inspection.missing,
+            )
+
+    assert duplicate_inspection is not None
+    repaired_inspection = _inspect_ranked_ids(
+        duplicate_inspection.repaired_ids,
         profile_ids,
     )
+    if not repaired_inspection.valid:
+        raise ValueError("Could not repair top-k ranking into a complete permutation.")
+    logger.warning(
+        "Repaired duplicate ranking after %s attempts; duplicates=%s, "
+        "restored_missing=%s.",
+        _RANKING_ATTEMPTS,
+        duplicate_inspection.duplicates,
+        duplicate_inspection.missing,
+    )
+    return repaired_inspection.ranked_ids
 
 
 async def ranking_top_k(
