@@ -24,13 +24,13 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
 
     # 1. Cleanup previous run
     logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")
-    storage.rmtree(raw_dataset_rel)
-    storage.rmtree(parsed_dataset_rel)
     try:
         qdrant = QdrantAdapter(temp_name)
-        qdrant.delete_collection()
+        qdrant.delete_dataset()
     except Exception as e:
-        logger.debug(f"Could not delete collection during cleanup (might not exist): {e}")
+        logger.debug(f"Could not delete dataset index during cleanup: {e}")
+    storage.rmtree(raw_dataset_rel)
+    storage.rmtree(parsed_dataset_rel)
 
     # 2. Setup: Copy external files (absolute OS paths) into the storage tree
     storage.mkdir(raw_dataset_rel)

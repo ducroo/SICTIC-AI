@@ -5,12 +5,20 @@
   "properties": {
     "path": {
       "type": ["string", "null"],
-      "description": "Exact originating path of the latest signed Shareholders' Agreement, or null when none can be identified."
+      "description": "Exact originating path of the best substantive Shareholders' Agreement candidate, or null when none can be identified."
     },
-    "confidence": {
+    "document_match": {
       "type": "string",
       "enum": ["High", "Medium", "Low", "None"],
-      "description": "Confidence that path identifies the latest signed Shareholders' Agreement."
+      "description": "How strongly the selected document substantively matches a Shareholders' Agreement. Use None only with a null path."
+    },
+    "concerns": {
+      "type": "array",
+      "description": "Material caveats about document selection, such as missing or ambiguous agreement dates, signatures, execution pages, completeness, amendments, or current-version status.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "paths_for_alternative_candidates": {
       "type": "array",
@@ -20,16 +28,17 @@
         "minLength": 1
       }
     },
-    "reason": {
+    "selection_reason": {
       "type": "string",
       "minLength": 1,
-      "description": "Free-form explanation covering the document's subject, internal date, signature evidence, and preference over alternatives."
+      "description": "Concise explanation of the substantive match and why this candidate was preferred over alternatives."
     }
   },
   "required": [
     "path",
-    "confidence",
+    "document_match",
+    "concerns",
     "paths_for_alternative_candidates",
-    "reason"
+    "selection_reason"
   ]
 }

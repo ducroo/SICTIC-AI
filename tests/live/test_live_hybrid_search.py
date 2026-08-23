@@ -46,7 +46,11 @@ class _SteeredEmbeddings:
 @pytest.fixture
 def hybrid_collection():
     try:
-        adapter = QdrantAdapter(DATASET, vector_size=4)
+        adapter = QdrantAdapter(
+            DATASET,
+            vector_size=4,
+            embeddings_model=_SteeredEmbeddings.model,
+        )
     except Exception as error:
         pytest.skip(f"Qdrant unavailable: {error}")
     yield adapter

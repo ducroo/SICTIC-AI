@@ -49,7 +49,7 @@ def prune(
     apply: bool = typer.Option(
         False,
         "--apply",
-        help="Delete orphaned collections. Default is dry-run.",
+        help="Delete orphaned dataset tenants. Default is dry-run.",
     ),
 ) -> None:
     collections = run_command(
@@ -80,17 +80,16 @@ def delete_command(
 @app.command("rebuild-index")
 def rebuild_index_command(
     dataset: str = typer.Option(..., "--dataset", "-d"),
-    embeddings: Optional[str] = typer.Option(None, "--embeddings", "-e"),
     sync: bool = typer.Option(
         True,
         "--sync/--no-sync",
-        help="Re-index immediately after dropping the collection.",
+        help="Re-index immediately after removing the dataset tenant.",
     ),
 ) -> None:
     """Recreate a dataset index so it gains BM25 vectors for hybrid search."""
     rebuilds = run_command(
         lambda: [
-            rebuild_dataset_index(item, embeddings)
+            rebuild_dataset_index(item)
             for item in _parse_datasets(dataset)
         ],
         logger=logger,

@@ -25,7 +25,7 @@ from skills.dataset_chat.dataset_chat import dataset_chat
 from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
-OUTPUT_SCHEMA_VERSION = 2
+OUTPUT_SCHEMA_VERSION = 3
 
 
 def _identification_prompt(
@@ -50,12 +50,21 @@ def _parse_identification(
     )
     if not isinstance(result, dict):
         raise ValueError("SHA document-identification response must be an object.")
-    path = result["path"]
-    confidence = result["confidence"]
-    if confidence == "None" or path is None:
+    if any(not concern.strip() for concern in result["concerns"]):
         raise ValueError(
-            "No signed Shareholders' Agreement could be identified: "
-            f"{result['reason']}"
+            "SHA document-identification concerns must contain non-blank text."
+        )
+    path = result["path"]
+    document_match = result["document_match"]
+    if (path is None) != (document_match == "None"):
+        raise ValueError(
+            "SHA document-identification response must use a null path if and "
+            "only if document_match is None."
+        )
+    if path is None:
+        raise ValueError(
+            "No plausible Shareholders' Agreement could be identified: "
+            f"{result['selection_reason']}"
         )
     return result
 
@@ -326,21 +335,29 @@ def _review_output(
     summary: str,
     *,
     sha_path: str,
-    confidence: str,
+    document_match: str,
+    concerns: list[str],
     reference_key: str,
 ) -> str:
+    concerns_markdown = (
+        "\n".join(f"- {concern.strip()}" for concern in concerns)
+        if concerns
+        else "No document-selection concerns were identified."
+    )
     return (
         "# Shareholders' Agreement Review\n\n"
         f"- **Shareholders' Agreement:** `{sha_path}`\n"
-        f"- **Identification confidence:** {confidence}\n"
+        f"- **Document match:** {document_match}\n"
         f"- **Closest reference template:** `{reference_key}`\n\n"
+        "## Document-selection concerns\n\n"
+        f"{concerns_markdown}\n\n"
         "---\n\n"
         f"{summary.strip()}\n"
     )
 
 
 async def sha_review(dataset_name: str) -> InsightResult:
-    """Review the latest signed SHA in a dataset and return its summary."""
+    """Review the best-matching SHA candidate in a dataset and return a summary."""
     status = await ensure_startup_dataset(dataset_name)
     dataset_slug = status.dataset_slug
     dataset_location(dataset_slug)
@@ -370,12 +387,18 @@ async def sha_review(dataset_name: str) -> InsightResult:
         sha_config,
     )
     logger.info(
-        "[%s] Selected SHA %s with confidence %s: %s",
+        "[%s] Selected SHA %s with document match %s: %s",
         dataset_slug,
         sha_path,
-        identification["confidence"],
-        identification["reason"],
+        identification["document_match"],
+        identification["selection_reason"],
     )
+    if identification["concerns"]:
+        logger.warning(
+            "[%s] SHA document-selection concerns: %s",
+            dataset_slug,
+            "; ".join(identification["concerns"]),
+        )
     reference_key, ranking = await _rank_templates(sha_markdown, sha_config)
     logger.info(
         "[%s] Selected reference SHA %s: %s",
@@ -404,7 +427,8 @@ async def sha_review(dataset_name: str) -> InsightResult:
         _review_output(
             summary,
             sha_path=sha_path,
-            confidence=identification["confidence"],
+            document_match=identification["document_match"],
+            concerns=identification["concerns"],
             reference_key=reference_key,
         )
     )

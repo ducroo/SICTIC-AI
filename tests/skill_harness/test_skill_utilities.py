@@ -75,7 +75,7 @@ async def test_ranking_rank_chunk_rejects_missing_ids(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ranking_rank_chunk_rejects_duplicate_ids(monkeypatch):
+async def test_ranking_rank_chunk_retries_then_repairs_duplicate_ids(monkeypatch):
     import json
     from pathlib import Path
 
@@ -107,11 +107,59 @@ async def test_ranking_rank_chunk_rejects_duplicate_ids(monkeypatch):
         duplicate_response,
     )
 
-    with pytest.raises(ValueError, match="duplicate profile IDs"):
-        await ranking_top_k_mod.rank_chunk(
-            "fixture objective",
-            {"a": "Profile A", "b": "Profile B"},
-        )
+    result = await ranking_top_k_mod.rank_chunk(
+        "fixture objective",
+        {"a": "Profile A", "b": "Profile B"},
+    )
+
+    assert result == ["b", "a"]
+
+
+@pytest.mark.asyncio
+async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatch):
+    import json
+    from pathlib import Path
+
+    import skills.ranking.ranking_top_k as ranking_top_k_mod
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "config/ranking_top_k/response_schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "config_load",
+        lambda: {
+            "ranking_top_k": {
+                "ranking_instructions": "{{response_schema}}",
+                "response_schema": schema,
+            }
+        },
+    )
+    responses = iter(
+        [
+            '{"ranked_profiles_ids":["b","b"]}',
+            '{"ranked_profiles_ids":["a","b"]}',
+        ]
+    )
+
+    async def retry_response(*_args, **_kwargs):
+        return next(responses)
+
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "llm_chat",
+        retry_response,
+    )
+
+    result = await ranking_top_k_mod.rank_chunk(
+        "fixture objective",
+        {"a": "Profile A", "b": "Profile B"},
+    )
+
+    assert result == ["a", "b"]
 
 
 @pytest.mark.asyncio
@@ -153,17 +201,16 @@ def test_linkedin_maintenance_formats_unique_missing_urls():
 def test_dataset_maintenance_filters_orphaned_qdrant_collections(skill_fixture_storage):
     from skills.dataset_maintenance.maintenance import orphaned_qdrant_collections
 
-    class FakeAdmin:
-        def list_collections(self):
+    class FakeAdapter:
+        def list_indexed_datasets(self):
             return [
-                "example-startup-test-embedding-8b",
-                "orphan-test-embedding-8b",
-                "unrelated-other-model",
+                "example-startup",
+                "orphan",
             ]
 
-    result = orphaned_qdrant_collections(admin=FakeAdmin())
+    result = orphaned_qdrant_collections(adapter=FakeAdapter())
 
-    assert result == ["orphan-test-embedding-8b"]
+    assert result == ["orphan"]
 
 
 def test_startup_website_import_validates_limits():
