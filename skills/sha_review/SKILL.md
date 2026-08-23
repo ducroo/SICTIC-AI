@@ -1,13 +1,17 @@
 ---
 name: sha_review
-description: Review the latest signed English-language Shareholders' Agreement in a startup dataset against the closest configured reference SHA and structured legal checklists. Use when asked to identify, compare, or summarize material balance and drafting concerns in a startup's SHA.
+description: Review the best substantive English-language Shareholders' Agreement candidate in a startup dataset against the closest configured reference SHA and structured legal checklists. Use when asked to identify, compare, or summarize material balance and drafting concerns in a startup's SHA.
 ---
 
 # Shareholders' Agreement Review
 
-Identify the latest signed SHA by its internal agreement date, load its complete
-parsed Markdown, compare it with every configured reference SHA in one direct
-LLM ranking call, and select the closest template.
+Identify the best substantive SHA candidate, preferring the latest complete,
+internally dated, and executed agreement. Missing or ambiguous date, signature,
+execution, completeness, amendment, or current-version evidence is a documented
+concern rather than an automatic disqualification. Stop only when no plausible
+SHA candidate exists. Load the selected document's complete parsed Markdown,
+compare it with every configured reference SHA in one direct LLM ranking call,
+and select the closest template.
 
 Run all configured SHA checklists through `batch_audit`. Every check receives
 the complete SHA under review, the complete selected reference SHA, and
@@ -16,9 +20,10 @@ check-specific semantic-search evidence. Use only `unclear`, `too weak`,
 
 Validate the canonical audit JSONs and summarize them into three to eight
 distinct, material findings. Prefix the final Markdown mechanically with the
-selected SHA path, identification confidence, and closest reference-template
-key. Save and return only that final report through `InsightFile`; keep the
-detailed JSON audits internal.
+selected SHA path, document match, closest reference-template key, and all
+document-selection concerns. Keep the selection reason in diagnostic logs.
+Save and return only that final report through `InsightFile`; keep the detailed
+JSON audits internal.
 
 All queries, prompts, response schemas, reference SHAs, and checklists come from
 `config/sha_review/`. Shared structured-audit instructions and schemas come

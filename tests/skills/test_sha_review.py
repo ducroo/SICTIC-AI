@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import importlib
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,14 @@ import pytest
 from lib.datasets.paths import dataset_location_for_domain
 from lib.insights import InsightFile
 from lib.storage import get_storage
+
+
+def _actual_identification_schema() -> dict:
+    return json.loads(
+        Path(
+            "config/sha_review/document_identification_response_schema.json"
+        ).read_text(encoding="utf-8")
+    )
 
 
 def _create_startup_dataset(name: str) -> None:
@@ -38,21 +47,26 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         "additionalProperties": False,
         "properties": {
             "path": {"type": ["string", "null"]},
-            "confidence": {
+            "document_match": {
                 "type": "string",
                 "enum": ["High", "Medium", "Low", "None"],
+            },
+            "concerns": {
+                "type": "array",
+                "items": {"type": "string"},
             },
             "paths_for_alternative_candidates": {
                 "type": "array",
                 "items": {"type": "string"},
             },
-            "reason": {"type": "string"},
+            "selection_reason": {"type": "string"},
         },
         "required": [
             "path",
-            "confidence",
+            "document_match",
+            "concerns",
             "paths_for_alternative_candidates",
-            "reason",
+            "selection_reason",
         ],
     }
     ranking_schema = {
@@ -127,9 +141,13 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         return json.dumps(
             {
                 "path": "legal/shareholders-agrement.pdf",
-                "confidence": "High",
+                "document_match": "Medium",
+                "concerns": [
+                    "No signature page was found in the retrieved text.",
+                    "The agreement date could not be verified internally.",
+                ],
                 "paths_for_alternative_candidates": [],
-                "reason": "Latest internally dated signed SHA.",
+                "selection_reason": "Operative provisions substantively match a SHA.",
             }
         )
 
@@ -209,8 +227,15 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         "- **Shareholders' Agreement:** "
         "`legal/shareholders-agreement.pdf.md`" in report
     )
-    assert "- **Identification confidence:** High" in report
+    assert "- **Document match:** Medium" in report
     assert "- **Closest reference template:** `light`" in report
+    assert "## Document-selection concerns" in report
+    assert "- No signature page was found in the retrieved text." in report
+    assert "- The agreement date could not be verified internally." in report
+    assert report.index("## Document-selection concerns") < report.index(
+        "Material finding"
+    )
+    assert "Operative provisions substantively match a SHA." not in report
     assert "Material finding" in report
     assert len(audit_calls) == 2
     assert all(call["status_scale"] == status_scale for call in audit_calls)
@@ -219,3 +244,49 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     assert len(llm_calls) == 2
     assert llm_calls[0][1] is not None
     assert llm_calls[1][1] is None
+
+
+@pytest.mark.parametrize(
+    ("path", "document_match"),
+    [
+        (None, "Medium"),
+        ("legal/shareholders-agreement.pdf", "None"),
+    ],
+)
+def test_sha_identification_rejects_inconsistent_none_result(
+    mock_env,
+    path,
+    document_match,
+):
+    module = importlib.import_module("skills.sha_review.sha_review")
+    response = json.dumps(
+        {
+            "path": path,
+            "document_match": document_match,
+            "concerns": [],
+            "paths_for_alternative_candidates": [],
+            "selection_reason": "Fixture selection rationale.",
+        }
+    )
+
+    with pytest.raises(ValueError, match="null path if and only if"):
+        module._parse_identification(response, _actual_identification_schema())
+
+
+def test_sha_identification_stops_only_when_no_candidate_exists(mock_env):
+    module = importlib.import_module("skills.sha_review.sha_review")
+    response = json.dumps(
+        {
+            "path": None,
+            "document_match": "None",
+            "concerns": ["No substantive SHA candidate was retrieved."],
+            "paths_for_alternative_candidates": [],
+            "selection_reason": "The retrieved documents do not contain SHA terms.",
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="No plausible Shareholders' Agreement could be identified",
+    ):
+        module._parse_identification(response, _actual_identification_schema())

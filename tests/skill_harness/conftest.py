@@ -118,9 +118,10 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         schema = response_format.get("json_schema", {}).get("schema", {})
         if "path" in schema.get("properties", {}):
             return (
-                '{"path":"fixture.md","confidence":"High",'
+                '{"path":"fixture.md","document_match":"High",'
+                '"concerns":[],'
                 '"paths_for_alternative_candidates":[],'
-                '"reason":"Fixture signed SHA."}'
+                '"selection_reason":"Fixture substantive SHA."}'
             )
         if "industry_type" in schema.get("properties", {}):
             return (

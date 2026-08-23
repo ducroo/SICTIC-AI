@@ -6,7 +6,7 @@ from skills.sha_review.sha_review import sha_review
 
 logger = get_logger(__name__)
 app = typer.Typer(
-    help="Review the latest signed Shareholders' Agreement in a dataset."
+    help="Review the best substantive Shareholders' Agreement candidate in a dataset."
 )
 
 
