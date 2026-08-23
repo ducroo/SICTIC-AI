@@ -52,8 +52,8 @@ async def reconcile_index(
         if collection_exists
         else {}
     )
-    # Collections created before hybrid search cannot gain sparse vectors in
-    # place, so they stay dense-only until an explicit rebuild recreates them.
+    # A shared collection created by the current adapter always supports BM25.
+    # Retain the fallback for externally created or transitional collections.
     sparse_version = (
         SPARSE_ENCODER_VERSION
         if not collection_exists or qdrant.sparse_enabled()
@@ -296,7 +296,10 @@ async def replace_document(
         if with_sparse:
             point["sparse"] = encode_document(chunk.text)
         points.append(point)
-    qdrant.upsert_points(points)
+    stored_ids = qdrant.upsert_points(points)
+    if not isinstance(stored_ids, set):
+        # Retain compatibility with lightweight test and third-party adapters.
+        stored_ids = {point["id"] for point in points}
     qdrant.delete_point_ids(
-        existing_ids - {point["id"] for point in points}
+        existing_ids - stored_ids
     )

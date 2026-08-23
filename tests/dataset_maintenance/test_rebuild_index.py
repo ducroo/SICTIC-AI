@@ -5,16 +5,16 @@ from lib.storage import LocalStorage
 from skills.dataset_maintenance import maintenance
 
 
-class FakeAdmin:
-    def __init__(self, collections):
-        self.collections = collections
-        self.deleted = []
+class FakeAdapter:
+    collection_name = "sictic-ai-datasets-test-embedding-8b"
 
-    def list_collections(self):
-        return list(self.collections)
+    def __init__(self, has_points):
+        self.has_points = has_points
+        self.delete_calls = 0
 
-    def delete_collection(self, collection):
-        self.deleted.append(collection)
+    def delete_dataset(self):
+        self.delete_calls += 1
+        return self.has_points
 
 
 def _prepare(tmp_path, mocker, collections, documents):
@@ -25,22 +25,22 @@ def _prepare(tmp_path, mocker, collections, documents):
     manifest.indexed_dataset_revision = "revision-1"
     manifest.save()
 
-    admin = FakeAdmin(collections)
-    mocker.patch.object(maintenance, "QdrantAdmin", return_value=admin)
+    adapter = FakeAdapter(bool(collections))
+    mocker.patch.object(maintenance, "QdrantAdapter", return_value=adapter)
     mocker.patch.object(maintenance, "get_storage", return_value=storage)
     mocker.patch.object(
         maintenance,
         "dataset_parsed_path",
         return_value=parsed_rel,
     )
-    return storage, parsed_rel, admin
+    return storage, parsed_rel, adapter
 
 
 def test_rebuild_drops_the_collection_and_clears_index_checkpoints(
     tmp_path,
     mocker,
 ):
-    storage, parsed_rel, admin = _prepare(
+    storage, parsed_rel, adapter = _prepare(
         tmp_path,
         mocker,
         collections=["example-test-embedding-8b"],
@@ -61,7 +61,8 @@ def test_rebuild_drops_the_collection_and_clears_index_checkpoints(
     assert rebuild.dataset == "example"
     assert rebuild.collection_deleted is True
     assert rebuild.documents_reset == 1
-    assert admin.deleted == ["example-test-embedding-8b"]
+    assert rebuild.collection == "sictic-ai-datasets-test-embedding-8b"
+    assert adapter.delete_calls == 1
 
     state = IngestionManifest.load(storage, parsed_rel).documents["report.md"]
     # Parsing checkpoints survive so a rebuild re-embeds without re-parsing.
@@ -71,7 +72,7 @@ def test_rebuild_drops_the_collection_and_clears_index_checkpoints(
 
 
 def test_rebuild_reports_a_missing_collection_without_failing(tmp_path, mocker):
-    _storage, _parsed_rel, admin = _prepare(
+    _storage, _parsed_rel, adapter = _prepare(
         tmp_path,
         mocker,
         collections=[],
@@ -81,7 +82,7 @@ def test_rebuild_reports_a_missing_collection_without_failing(tmp_path, mocker):
     rebuild = maintenance.rebuild_dataset_index("example")
 
     assert rebuild.collection_deleted is False
-    assert admin.deleted == []
+    assert adapter.delete_calls == 1
     assert rebuild.documents_reset == 1
 
 

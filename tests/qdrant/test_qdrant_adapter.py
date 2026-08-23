@@ -11,7 +11,7 @@ def test_adapter_creates_collection_from_explicit_vector_size(mock_env, mocker):
 
     adapter = QdrantAdapter("test-dataset", vector_size=4096)
 
-    assert adapter.collection_name == "test-dataset-test-embedding-8b"
+    assert adapter.collection_name == "sictic-ai-datasets-test-embedding-8b"
     create_kwargs = client.create_collection.call_args.kwargs
     assert create_kwargs["collection_name"] == adapter.collection_name
     assert create_kwargs["vectors_config"].size == 4096
@@ -21,6 +21,7 @@ def test_get_document_mtimes_scrolls_all_pages_and_keeps_newest_timestamp():
     adapter = object.__new__(QdrantAdapter)
     adapter.client = MagicMock()
     adapter.collection_name = "test-collection"
+    adapter.dataset_slug = "test-dataset"
     adapter.client.scroll.side_effect = [
         (
             [
@@ -63,6 +64,7 @@ def test_upsert_points_translates_records_to_qdrant_points():
     adapter = object.__new__(QdrantAdapter)
     adapter.client = MagicMock()
     adapter.collection_name = "test-collection"
+    adapter.dataset_slug = "test-dataset"
 
     adapter.upsert_points(
         [
@@ -78,12 +80,14 @@ def test_upsert_points_translates_records_to_qdrant_points():
     assert len(points) == 1
     assert points[0].vector == [1.0, 2.0]
     assert points[0].payload["document_name"] == "document.md"
+    assert points[0].payload["dataset_slug"] == "test-dataset"
 
 
 def test_query_passes_vector_and_limit_to_qdrant():
     adapter = object.__new__(QdrantAdapter)
     adapter.client = MagicMock()
     adapter.collection_name = "test-collection"
+    adapter.dataset_slug = "test-dataset"
     adapter.collection_exists = lambda: True
     expected = [SimpleNamespace(id="one")]
     adapter.client.query_points.return_value = SimpleNamespace(points=expected)
@@ -91,18 +95,19 @@ def test_query_passes_vector_and_limit_to_qdrant():
     result = adapter.query([1.0], limit=25)
 
     assert result == expected
-    adapter.client.query_points.assert_called_once_with(
-        collection_name="test-collection",
-        query=[1.0],
-        limit=25,
-        with_payload=True,
-    )
+    query_kwargs = adapter.client.query_points.call_args.kwargs
+    assert query_kwargs["collection_name"] == "test-collection"
+    assert query_kwargs["query"] == [1.0]
+    assert query_kwargs["limit"] == 25
+    assert query_kwargs["with_payload"] is True
+    assert query_kwargs["query_filter"].must[0].match.value == "test-dataset"
 
 
 def _query_adapter(client, *, exists: bool) -> QdrantAdapter:
     adapter = object.__new__(QdrantAdapter)
     adapter.client = client
     adapter.collection_name = "proud-technology-test-embedding"
+    adapter.dataset_slug = "proud-technology"
     adapter.collection_exists = lambda: exists
     return adapter
 

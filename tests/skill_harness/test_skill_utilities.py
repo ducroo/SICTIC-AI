@@ -153,17 +153,16 @@ def test_linkedin_maintenance_formats_unique_missing_urls():
 def test_dataset_maintenance_filters_orphaned_qdrant_collections(skill_fixture_storage):
     from skills.dataset_maintenance.maintenance import orphaned_qdrant_collections
 
-    class FakeAdmin:
-        def list_collections(self):
+    class FakeAdapter:
+        def list_indexed_datasets(self):
             return [
-                "example-startup-test-embedding-8b",
-                "orphan-test-embedding-8b",
-                "unrelated-other-model",
+                "example-startup",
+                "orphan",
             ]
 
-    result = orphaned_qdrant_collections(admin=FakeAdmin())
+    result = orphaned_qdrant_collections(adapter=FakeAdapter())
 
-    assert result == ["orphan-test-embedding-8b"]
+    assert result == ["orphan"]
 
 
 def test_startup_website_import_validates_limits():

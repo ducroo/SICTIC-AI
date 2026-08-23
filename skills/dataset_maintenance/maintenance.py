@@ -23,6 +23,43 @@ _INDEX_STATE_KEYS = (
 )
 
 
+def _reset_manifest_index_state(
+    dataset: str,
+    *,
+    embeddings: str | None = None,
+) -> int:
+    """Clear index checkpoints, optionally only for one embedding model."""
+    dataset_slug = slugify(dataset)
+    storage = get_storage()
+    parsed_path = dataset_parsed_path(dataset_slug)
+    if not storage.exists(parsed_path):
+        return 0
+    manifest = IngestionManifest.load(storage, parsed_path)
+    expected_model_slug = (
+        slugify(embeddings.split("/")[-1])
+        if embeddings is not None
+        else None
+    )
+    documents_reset = 0
+    for state in manifest.documents.values():
+        indexed_model = state.get("indexed_embedding_model")
+        if expected_model_slug is not None and (
+            not indexed_model
+            or slugify(str(indexed_model).split("/")[-1])
+            != expected_model_slug
+        ):
+            continue
+        if not any(key in state for key in _INDEX_STATE_KEYS):
+            continue
+        for key in _INDEX_STATE_KEYS:
+            state.pop(key, None)
+        documents_reset += 1
+    if documents_reset:
+        manifest.indexed_dataset_revision = ""
+        manifest.save()
+    return documents_reset
+
+
 @dataclass(frozen=True)
 class CollectionDiagnostic:
     collection: str
@@ -41,58 +78,61 @@ class IndexRebuild:
 def orphaned_qdrant_collections(
     embeddings: Optional[str] = None,
     *,
-    admin: QdrantAdmin | None = None,
+    adapter: QdrantAdapter | None = None,
 ) -> list[str]:
+    """Return indexed dataset tenants that no longer exist in storage."""
     model = embeddings or embedding_model()
-    suffix = f"-{slugify(model.split('/')[-1])}"
     present_datasets = set(list_all_dataset_names())
-    collections = (admin or QdrantAdmin()).list_collections()
+    indexed_datasets = (
+        adapter or QdrantAdapter("dataset-maintenance", embeddings_model=model)
+    ).list_indexed_datasets()
     return sorted(
-        collection
-        for collection in collections
-        if collection.endswith(suffix)
-        and collection[:-len(suffix)] not in present_datasets
+        dataset
+        for dataset in indexed_datasets
+        if dataset not in present_datasets
     )
 
 
 def diagnose_qdrant_collections(
     embeddings: Optional[str] = None,
     *,
-    admin: QdrantAdmin | None = None,
+    adapter: QdrantAdapter | None = None,
 ) -> list[CollectionDiagnostic]:
     model = embeddings or embedding_model()
-    suffix = f"-{slugify(model.split('/')[-1])}"
+    qdrant = adapter or QdrantAdapter(
+        "dataset-maintenance",
+        embeddings_model=model,
+    )
     present_datasets = set(list_all_dataset_names())
-    diagnostics = []
-    for collection in sorted((admin or QdrantAdmin()).list_collections()):
-        if not collection.endswith(suffix):
-            continue
-        dataset = collection[:-len(suffix)]
-        diagnostics.append(
-            CollectionDiagnostic(
-                collection=collection,
-                dataset=dataset,
-                status="present" if dataset in present_datasets else "orphaned",
-            )
+    return [
+        CollectionDiagnostic(
+            collection=qdrant.collection_name,
+            dataset=dataset,
+            status="present" if dataset in present_datasets else "orphaned",
         )
-    return diagnostics
+        for dataset in qdrant.list_indexed_datasets()
+    ]
 
 
 def prune_orphaned_qdrant_collections(
     embeddings: Optional[str] = None,
     *,
     apply: bool = False,
-    admin: QdrantAdmin | None = None,
+    adapter: QdrantAdapter | None = None,
 ) -> list[str]:
-    qdrant_admin = admin or QdrantAdmin()
+    model = embeddings or embedding_model()
+    qdrant = adapter or QdrantAdapter(
+        "dataset-maintenance",
+        embeddings_model=model,
+    )
     orphans = orphaned_qdrant_collections(
-        embeddings,
-        admin=qdrant_admin,
+        model,
+        adapter=qdrant,
     )
     if apply:
-        for collection in orphans:
-            qdrant_admin.delete_collection(collection)
-            logger.info("Deleted orphaned Qdrant collection: %s", collection)
+        for dataset in orphans:
+            qdrant.delete_dataset(dataset)
+            logger.info("Deleted orphaned Qdrant dataset tenant: %s", dataset)
     return orphans
 
 
@@ -111,14 +151,19 @@ def delete_dataset_index(
 
     if dataset and not embeddings:
         dataset_slug = slugify(dataset)
-        prefix = f"{dataset_slug}-"
-        deleted = [
+        shared_collections = [
             collection
             for collection in all_collections
-            if collection.startswith(prefix)
+            if collection.startswith("sictic-ai-datasets-")
         ]
-        for collection in deleted:
-            admin.delete_collection(collection)
+        for collection in shared_collections:
+            model_slug = collection.removeprefix("sictic-ai-datasets-")
+            adapter = QdrantAdapter(
+                dataset_slug,
+                embeddings_model=model_slug,
+            )
+            if adapter.delete_dataset():
+                deleted.append(collection)
         storage = get_storage()
         parsed_path = dataset_parsed_path(dataset_slug)
         if storage.exists(parsed_path):
@@ -126,61 +171,50 @@ def delete_dataset_index(
         return deleted
 
     if dataset and embeddings:
-        collection = QdrantAdapter.collection_for(
-            slugify(dataset),
-            embeddings,
+        dataset_slug = slugify(dataset)
+        adapter = QdrantAdapter(
+            dataset_slug,
+            embeddings_model=embeddings,
         )
-        if collection in all_collections:
-            admin.delete_collection(collection)
-            deleted.append(collection)
+        if adapter.delete_dataset():
+            deleted.append(adapter.collection_name)
+        _reset_manifest_index_state(
+            dataset_slug,
+            embeddings=embeddings,
+        )
         return deleted
 
-    suffix = f"-{slugify(embeddings or '')}"
-    deleted = [
-        collection
-        for collection in all_collections
-        if collection.endswith(suffix)
-    ]
-    for collection in deleted:
+    collection = QdrantAdapter.collection_for("", embeddings)
+    if collection in all_collections:
         admin.delete_collection(collection)
+        deleted.append(collection)
+        for dataset_name in list_all_dataset_names():
+            _reset_manifest_index_state(
+                dataset_name,
+                embeddings=embeddings,
+            )
     return deleted
 
 
 def rebuild_dataset_index(
     dataset: str,
-    embeddings: Optional[str] = None,
 ) -> IndexRebuild:
-    """Drop a dataset's Qdrant collection so the next sync rebuilds it.
-
-    Qdrant cannot add sparse vectors to an existing collection, so datasets
-    indexed before hybrid search need their collection recreated. Parsed
-    Markdown is kept, which means the rebuild re-embeds but never re-parses.
-    """
+    """Rebuild one dataset tenant with the configured embedding model."""
     if not dataset:
         raise ValueError("Must provide --dataset/-d.")
 
     dataset_slug = slugify(dataset)
-    collection = QdrantAdapter.collection_for(dataset_slug, embeddings)
-    admin = QdrantAdmin()
-    collection_deleted = collection in admin.list_collections()
+    adapter = QdrantAdapter(dataset_slug)
+    collection = adapter.collection_name
+    collection_deleted = adapter.delete_dataset()
     if collection_deleted:
-        admin.delete_collection(collection)
-        logger.info("Deleted Qdrant collection for rebuild: %s", collection)
+        logger.info(
+            "Deleted dataset %s from shared Qdrant collection %s for rebuild.",
+            dataset_slug,
+            collection,
+        )
 
-    manifest = IngestionManifest.load(
-        get_storage(),
-        dataset_parsed_path(dataset_slug),
-    )
-    documents_reset = 0
-    for state in manifest.documents.values():
-        if not any(key in state for key in _INDEX_STATE_KEYS):
-            continue
-        for key in _INDEX_STATE_KEYS:
-            state.pop(key, None)
-        documents_reset += 1
-    if documents_reset:
-        manifest.indexed_dataset_revision = ""
-        manifest.save()
+    documents_reset = _reset_manifest_index_state(dataset_slug)
 
     return IndexRebuild(
         dataset=dataset_slug,
