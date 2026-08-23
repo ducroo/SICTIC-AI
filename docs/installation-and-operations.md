@@ -100,6 +100,25 @@ The launcher starts Qdrant and, when an `ollama/...` model is configured,
 Ollama. It also pulls missing models referenced by `LLM_MODEL`, `VLM_MODEL`, and
 `EMBEDDING_MODEL`.
 
+Qdrant startup is serialized with a lock tied to the repository's
+`qdrant_data/` directory. The launcher waits for the configured `QDRANT_HOST`
+to become ready before reporting success and preserves previous output in
+`logs/qdrant.log`. `./launch.sh status qdrant` distinguishes a ready service,
+a process that is still starting, a stale PID, and an externally managed
+service. It refuses to start a second local Qdrant process when an existing
+process or storage lock is detected.
+
+The readiness wait defaults to 600 seconds and polls every two seconds. Large
+installations can override these values for a single launch:
+
+```bash
+QDRANT_START_TIMEOUT=1800 QDRANT_START_INTERVAL=5 ./launch.sh start qdrant
+```
+
+If the timeout expires while Qdrant is still running, the launcher leaves the
+process, PID, and storage lock intact for inspection rather than risking a
+second start.
+
 ## Command interfaces
 
 Use the harness for stable user-facing slash commands:
