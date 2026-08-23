@@ -18,6 +18,7 @@ from lib.datasets.source import (
     parsed_filepath,
     snapshot_source_files,
 )
+from lib.datasets.sparse import SPARSE_ENCODER_VERSION, encode_document
 from lib.logger import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
@@ -50,6 +51,13 @@ async def reconcile_index(
         qdrant.get_document_mtimes(raise_on_error=True)
         if collection_exists
         else {}
+    )
+    # Collections created before hybrid search cannot gain sparse vectors in
+    # place, so they stay dense-only until an explicit rebuild recreates them.
+    sparse_version = (
+        SPARSE_ENCODER_VERSION
+        if not collection_exists or qdrant.sparse_enabled()
+        else ""
     )
 
     indexable_source_names = {
@@ -100,6 +108,7 @@ async def reconcile_index(
                     "indexed_parsed_sha256": parsed_sha,
                     "indexed_chunker_version": CHUNKER_VERSION,
                     "indexed_embedding_model": embeddings.model,
+                    "indexed_sparse_version": sparse_version,
                 }
             )
 
@@ -107,6 +116,7 @@ async def reconcile_index(
             state.get("indexed_parsed_sha256") != parsed_sha
             or state.get("indexed_chunker_version") != CHUNKER_VERSION
             or state.get("indexed_embedding_model") != embeddings.model
+            or state.get("indexed_sparse_version", "") != sparse_version
         ):
             files_to_index.append((source, parsed_path, parsed_text))
 
@@ -195,6 +205,7 @@ async def reconcile_index(
                     embeddings,
                     source.filename,
                     chunks,
+                    with_sparse=bool(sparse_version),
                 )
             state = manifest.state(source.filename)
             state.update(
@@ -202,6 +213,7 @@ async def reconcile_index(
                     "indexed_parsed_sha256": content_hash(text),
                     "indexed_chunker_version": CHUNKER_VERSION,
                     "indexed_embedding_model": embeddings.model,
+                    "indexed_sparse_version": sparse_version,
                 }
             )
             state.pop("index_ignored_reason", None)
@@ -265,6 +277,8 @@ async def replace_document(
     embeddings: EmbeddingService,
     filename: str,
     chunks,
+    *,
+    with_sparse: bool = False,
 ) -> None:
     """Upsert a complete replacement before removing obsolete chunk IDs."""
     existing_ids = qdrant.get_document_point_ids(filename)
@@ -274,13 +288,14 @@ async def replace_document(
         payload = chunk.model_dump()
         payload.pop("chunk_id", None)
         payload.pop("score", None)
-        points.append(
-            {
-                "id": chunk.chunk_id,
-                "vector": vector,
-                "payload": payload,
-            }
-        )
+        point = {
+            "id": chunk.chunk_id,
+            "vector": vector,
+            "payload": payload,
+        }
+        if with_sparse:
+            point["sparse"] = encode_document(chunk.text)
+        points.append(point)
     qdrant.upsert_points(points)
     qdrant.delete_point_ids(
         existing_ids - {point["id"] for point in points}

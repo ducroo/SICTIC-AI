@@ -16,7 +16,7 @@ from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-_RESOURCE_KEYS = ("docling", "embedding", "llm")
+_RESOURCE_KEYS = ("docling", "embedding", "llm", "rerank")
 _DEFAULT_WAIT_TIMEOUT = 3600.0
 _POLL_INTERVAL = 0.05
 # A lease held longer than this is treated as leaked and reclaimed even if
@@ -25,6 +25,7 @@ _POLL_INTERVAL = 0.05
 _DEFAULT_LEASE_MAX_AGE = 1800.0
 _DEFAULT_LLM_REQUEST_TIMEOUT = 600.0
 _DEFAULT_EMBEDDING_REQUEST_TIMEOUT = 300.0
+_DEFAULT_RERANK_REQUEST_TIMEOUT = 120.0
 _MAX_CONCURRENT_LLMS = 8
 
 
@@ -141,7 +142,7 @@ class ServicesGateway:
 
     def _empty_state(self) -> dict:
         return {
-            "version": 4,
+            "version": 5,
             "leases": {resource: [] for resource in _RESOURCE_KEYS},
             "requests": {resource: [] for resource in _RESOURCE_KEYS},
         }
@@ -323,11 +324,16 @@ class ServicesGateway:
         *,
         active_models: set[str] | None = None,
     ) -> str:
-        labels = {"docling": "docling", "embedding": "embedding", "llm": "LLM"}
+        labels = {
+            "docling": "docling",
+            "embedding": "embedding",
+            "llm": "LLM",
+            "rerank": "rerank",
+        }
         summary = " | ".join(
             f"{labels[resource]} {counts[resource]['running']} running, "
             f"{counts[resource]['waiting']} waiting"
-            for resource in ("llm", "embedding", "docling")
+            for resource in ("llm", "embedding", "rerank", "docling")
         )
         if active_models is not None:
             summary = (
@@ -582,6 +588,30 @@ class ServicesGateway:
             timeout=timeout,
         ):
             return await litellm.acompletion(**kwargs)
+
+    async def request_rerank(
+        self,
+        kwargs: dict[str, Any],
+        *,
+        timeout: float | None = None,
+    ) -> Any:
+        """Coordinate reranking by model slots and per-model parallelism."""
+        import litellm
+
+        litellm.disable_aiohttp_transport = True
+        kwargs.setdefault(
+            "timeout",
+            _float_env(
+                "RERANK_REQUEST_TIMEOUT",
+                _DEFAULT_RERANK_REQUEST_TIMEOUT,
+            ),
+        )
+        async with self.slot(
+            "rerank",
+            model=str(kwargs.get("model") or "rerank"),
+            timeout=timeout,
+        ):
+            return await litellm.arerank(**kwargs)
 
 
 class _DefaultGateway:
