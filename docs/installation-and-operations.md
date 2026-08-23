@@ -199,6 +199,37 @@ document, such as a 200-page shareholder agreement, from filling the whole
 context and hiding the cap table. Chunks above the cap are demoted rather than
 dropped, so the requested number of chunks is still returned.
 
+### Tables and spreadsheets
+
+A table that does not fit in one chunk loses its header on the first cut, and
+every chunk after that is a block of cells no model can attribute to a column.
+Chunking is therefore table-aware. A table larger than one chunk is split on row
+boundaries, never mid-row, and every chunk repeats the header. Because each
+chunk re-spends part of its budget on that header, tables use a larger chunk
+size than prose. This applies wherever tables come from: worksheets, CSV
+exports, and tables embedded in PDFs and Word documents.
+
+Tables small enough to survive intact are left alone, inside the prose that
+surrounds them, since the sentence before a short table is usually what explains
+it.
+
+Where a table carries a GitHub-style separator row, that row identifies the
+header and is trusted. Otherwise the header is inferred, because workbooks
+routinely stack title and grouping rows above the row that actually names the
+columns. A header is recognised by how much more label-like it is than the rows
+beneath it, not by an absolute score: a sheet that is simply a column of labelled
+values has no header at all, and must not have one of its value rows promoted
+into every chunk.
+
+Workbooks are not converted by Docling. They are read directly with `openpyxl`
+(or `xlrd` for legacy `.xls`), which keeps hidden rows, hidden columns, hidden
+sheets and formula error cells out of the index, and writes one Markdown table
+per visible worksheet. Values are rendered the way a reader would write them, so
+a share price becomes `15.15` rather than `15.151515151515152`, a
+percent-formatted cell becomes `24.69%` rather than `0.24685415429152754`, and a
+date becomes `2026-01-19`. Chunks from a workbook are cited by sheet name
+instead of a page number.
+
 ### Upgrading an existing index
 
 Qdrant cannot add sparse vectors to a collection that was created without them,

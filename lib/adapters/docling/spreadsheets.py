@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import datetime
+
+from lib.datasets.spreadsheet_markdown import SPREADSHEET_MARKDOWN_MARKER
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
 
 SPREADSHEET_EXTENSIONS = (".xls", ".xlsx", ".xlsm")
-SPREADSHEET_MARKDOWN_MARKER = (
-    "<!-- sictic-spreadsheet: compact-values-v2 -->"
-)
+
+__all__ = [
+    "SPREADSHEET_EXTENSIONS",
+    "SPREADSHEET_MARKDOWN_MARKER",
+    "convert_spreadsheet",
+    "format_cell_value",
+    "is_spreadsheet_filename",
+]
 
 
 def is_spreadsheet_filename(filename: str) -> bool:
@@ -53,11 +61,9 @@ def convert_openpyxl(filepath: str) -> str:
             for (row, col), cell in values_ws._cells.items():
                 if is_hidden(row, col) or cell.data_type == "e":
                     continue
-                value = cell.value
-                text = (
-                    ""
-                    if value is None
-                    else str(value).replace("\n", " ").strip()
+                text = format_cell_value(
+                    cell.value,
+                    getattr(cell, "number_format", ""),
                 )
                 if text:
                     row_cells.setdefault(row, {})[col] = text
@@ -154,6 +160,53 @@ def escape_markdown_cell(value: str) -> str:
     return value.replace("|", "\\|")
 
 
+def format_cell_value(value, number_format: str = "") -> str:
+    """Render a cell as text a reader (and an embedding model) can use."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return format_temporal(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return format_float(value, number_format)
+    return str(value).replace("\n", " ").strip()
+
+
+def format_temporal(value) -> str:
+    if isinstance(value, datetime.datetime):
+        if (value.hour, value.minute, value.second) == (0, 0, 0):
+            return value.date().isoformat()
+        return value.isoformat(sep=" ", timespec="minutes")
+    if isinstance(value, datetime.time):
+        return value.isoformat(timespec="minutes")
+    return value.isoformat()
+
+
+def format_float(value: float, number_format: str = "") -> str:
+    if value != value or value in (float("inf"), float("-inf")):
+        return str(value)
+    if "%" in (number_format or ""):
+        return f"{format_magnitude(value * 100)}%"
+    return format_magnitude(value)
+
+
+def format_magnitude(value: float) -> str:
+    """Drop float noise: spreadsheet ratios carry far more digits than meaning."""
+    if value == int(value):
+        return str(int(value))
+    magnitude = abs(value)
+    if magnitude >= 1:
+        text = f"{value:.2f}"
+    elif magnitude >= 1e-4:
+        text = f"{value:.4f}"
+    else:
+        return f"{value:.4g}"
+    return text.rstrip("0").rstrip(".")
+
+
 def render_spreadsheet_markdown(sections: list[str]) -> str:
     body = "\n".join(sections).strip()
     if not body:
@@ -162,8 +215,6 @@ def render_spreadsheet_markdown(sections: list[str]) -> str:
 
 
 def xls_cell_text(value) -> str:
-    if value in (None, ""):
+    if value is None or value == "":
         return ""
-    if isinstance(value, float) and value.is_integer():
-        value = int(value)
-    return str(value).replace("\n", " ").strip()
+    return format_cell_value(value)
