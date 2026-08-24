@@ -6,23 +6,36 @@
   <title>SICTIC spike</title>
   <style>
     body { font-family: sans-serif; max-width: 48rem; margin: 1.5rem auto; padding: 0 1rem; }
-    label, textarea, input[type=text] { display: block; width: 100%; }
+    label, textarea, input[type=text], select { display: block; width: 100%; }
     textarea { min-height: 10rem; }
     .hit { border-top: 1px solid #ccc; padding: 0.75rem 0; }
     pre { white-space: pre-wrap; }
     .error { color: #a40000; }
     button { margin-top: 0.75rem; }
+    .hint { color: #444; font-size: 0.9rem; }
+    form { margin-bottom: 2rem; }
   </style>
 </head>
 <body>
   <h1>SICTIC spike</h1>
   <p id="status">Loading status…</p>
   <p class="error" id="error" hidden></p>
+  <form id="skill">
+    <h2>Run a skill</h2>
+    <label for="skillName">Skill</label>
+    <select id="skillName" name="skill" required></select>
+    <p class="hint" id="skillHint"></p>
+    <label for="skillArgs">Arguments</label>
+    <input id="skillArgs" name="args" type="text" placeholder="avientus">
+    <button type="submit">Run</button>
+  </form>
+  <pre id="skillOutput" hidden></pre>
   <form id="demo">
+    <h2>Search pasted markdown</h2>
     <label for="query">Query</label>
-    <input id="query" name="query" type="text" required>
+    <input id="query" name="query" type="text">
     <label for="markdown">Markdown</label>
-    <textarea id="markdown" name="markdown" required></textarea>
+    <textarea id="markdown" name="markdown"></textarea>
     <button type="submit">Search</button>
   </form>
   <div id="hits"></div>
@@ -30,6 +43,10 @@
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
     const hitsEl = document.getElementById("hits");
+    const skillSelect = document.getElementById("skillName");
+    const skillHint = document.getElementById("skillHint");
+    const skillOutput = document.getElementById("skillOutput");
+    let commands = [];
 
     function showError(message) {
       errorEl.hidden = !message;
@@ -44,11 +61,58 @@
       return payload;
     }
 
+    function selectedCommand() {
+      return commands.find((item) => item.name === skillSelect.value);
+    }
+
+    function refreshHint() {
+      const command = selectedCommand();
+      skillHint.textContent = command
+        ? `${command.usage} — ${command.description}`
+        : "";
+    }
+
     async function loadStatus() {
       const status = await readJson(await fetch("/api/status"));
       statusEl.textContent =
         `Parser ${status.parser} · store ${status.store} · embedding ${status.embedding_model}`;
+      commands = status.commands || [];
+      skillSelect.replaceChildren();
+      for (const command of commands) {
+        const option = document.createElement("option");
+        option.value = command.name;
+        option.textContent = command.name;
+        skillSelect.append(option);
+      }
+      if (commands.some((item) => item.name === "startup_profile")) {
+        skillSelect.value = "startup_profile";
+      }
+      refreshHint();
     }
+
+    skillSelect.addEventListener("change", refreshHint);
+
+    document.getElementById("skill").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showError("");
+      skillOutput.hidden = true;
+      skillOutput.textContent = "Running…";
+      skillOutput.hidden = false;
+      try {
+        const result = await readJson(await fetch("/api/skill", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            skill: skillSelect.value,
+            args: document.getElementById("skillArgs").value,
+          }),
+        }));
+        skillOutput.textContent = result.output || "(no output)";
+      } catch (error) {
+        skillOutput.hidden = true;
+        showError(error instanceof Error ? error.message : "Skill failed.");
+      }
+    });
 
     document.getElementById("demo").addEventListener("submit", async (event) => {
       event.preventDefault();

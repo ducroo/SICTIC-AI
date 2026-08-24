@@ -8,7 +8,14 @@ from pathlib import Path
 from aiohttp import web
 
 from lib.logger import get_logger
-from spike.runtime import DemoResult, SpikeStatus, run_demo, spike_status
+from spike.runtime import (
+    DemoResult,
+    SpikeStatus,
+    parse_skill_call,
+    run_demo,
+    run_skill,
+    spike_status,
+)
 
 logger = get_logger(__name__)
 
@@ -129,6 +136,15 @@ def parse_json_demo(body: object) -> DemoRequest:
     return DemoRequest(filename="note.md", payload=markdown.encode("utf-8"), query=query)
 
 
+def parse_json_skill(body: object):
+    if not isinstance(body, dict):
+        raise ValueError("JSON object required.")
+    return parse_skill_call(
+        skill=str(body.get("skill") or ""),
+        args=str(body.get("args") or ""),
+    )
+
+
 def demo_result_payload(result: DemoResult) -> dict:
     return {
         "dataset_name": result.dataset_name,
@@ -234,12 +250,31 @@ async def handle_api_demo(request: web.Request) -> web.Response:
     return web.json_response(demo_result_payload(result))
 
 
+async def handle_api_skill(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        call = parse_json_skill(body)
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except Exception:
+        return web.json_response({"error": "JSON object required."}, status=400)
+    try:
+        result = await run_skill(call)
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except Exception as error:
+        logger.exception("Skill failed.")
+        return web.json_response({"error": str(error)}, status=500)
+    return web.json_response(asdict(result))
+
+
 ROUTES = (
     web.get("/", handle_index),
     web.post("/demo", handle_demo),
     web.get("/healthz", handle_healthz),
     web.get("/api/status", handle_api_status),
     web.post("/api/demo", handle_api_demo),
+    web.post("/api/skill", handle_api_skill),
 )
 
 

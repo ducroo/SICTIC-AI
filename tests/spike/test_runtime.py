@@ -139,6 +139,40 @@ def test_parse_json_demo_requires_object_query_and_markdown():
     assert demo.payload == b"# Acme\n"
 
 
+def test_parse_skill_call_builds_harness_command():
+    from spike.runtime import parse_skill_call
+
+    call = parse_skill_call(skill="startup_profile", args="  avientus  ")
+    assert call.skill == "startup_profile"
+    assert call.args == "avientus"
+    assert call.command == "/startup_profile avientus"
+
+
+def test_parse_skill_call_rejects_unknown_and_unsafe_names():
+    from spike.runtime import parse_skill_call
+
+    with pytest.raises(ValueError, match="Unknown harness skill"):
+        parse_skill_call(skill="not_a_skill", args="avientus")
+    with pytest.raises(ValueError, match="invalid"):
+        parse_skill_call(skill="../etc/passwd", args="")
+    with pytest.raises(ValueError, match="invalid"):
+        parse_skill_call(skill="HARSH", args="")
+
+
+def test_spike_status_includes_harness_commands(monkeypatch, tmp_path):
+    monkeypatch.setenv("REPO_PATH", str(tmp_path))
+    monkeypatch.setenv("DOCUMENT_PARSER", "docling")  # pragma: allowlist secret
+    monkeypatch.setenv("VECTOR_STORE", "qdrant")  # pragma: allowlist secret
+    monkeypatch.delenv("LLAMA_CLOUD_API_KEY", raising=False)
+    monkeypatch.delenv("FIREBASE_SERVICE_ACCOUNT_JSON", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    monkeypatch.delenv("FIREBASE_PROJECT_ID", raising=False)
+    monkeypatch.delenv("EMBEDDING_MODEL", raising=False)
+    names = [command.name for command in spike_status().commands]
+    assert "startup_profile" in names
+    assert "harness" not in names
+
+
 def test_emulator_config_skips_database_emulator():
     import json
 

@@ -18,6 +18,13 @@ class SkillInfo:
 
 
 @dataclass(frozen=True)
+class HarnessCommandInfo:
+    name: str
+    usage: str
+    description: str
+
+
+@dataclass(frozen=True)
 class SpikeStatus:
     parser: str
     store: str
@@ -25,6 +32,22 @@ class SpikeStatus:
     firebase_credentials: bool
     embedding_model: str
     skills: tuple[SkillInfo, ...]
+    commands: tuple[HarnessCommandInfo, ...]
+
+
+@dataclass(frozen=True)
+class SkillCall:
+    skill: str
+    args: str
+    command: str
+
+
+@dataclass(frozen=True)
+class SkillResult:
+    skill: str
+    args: str
+    command: str
+    output: str
 
 
 @dataclass(frozen=True)
@@ -57,6 +80,57 @@ def list_skills() -> tuple[SkillInfo, ...]:
     return tuple(found)
 
 
+def list_harness_commands() -> tuple[HarnessCommandInfo, ...]:
+    from skills.harness.harness import build_registry
+
+    found: list[HarnessCommandInfo] = []
+    for command in build_registry().values():
+        name = command.name.lstrip("/")
+        found.append(
+            HarnessCommandInfo(
+                name=name,
+                usage=command.usage,
+                description=command.description,
+            )
+        )
+    return tuple(found)
+
+
+def allowed_skill_names() -> frozenset[str]:
+    return frozenset(command.name for command in list_harness_commands())
+
+
+def parse_skill_call(*, skill: str, args: str) -> SkillCall:
+    cleaned_skill = skill.strip().lstrip("/")
+    if not cleaned_skill.isidentifier() or not cleaned_skill.islower():
+        raise ValueError("Skill name is invalid.")
+    if cleaned_skill not in allowed_skill_names():
+        raise ValueError(f"Unknown harness skill: {cleaned_skill}")
+    cleaned_args = " ".join(args.split())
+    if "\x00" in cleaned_args:
+        raise ValueError("Arguments are invalid.")
+    if len(cleaned_args) > 4000:
+        raise ValueError("Arguments are too long.")
+    command = f"/{cleaned_skill}"
+    if cleaned_args:
+        command = f"{command} {cleaned_args}"
+    return SkillCall(skill=cleaned_skill, args=cleaned_args, command=command)
+
+
+async def run_skill(call: SkillCall) -> SkillResult:
+    from skills.harness.harness import dispatch_command
+
+    output = await dispatch_command(call.command)
+    if output == "__EXIT__":
+        raise ValueError("That command is not runnable here.")
+    return SkillResult(
+        skill=call.skill,
+        args=call.args,
+        command=call.command,
+        output=output or "",
+    )
+
+
 def spike_status() -> SpikeStatus:
     return SpikeStatus(
         parser=document_parser_backend(),
@@ -69,6 +143,7 @@ def spike_status() -> SpikeStatus:
         ),
         embedding_model=(os.environ.get("EMBEDDING_MODEL") or "").strip(),
         skills=list_skills(),
+        commands=list_harness_commands(),
     )
 
 

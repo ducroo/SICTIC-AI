@@ -14,6 +14,9 @@ function spikePath(req) {
   if (path.endsWith("/demo")) {
     return "/api/demo";
   }
+  if (path.endsWith("/skill")) {
+    return "/api/skill";
+  }
   return "";
 }
 
@@ -35,6 +38,10 @@ exports.spikeGateway = onRequest(
       return;
     }
     if (path === "/api/demo" && req.method !== "POST") {
+      res.status(405).json({ error: "POST required." });
+      return;
+    }
+    if (path === "/api/skill" && req.method !== "POST") {
       res.status(405).json({ error: "POST required." });
       return;
     }

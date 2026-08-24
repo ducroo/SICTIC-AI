@@ -91,7 +91,7 @@ If `docker build` fails with overlayfs `invalid argument`, prove the process wit
 
 ## Hosting emulator
 
-The static UI lives in `hosting/public`. `firebase.json` rewrites `/api/**` to the `spikeGateway` Function, which forwards JSON to the Python process (`POST /api/demo`, `GET /api/status`). Do not start a database emulator. The Python process keeps using the production vector store.
+The static UI lives in `hosting/public`. `firebase.json` rewrites `/api/**` to the `spikeGateway` Function, which forwards JSON to the Python process (`POST /api/demo`, `POST /api/skill`, `GET /api/status`). The skill menu is the harness command list, not every Typer module. Arguments are the rest of the slash command, for example skill `startup_profile` and arguments `avientus`. Do not start a database emulator. The Python process keeps using the production vector store.
 
 ```bash
 conda run -n sictic-env python -m spike.web
