@@ -345,4 +345,19 @@ async def test_oversized_document_is_skipped_without_embedding(tmp_path, mocker)
     )
     state = IngestionManifest.load(storage, parsed_rel).documents["oversized.md"]
     assert state["indexed_parsed_sha256"] == content_hash(oversized_text)
+    assert state["indexed_sparse_version"] == indexing.SPARSE_ENCODER_VERSION
     assert "500,000-character limit" in state["index_ignored_reason"]
+
+    second_result = await indexing.reconcile_index(
+        "example",
+        raw_rel,
+        parsed_rel,
+        sources=[source_document],
+    )
+
+    assert second_result.failures == []
+    assert second_result.ignored == 0
+    qdrant.delete_document.assert_called_once_with(
+        "oversized.md",
+        raise_on_error=True,
+    )
