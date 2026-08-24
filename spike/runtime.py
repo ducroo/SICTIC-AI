@@ -30,6 +30,7 @@ class SpikeStatus:
     store: str
     llama_cloud_key: bool
     firebase_credentials: bool
+    firebase_project_id: str
     embedding_model: str
     skills: tuple[SkillInfo, ...]
     commands: tuple[HarnessCommandInfo, ...]
@@ -142,6 +143,7 @@ def spike_status() -> SpikeStatus:
             or (os.environ.get("FIREBASE_PROJECT_ID") or "").strip()
         ),
         embedding_model=(os.environ.get("EMBEDDING_MODEL") or "").strip(),
+        firebase_project_id=(os.environ.get("FIREBASE_PROJECT_ID") or "").strip(),
         skills=list_skills(),
         commands=list_harness_commands(),
     )

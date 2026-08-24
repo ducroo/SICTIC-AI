@@ -46,6 +46,7 @@
     const skillSelect = document.getElementById("skillName");
     const skillHint = document.getElementById("skillHint");
     const skillOutput = document.getElementById("skillOutput");
+    let lastStatus = {};
     let commands = [];
 
     function showError(message) {
@@ -61,6 +62,14 @@
       return payload;
     }
 
+    function skillUrl() {
+      const project = lastStatus.firebase_project_id;
+      if (location.port === "5000" && project) {
+        return `http://${location.hostname}:5001/${project}/europe-west1/spikeGateway/api/skill`;
+      }
+      return "/api/skill";
+    }
+
     function selectedCommand() {
       return commands.find((item) => item.name === skillSelect.value);
     }
@@ -74,6 +83,7 @@
 
     async function loadStatus() {
       const status = await readJson(await fetch("/api/status"));
+      lastStatus = status;
       statusEl.textContent =
         `Parser ${status.parser} · store ${status.store} · embedding ${status.embedding_model}`;
       commands = status.commands || [];
@@ -99,7 +109,7 @@
       skillOutput.textContent = "Running…";
       skillOutput.hidden = false;
       try {
-        const result = await readJson(await fetch("/api/skill", {
+        const result = await readJson(await fetch(skillUrl(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
