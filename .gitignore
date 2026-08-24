@@ -60,4 +60,5 @@ config/sync.yaml
 .firebase/
 .firebaserc
 functions/node_modules/
+functions/package-lock.json
 hosting/.firebase/
