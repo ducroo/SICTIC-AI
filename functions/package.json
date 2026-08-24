@@ -1,0 +1,11 @@
+{
+  "name": "sictic-spike-gateway",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-functions": "^6.4.0"
+  }
+}

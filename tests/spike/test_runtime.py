@@ -126,6 +126,42 @@ async def test_run_demo_writes_payload_and_maps_chunks(mocker):
     assert "arms" in result.hits[0].text
 
 
+def test_parse_json_demo_requires_object_query_and_markdown():
+    from spike.web import parse_json_demo
+
+    with pytest.raises(ValueError, match="JSON object"):
+        parse_json_demo(["nope"])
+    with pytest.raises(ValueError, match="Query and markdown"):
+        parse_json_demo({"query": "what", "markdown": "  "})
+    demo = parse_json_demo({"query": "what", "markdown": "# Acme\n"})
+    assert demo.filename == "note.md"
+    assert demo.query == "what"
+    assert demo.payload == b"# Acme\n"
+
+
+def test_emulator_config_skips_database_emulator():
+    import json
+
+    config = json.loads((REPO_ROOT / "firebase.json").read_text(encoding="utf-8"))
+    emulators = config.get("emulators") or {}
+    assert "hosting" in emulators
+    assert "functions" in emulators
+    assert set(emulators) <= {"hosting", "functions", "ui"}
+
+
+def test_hosting_rewrites_api_to_function():
+    import json
+
+    config = json.loads((REPO_ROOT / "firebase.json").read_text(encoding="utf-8"))
+    rewrites = config["hosting"]["rewrites"]
+    api = next(rule for rule in rewrites if rule.get("source") == "/api/**")
+    function = api.get("function")
+    if isinstance(function, dict):
+        assert function.get("functionId") == "spikeGateway"
+    else:
+        assert function == "spikeGateway"
+
+
 def test_image_omits_heavy_local_stack():
     blob = (
         (REPO_ROOT / "spike" / "Dockerfile").read_text(encoding="utf-8")

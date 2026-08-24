@@ -55,3 +55,9 @@ gdrive-ops-token.json
 
 # Live sync config (per-user folder IDs). Commit only sync.yaml.example.
 config/sync.yaml
+
+# Firebase emulators and Functions install
+.firebase/
+.firebaserc
+functions/node_modules/
+hosting/.firebase/

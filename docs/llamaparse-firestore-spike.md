@@ -88,3 +88,14 @@ The process binds `0.0.0.0` and reads `PORT` (default 8080). Cloud Run sets `POR
 Skills ship in the image as `python -m skills.<name>` with `PYTHONPATH=/app`. The page lists those modules. It does not wrap every Typer CLI.
 
 If `docker build` fails with overlayfs `invalid argument`, prove the process with `conda run -n sictic-env python -m pytest tests/spike/test_runtime.py` and `spike/verify.sh`.
+
+## Hosting emulator
+
+The static UI lives in `hosting/public`. `firebase.json` rewrites `/api/**` to the `spikeGateway` Function, which forwards JSON to the Python process (`POST /api/demo`, `GET /api/status`). Do not start a database emulator. The Python process keeps using the production vector store.
+
+```bash
+conda run -n sictic-env python -m spike.web
+SPIKE_URL=http://127.0.0.1:8080 bash spike/emulate.sh
+```
+
+Hosting emulator: `http://127.0.0.1:5000`. Functions emulator: `http://127.0.0.1:5001`. The Function does not verify Firebase Auth yet. Do not deploy this gateway until it checks ID tokens.

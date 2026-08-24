@@ -119,6 +119,23 @@ def parse_demo_request(post) -> DemoRequest:
     return DemoRequest(filename=filename, payload=payload, query=query)
 
 
+def parse_json_demo(body: object) -> DemoRequest:
+    if not isinstance(body, dict):
+        raise ValueError("JSON object required.")
+    query = str(body.get("query") or "").strip()
+    markdown = str(body.get("markdown") or "")
+    if not markdown.strip() or not query:
+        raise ValueError("Query and markdown are required.")
+    return DemoRequest(filename="note.md", payload=markdown.encode("utf-8"), query=query)
+
+
+def demo_result_payload(result: DemoResult) -> dict:
+    return {
+        "dataset_name": result.dataset_name,
+        "hits": [asdict(hit) for hit in result.hits],
+    }
+
+
 def _health_payload(status: SpikeStatus) -> dict:
     ok = bool(status.parser) and bool(status.store)
     return {
@@ -197,11 +214,32 @@ async def handle_api_status(_request: web.Request) -> web.Response:
     return web.json_response(asdict(spike_status()))
 
 
+async def handle_api_demo(request: web.Request) -> web.Response:
+    try:
+        body = await request.json()
+        demo = parse_json_demo(body)
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except Exception:
+        return web.json_response({"error": "JSON object required."}, status=400)
+    try:
+        result = await run_demo(
+            filename=demo.filename,
+            payload=demo.payload,
+            query=demo.query,
+        )
+    except Exception as error:
+        logger.exception("Demo failed.")
+        return web.json_response({"error": str(error)}, status=500)
+    return web.json_response(demo_result_payload(result))
+
+
 ROUTES = (
     web.get("/", handle_index),
     web.post("/demo", handle_demo),
     web.get("/healthz", handle_healthz),
     web.get("/api/status", handle_api_status),
+    web.post("/api/demo", handle_api_demo),
 )
 
 

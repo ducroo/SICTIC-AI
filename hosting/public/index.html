@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SICTIC spike</title>
+  <style>
+    body { font-family: sans-serif; max-width: 48rem; margin: 1.5rem auto; padding: 0 1rem; }
+    label, textarea, input[type=text] { display: block; width: 100%; }
+    textarea { min-height: 10rem; }
+    .hit { border-top: 1px solid #ccc; padding: 0.75rem 0; }
+    pre { white-space: pre-wrap; }
+    .error { color: #a40000; }
+    button { margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>SICTIC spike</h1>
+  <p id="status">Loading status…</p>
+  <p class="error" id="error" hidden></p>
+  <form id="demo">
+    <label for="query">Query</label>
+    <input id="query" name="query" type="text" required>
+    <label for="markdown">Markdown</label>
+    <textarea id="markdown" name="markdown" required></textarea>
+    <button type="submit">Search</button>
+  </form>
+  <div id="hits"></div>
+  <script>
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+    const hitsEl = document.getElementById("hits");
+
+    function showError(message) {
+      errorEl.hidden = !message;
+      errorEl.textContent = message || "";
+    }
+
+    async function readJson(response) {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      return payload;
+    }
+
+    async function loadStatus() {
+      const status = await readJson(await fetch("/api/status"));
+      statusEl.textContent =
+        `Parser ${status.parser} · store ${status.store} · embedding ${status.embedding_model}`;
+    }
+
+    document.getElementById("demo").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      showError("");
+      hitsEl.replaceChildren();
+      try {
+        const result = await readJson(await fetch("/api/demo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: document.getElementById("query").value,
+            markdown: document.getElementById("markdown").value,
+          }),
+        }));
+        const heading = document.createElement("h2");
+        heading.textContent = `Hits in ${result.dataset_name}`;
+        hitsEl.append(heading);
+        if (!result.hits || result.hits.length === 0) {
+          const empty = document.createElement("p");
+          empty.textContent = "No hits.";
+          hitsEl.append(empty);
+          return;
+        }
+        for (const hit of result.hits) {
+          const article = document.createElement("article");
+          article.className = "hit";
+          const meta = document.createElement("p");
+          const strong = document.createElement("strong");
+          strong.textContent = hit.document_name;
+          meta.append(strong, ` · page ${hit.page_number}`);
+          const pre = document.createElement("pre");
+          pre.textContent = hit.text;
+          article.append(meta, pre);
+          hitsEl.append(article);
+        }
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "Search failed.");
+      }
+    });
+
+    loadStatus().catch((error) => {
+      statusEl.textContent = "Status unavailable.";
+      showError(error instanceof Error ? error.message : "Status failed.");
+    });
+  </script>
+</body>
+</html>
