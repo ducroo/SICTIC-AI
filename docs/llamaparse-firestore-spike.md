@@ -63,3 +63,28 @@ are re-parsed.
 conda run -n sictic-env python -m skills.dataset_chat sync <dataset>
 conda run -n sictic-env python -m skills.dataset_chat search <dataset> "what does the company do?"
 ```
+
+## Container
+
+The Dockerfile is `spike/Dockerfile`. It lives under `spike/` so `install.sh` never treats it as the Conda installer path. The image is pip-only and omits torch, Docling, Qdrant, and Ollama. Image defaults are the SaaS parser and Firestore vector store. Host Conda defaults stay `docling` / `qdrant`.  <!-- pragma: allowlist secret -->
+
+Build from the repository root so `lib/`, `skills/`, and `config/` copy into the image.
+
+```bash
+docker build -f spike/Dockerfile -t sictic-spike .
+docker run --rm -p 8080:8080 \
+  -e LLAMA_CLOUD_API_KEY \
+  -e FIREBASE_PROJECT_ID \
+  -e FIREBASE_SERVICE_ACCOUNT_JSON \
+  -e LLM_API_KEY -e EMBEDDING_API_KEY \
+  -e LLM_MODEL -e EMBEDDING_MODEL \
+  sictic-spike
+```
+
+Pass secrets as process environment. Do not copy a `.env` into the image. `lib/env.py` loads repo-root `.env` with `override=True`, so empty template keys would wipe those values. Do not put `FIREBASE_SERVICE_ACCOUNT_JSON` in a file that `sed` will rewrite.
+
+The process binds `0.0.0.0` and reads `PORT` (default 8080). Cloud Run sets `PORT`. `GET /healthz` reports parser, store, and secret presence flags. It does not call LlamaCloud or Firestore. `GET /` is a private demo form that calls `prepare_ephemeral_dataset` and `dataset_search`. There is no auth. Do not publish this port. <!-- pragma: allowlist secret -->
+
+Skills ship in the image as `python -m skills.<name>` with `PYTHONPATH=/app`. The page lists those modules. It does not wrap every Typer CLI.
+
+If `docker build` fails with overlayfs `invalid argument`, prove the process with `conda run -n sictic-env python -m pytest tests/spike/test_runtime.py` and `spike/verify.sh`.
