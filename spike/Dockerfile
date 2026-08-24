@@ -5,7 +5,6 @@ WORKDIR /app
 COPY spike/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Do not COPY .env; lib.env loads it with override=True and would wipe process env.
 COPY lib /app/lib
 COPY skills /app/skills
 COPY config /app/config
