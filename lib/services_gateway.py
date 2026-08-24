@@ -26,7 +26,6 @@ _DEFAULT_LEASE_MAX_AGE = 1800.0
 _DEFAULT_LLM_REQUEST_TIMEOUT = 600.0
 _DEFAULT_EMBEDDING_REQUEST_TIMEOUT = 300.0
 _DEFAULT_RERANK_REQUEST_TIMEOUT = 120.0
-_MAX_CONCURRENT_LLMS = 8
 
 
 def _float_env(name: str, default: float) -> float:
@@ -301,11 +300,6 @@ class ServicesGateway:
         request: dict,
     ) -> bool:
         model = str(request.get("model") or request.get("resource"))
-        if (
-            request.get("resource") == "llm"
-            and len(state["leases"]["llm"]) >= _MAX_CONCURRENT_LLMS
-        ):
-            return False
         active_models = self._active_models(state)
         model_already_loaded = model in active_models
         if (

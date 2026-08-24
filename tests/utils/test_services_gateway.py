@@ -280,35 +280,33 @@ async def test_same_resource_different_models_have_independent_capacity(
 
 
 @pytest.mark.asyncio
-async def test_llm_capacity_is_globally_capped_at_eight(tmp_path):
+async def test_llm_capacity_matches_ollama_num_parallel(tmp_path):
     gateway = ServicesGateway(
         state_path=tmp_path / "gateway.json",
-        ollama_num_parallel=16,
-        ollama_max_loaded_models=2,
+        ollama_num_parallel=9,
+        ollama_max_loaded_models=1,
         wait_timeout=1,
         poll_interval=0.01,
     )
-    requests = [
-        gateway._register_request(
-            "llm",
-            "model-a" if index % 2 == 0 else "model-b",
-        )[0]
-        for index in range(9)
+    slots = [
+        gateway.slot("llm", model="ollama/same")
+        for _ in range(gateway.ollama_num_parallel)
     ]
-    leases = [
-        gateway._try_acquire(request, max_concurrent=16)[0]
-        for request in requests[:8]
-    ]
-    blocked, _, _ = gateway._try_acquire(
-        requests[8],
-        max_concurrent=16,
-    )
+    try:
+        for slot in slots:
+            await slot.__aenter__()
+        assert len(_leases(gateway, "llm")) == gateway.ollama_num_parallel
 
-    assert all(lease is not None for lease in leases)
-    assert blocked is None
-    gateway._remove_request(requests[8])
-    for lease in leases:
-        gateway._release(lease)
+        with pytest.raises(GatewayTimeoutError):
+            async with gateway.slot(
+                "llm",
+                model="ollama/same",
+                timeout=0.03,
+            ):
+                pass
+    finally:
+        for slot in reversed(slots):
+            await slot.__aexit__(None, None, None)
 
 
 @pytest.mark.asyncio
