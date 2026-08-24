@@ -59,6 +59,8 @@ config/sync.yaml
 # Firebase emulators and Functions install
 .firebase/
 .firebaserc
+firebase-debug.log
+*-debug.log
 functions/node_modules/
 functions/package-lock.json
 hosting/.firebase/
