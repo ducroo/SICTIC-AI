@@ -1,55 +1,59 @@
 name: sictic-env
 
-# Channels: prefer conda-forge for everything; defaults left as a fallback.
+# Keep one consistent package ecosystem. `nodefaults` prevents Conda from
+# silently mixing packages from the Anaconda defaults channel.
 channels:
   - conda-forge
-  - defaults
-
-# This file is the sole source of truth for the Python runtime.
-# Anything listed under `dependencies:` is installed via conda-forge.
-# Anything under `pip:` is installed via pip because it isn't on conda-forge,
-# or has an extra we need (e.g. docling[ocrmac]).
+  - nodefaults
 
 dependencies:
-  # Python 3.12 is the supported runtime on macOS and Linux.
-  - python=3.12
+  # Python 3.13 is supported on macOS and Linux/WSL2. Python 3.14 is not yet
+  # supported by Docling's complete dependency chain.
+  - python=3.13
   - pip
 
-  # === Runtime deps available on conda-forge ===
+  # Application dependencies
   - aiohttp
-  - google-api-python-client
-  - google-auth-oauthlib
   - jsonschema
-  # Keep LiteLLM on a GPT-5.6-capable release and prevent conda update --all
-  # from downgrading it in order to select the incompatible OpenAI 3.x SDK.
-  - litellm=1.97.0
-  - openai>=2.20,<3
-  # Transformers 5.8.1 rejects tokenizers 0.23.1; conda-forge does not ship 0.23.0.
-  - tokenizers=0.22.2
-  - polars
+  - openpyxl
   - pydantic
   - python-dotenv
-  - qdrant-client
   - rapidfuzz
   - requests
   - rich
-  - striprtf=0.0.29
-  - typer
+  - striprtf
+  - typer<0.25
   - xlrd
 
-  # === Test deps ===
+  # Google Drive support. Reconsider after the rclone decision.
+  - google-api-python-client
+  - google-auth-oauthlib
+
+  # LLM access
+  - litellm>=1.97.0
+
+  # Dataset chunking
+  - langchain-text-splitters
+
+  # Document conversion
+  - docling=2.96.1
+
+  # Temporary compatibility constraints required by Docling 2.96.1.
+  # Remove these after a newer Docling release has been tested.
+  - transformers<5.9
+  - tokenizers<0.23.1
+
+  # Vector database client. Leave unpinned to use the newest compatible
+  # conda-forge release. This does not install the Qdrant server.
+  - qdrant-client
+
+  # Tests
   - pytest
   - pytest-mock
 
+  # Packages that cannot currently be handled reliably and portably through
+  # conda-forge across all supported platforms.
   - pip:
-      # Not on conda-forge. Docling uses ocrmac on macOS and RapidOCR on Linux.
-      # RapidOCR needs onnxruntime; it is not pulled in by the base docling wheel.
       - apify-client
-      - langchain-text-splitters
-      - ollama
-      - 'docling[ocrmac]==2.96.1; platform_system == "Darwin"'
-      - 'docling==2.96.1; platform_system != "Darwin"'
+      - 'ocrmac>=1,<2; platform_system == "Darwin"'
       - 'onnxruntime; platform_system != "Darwin"'
-      - torch==2.10.0
-      - torchvision==0.25.0
-      - 'ocrmac==1.0.1; platform_system == "Darwin"'
