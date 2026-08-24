@@ -89,6 +89,17 @@ def _llm_prompt(
     llm_instructions: str,
     response_schema: dict[str, Any],
 ) -> str:
+    return (
+        _llm_prompt_prefix(llm_instructions, response_schema)
+        + "\n\n"
+        + _llm_check_prompt(check)
+    )
+
+
+def _llm_prompt_prefix(
+    llm_instructions: str,
+    response_schema: dict[str, Any],
+) -> str:
     rendered_schema = schema_text(response_schema)
     if "{{response_schema}}" in llm_instructions:
         instructions = llm_instructions.replace(
@@ -101,8 +112,17 @@ def _llm_prompt(
             f"{rendered_schema}"
         )
     return (
-        f"Check to perform:\n{check.description}\n\n"
-        f"Instructions:\n{instructions}"
+        "### AUDIT INSTRUCTIONS — START\n\n"
+        f"{instructions}\n\n"
+        "### AUDIT INSTRUCTIONS — END"
+    )
+
+
+def _llm_check_prompt(check: ChecklistCheck) -> str:
+    return (
+        "### CURRENT CHECK — START\n\n"
+        f"{check.description}\n\n"
+        "### CURRENT CHECK — END"
     )
 
 
@@ -151,16 +171,14 @@ async def _run_check(
     missing_evidence_status: str,
 ) -> dict[str, Any]:
     errors: list[str] = []
+    prompt_prefix = _llm_prompt_prefix(llm_instructions, response_schema)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             raw_response = await dataset_chat(
                 dataset_name=dataset_name,
                 queries=_retrieval_queries(check),
-                prompt=_llm_prompt(
-                    check,
-                    llm_instructions,
-                    response_schema,
-                ),
+                prompt=_llm_check_prompt(check),
+                cacheable_prompt_prefix=prompt_prefix,
                 strict_insufficient_context=False,
                 response_format=json_schema_response_format(
                     "batch_audit_check",
@@ -269,10 +287,28 @@ async def batch_audit_json(
                 error,
             )
 
-    tasks: dict[str, asyncio.Task[dict[str, Any]]] = {}
-    for chapter in checklist.chapters:
-        for check in chapter.checks:
-            tasks[check.number] = asyncio.create_task(
+    checks = [
+        check
+        for chapter in checklist.chapters
+        for check in chapter.checks
+    ]
+    results: dict[str, dict[str, Any]] = {}
+    if checks:
+        first_check, *remaining_checks = checks
+        # Run one complete check first to warm any provider-side prompt-prefix
+        # cache before submitting the remaining checks concurrently.
+        # TODO(2026-12): Reassess Ollama/MLX prefix-cache behavior under
+        # concurrent batch-audit workloads.
+        results[first_check.number] = await _run_check(
+            dataset_name,
+            first_check,
+            llm_instructions,
+            response_schema,
+            status_scale,
+            missing_evidence_status,
+        )
+        tasks = {
+            check.number: asyncio.create_task(
                 _run_check(
                     dataset_name,
                     check,
@@ -282,8 +318,14 @@ async def batch_audit_json(
                     missing_evidence_status,
                 )
             )
-    if tasks:
-        await asyncio.gather(*tasks.values())
+            for check in remaining_checks
+        }
+        if tasks:
+            await asyncio.gather(*tasks.values())
+            results.update(
+                (number, task.result())
+                for number, task in tasks.items()
+            )
 
     audit = {
         "schema_version": AUDIT_SCHEMA_VERSION,
@@ -301,7 +343,7 @@ async def batch_audit_json(
                     {
                         "number": check.number,
                         "check": check.name,
-                        **tasks[check.number].result(),
+                        **results[check.number],
                     }
                     for check in chapter.checks
                 ],

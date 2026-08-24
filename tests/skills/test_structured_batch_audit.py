@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import pytest
@@ -99,7 +100,86 @@ async def test_structured_batch_audit_saves_json_insight(
         "Sufficient",
         "Fine",
     ]
-    assert '"status"' in calls[0]["prompt"]
+    prefix = calls[0]["cacheable_prompt_prefix"]
+    assert '"status"' in prefix
+    assert prefix.index("### AUDIT INSTRUCTIONS — START") < (
+        prefix.index('"status"')
+    )
+    assert "### CURRENT CHECK — START" not in prefix
+    assert calls[0]["prompt"].index("### CURRENT CHECK — START") < (
+        calls[0]["prompt"].index(
+            "Is the company registered in the commercial registry?"
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_structured_batch_audit_warms_one_check_before_concurrent_fanout(
+    mock_env,
+    monkeypatch,
+):
+    from skills.batch_audit import structured
+
+    _indexed_dataset()
+    checklist = CHECKLIST + """
+
+### Registered office
+
+Is the registered office documented?
+"""
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    remaining_started = asyncio.Event()
+    release_remaining = asyncio.Event()
+    started = []
+
+    async def fake_run_check(
+        _dataset_name,
+        check,
+        _llm_instructions,
+        _response_schema,
+        _status_scale,
+        _missing_evidence_status,
+    ):
+        started.append(check.number)
+        if check.number == "1.1":
+            first_started.set()
+            await release_first.wait()
+        else:
+            if len(started) == 3:
+                remaining_started.set()
+            await release_remaining.wait()
+        return {
+            "status": "Pass",
+            "rationale": f"Completed {check.number}.",
+            "source_documents": [],
+            "proposed_next_steps_and_questions": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr(structured, "_run_check", fake_run_check)
+    audit_task = asyncio.create_task(
+        batch_audit_json(
+            dataset_name="example-startup",
+            skill_name="submission_ready",
+            checklist_markdown=checklist,
+            llm_instructions="Return JSON.",
+            status_scale=["Pass", "Fail", "Unclear"],
+            missing_evidence_status="Unclear",
+        )
+    )
+
+    await first_started.wait()
+    assert started == ["1.1"]
+
+    release_first.set()
+    await remaining_started.wait()
+    assert started == ["1.1", "1.2", "1.3"]
+
+    release_remaining.set()
+    insight = await audit_task
+    checks = json.loads(insight.content())["chapters"][0]["checks"]
+    assert [check["number"] for check in checks] == ["1.1", "1.2", "1.3"]
 
 
 @pytest.mark.asyncio

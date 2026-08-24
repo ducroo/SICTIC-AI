@@ -1,3 +1,4 @@
+import hashlib
 import math
 from typing import Dict, Any, Optional
 from lib.runtime_noise import configure_runtime_noise
@@ -12,19 +13,32 @@ from lib.model_config import llm_endpoint
 
 logger = get_logger(__name__)
 
-async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Optional[str]:
+def _supports_explicit_prompt_caching(model: str) -> bool:
+    if model.startswith(("ollama/", "mlx/")):
+        return False
+    return model.rsplit("/", 1)[-1].startswith("gpt-5.6")
+
+
+async def llm_chat(
+    prompt: str,
+    response_format: Optional[Any] = None,
+    cacheable_prompt_prefix: Optional[str] = None,
+) -> Optional[str]:
     endpoint = llm_endpoint()
     default_model = endpoint.model
     is_ollama = default_model.startswith("ollama/")
+    full_prompt = f"{cacheable_prompt_prefix or ''}{prompt}"
 
     min_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH"))
     max_ctx = int(get_env_var("OLLAMA_CONTEXT_LENGTH_MAX"))
-    estimated_tokens = int(len(prompt) / 3)
+    estimated_tokens = int(len(full_prompt) / 3)
 
     if estimated_tokens > max_ctx:
         logger.warning(f"Prompt is too long ({estimated_tokens} tokens > {max_ctx}). Truncating the first part.")
         # Fix truncation logic: keep the END of the prompt (where the instructions usually are)
-        prompt = prompt[-(3 * max_ctx):]
+        full_prompt = full_prompt[-(3 * max_ctx):]
+        prompt = full_prompt
+        cacheable_prompt_prefix = None
         estimated_tokens = max_ctx
 
     if estimated_tokens <= min_ctx:
@@ -34,9 +48,44 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
         power_of_2 = int(2 ** math.ceil(math.log2(estimated_tokens)))
         ctx = max(min_ctx, min(max_ctx, power_of_2))
 
-    messages = [{"role": "user", "content": prompt}]
+    use_explicit_cache = bool(
+        cacheable_prompt_prefix
+        and _supports_explicit_prompt_caching(default_model)
+    )
+    if use_explicit_cache:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": cacheable_prompt_prefix,
+                        "prompt_cache_breakpoint": {"mode": "explicit"},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+    else:
+        messages = [{"role": "user", "content": full_prompt}]
     kwargs: Dict[str, Any] = endpoint.litellm_kwargs()
     kwargs.update({"messages": messages, "timeout": 3600.0})
+
+    if use_explicit_cache:
+        # LiteLLM 1.97 still drops prompt_cache_key when supplied as a named
+        # argument, while its extra_body passthrough preserves the complete
+        # GPT-5.6 request. The request shape is covered by tests.
+        cache_digest = hashlib.sha256(
+            cacheable_prompt_prefix.encode("utf-8")
+        ).hexdigest()[:32]
+        extra_body = dict(kwargs.get("extra_body") or {})
+        extra_body.update(
+            {
+                "prompt_cache_key": f"sictic-ai:{cache_digest}",
+                "prompt_cache_options": {"mode": "explicit"},
+            }
+        )
+        kwargs["extra_body"] = extra_body
     
     if response_format:
         kwargs["response_format"] = response_format
@@ -47,6 +96,9 @@ async def llm_chat(prompt: str, response_format: Optional[Any] = None) -> Option
     logger.info(f"Sending request to {default_model} with context {ctx} (estimated tokens: {estimated_tokens})...")
     try:
         response = await gateway.request_completion(kwargs)
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            logger.info("LLM usage for %s: %s", default_model, usage)
         content = response.choices[0].message.content
         if not content:
             logger.warning("Received an empty response from the model.")

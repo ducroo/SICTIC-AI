@@ -20,7 +20,12 @@ dependencies:
   - google-api-python-client
   - google-auth-oauthlib
   - jsonschema
-  - litellm
+  # Keep LiteLLM on a GPT-5.6-capable release and prevent conda update --all
+  # from downgrading it in order to select the incompatible OpenAI 3.x SDK.
+  - litellm=1.97.0
+  - openai>=2.20,<3
+  # Transformers 5.8.1 rejects tokenizers 0.23.1; conda-forge does not ship 0.23.0.
+  - tokenizers=0.22.2
   - polars
   - pydantic
   - python-dotenv
