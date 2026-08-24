@@ -83,48 +83,57 @@ async def suggested_startups(
     async def generate(
         person: Person,
         insight: InsightFile,
-    ) -> InsightFile | None:
+    ) -> InsightFile:
         logger.info(
             "[%s] Processing investor: %s",
             request.dataset,
             person.display_name,
         )
-        try:
-            report = await generate_report(
-                person.display_name,
-                investor_profiles[person.linkedin_id],
-                compiled_startup_profiles,
-                skill_config.prompt,
-                request.max_startups,
-            )
-            insight.save(report)
-            logger.info(
-                "[%s] Saved suggestions for %s to %s",
-                request.dataset,
-                person.display_name,
-                insight.path,
-            )
-            return insight
-        except Exception:
-            logger.exception(
+        report = await generate_report(
+            person.display_name,
+            investor_profiles[person.linkedin_id],
+            compiled_startup_profiles,
+            skill_config.prompt,
+            request.max_startups,
+        )
+        insight.save(report)
+        logger.info(
+            "[%s] Saved suggestions for %s to %s",
+            request.dataset,
+            person.display_name,
+            insight.path,
+        )
+        return insight
+
+    generated_results = await asyncio.gather(
+        *(generate(person, insight) for person, insight in pending),
+        return_exceptions=True,
+    )
+    generated: InsightResult = []
+    failures: list[str] = []
+    for (person, _insight), result in zip(pending, generated_results):
+        if isinstance(result, BaseException):
+            if not isinstance(result, Exception):
+                raise result
+            logger.error(
                 "[%s] Failed to generate suggested startups for %s. "
                 "No insight was saved.",
                 request.dataset,
                 person.display_name,
+                exc_info=(type(result), result, result.__traceback__),
             )
-            return None
-
-    generated_results = await asyncio.gather(
-        *(generate(person, insight) for person, insight in pending)
-    )
-    generated = [
-        insight for insight in generated_results if insight is not None
-    ]
-    failed_count = len(pending) - len(generated)
+            failures.append(f"{person.display_name}: {result}")
+        else:
+            generated.append(result)
     logger.info(
         "[%s] Suggested-startups summary: %d generated, %d failed.",
         request.dataset,
         len(generated),
-        failed_count,
+        len(failures),
     )
+    if failures:
+        raise RuntimeError(
+            f"Failed to generate suggestions for {len(failures)} "
+            "investor(s): " + "; ".join(failures)
+        )
     return generated

@@ -48,8 +48,9 @@ async def _investor_profile_result(
     track_record_dir = f"{dataset_raw_path(dataset_slug)}/track-record"
 
     if not storage.exists(person_profile_dir):
-        logger.warning(f"[{dataset_slug}] Person profile directory not found: {person_profile_dir}")
-        return InvestorProfileResult(source_dataset=dataset_slug)
+        raise RuntimeError(
+            f"Person profile directory not found: {person_profile_dir}"
+        )
 
     from lib.people.discovery import persons_in_dataset
 
@@ -77,6 +78,7 @@ async def _investor_profile_result(
     skipped = 0
     missing_track_records = 0
     insights: InsightResult = []
+    failures: list[str] = []
 
     for filename in filenames:
         stem = PurePosixPath(filename).stem
@@ -121,13 +123,23 @@ async def _investor_profile_result(
             written += 1
             insights.append(insight)
         except Exception as error:
-            logger.warning(f"[{dataset_slug}] Skipping {filename}: {error}")
+            logger.exception(
+                "[%s] Failed to build investor profile from %s",
+                dataset_slug,
+                filename,
+            )
             skipped += 1
+            failures.append(f"{filename}: {error}")
 
     logger.info(
         f"[{dataset_slug}] Investor profiles complete: "
         f"{written} written, {unchanged} unchanged, {skipped} skipped."
     )
+    if failures:
+        raise RuntimeError(
+            f"Failed to build {len(failures)} investor profile(s): "
+            + "; ".join(failures)
+        )
     return InvestorProfileResult(
         source_dataset=dataset_slug,
         person_profiles=len(filenames),

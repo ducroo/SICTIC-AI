@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from lib.model_config import llm_model
@@ -6,6 +7,7 @@ from lib.storage import get_storage
 from skills.config_load.config_load import config_key, config_load
 from skills.batch_audit.batch_audit import batch_audit
 from skills.batch_audit.rendering import json_to_markdown_table
+from skills.batch_audit.schema import audit_errors, validate_audit_document
 from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.slugify import slugify
 from lib.logger import get_logger
@@ -122,6 +124,7 @@ async def chapter_by_chapter(
 ) -> list[str]:
     checklists = dd_config['checklists']
     sections = []
+    failures: list[str] = []
     for chapter in sorted_chapters:
         target_key = f"{chapter}_{industry_type}"
         fallback_key = f"{chapter}_general"
@@ -146,13 +149,31 @@ async def chapter_by_chapter(
                 missing_evidence_status="Not Found",
             )
             [audit_insight] = audit_results
+            audit = validate_audit_document(json.loads(audit_insight.content()))
+            technical_errors = audit_errors(audit)
+            if technical_errors:
+                details = "; ".join(
+                    f"{item['number']}: {item['error']}"
+                    for item in technical_errors
+                )
+                raise RuntimeError(
+                    f"DD chapter {chapter!r} contains "
+                    f"{len(technical_errors)} technical failure(s): {details}"
+                )
             chapter_output = json_to_markdown_table(audit_insight)
             sections.append(f"## Chapter: {chapter}\n\n{chapter_output}\n")
         except Exception as e:
-            sections.append(
-                f"## Chapter: {chapter}\n\n"
-                f"**Error:** Failed to process chapter due to: {e}\n"
+            logger.exception(
+                "[%s] Failed to process DD chapter %s",
+                startup_name_lower,
+                chapter,
             )
+            failures.append(f"{chapter}: {e}")
+    if failures:
+        raise RuntimeError(
+            f"Failed to process {len(failures)} DD chapter(s): "
+            + "; ".join(failures)
+        )
     return sections
 
 async def dd_checks(startup: str) -> InsightResult:

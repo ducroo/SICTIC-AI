@@ -579,12 +579,17 @@ async def test_discovery_failure_retries_and_writes_failure_report(
         identifier="failures",
         subdir=True,
     )
+    saved_failures = []
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._save_failure_report",
-        lambda failures, run_id: failure_insight,
+        lambda failures, run_id: saved_failures.extend(failures) or failure_insight,
     )
 
-    result = await submission_ready()
+    with pytest.raises(
+        RuntimeError,
+        match="Submission-ready discovery failed",
+    ):
+        await submission_ready()
 
     assert adapter.calls == 3
-    assert result == [failure_insight]
+    assert len(saved_failures) == 1

@@ -690,7 +690,10 @@ async def submission_ready(
             status="failed after three attempts",
             error=str(error),
         )
-        return [_save_failure_report([failure], run_id)]
+        _save_failure_report([failure], run_id)
+        raise RuntimeError(
+            f"Submission-ready discovery failed: {error}"
+        ) from error
     candidates, results = _resolve_candidates(
         applications,
         adapter,
@@ -729,9 +732,15 @@ async def submission_ready(
         results.append(result)
 
     if failures:
-        failure_insight = _save_failure_report(failures, run_id)
-    else:
-        failure_insight = None
+        _save_failure_report(failures, run_id)
+        details = "; ".join(
+            f"{failure.startup}: {failure.error or failure.status}"
+            for failure in failures
+        )
+        raise RuntimeError(
+            f"Submission-ready failed for {len(failures)} startup(s): "
+            + details
+        )
 
     if not results:
         return []
@@ -740,6 +749,4 @@ async def submission_ready(
         for result in results
         for insight in result.insights
     ]
-    if failure_insight is not None:
-        insights.append(failure_insight)
     return insights

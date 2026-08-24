@@ -109,6 +109,33 @@ def test_person_profile_cli_accepts_comma_separated_people(monkeypatch):
     }
 
 
+def test_bulk_refresh_cli_uses_plural_scope_options(monkeypatch):
+    module = importlib.import_module("skills.bulk_refresh.__main__")
+    captured = {}
+
+    async def fake_bulk_refresh(*, datasets, skills):
+        captured["datasets"] = datasets
+        captured["skills"] = skills
+
+    monkeypatch.setattr(module, "bulk_refresh", fake_bulk_refresh)
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--datasets",
+            "avientus,miraex",
+            "--skills",
+            "sha-review,dd-checks",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "datasets": "avientus,miraex",
+        "skills": "sha-review,dd-checks",
+    }
+
+
 def test_suggested_startups_cli_accepts_comma_separated_investors(monkeypatch):
     module = importlib.import_module("skills.suggested_startups.__main__")
     captured = {}
