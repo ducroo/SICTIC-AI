@@ -188,12 +188,13 @@ async def test_structured_batch_audit_retries_invalid_responses(
     monkeypatch,
 ):
     _indexed_dataset()
-    calls = 0
+    calls = []
 
-    async def fake_dataset_chat(**_kwargs):
-        nonlocal calls
-        calls += 1
-        if calls < 3:
+    async def fake_dataset_chat(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ""
+        if len(calls) == 2:
             return '{"status":"Maybe"}'
         return json.dumps(
             {
@@ -222,8 +223,49 @@ async def test_structured_batch_audit_retries_invalid_responses(
     )
 
     check = json.loads(insight.content())["chapters"][0]["checks"][0]
-    assert calls == 3
+    assert len(calls) == 3
     assert check["status"] == "Pass"
+    assert check["error"] is None
+    assert "Audit model returned no content" in calls[1]["prompt"]
+    assert "does not match the schema" in calls[2]["prompt"]
+    assert "Audit model returned no content" not in calls[2]["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_structured_batch_audit_preserves_missing_evidence_fallback(
+    mock_env,
+    monkeypatch,
+):
+    from skills.dataset_chat.dataset_chat import _fallback_trigger
+
+    _indexed_dataset()
+    calls = 0
+
+    async def fake_dataset_chat(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return _fallback_trigger()
+
+    monkeypatch.setattr(
+        "skills.batch_audit.structured.dataset_chat",
+        fake_dataset_chat,
+    )
+
+    insight = await batch_audit_json(
+        dataset_name="example-startup",
+        skill_name="submission_ready",
+        checklist_markdown=CHECKLIST.replace(
+            "### Legal form\n\nIs the current legal form established?\n",
+            "",
+        ),
+        llm_instructions="Return JSON.",
+        status_scale=["Pass", "Fail", "Unclear"],
+        missing_evidence_status="Unclear",
+    )
+
+    check = json.loads(insight.content())["chapters"][0]["checks"][0]
+    assert calls == 1
+    assert check["status"] == "Unclear"
     assert check["error"] is None
 
 

@@ -36,6 +36,7 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
             config["expert_search"],
             config.get("ranking_top_k", {}),
             config.get("ranking_rationale", {}),
+            config.get("structured_output", {}),
             {
                 "target_experts": target_experts,
                 "exclude_experts": exclude_experts,

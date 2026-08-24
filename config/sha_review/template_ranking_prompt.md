@@ -9,5 +9,3 @@ Include every supplied template exactly once. Return them in descending order, w
 For each template, return its exact key from the supplied reference-template dictionary and a concise rationale explaining its position relative to the other templates.
 
 This is a one-shot comparative ranking. Do not perform the substantive legal audit or assess whether the reviewed SHA is balanced.
-
-Return strict JSON only matching the supplied response schema.

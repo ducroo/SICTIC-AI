@@ -36,6 +36,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
             config["potential_investors"],
             config.get("ranking_top_k", {}),
             config.get("ranking_rationale", {}),
+            config.get("structured_output", {}),
             {
                 "target_investors": target_investors,
                 "exclude_investors": exclude_investors,

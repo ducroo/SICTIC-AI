@@ -109,8 +109,7 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         "template_ranking_response_schema": ranking_schema,
         "audit_instructions": (
             "SHA:\n{{sha_under_review}}\n\n"
-            "REFERENCE:\n{{reference_sha}}\n\n"
-            "SCHEMA:\n{{response_schema}}"
+            "REFERENCE:\n{{reference_sha}}"
         ),
         "checklists": {
             "first": checklist,
@@ -125,10 +124,13 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     monkeypatch.setattr(
         module,
         "config_load",
-        lambda: {
-            "sha_review": sha_config,
-            "batch_audit": {"response_schema": {}, "llm_instructions": ""},
-        },
+            lambda: {
+                "sha_review": sha_config,
+                "batch_audit": {"response_schema": {}, "llm_instructions": ""},
+                "structured_output": {
+                    "json_response_instructions": "fixture"
+                },
+            },
     )
 
     async def fake_sync(*_args, **_kwargs):
@@ -137,7 +139,12 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     async def fake_ensure_startup_dataset(startup):
         return SimpleNamespace(dataset_slug=startup.lower())
 
-    async def fake_dataset_chat(*_args, **_kwargs):
+    identification_prompts = []
+
+    async def fake_dataset_chat(*_args, **kwargs):
+        identification_prompts.append(kwargs["prompt"])
+        if len(identification_prompts) == 1:
+            return ""
         return json.dumps(
             {
                 "path": "legal/shareholders-agrement.pdf",
@@ -156,6 +163,8 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     async def fake_llm_chat(*, prompt, response_format=None):
         llm_calls.append((prompt, response_format))
         if response_format is not None:
+            if sum(call[1] is not None for call in llm_calls) == 1:
+                return json.dumps({"rankings": []})
             return json.dumps(
                 {
                     "rankings": [
@@ -241,9 +250,14 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     assert all(call["status_scale"] == status_scale for call in audit_calls)
     assert all(call["missing_evidence_status"] == "unclear" for call in audit_calls)
     assert "legal/shareholders-agreement.pdf.md" in audit_calls[0]["llm_instructions"]
-    assert len(llm_calls) == 2
+    assert len(identification_prompts) == 2
+    assert "### CORRECTION REQUIRED" not in identification_prompts[0]
+    assert "returned no content" in identification_prompts[1]
+    assert len(llm_calls) == 3
     assert llm_calls[0][1] is not None
-    assert llm_calls[1][1] is None
+    assert llm_calls[1][1] is not None
+    assert "does not match the schema" in llm_calls[1][0]
+    assert llm_calls[2][1] is None
 
 
 @pytest.mark.parametrize(

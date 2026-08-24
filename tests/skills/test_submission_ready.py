@@ -222,11 +222,17 @@ def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
 
 @pytest.mark.asyncio
 async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
-    captured = {}
+    calls = []
 
     async def fake_llm_chat(prompt, response_format):
-        captured["prompt"] = prompt
-        captured["response_format"] = response_format
+        calls.append(
+            {
+                "prompt": prompt,
+                "response_format": response_format,
+            }
+        )
+        if len(calls) == 1:
+            return json.dumps({"proposed_action": "Move to Jury"})
         return json.dumps(
             {
                 "proposed_action": "Move to Jury",
@@ -248,12 +254,15 @@ async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
         response_schema=_check_config()["response_schema"],
     )
 
-    schema = captured["response_format"]["json_schema"]["schema"]
+    schema = calls[-1]["response_format"]["json_schema"]["schema"]
     assert schema["properties"]["proposed_action"]["enum"] == [
         "Move to Jury",
         "Send concerns to startup",
     ]
-    assert '"proposed_action"' in captured["prompt"]
+    assert len(calls) == 2
+    assert "### CORRECTION REQUIRED" not in calls[0]["prompt"]
+    assert "does not match the schema" in calls[1]["prompt"]
+    assert '"proposed_action"' in calls[1]["prompt"]
     assert "Move to Jury" in report
 
 

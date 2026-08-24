@@ -53,13 +53,53 @@ async def test_ranking_rationale_propagates_invalid_response(mocker):
             }
         },
     )
-    mocker.patch(
+    mock_llm = mocker.patch(
         "skills.ranking.ranking_rationale.llm_chat",
         return_value='{"results": []}',
     )
 
-    with pytest.raises(ValueError, match="schema|Missing rationale IDs"):
+    with pytest.raises(RuntimeError, match="failed after 3 attempts"):
         await ranking_rationale(
             [{"id": "urs-gubser", "text": "Profile", "rank": 1}],
             objective="Find experts",
         )
+
+    assert mock_llm.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_ranking_rationale_retries_with_validation_feedback(mocker):
+    mocker.patch(
+        "skills.ranking.ranking_rationale.config_load",
+        return_value={
+            "ranking_rationale": {
+                "rationale_instructions": "{{objective}}\n{{profiles_text}}",
+                "response_schema": RESPONSE_SCHEMA,
+            }
+        },
+    )
+    mock_llm = mocker.patch(
+        "skills.ranking.ranking_rationale.llm_chat",
+        side_effect=[
+            '{"results": []}',
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "id": "urs-gubser",
+                            "rationale": "Strong fit.",
+                        }
+                    ]
+                }
+            ),
+        ],
+    )
+
+    result = await ranking_rationale(
+        [{"id": "urs-gubser", "text": "Profile", "rank": 1}],
+        objective="Find experts",
+    )
+
+    assert result[0]["rationale"] == "Strong fit."
+    assert "### CORRECTION REQUIRED" not in mock_llm.await_args_list[0].args[0]
+    assert "does not match the schema" in mock_llm.await_args_list[1].args[0]

@@ -6,14 +6,15 @@ from datetime import datetime, timezone
 from typing import Any
 
 from lib.insights import InsightFile
+from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
 from lib.structured_output import (
     copy_schema,
     json_schema_response_format,
-    parse_json_response,
-    schema_text,
+    schema_prompt_block,
+    validate_json_schema,
 )
 from skills.batch_audit.checklist import ChecklistCheck, parse_checklist
 from skills.batch_audit.schema import (
@@ -46,8 +47,9 @@ def _parse_check_response(
     response_schema: dict[str, Any],
     status_scale: list[str],
 ) -> dict[str, Any]:
-    result = parse_json_response(
-        raw_response,
+    result = repair_json_payload(raw_response)
+    validate_json_schema(
+        result,
         response_schema,
         label="Batch-audit response",
     )
@@ -100,17 +102,9 @@ def _llm_prompt_prefix(
     llm_instructions: str,
     response_schema: dict[str, Any],
 ) -> str:
-    rendered_schema = schema_text(response_schema)
-    if "{{response_schema}}" in llm_instructions:
-        instructions = llm_instructions.replace(
-            "{{response_schema}}",
-            rendered_schema,
-        )
-    else:
-        instructions = (
-            f"{llm_instructions}\n\nResponse JSON Schema:\n"
-            f"{rendered_schema}"
-        )
+    instructions = (
+        f"{llm_instructions}\n\n{schema_prompt_block(response_schema)}"
+    )
     return (
         "### AUDIT INSTRUCTIONS — START\n\n"
         f"{instructions}\n\n"
@@ -172,12 +166,15 @@ async def _run_check(
 ) -> dict[str, Any]:
     errors: list[str] = []
     prompt_prefix = _llm_prompt_prefix(llm_instructions, response_schema)
+    check_prompt = _llm_check_prompt(check)
+    retry_feedback = ""
+
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             raw_response = await dataset_chat(
                 dataset_name=dataset_name,
                 queries=_retrieval_queries(check),
-                prompt=_llm_check_prompt(check),
+                prompt=check_prompt + retry_feedback,
                 cacheable_prompt_prefix=prompt_prefix,
                 strict_insufficient_context=False,
                 response_format=json_schema_response_format(
@@ -185,7 +182,9 @@ async def _run_check(
                     response_schema,
                 ),
             )
-            if not raw_response or raw_response.strip() == _fallback_trigger():
+            if not raw_response:
+                raise ValueError("Audit model returned no content.")
+            if raw_response.strip() == _fallback_trigger():
                 return _missing_evidence_result(missing_evidence_status)
             return _parse_check_response(
                 raw_response,
@@ -202,6 +201,13 @@ async def _run_check(
                 MAX_ATTEMPTS,
                 error,
             )
+            if attempt < MAX_ATTEMPTS:
+                retry_feedback = (
+                    "\n\n### CORRECTION REQUIRED\n\n"
+                    f"Your previous response was invalid: {error}\n"
+                    "Try again and return only a JSON object matching "
+                    "the schema."
+                )
     return _error_result(
         RuntimeError(
             f"Audit check failed after {MAX_ATTEMPTS} attempts: "
@@ -240,6 +246,7 @@ async def batch_audit_json(
     model = llm_model()
     effective_config_key = config_key(
         batch_config,
+        config_load()["structured_output"],
         {
             "schema_version": AUDIT_SCHEMA_VERSION,
             "skill_name": skill_name,

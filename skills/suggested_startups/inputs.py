@@ -37,6 +37,7 @@ def load_skill_config(config: dict) -> SuggestedStartupsConfig:
         prompt = section["suggested_startups_prompt"]
         ranking_top_k = config["ranking_top_k"]
         ranking_rationale = config["ranking_rationale"]
+        structured_output = config["structured_output"]
     except KeyError as error:
         raise ValueError(
             f"Missing configuration for suggested_startups: {error}"
@@ -47,7 +48,12 @@ def load_skill_config(config: dict) -> SuggestedStartupsConfig:
         )
     return SuggestedStartupsConfig(
         prompt=prompt,
-        key=config_key(section, ranking_top_k, ranking_rationale),
+        key=config_key(
+            section,
+            ranking_top_k,
+            ranking_rationale,
+            structured_output,
+        ),
     )
 
 

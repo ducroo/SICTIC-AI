@@ -57,7 +57,11 @@ async def test_ranking_rank_chunk_rejects_missing_ids(monkeypatch):
         },
     )
 
+    calls = 0
+
     async def fake_llm_chat(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
         schema = _kwargs["response_format"]["json_schema"]["schema"]
         assert schema["properties"]["ranked_profiles_ids"]["minItems"] == 2
         assert schema["properties"]["ranked_profiles_ids"]["items"][
@@ -67,11 +71,12 @@ async def test_ranking_rank_chunk_rejects_missing_ids(monkeypatch):
 
     monkeypatch.setattr(ranking_top_k_mod, "llm_chat", fake_llm_chat)
 
-    with pytest.raises(ValueError, match="does not match the schema"):
+    with pytest.raises(RuntimeError, match="failed after 3 attempts"):
         await ranking_top_k_mod.rank_chunk(
             "fixture objective",
             {"a": "Profile A", "b": "Profile B"},
         )
+    assert calls == 3
 
 
 @pytest.mark.asyncio
@@ -92,13 +97,17 @@ async def test_ranking_rank_chunk_retries_then_repairs_duplicate_ids(monkeypatch
         "config_load",
         lambda: {
             "ranking_top_k": {
-                "ranking_instructions": "{{response_schema}}",
+                "ranking_instructions": "Rank the supplied profiles.",
                 "response_schema": schema,
             }
         },
     )
 
+    calls = 0
+
     async def duplicate_response(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
         return '{"ranked_profiles_ids":["b","b"]}'
 
     monkeypatch.setattr(
@@ -113,6 +122,7 @@ async def test_ranking_rank_chunk_retries_then_repairs_duplicate_ids(monkeypatch
     )
 
     assert result == ["b", "a"]
+    assert calls == 3
 
 
 @pytest.mark.asyncio
@@ -133,7 +143,7 @@ async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatc
         "config_load",
         lambda: {
             "ranking_top_k": {
-                "ranking_instructions": "{{response_schema}}",
+                "ranking_instructions": "Rank the supplied profiles.",
                 "response_schema": schema,
             }
         },
@@ -145,7 +155,10 @@ async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatc
         ]
     )
 
+    prompts = []
+
     async def retry_response(*_args, **_kwargs):
+        prompts.append(_args[0])
         return next(responses)
 
     monkeypatch.setattr(
@@ -160,6 +173,103 @@ async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatc
     )
 
     assert result == ["a", "b"]
+    assert "### CORRECTION REQUIRED" not in prompts[0]
+    assert "duplicates=['b'], missing=['a']" in prompts[1]
+
+
+@pytest.mark.asyncio
+async def test_ranking_rank_chunk_retries_empty_and_malformed_output(monkeypatch):
+    import json
+    from pathlib import Path
+
+    import skills.ranking.ranking_top_k as ranking_top_k_mod
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "config/ranking_top_k/response_schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "config_load",
+        lambda: {
+            "ranking_top_k": {
+                "ranking_instructions": "Rank the supplied profiles.",
+                "response_schema": schema,
+            }
+        },
+    )
+    responses = iter(
+        [
+            "",
+            "This is not JSON.",
+            '{"ranked_profiles_ids":["b","a"]}',
+        ]
+    )
+    prompts = []
+
+    async def retry_response(*args, **_kwargs):
+        prompts.append(args[0])
+        return next(responses)
+
+    monkeypatch.setattr(ranking_top_k_mod, "llm_chat", retry_response)
+
+    result = await ranking_top_k_mod.rank_chunk(
+        "fixture objective",
+        {"a": "Profile A", "b": "Profile B"},
+    )
+
+    assert result == ["b", "a"]
+    assert "Ranking model returned no content" in prompts[1]
+    assert "No JSON object found" in prompts[2]
+    assert "Ranking model returned no content" not in prompts[2]
+
+
+@pytest.mark.asyncio
+async def test_ranking_rank_chunk_retries_schema_violation(monkeypatch):
+    import json
+    from pathlib import Path
+
+    import skills.ranking.ranking_top_k as ranking_top_k_mod
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "config/ranking_top_k/response_schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "config_load",
+        lambda: {
+            "ranking_top_k": {
+                "ranking_instructions": "Rank the supplied profiles.",
+                "response_schema": schema,
+            }
+        },
+    )
+    responses = iter(
+        [
+            '{"ranked_profiles_ids":["a"]}',
+            '{"ranked_profiles_ids":["a","b"]}',
+        ]
+    )
+    prompts = []
+
+    async def retry_response(*args, **_kwargs):
+        prompts.append(args[0])
+        return next(responses)
+
+    monkeypatch.setattr(ranking_top_k_mod, "llm_chat", retry_response)
+
+    result = await ranking_top_k_mod.rank_chunk(
+        "fixture objective",
+        {"a": "Profile A", "b": "Profile B"},
+    )
+
+    assert result == ["a", "b"]
+    assert "does not match the schema" in prompts[1]
 
 
 @pytest.mark.asyncio

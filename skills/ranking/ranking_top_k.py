@@ -3,12 +3,13 @@ import random
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
+from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.structured_output import (
     copy_schema,
     json_schema_response_format,
-    parse_json_response,
-    schema_text,
+    schema_prompt_block,
+    validate_json_schema,
 )
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
@@ -16,7 +17,7 @@ from skills.llm_chat.llm_chat import llm_chat
 logger = get_logger(__name__)
 
 DEFAULT_BATCH_SIZE = 16
-_RANKING_ATTEMPTS = 2
+_RANKING_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -102,59 +103,91 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
         .replace("{{objective}}", objective)
         .replace("{{n_profiles}}", str(len(profiles)))
         .replace("{{IDs_profiles}}", ", ".join(profile_ids))
-        .replace("{{response_schema}}", schema_text(response_schema))
     )
     prompt += (
         "\n\nReturn every supplied profile ID exactly once; "
         "do not repeat or omit IDs."
     )
+    prompt += "\n\n" + schema_prompt_block(response_schema)
 
-    duplicate_inspection: RankingInspection | None = None
+    attempt_errors: list[str] = []
+    retry_feedback = ""
+    repairable_inspection: RankingInspection | None = None
+
     for attempt in range(1, _RANKING_ATTEMPTS + 1):
-        response_content = await llm_chat(
-            prompt,
-            response_format=json_schema_response_format(
-                "ranked_profile_ids",
+        repairable_inspection = None
+        final_prompt = prompt + retry_feedback
+
+        try:
+            response_content = await llm_chat(
+                final_prompt,
+                response_format=json_schema_response_format(
+                    "ranked_profile_ids",
+                    response_schema,
+                ),
+            )
+            if not response_content:
+                raise ValueError("Ranking model returned no content.")
+
+            parsed = repair_json_payload(response_content)
+            validate_json_schema(
+                parsed,
                 response_schema,
-            ),
-        )
-        if not response_content:
-            raise ValueError("Ranking model returned no content.")
-        parsed = parse_json_response(
-            response_content,
-            response_schema,
-            label="Top-k ranking response",
-        )
-        inspection = _inspect_ranked_ids(
-            parsed["ranked_profiles_ids"],
-            profile_ids,
-        )
-        if inspection.valid:
-            return inspection.ranked_ids
-        duplicate_inspection = inspection
-        if attempt < _RANKING_ATTEMPTS:
+                label="Top-k ranking response",
+            )
+            inspection = _inspect_ranked_ids(
+                parsed["ranked_profiles_ids"],
+                profile_ids,
+            )
+            if not inspection.valid:
+                repairable_inspection = inspection
+                raise ValueError(
+                    "Top-k ranking must contain every candidate ID exactly "
+                    f"once; duplicates={inspection.duplicates}, "
+                    f"missing={inspection.missing}."
+                )
+        except Exception as error:
+            attempt_errors.append(str(error))
             logger.warning(
-                "Ranking model returned duplicate IDs; retrying chunk "
-                "(%s/%s); duplicates=%s, missing=%s.",
+                "Ranking model returned an invalid response on attempt "
+                "%s/%s: %s",
                 attempt,
                 _RANKING_ATTEMPTS,
-                inspection.duplicates,
-                inspection.missing,
+                error,
             )
+            if attempt < _RANKING_ATTEMPTS:
+                retry_feedback = (
+                    "\n\n### CORRECTION REQUIRED\n\n"
+                    f"Your previous response was invalid: {error}\n"
+                    "Try again and return only a JSON object matching "
+                    "the schema."
+                )
+            continue
 
-    assert duplicate_inspection is not None
+        return inspection.ranked_ids
+
+    if repairable_inspection is None:
+        raise RuntimeError(
+            "Top-k ranking failed after "
+            f"{_RANKING_ATTEMPTS} attempts: "
+            + " | ".join(attempt_errors)
+        )
+
     repaired_inspection = _inspect_ranked_ids(
-        duplicate_inspection.repaired_ids,
+        repairable_inspection.repaired_ids,
         profile_ids,
     )
     if not repaired_inspection.valid:
-        raise ValueError("Could not repair top-k ranking into a complete permutation.")
+        raise ValueError(
+            "Could not repair top-k ranking into a complete permutation."
+        )
+
     logger.warning(
         "Repaired duplicate ranking after %s attempts; duplicates=%s, "
         "restored_missing=%s.",
         _RANKING_ATTEMPTS,
-        duplicate_inspection.duplicates,
-        duplicate_inspection.missing,
+        repairable_inspection.duplicates,
+        repairable_inspection.missing,
     )
     return repaired_inspection.ranked_ids
 
