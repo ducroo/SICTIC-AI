@@ -130,3 +130,83 @@ async def test_find_industry_type_uses_default_retrieval_chunk_count(monkeypatch
         "software",
         None,
     ]
+
+
+@pytest.mark.asyncio
+async def test_find_industry_type_retries_with_latest_feedback(monkeypatch):
+    responses = iter(
+        [
+            "",
+            json.dumps(
+                {
+                    "industry_type": "hardware",
+                    "confidence": 50,
+                    "evidence": [],
+                }
+            ),
+            json.dumps(
+                {
+                    "industry_type": "software",
+                    "confidence": 95,
+                    "evidence": ["The product is delivered as SaaS."],
+                }
+            ),
+        ]
+    )
+    prompts = []
+
+    async def fake_dataset_chat(*_args, **kwargs):
+        prompts.append(kwargs["prompt"])
+        return next(responses)
+
+    monkeypatch.setattr(
+        "skills.dd_checks.dd_checks.dataset_chat",
+        fake_dataset_chat,
+    )
+
+    result = await find_industry_type(
+        "example-startup",
+        {
+            "industry_type_query": "classify the startup",
+            "industry_type_llm_instructions": "choose one industry type",
+            "industry_type_response_schema": INDUSTRY_SCHEMA,
+        },
+        {"general", "hardware", "software"},
+    )
+
+    assert result == "software"
+    assert "returned no content" in prompts[1]
+    assert "requires evidence" in prompts[2]
+    assert "returned no content" not in prompts[2]
+
+
+@pytest.mark.asyncio
+async def test_find_industry_type_preserves_missing_evidence_fallback(
+    monkeypatch,
+):
+    from skills.dataset_chat.dataset_chat import _fallback_trigger
+
+    calls = 0
+
+    async def fake_dataset_chat(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return _fallback_trigger()
+
+    monkeypatch.setattr(
+        "skills.dd_checks.dd_checks.dataset_chat",
+        fake_dataset_chat,
+    )
+
+    result = await find_industry_type(
+        "example-startup",
+        {
+            "industry_type_query": "classify the startup",
+            "industry_type_llm_instructions": "choose one industry type",
+            "industry_type_response_schema": INDUSTRY_SCHEMA,
+        },
+        {"general", "hardware", "software"},
+    )
+
+    assert result == "general"
+    assert calls == 1

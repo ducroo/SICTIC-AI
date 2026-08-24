@@ -14,6 +14,7 @@ from lib.datasets.paths import (
     find_dataset_location,
 )
 from lib.insights import InsightFile, InsightResult
+from lib.json_parser import repair_json_payload
 from lib.insights.paths import model_slug
 from lib.logger import get_logger
 from lib.model_config import llm_model
@@ -29,8 +30,8 @@ from lib.storage import get_storage
 from lib.structured_output import (
     copy_schema,
     json_schema_response_format,
-    parse_json_response,
-    schema_text,
+    schema_prompt_block,
+    validate_json_schema,
 )
 from skills.batch_audit.batch_audit import batch_audit
 from skills.batch_audit.checklist import parse_checklist
@@ -169,8 +170,9 @@ def _parse_proposed_action(
     stage: str,
     response_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    result = parse_json_response(
-        raw_response,
+    result = repair_json_payload(raw_response)
+    validate_json_schema(
+        result,
         response_schema,
         label="Submission-ready proposed action",
     )
@@ -264,24 +266,54 @@ async def _generate_proposed_action(
         response_instructions=response_instructions,
         response_schema=effective_schema,
     )
+    errors: list[str] = []
+    retry_feedback = ""
+    result: dict[str, Any] | None = None
 
-    async def execute() -> dict[str, Any]:
-        raw_response = await llm_chat(
-            prompt,
-            response_format=json_schema_response_format(
-                "submission_ready_proposed_action",
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            raw_response = await llm_chat(
+                prompt + retry_feedback,
+                response_format=json_schema_response_format(
+                    "submission_ready_proposed_action",
+                    effective_schema,
+                ),
+            )
+            if not raw_response:
+                raise ValueError(
+                    "The proposed-action model returned no content."
+                )
+            result = _parse_proposed_action(
+                raw_response,
+                stage,
                 effective_schema,
-            ),
-        )
-        if not raw_response:
-            raise ValueError("The proposed-action model returned no content.")
-        return _parse_proposed_action(
-            raw_response,
-            stage,
-            effective_schema,
+            )
+        except Exception as error:
+            errors.append(str(error))
+            logger.warning(
+                "Proposed-action analysis failed on attempt %d/%d: %s",
+                attempt,
+                MAX_ATTEMPTS,
+                error,
+            )
+            if attempt < MAX_ATTEMPTS:
+                retry_feedback = (
+                    "\n\n### CORRECTION REQUIRED\n\n"
+                    f"Your previous response was invalid: {error}\n"
+                    "Try again and return only a JSON object matching "
+                    "the schema."
+                )
+            continue
+
+        break
+
+    if result is None:
+        raise RuntimeError(
+            f"Proposed-action analysis failed after {MAX_ATTEMPTS} "
+            "attempts: "
+            + " | ".join(errors)
         )
 
-    result = await _retry("Proposed-action analysis", execute)
     return _render_proposed_action(stage, result), prompt
 
 
@@ -297,7 +329,7 @@ def _proposed_action_prompt(
             response_instructions,
             f"Current Dealum stage: {stage}",
             "Current submission checklist:\n" + checklist_report,
-            "Response JSON Schema:\n" + schema_text(response_schema),
+            schema_prompt_block(response_schema),
         ]
     )
 
@@ -488,6 +520,7 @@ async def _process_candidate(
     )
     checklist_config_key = config_key(
         check_config,
+        config_load()["structured_output"],
         {
             "artifact": "checklist",
             "audit_path": audit_insight.path,
@@ -496,6 +529,7 @@ async def _process_candidate(
     )
     response_config_key = config_key(
         check_config,
+        config_load()["structured_output"],
         {
             "artifact": "response",
             "stage": stage,
@@ -690,7 +724,10 @@ async def submission_ready(
             status="failed after three attempts",
             error=str(error),
         )
-        return [_save_failure_report([failure], run_id)]
+        _save_failure_report([failure], run_id)
+        raise RuntimeError(
+            f"Submission-ready discovery failed: {error}"
+        ) from error
     candidates, results = _resolve_candidates(
         applications,
         adapter,
@@ -729,9 +766,15 @@ async def submission_ready(
         results.append(result)
 
     if failures:
-        failure_insight = _save_failure_report(failures, run_id)
-    else:
-        failure_insight = None
+        _save_failure_report(failures, run_id)
+        details = "; ".join(
+            f"{failure.startup}: {failure.error or failure.status}"
+            for failure in failures
+        )
+        raise RuntimeError(
+            f"Submission-ready failed for {len(failures)} startup(s): "
+            + details
+        )
 
     if not results:
         return []
@@ -740,6 +783,4 @@ async def submission_ready(
         for result in results
         for insight in result.insights
     ]
-    if failure_insight is not None:
-        insights.append(failure_insight)
     return insights

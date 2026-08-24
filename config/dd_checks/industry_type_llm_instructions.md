@@ -34,9 +34,3 @@ The company does not fit the Software, Hardware, or Biology definitions. Example
 5. If biological or wet-lab work is central to the product, classify the startup as Biology.
 6. Choose General only when the evidence supports it, not merely because another classification is uncertain.
 7. If the context does not contain enough company-specific evidence to select a type, return `null` for `industry_type`, `0` for `confidence`, and an empty evidence list.
-
-## Output Format
-
-Return strict JSON only, without Markdown fences, matching this response schema:
-
-{{response_schema}}

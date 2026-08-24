@@ -1,13 +1,18 @@
 from typing import Any, Dict, List
 
+from lib.json_parser import repair_json_payload
+from lib.logger import get_logger
 from lib.structured_output import (
     copy_schema,
     json_schema_response_format,
-    parse_json_response,
-    schema_text,
+    schema_prompt_block,
+    validate_json_schema,
 )
 from skills.config_load.config_load import config_load
 from skills.llm_chat.llm_chat import llm_chat
+
+logger = get_logger(__name__)
+_STRUCTURED_OUTPUT_ATTEMPTS = 3
 
 
 def _specialize_schema(
@@ -70,27 +75,60 @@ async def ranking_rationale(
         section["rationale_instructions"]
         .replace("{{objective}}", objective)
         .replace("{{profiles_text}}", profiles_text)
-        .replace("{{response_schema}}", schema_text(response_schema))
     )
+    prompt += "\n\n" + schema_prompt_block(response_schema)
 
-    response_content = await llm_chat(
-        prompt,
-        response_format=json_schema_response_format(
-            "profile_rationales",
-            response_schema,
-        ),
-    )
-    if not response_content:
-        raise ValueError("Rationale model returned no content.")
-    parsed = parse_json_response(
-        response_content,
-        response_schema,
-        label="Ranking-rationale response",
-    )
-    rationale_lookup = _rationale_lookup(
-        parsed["results"],
-        profile_ids,
-    )
+    errors: list[str] = []
+    retry_feedback = ""
+    rationale_lookup: dict[str, str] | None = None
+
+    for attempt in range(1, _STRUCTURED_OUTPUT_ATTEMPTS + 1):
+        try:
+            response_content = await llm_chat(
+                prompt + retry_feedback,
+                response_format=json_schema_response_format(
+                    "profile_rationales",
+                    response_schema,
+                ),
+            )
+            if not response_content:
+                raise ValueError("Rationale model returned no content.")
+            parsed = repair_json_payload(response_content)
+            validate_json_schema(
+                parsed,
+                response_schema,
+                label="Ranking-rationale response",
+            )
+            rationale_lookup = _rationale_lookup(
+                parsed["results"],
+                profile_ids,
+            )
+        except Exception as error:
+            errors.append(str(error))
+            logger.warning(
+                "Ranking rationale failed on attempt %d/%d: %s",
+                attempt,
+                _STRUCTURED_OUTPUT_ATTEMPTS,
+                error,
+            )
+            if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
+                retry_feedback = (
+                    "\n\n### CORRECTION REQUIRED\n\n"
+                    f"Your previous response was invalid: {error}\n"
+                    "Try again and return only a JSON object matching "
+                    "the schema."
+                )
+            continue
+
+        break
+
+    if rationale_lookup is None:
+        raise RuntimeError(
+            "Ranking rationale failed after "
+            f"{_STRUCTURED_OUTPUT_ATTEMPTS} attempts: "
+            + " | ".join(errors)
+        )
+
     for item in ranked_items:
         item["rationale"] = rationale_lookup[item["id"]]
     return ranked_items

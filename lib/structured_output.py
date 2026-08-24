@@ -23,6 +23,22 @@ def schema_text(schema: dict[str, Any]) -> str:
     return json.dumps(schema, ensure_ascii=False, indent=2)
 
 
+def schema_prompt_block(schema: dict[str, Any]) -> str:
+    """Render the shared, configured instructions for a schema response."""
+    from skills.config_load.config_load import config_load
+
+    template = config_load()["structured_output"][
+        "json_response_instructions"
+    ]
+    placeholder = "{{response_schema}}"
+    if template.count(placeholder) != 1:
+        raise ValueError(
+            "structured_output.json_response_instructions must contain "
+            "{{response_schema}} exactly once."
+        )
+    return template.replace(placeholder, schema_text(schema))
+
+
 def json_schema_response_format(
     name: str,
     schema: dict[str, Any],

@@ -14,13 +14,17 @@ def test_skill_config_key_includes_shared_ranking_configuration():
         },
         "ranking_top_k": {"ranking_instructions": "rank-v1"},
         "ranking_rationale": {"rationale_instructions": "explain-v1"},
+        "structured_output": {"json_response_instructions": "json-v1"},
     }
 
     first = inputs.load_skill_config(config)
     config["ranking_top_k"]["ranking_instructions"] = "rank-v2"
     second = inputs.load_skill_config(config)
+    config["structured_output"]["json_response_instructions"] = "json-v2"
+    third = inputs.load_skill_config(config)
 
     assert first.key != second.key
+    assert second.key != third.key
 
 
 def test_default_investors_preserve_canonical_people(monkeypatch):

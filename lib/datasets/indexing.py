@@ -149,6 +149,7 @@ async def reconcile_index(
                     source=source,
                     state=manifest.state(source.filename),
                     embeddings=embeddings,
+                    sparse_version=sparse_version,
                     parsed_text=text,
                     reason=(
                         f"{len(text):,} characters exceeds the "
@@ -180,6 +181,7 @@ async def reconcile_index(
                     source=source,
                     state=manifest.state(source.filename),
                     embeddings=embeddings,
+                    sparse_version=sparse_version,
                     parsed_text=text,
                     reason=(
                         f"{len(chunks):,} chunks exceeds the "
@@ -256,6 +258,7 @@ def _skip_oversized_document(
     source: SourceDocument,
     state: dict,
     embeddings: EmbeddingService,
+    sparse_version: str,
     parsed_text: str,
     reason: str,
 ) -> None:
@@ -267,6 +270,7 @@ def _skip_oversized_document(
             "indexed_parsed_sha256": content_hash(parsed_text),
             "indexed_chunker_version": CHUNKER_VERSION,
             "indexed_embedding_model": embeddings.model,
+            "indexed_sparse_version": sparse_version,
             "index_ignored_reason": reason,
         }
     )

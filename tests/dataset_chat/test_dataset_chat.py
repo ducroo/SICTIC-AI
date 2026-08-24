@@ -116,6 +116,47 @@ async def test_dataset_chat_forwards_response_format(mocker):
 
 
 @pytest.mark.asyncio
+async def test_dataset_chat_separates_cacheable_prefix_from_dynamic_context(mocker):
+    from lib.datasets.models import Chunk
+
+    mocker.patch(
+        "skills.dataset_chat.dataset_chat.dataset_search",
+        return_value=[
+            Chunk(
+                chunk_id="1",
+                document_name="evidence.md",
+                page_number=1,
+                last_modified=0.0,
+                text="Question-specific evidence.",
+                score=1.0,
+            )
+        ],
+    )
+    mock_llm = mocker.patch(
+        "skills.dataset_chat.dataset_chat.llm_chat",
+        return_value="ok",
+    )
+
+    await dataset_chat(
+        "test",
+        "dynamic query",
+        "CURRENT CHECK: dynamic question",
+        cacheable_prompt_prefix="SHARED AUDIT DOCUMENTS AND SCHEMA",
+    )
+
+    call = mock_llm.await_args.kwargs
+    assert call["cacheable_prompt_prefix"].startswith(
+        "Use ONLY the context below"
+    )
+    assert "SHARED AUDIT DOCUMENTS AND SCHEMA" in call[
+        "cacheable_prompt_prefix"
+    ]
+    assert "dynamic question" not in call["cacheable_prompt_prefix"]
+    assert "CURRENT CHECK: dynamic question" in call["prompt"]
+    assert "Question-specific evidence." in call["prompt"]
+
+
+@pytest.mark.asyncio
 async def test_dataset_chat_refuses_empty_context(mocker):
     mock_search = mocker.patch("skills.dataset_chat.dataset_chat.dataset_search")
     mock_search.return_value = []

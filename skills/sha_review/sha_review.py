@@ -8,6 +8,7 @@ from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, dataset_parsed_path
 from lib.datasets.source import parsed_filepath
 from lib.insights import InsightFile, InsightResult
+from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.startups.sources import ensure_startup_dataset
@@ -15,8 +16,8 @@ from lib.storage import get_storage
 from lib.structured_output import (
     copy_schema,
     json_schema_response_format,
-    parse_json_response,
-    schema_text,
+    schema_prompt_block,
+    validate_json_schema,
 )
 from skills.batch_audit.batch_audit import batch_audit
 from skills.batch_audit.schema import audit_errors, validate_audit_document
@@ -26,6 +27,7 @@ from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
 OUTPUT_SCHEMA_VERSION = 3
+_STRUCTURED_OUTPUT_ATTEMPTS = 3
 
 
 def _identification_prompt(
@@ -34,8 +36,7 @@ def _identification_prompt(
 ) -> str:
     return (
         f"{instructions}\n\n"
-        "Response JSON Schema:\n"
-        f"{schema_text(response_schema)}"
+        f"{schema_prompt_block(response_schema)}"
     )
 
 
@@ -43,8 +44,9 @@ def _parse_identification(
     raw_response: str,
     response_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    result = parse_json_response(
-        raw_response,
+    result = repair_json_payload(raw_response)
+    validate_json_schema(
+        result,
         response_schema,
         label="SHA document-identification response",
     )
@@ -74,24 +76,63 @@ async def _identify_sha(
     sha_config: dict[str, Any],
 ) -> tuple[str, str, dict[str, Any]]:
     response_schema = sha_config["document_identification_response_schema"]
-    raw_response = await dataset_chat(
-        dataset_name=dataset_name,
-        queries=sha_config["document_identification_queries"],
-        prompt=_identification_prompt(
-            sha_config["document_identification_prompt"],
-            response_schema,
-        ),
-        response_format=json_schema_response_format(
-            "sha_document_identification",
-            response_schema,
-        ),
-        max_chunks=int(
-            sha_config["document_identification_settings"]["max_chunks"]
-        ),
+    prompt = _identification_prompt(
+        sha_config["document_identification_prompt"],
+        response_schema,
     )
-    if not raw_response:
-        raise ValueError("SHA document identification returned no content.")
-    result = _parse_identification(raw_response, response_schema)
+    errors: list[str] = []
+    retry_feedback = ""
+    result: dict[str, Any] | None = None
+
+    for attempt in range(1, _STRUCTURED_OUTPUT_ATTEMPTS + 1):
+        try:
+            raw_response = await dataset_chat(
+                dataset_name=dataset_name,
+                queries=sha_config["document_identification_queries"],
+                prompt=prompt + retry_feedback,
+                response_format=json_schema_response_format(
+                    "sha_document_identification",
+                    response_schema,
+                ),
+                max_chunks=int(
+                    sha_config["document_identification_settings"][
+                        "max_chunks"
+                    ]
+                ),
+            )
+            if not raw_response:
+                raise ValueError(
+                    "SHA document identification returned no content."
+                )
+            result = _parse_identification(raw_response, response_schema)
+        except Exception as error:
+            errors.append(str(error))
+            logger.warning(
+                "[%s] SHA document identification failed on attempt "
+                "%d/%d: %s",
+                dataset_name,
+                attempt,
+                _STRUCTURED_OUTPUT_ATTEMPTS,
+                error,
+            )
+            if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
+                retry_feedback = (
+                    "\n\n### CORRECTION REQUIRED\n\n"
+                    f"Your previous response was invalid: {error}\n"
+                    "Try again and return only a JSON object matching "
+                    "the schema."
+                )
+            continue
+
+        break
+
+    if result is None:
+        raise RuntimeError(
+            "SHA document identification failed after "
+            f"{_STRUCTURED_OUTPUT_ATTEMPTS} attempts: "
+            + " | ".join(errors)
+        )
+
     path_config = sha_config["document_path_resolution"]
     min_score = float(path_config["min_score"])
     if not 0.0 <= min_score <= 100.0:
@@ -175,7 +216,7 @@ def _template_ranking_prompt(
             instructions,
             *contexts,
             "### AUTHORITATIVE RANKING INSTRUCTIONS\n\n" + instructions,
-            "Response JSON Schema:\n" + schema_text(response_schema),
+            schema_prompt_block(response_schema),
         ]
     )
 
@@ -201,35 +242,79 @@ async def _rank_templates(
         sha_config["template_ranking_response_schema"],
         template_keys,
     )
-    raw_response = await llm_chat(
-        prompt=_template_ranking_prompt(
-            sha_markdown,
-            {key: templates[key] for key in template_keys},
-            sha_config["template_ranking_prompt"],
-            response_schema,
-        ),
-        response_format=json_schema_response_format(
-            "sha_template_ranking",
-            response_schema,
-        ),
-    )
-    if not raw_response:
-        raise ValueError("SHA template ranking returned no content.")
-    ranking_result = parse_json_response(
-        raw_response,
+    prompt = _template_ranking_prompt(
+        sha_markdown,
+        {key: templates[key] for key in template_keys},
+        sha_config["template_ranking_prompt"],
         response_schema,
-        label="SHA template-ranking response",
     )
-    if not isinstance(ranking_result, dict):
-        raise ValueError("SHA template-ranking response must be an object.")
-    ranking = ranking_result["rankings"]
-    if not isinstance(ranking, list):
-        raise ValueError("SHA template-ranking rankings must be an array.")
-    returned_keys = [item["template_key"] for item in ranking]
-    if len(set(returned_keys)) != len(returned_keys):
-        raise ValueError("SHA template ranking contains duplicate template keys.")
-    if set(returned_keys) != set(template_keys):
-        raise ValueError("SHA template ranking must include every configured template.")
+    errors: list[str] = []
+    retry_feedback = ""
+    ranking: list[dict[str, str]] | None = None
+    returned_keys: list[str] | None = None
+
+    for attempt in range(1, _STRUCTURED_OUTPUT_ATTEMPTS + 1):
+        try:
+            raw_response = await llm_chat(
+                prompt=prompt + retry_feedback,
+                response_format=json_schema_response_format(
+                    "sha_template_ranking",
+                    response_schema,
+                ),
+            )
+            if not raw_response:
+                raise ValueError("SHA template ranking returned no content.")
+            ranking_result = repair_json_payload(raw_response)
+            validate_json_schema(
+                ranking_result,
+                response_schema,
+                label="SHA template-ranking response",
+            )
+            if not isinstance(ranking_result, dict):
+                raise ValueError(
+                    "SHA template-ranking response must be an object."
+                )
+            ranking = ranking_result["rankings"]
+            if not isinstance(ranking, list):
+                raise ValueError(
+                    "SHA template-ranking rankings must be an array."
+                )
+            returned_keys = [item["template_key"] for item in ranking]
+            if len(set(returned_keys)) != len(returned_keys):
+                raise ValueError(
+                    "SHA template ranking contains duplicate template keys."
+                )
+            if set(returned_keys) != set(template_keys):
+                raise ValueError(
+                    "SHA template ranking must include every configured "
+                    "template."
+                )
+        except Exception as error:
+            errors.append(str(error))
+            logger.warning(
+                "SHA template ranking failed on attempt %d/%d: %s",
+                attempt,
+                _STRUCTURED_OUTPUT_ATTEMPTS,
+                error,
+            )
+            if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
+                retry_feedback = (
+                    "\n\n### CORRECTION REQUIRED\n\n"
+                    f"Your previous response was invalid: {error}\n"
+                    "Try again and return only a JSON object matching "
+                    "the schema."
+                )
+            continue
+
+        break
+
+    if ranking is None or returned_keys is None:
+        raise RuntimeError(
+            "SHA template ranking failed after "
+            f"{_STRUCTURED_OUTPUT_ATTEMPTS} attempts: "
+            + " | ".join(errors)
+        )
+
     return returned_keys[0], ranking
 
 
@@ -244,7 +329,6 @@ def _audit_instructions(
     for placeholder in (
         "{{sha_under_review}}",
         "{{reference_sha}}",
-        "{{response_schema}}",
     ):
         if template.count(placeholder) != 1:
             raise ValueError(
@@ -369,6 +453,7 @@ async def sha_review(dataset_name: str) -> InsightResult:
     effective_config_key = config_key(
         sha_config,
         batch_config,
+        config["structured_output"],
         {"output_schema_version": OUTPUT_SCHEMA_VERSION},
     )
     output = InsightFile(

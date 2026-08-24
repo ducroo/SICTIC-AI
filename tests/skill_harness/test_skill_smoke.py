@@ -142,14 +142,17 @@ async def test_suggested_startups_does_not_save_invalid_response(
 
     monkeypatch.setattr(module, "generate_report", invalid_response)
 
-    result = await module.suggested_startups(
-        "sictic-members",
-        ["example-startup"],
-        ["Jane Doe"],
-        1,
-    )
+    with pytest.raises(
+        RuntimeError,
+        match="Failed to generate suggestions for 1 investor",
+    ):
+        await module.suggested_startups(
+            "sictic-members",
+            ["example-startup"],
+            ["Jane Doe"],
+            1,
+        )
 
-    assert result == []
     assert "Failed to generate suggested startups for Jane Doe" in caplog.text
     assert "0 generated, 1 failed" in caplog.text
     assert not InsightFile(
@@ -191,16 +194,26 @@ async def test_suggested_startups_continues_after_investor_failure(
 
     monkeypatch.setattr(module, "generate_report", generate_report)
 
-    result = await module.suggested_startups(
-        "sictic-members",
-        ["example-startup"],
-        ["Jane Doe", "John Roe"],
-        1,
-    )
+    with pytest.raises(
+        RuntimeError,
+        match="Failed to generate suggestions for 1 investor",
+    ):
+        await module.suggested_startups(
+            "sictic-members",
+            ["example-startup"],
+            ["Jane Doe", "John Roe"],
+            1,
+        )
 
-    assert len(result) == 1
-    assert result[0].identifier == "John Roe"
-    assert "Valid report" in result[0].content()
+    successful = InsightFile(
+        "sictic-members",
+        "suggested_startups",
+        "ollama/test_model:1b",
+        identifier="John Roe",
+        subdir=True,
+    )
+    assert successful.exists()
+    assert "Valid report" in successful.content()
     assert "Failed to generate suggested startups for Jane Doe" in caplog.text
     assert "1 generated, 1 failed" in caplog.text
 

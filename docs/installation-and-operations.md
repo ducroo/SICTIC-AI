@@ -139,7 +139,7 @@ conda run -n sictic-env --no-capture-output python -m skills.harness
 Administrative skills with their own command-line options are invoked directly:
 
 ```bash
-conda run -n sictic-env python -m skills.bulk_refresh --dataset spacex --skill startup_profile
+conda run -n sictic-env python -m skills.bulk_refresh --datasets spacex --skills startup_profile
 conda run -n sictic-env python -m skills.dealum_import "Example Startup"
 conda run -n sictic-env python -m skills.dataset_maintenance diagnose
 ```

@@ -10,11 +10,27 @@ app = typer.Typer(help="Automatically refreshes caches and profiles for all SICT
 
 @app.command()
 def main(
-    dataset: Optional[str] = typer.Option(None, "--dataset", "-d", help="Specific dataset to refresh (e.g., sictic_members, avientus). If none, all datasets are refreshed."),
-    skill: Optional[str] = typer.Option(None, "--skill", "-s", help="Specific skill to refresh (e.g., person_profile, startup_profile). If none, all are refreshed.")
+    datasets: Optional[str] = typer.Option(
+        None,
+        "--datasets",
+        "-d",
+        help=(
+            "Comma-separated source datasets, or 'all'. "
+            "Defaults to active startup and community datasets."
+        ),
+    ),
+    skills: Optional[str] = typer.Option(
+        None,
+        "--skills",
+        "-s",
+        help=(
+            "Comma-separated root skills, or 'all'. "
+            "Required dependencies are included automatically."
+        ),
+    ),
 ):
     run_command(
-        lambda: bulk_refresh(target_dataset=dataset, target_skill=skill),
+        lambda: bulk_refresh(datasets=datasets, skills=skills),
         logger=logger,
         error_prefix="Bulk refresh failed",
     )

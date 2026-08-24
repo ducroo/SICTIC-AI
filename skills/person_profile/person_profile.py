@@ -118,24 +118,42 @@ async def _person_profile_result(
     concurrency = int(get_env_var("OLLAMA_NUM_PARALLEL"))
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def generate_with_logging(person: Person) -> InsightFile | None:
-        try:
-            async with semaphore:
-                return await _generate_single_profile(
-                    dataset_slug,
-                    person,
-                    include_dataset_context=include_dataset_context,
-                )
-        except Exception as e:
-            logger.error(f"[{dataset_slug}] Failed to generate profile for {person.display_name}: {e}")
-            return None
+    async def generate(person: Person) -> InsightFile:
+        async with semaphore:
+            return await _generate_single_profile(
+                dataset_slug,
+                person,
+                include_dataset_context=include_dataset_context,
+            )
 
     generated = await asyncio.gather(
-        *(generate_with_logging(person) for person in profiles_to_process)
+        *(generate(person) for person in profiles_to_process),
+        return_exceptions=True,
     )
+    insights: InsightResult = []
+    failures: list[str] = []
+    for person, result in zip(profiles_to_process, generated):
+        if isinstance(result, BaseException):
+            if not isinstance(result, Exception):
+                raise result
+            logger.error(
+                "[%s] Failed to generate profile for %s",
+                dataset_slug,
+                person.display_name,
+                exc_info=(type(result), result, result.__traceback__),
+            )
+            failures.append(f"{person.display_name}: {result}")
+        else:
+            insights.append(result)
+
+    if failures:
+        raise RuntimeError(
+            f"Failed to generate {len(failures)} person profile(s): "
+            + "; ".join(failures)
+        )
     return _PersonProfileResult(
         persons=profiles_to_process,
-        insights=[insight for insight in generated if insight is not None],
+        insights=insights,
     )
 
 

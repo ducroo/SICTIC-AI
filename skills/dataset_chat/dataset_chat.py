@@ -32,6 +32,7 @@ async def dataset_chat(
     max_chunks: int = 25,
     strict_insufficient_context: bool = True,
     response_format: Optional[Any] = None,
+    cacheable_prompt_prefix: Optional[str] = None,
 ) -> Optional[str]:
     """Run one RAG using search queries and an independent LLM prompt."""
     if isinstance(queries, str):
@@ -42,6 +43,8 @@ async def dataset_chat(
         has_queries = bool(search_queries)
 
     prompt = prompt.strip()
+    if cacheable_prompt_prefix is not None:
+        cacheable_prompt_prefix = cacheable_prompt_prefix.strip() or None
     if not has_queries or not prompt:
         return None
 
@@ -67,9 +70,12 @@ async def dataset_chat(
                 "a requested category, say that no evidence was found in the provided "
                 "context for that category. Do not invent facts."
             )
-        prompt_parts = [grounding_rule, prompt]
-
-        header = "\n\n".join(prompt_parts) + f"\n\nContext from {dataset_name}:\n"
+        stable_parts = [grounding_rule]
+        if cacheable_prompt_prefix:
+            stable_parts.append(cacheable_prompt_prefix)
+        stable_prefix = "\n\n".join(stable_parts) + "\n\n"
+        dynamic_header = f"{prompt}\n\nContext from {dataset_name}:\n"
+        header = stable_prefix + dynamic_header
         context_budget = max(1_000, _context_budget_chars() - len(header))
 
         selected = []
@@ -91,11 +97,15 @@ async def dataset_chat(
             f"[{dataset_name}] Using {len(selected)} of {len(current_chunks)} chunks "
             f"({used_chars} chars) for RAG prompt."
         )
-        prompt_parts.append(f"Context from {dataset_name}:\n{context_str}")
-        return "\n\n".join(prompt_parts)
+        dynamic_prompt = dynamic_header + context_str
+        if cacheable_prompt_prefix:
+            return stable_prefix, dynamic_prompt
+        return None, stable_prefix + dynamic_prompt
 
     logger.info(f"[{dataset_name}] Handing off to llm_chat.")
+    stable_prefix, dynamic_prompt = build_prompt(chunks)
     return await llm_chat(
-        prompt=build_prompt(chunks),
+        prompt=dynamic_prompt,
         response_format=response_format,
+        cacheable_prompt_prefix=stable_prefix,
     )
