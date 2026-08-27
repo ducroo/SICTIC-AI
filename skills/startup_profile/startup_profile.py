@@ -56,7 +56,7 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> In
         ),
     )
 
-    if profile_output is None:
-        raise ValueError("LLM returned None for the profile output.")
+    if not profile_output or not profile_output.strip():
+        raise ValueError("LLM returned an empty response for the profile output.")
     insight.save(profile_output)
     return [insight]
