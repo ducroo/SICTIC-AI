@@ -1,11 +1,8 @@
 """Reorganize startup raw and parsed datasets into the standard folder layout.
 
 Dry-run is the default. Use --apply only after reviewing the JSON manifest.
-This script changes the local mirror only; sync both migrated trees afterward:
-
-    python -m gdrive_sync sync --conflict-policy local-wins
-
-The stateful standalone sync utility operates on the complete configured storage tree.
+This script changes local application storage only. If external synchronization
+is configured, sync the complete storage tree afterward.
 """
 from __future__ import annotations
 

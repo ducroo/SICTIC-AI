@@ -65,8 +65,6 @@ seed_cloud_env() {
   env_set "EMBEDDING_MODEL" "${EMBEDDING_MODEL:-openrouter/openai/text-embedding-3-small}" "$env_path"
   env_set "EMBEDDING_BASE_URL" "${EMBEDDING_BASE_URL:-}" "$env_path"
   env_set "RANKED_LLMS" "${RANKED_LLMS:-openai/gpt-4o-mini}" "$env_path"
-  env_set "CLOUD_PROVIDER" "${CLOUD_PROVIDER:-}" "$env_path"
-
   # Map Cloud Agent secrets into .env when present (never print values).
   if [ -n "${LLM_API_KEY:-}" ]; then
     env_set "LLM_API_KEY" "$LLM_API_KEY" "$env_path"
@@ -91,10 +89,6 @@ seed_cloud_env() {
   source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
   seed_dotenv_secrets "$env_path"
 
-  # GDrive: secrets UI holds JSON; runtime expects paths. Prefer *_JSON.
-  # shellcheck disable=SC1091
-  source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
-  materialize_gdrive_secrets "$env_path"
 }
 
 ensure_conda

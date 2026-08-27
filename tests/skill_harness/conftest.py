@@ -91,21 +91,6 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
     reset_storage_singleton()
 
 
-@pytest.fixture(autouse=True)
-def forbid_cloud_sync(monkeypatch):
-    def blocked(*_args, **_kwargs):
-        raise AssertionError("skill harness tests must not invoke Google Drive sync")
-
-    import gdrive_sync.client as gdrive_client
-    import lib.storage_gdrive as storage_gdrive
-
-    monkeypatch.setattr(gdrive_client.GDriveSync, "push", blocked)
-    monkeypatch.setattr(gdrive_client.GDriveSync, "pull", blocked)
-    monkeypatch.setattr(gdrive_client.GDriveSync, "sync", blocked)
-    monkeypatch.setattr(storage_gdrive.GoogleDriveStorage, "_ensure_service", blocked)
-    monkeypatch.setattr(storage_gdrive.GoogleDriveStorage, "_load_or_authorize", blocked)
-
-
 @pytest.fixture
 def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     fixtures = skill_fixture_storage

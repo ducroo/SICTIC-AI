@@ -1,31 +1,49 @@
-# SICTIC-AI
+# Make your AI agent smarter at startup investing
 
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
+![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)
 ![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+
+SICTIC-AI works inside the AI agent you already use, such as Codex, Claude Code
+or Cowork, OpenClaw, or Gemini. It gives your agent reusable **skills** for
+startup analysis, due diligence, investor matching, and angel-network operations. The
+important checks and workflows are codified up front, so your agent can apply
+them consistently instead of inventing an approach on the spot.
+
+To set it up, ask your agent to install this repository. It can inspect your
+machine, install the required local services, configure the toolkit, and verify
+the result. A ready-to-use installation prompt is provided below.
+
+Once installed, run a skill by asking naturally: “Run `startup_profile` for
+SpaceX” or “Ask the `spacex` dataset about its main technical risks.” Your agent
+reads the relevant skill instructions, runs the workflow, and returns the
+result with its supporting evidence.
+
+## Built from real angel-investing workflows
 
 SICTIC is Switzerland's largest and most active angel investor network. It
 brings together more than 500 investors, has hosted more than 1,000 startup
 pitches, and its investor community has helped fund more than 300 Swiss
-technology startups ([sictic.ch](https://www.sictic.ch)).
+technology startups ([sictic.ch](https://www.sictic.ch)). SICTIC-AI turns that
+practical experience into an open-source toolkit that is free to use and
+contribute to.
 
-SICTIC-AI is our open-source collection of AI-assisted startup analysis and
-community workflows, AKA **skills**. The toolkit is free to use and contribute
-to.
-
-It is designed for:
+It helps:
 
 - **Startups:** Review funding materials before approaching investors.
 - **Business angels:** Accelerate common due-diligence assessments.
 - **Angel investor networks:** Support member engagement, startup selection,
   due diligence, and portfolio monitoring.
-- **AI contributors:** Improve how AI supports early-stage funding.
+- **Contributors:** Improve how AI supports early-stage funding by extending
+  shared, reviewable workflows.
 
-## Let your coding agent set it up
+Recent releases also add hybrid semantic and keyword retrieval, table-aware
+spreadsheet ingestion, safer Qdrant lifecycle management, and dependency-aware
+bulk refreshes.
 
-The easiest way to install and use SICTIC-AI is with a coding agent such as
-Codex, Claude Code, OpenClaw, or Gemini. Start your coding agent and send it the
-following prompt:
+## Install with your AI agent
+
+Start your agent and send it this prompt:
 
 ```text
 Install SICTIC-AI for me using its default local setup.
@@ -40,8 +58,9 @@ After the initial folder question, ask me again only if:
 - the operating system cannot support the default setup; or
 - setup fails and there are multiple materially different ways to proceed.
 
-Do not configure Google Drive, hosted model providers, API keys, or other
-optional integrations. Mention them only after the local installation succeeds.
+Do not configure Google Drive synchronization, hosted model providers, API
+keys, or other optional integrations. Mention them only after the local
+installation succeeds.
 
 After I answer, continue autonomously:
 
@@ -54,7 +73,7 @@ After I answer, continue autonomously:
 3. Clone https://github.com/ducroo/SICTIC-AI into the folder I selected. If
    that folder already contains the correct repository, reuse it after
    verifying its Git remote. Never overwrite an unrelated or modified folder.
-4. Read README.md and follow its “Quick manual setup” section in sequence.
+4. Read README.md and follow its “Manual setup” section in sequence.
 5. Check for Miniforge/Conda and Ollama. Install either one if missing using the
    documented platform commands.
 6. Run the installer without copying skills to an agent skills directory, using
@@ -62,7 +81,6 @@ After I answer, continue autonomously:
    - REPO_PATH: the selected repository folder
    - LOCAL_STORAGE_PATH: <REPO_PATH>/local_storage
    - LOCAL_DATA_PATH: <REPO_PATH>
-   - no cloud provider
    - accept the installer's default local models, URLs, and service settings
 7. Start Ollama and Qdrant with ./launch.sh start and confirm that both services
    are running. Allow the launcher to pull configured Ollama models that are
@@ -109,25 +127,18 @@ model name and API-key workflow are documented in the
 [official OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
 and [API quickstart](https://platform.openai.com/docs/quickstart).
 
-### Running skills with the agent
-
-Once installed, the agent can run skills for you. For example: “Run
-`startup_profile` for SpaceX” or “Ask the `spacex` dataset about its main
-technical risks.” See [Running a skill](#running-a-skill) below for direct
-command-line usage.
-
 ## Contributing
 
-Help us turn strong investing practice into open, reusable skills. Critical
-thinking and practical investing experience are the differentiators; being an
-AI wizard is not a requirement.
+By establishing shared standards for
+early-stage investing, we aim to structurally strengthen the startup ecosystem
+in Switzerland and Europe.
+
+Join us with your experience, questions, and ideas! Critical thinking and practical investing experience are the differentiators; We already have the AI wizards in the team.
 
 We develop skills in teams and meet regularly to challenge assumptions, compare
-results, and improve the workflows. By establishing shared standards for
-early-stage investing, we aim to structurally strengthen the startup ecosystem
-in Switzerland and Europe. Join us with your experience, questions, and ideas.
+results, and improve the workflows. Help us turn strong investing practice into open, reusable skills.
 
-## Quick manual setup
+## Manual setup
 
 SICTIC-AI requires macOS, Linux, or WSL2, plus Git, Miniforge, and Ollama.
 Ollama is required for the default local models. Install the prerequisites for
@@ -168,7 +179,7 @@ cd SICTIC-AI
 
 The installer creates or updates the `sictic-env` Conda environment and helps
 configure `.env`. It also asks for `INSTALLED_SKILLS_PATH`: the optional
-directory into which it copies skills for discovery by your coding agent.
+directory into which it copies skills for discovery by your AI agent.
 
 - Choose `none` to work directly from the repository without copying skills.
 - Enter an absolute path to make SICTIC-AI skills discoverable by that agent.
@@ -179,7 +190,6 @@ For the default local setup:
   you put the repository.
 - Accept the suggested local storage and data paths.
 - Choose `none` for `INSTALLED_SKILLS_PATH`.
-- Choose `none` for `CLOUD_PROVIDER`.
 - Accept the local Ollama model, URL, and service defaults.
 
 The installer writes these choices to `.env`.
@@ -188,8 +198,7 @@ Repository-only mode still supports all commands documented below. Re-run the
 installer after editing or adding skill instructions if you use copied skills.
 
 The commands above are sufficient for the default local setup. For hosted model
-providers, Google Drive synchronization, advanced command interfaces, and
-maintenance tasks, see
+providers, advanced command interfaces, and maintenance tasks, see
 [Installation and operations](docs/installation-and-operations.md).
 
 ## Configuration paths
@@ -201,22 +210,22 @@ The installer suggests sensible values for a new `.env`:
 | `REPO_PATH` | Root of this Git repository and its source code | `/Users/you/SICTIC-AI` |
 | `INSTALLED_SKILLS_PATH` | Optional directory receiving agent-discoverable copies of skills | `none` or `/Users/you/.claude/skills` |
 | `LOCAL_STORAGE_PATH` | Local root containing startup, community, and generated datasets and insights | `/Users/you/SICTIC-AI/local_storage` |
-| `CLOUD_STORAGE_PATH` | Optional cloud equivalent of `LOCAL_STORAGE_PATH`, currently a Google Drive folder ID, `root`, or path/name | `SICTIC-AI-storage` |
 | `LOCAL_DATA_PATH` | Machine-local root under which `cache/` and `docling_data/` are stored | `/Users/you/SICTIC-AI` |
-| `CLOUD_PROVIDER` | Optional synchronization backend | blank or `google` |
 
-All skills operate on `LOCAL_STORAGE_PATH`. Cloud storage is synchronized to
-that folder by a separate utility; skills do not access Google Drive directly.
-Model and service variables are explained in `.env-template` and in the
-[operations guide](docs/installation-and-operations.md).
+All skills operate on `LOCAL_STORAGE_PATH`. Optional Google Drive
+synchronization is independent of the toolkit runtime and is not configured by
+`install.sh`. Model and service variables are explained in `.env-template` and
+in the [operations guide](docs/installation-and-operations.md).
 
 ## Running a skill
 
-Ask your coding agent, or use the command harness directly:
+Ask your AI agent, or use the command harness directly:
 
 ```bash
 conda run -n sictic-env python -m skills.harness /startup_profile SpaceX
+
 conda run -n sictic-env python -m skills.harness /dataset_chat SpaceX "What are the main risks?"
+
 conda run -n sictic-env --no-capture-output python -m skills.harness
 ```
 
@@ -258,7 +267,6 @@ Internal building blocks are intentionally omitted.
 | `portfolio_mgmt` | ◻️ | Produces portfolio risk, return, and performance overviews. |
 | **Data and operations** | | |
 | `dealum_import` | ✅ | Imports the application dossier of a startup from the Dealum.com platform using an API key. |
-| `gdrive_sync` | ✅ | Synchronizes local storage with Google Drive when enabled. |
 | `bulk_refresh` | ✅ | Refreshes selected insights across selected datasets. |
 | `dataset_maintenance` | ✅ | Diagnoses, migrates, prunes, and repairs datasets and search indexes. |
 | `linkedin_maintenance` | ✅ | Finds missing LinkedIn profiles and imports manually collected profiles. |
@@ -283,7 +291,6 @@ at `LOCAL_DATA_PATH`.
 | ↳ `./docling_data/` | Durable parsed documents; not synchronized to cloud storage. |
 | ↳ `./cache/` | Disposable runtime cache and temporary state. |
 | ↳ `./cache/services-gateway.json` | Shared concurrency state for LLM, embedding, and Docling jobs. |
-| `<REPO_PATH>/gdrive_sync_state/` | Durable Google Drive synchronization state; do not delete as cache. |
 
 For example, place a pitch deck in
 `<LOCAL_STORAGE_PATH>/storage/startups/spacex/datasets/`. Running
@@ -296,6 +303,35 @@ The `docs/` folder currently contains:
 
 - [Installation and operations](docs/installation-and-operations.md): detailed
   installer modes, environment and model configuration, background services,
-  command interfaces, Google Drive synchronization, maintenance, and tests.
+  command interfaces, retrieval, maintenance, and tests.
 - [Codebase assessment](docs/codebase-assessment.md): technical architecture
   findings, known risks, and recommended follow-up work for contributors.
+
+## Optional Google Drive synchronization
+
+The toolkit itself always reads and writes local files. If you want to share
+the application-storage tree through Google Drive, the optional `rclone-sync`
+helper provides guarded bidirectional synchronization while converting local
+Markdown files to native Google Docs and exporting Google Docs back to
+Markdown.
+
+Cloud access is deliberately user-owned. Install `rclone`, create and
+authenticate your Google Drive remote with `rclone config`, and then run the
+guided repository setup:
+
+```bash
+./rclone-sync/configure.sh
+./rclone-sync/rclone-sync.sh bootstrap-dry-run
+```
+
+Review the dry-run output carefully before establishing the first baseline:
+
+```bash
+./rclone-sync/rclone-sync.sh bootstrap
+```
+
+After bootstrap, preview and run routine synchronization with `dry-run` and
+`sync`. See [rclone synchronization](rclone-sync/README.md) for installation,
+recovery, safety, and scheduling details. Existing legacy cloud variables in
+`.env` are ignored and may be removed manually after the rclone setup has been
+verified.

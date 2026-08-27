@@ -25,10 +25,6 @@ dependencies:
   - typer<0.25
   - xlrd
 
-  # Google Drive support. Reconsider after the rclone decision.
-  - google-api-python-client
-  - google-auth-oauthlib
-
   # LLM access
   - litellm>=1.97.0
 
