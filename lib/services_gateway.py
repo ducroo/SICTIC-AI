@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import json
+import math
 import os
 import subprocess
 import time
@@ -26,6 +27,8 @@ _DEFAULT_LEASE_MAX_AGE = 1800.0
 _DEFAULT_LLM_REQUEST_TIMEOUT = 600.0
 _DEFAULT_EMBEDDING_REQUEST_TIMEOUT = 300.0
 _DEFAULT_RERANK_REQUEST_TIMEOUT = 120.0
+_CLOUD_BUDGET_WINDOW_SECONDS = 60.0
+_LOCAL_MODEL_PREFIXES = ("ollama/", "mlx/")
 
 
 def _float_env(name: str, default: float) -> float:
@@ -63,6 +66,25 @@ class ServiceRequest:
     process_start: str
     requested_at: float
     max_concurrent: int
+    budget_units: int = 0
+
+
+def _estimate_tokens(value: Any) -> int:
+    """Conservatively estimate tokens from a LiteLLM request payload."""
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        return math.ceil(len(value) / 3)
+    if isinstance(value, dict):
+        return sum(_estimate_tokens(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return sum(_estimate_tokens(item) for item in value)
+    return 0
+
+
+def _is_cloud_request(kwargs: dict[str, Any]) -> bool:
+    model = str(kwargs.get("model") or "")
+    return not model.startswith(_LOCAL_MODEL_PREFIXES)
 
 
 def default_gateway_state_path() -> Path:
@@ -114,6 +136,7 @@ class ServicesGateway:
         wait_timeout: float = _DEFAULT_WAIT_TIMEOUT,
         poll_interval: float = _POLL_INTERVAL,
         lease_max_age: float | None = None,
+        cloud_tpm_budget: int | None = None,
     ):
         self.state_path = Path(
             state_path or default_gateway_state_path()
@@ -135,15 +158,21 @@ class ServicesGateway:
             if lease_max_age is not None
             else _float_env("GATEWAY_LEASE_MAX_AGE", _DEFAULT_LEASE_MAX_AGE)
         )
+        self.cloud_tpm_budget = (
+            cloud_tpm_budget
+            if cloud_tpm_budget is not None
+            else int(os.environ.get("CLOUD_TPM_BUDGET", "0"))
+        )
         self._process_start = _process_start_token(os.getpid()) or str(
             time.time_ns()
         )
 
     def _empty_state(self) -> dict:
         return {
-            "version": 5,
+            "version": 6,
             "leases": {resource: [] for resource in _RESOURCE_KEYS},
             "requests": {resource: [] for resource in _RESOURCE_KEYS},
+            "cloud_usage": [],
         }
 
     def _ensure_parent(self) -> None:
@@ -230,6 +259,22 @@ class ServicesGateway:
                     if isinstance(request, dict)
                     and entry_is_alive(request)
                 ]
+        cloud_usage = state.get("cloud_usage", [])
+        cutoff = now - _CLOUD_BUDGET_WINDOW_SECONDS
+        if isinstance(cloud_usage, list):
+            cleaned["cloud_usage"] = sorted(
+                (
+                    {
+                        "request_time": float(item["request_time"]),
+                        "units": int(item["units"]),
+                    }
+                    for item in cloud_usage
+                    if isinstance(item, dict)
+                    and float(item.get("request_time", 0)) > cutoff
+                    and int(item.get("units", 0)) > 0
+                ),
+                key=lambda item: item["request_time"],
+            )
         return cleaned, cleaned != state
 
     def _write_state(self, handle, state: dict) -> None:
@@ -310,7 +355,14 @@ class ServicesGateway:
         capacity = int(
             request.get("max_concurrent") or self.ollama_num_parallel
         )
-        return self._model_lease_count(state, model) < capacity
+        if self._model_lease_count(state, model) >= capacity:
+            return False
+
+        budget_units = int(request.get("budget_units") or 0)
+        if not budget_units or not self.cloud_tpm_budget:
+            return True
+        used = sum(int(item["units"]) for item in state["cloud_usage"])
+        return used + budget_units <= self.cloud_tpm_budget
 
     def _format_counts(
         self,
@@ -342,6 +394,7 @@ class ServicesGateway:
         model: str,
         *,
         max_concurrent: int | None = None,
+        budget_units: int = 0,
     ) -> tuple[ServiceRequest, dict[str, dict[str, int]], set[str]]:
         request = ServiceRequest(
             request_id=uuid.uuid4().hex,
@@ -351,6 +404,7 @@ class ServicesGateway:
             process_start=self._process_start,
             requested_at=time.time(),
             max_concurrent=max_concurrent or self.ollama_num_parallel,
+            budget_units=budget_units,
         )
 
         def register(state):
@@ -362,6 +416,13 @@ class ServicesGateway:
     def _grant_available(self, state: dict) -> None:
         """Grant every currently available slot in global FIFO order."""
         while True:
+            now = time.time()
+            cutoff = now - _CLOUD_BUDGET_WINDOW_SECONDS
+            state["cloud_usage"] = [
+                item
+                for item in state["cloud_usage"]
+                if float(item["request_time"]) > cutoff
+            ]
             request = next(
                 (
                     item
@@ -388,10 +449,18 @@ class ServicesGateway:
                         model=str(request.get("model") or resource),
                         pid=int(request["pid"]),
                         process_start=str(request["process_start"]),
-                        acquired_at=time.time(),
+                        acquired_at=now,
                     )
                 )
             )
+            budget_units = int(request.get("budget_units") or 0)
+            if budget_units:
+                state["cloud_usage"].append(
+                    {
+                        "request_time": now,
+                        "units": budget_units,
+                    }
+                )
 
     def _try_acquire(
         self,
@@ -474,6 +543,7 @@ class ServicesGateway:
         max_concurrent: int | None = None,
         model: str | None = None,
         timeout: float | None = None,
+        budget_units: int = 0,
     ) -> AsyncIterator[ServiceLease]:
         if resource not in _RESOURCE_KEYS:
             raise ValueError(f"Unknown gateway resource: {resource}")
@@ -482,6 +552,16 @@ class ServicesGateway:
             raise ValueError("max_concurrent must be at least 1")
         if self.ollama_max_loaded_models < 1:
             raise ValueError("OLLAMA_MAX_LOADED_MODELS must be at least 1")
+        if budget_units < 0:
+            raise ValueError("budget_units cannot be negative")
+        if (
+            self.cloud_tpm_budget
+            and budget_units > self.cloud_tpm_budget
+        ):
+            raise ValueError(
+                f"Request estimate ({budget_units}) exceeds CLOUD_TPM_BUDGET "
+                f"({self.cloud_tpm_budget})."
+            )
         model_key = model or resource
         wait_timeout = self.wait_timeout if timeout is None else timeout
         started = time.monotonic()
@@ -490,6 +570,7 @@ class ServicesGateway:
             resource,
             model_key,
             max_concurrent=capacity,
+            budget_units=budget_units,
         )
         logger.info(
             "Gateway request received: %s",
@@ -550,10 +631,16 @@ class ServicesGateway:
                 _DEFAULT_EMBEDDING_REQUEST_TIMEOUT,
             ),
         )
+        budget_units = (
+            _estimate_tokens(kwargs.get("input"))
+            if _is_cloud_request(kwargs)
+            else 0
+        )
         async with self.slot(
             "embedding",
             model=str(kwargs.get("model") or "embedding"),
             timeout=timeout,
+            budget_units=budget_units,
         ):
             return await litellm.aembedding(**kwargs)
 
@@ -576,10 +663,16 @@ class ServicesGateway:
                 _DEFAULT_LLM_REQUEST_TIMEOUT,
             ),
         )
+        budget_units = (
+            _estimate_tokens(kwargs.get("messages"))
+            if _is_cloud_request(kwargs)
+            else 0
+        )
         async with self.slot(
             "llm",
             model=str(kwargs.get("model") or "llm"),
             timeout=timeout,
+            budget_units=budget_units,
         ):
             return await litellm.acompletion(**kwargs)
 
@@ -600,10 +693,17 @@ class ServicesGateway:
                 _DEFAULT_RERANK_REQUEST_TIMEOUT,
             ),
         )
+        budget_units = (
+            _estimate_tokens(kwargs.get("query"))
+            + _estimate_tokens(kwargs.get("documents"))
+            if _is_cloud_request(kwargs)
+            else 0
+        )
         async with self.slot(
             "rerank",
             model=str(kwargs.get("model") or "rerank"),
             timeout=timeout,
+            budget_units=budget_units,
         ):
             return await litellm.arerank(**kwargs)
 

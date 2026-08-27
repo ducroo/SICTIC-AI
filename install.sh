@@ -525,6 +525,7 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "OLLAMA_CONTEXT_LENGTH_MAX" "Ollama maximum context length" "$(env_get OLLAMA_CONTEXT_LENGTH_MAX || true)" 1 0
     ask_env "OLLAMA_NUM_PARALLEL" "Ollama parallel request limit" "$(env_get OLLAMA_NUM_PARALLEL || true)" 1 0
     ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_get OLLAMA_MAX_LOADED_MODELS || true)" 1 0
+    ask_env "CLOUD_TPM_BUDGET" "Cloud rolling token-per-minute budget" "$(env_get CLOUD_TPM_BUDGET || true)" 1000000 0
     ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_get OLLAMA_KV_CACHE_TYPE || true)" 0 0
     ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_get OLLAMA_FLASH_ATTENTION || true)" 0 0
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1

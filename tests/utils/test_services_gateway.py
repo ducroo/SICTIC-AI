@@ -50,10 +50,118 @@ def test_gateway_initialization_has_no_file_side_effect(clean_gateway):
     state = clean_gateway.snapshot()
 
     assert state == {
-        "version": 5,
+        "version": 6,
         "leases": {"docling": [], "embedding": [], "llm": [], "rerank": []},
         "requests": {"docling": [], "embedding": [], "llm": [], "rerank": []},
+        "cloud_usage": [],
     }
+
+
+def test_cloud_budget_is_shared_across_services_and_expires(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=2,
+        cloud_tpm_budget=10,
+    )
+    first = gateway._register_request(
+        "llm",
+        "openai/model",
+        budget_units=7,
+    )[0]
+    waiting = gateway._register_request(
+        "embedding",
+        "openai/embedding-model",
+        budget_units=4,
+    )[0]
+
+    first_lease, _, _ = gateway._try_acquire(first, max_concurrent=2)
+    assert first_lease is not None
+    gateway._release(first_lease)
+
+    blocked, _, _ = gateway._try_acquire(waiting, max_concurrent=2)
+    assert blocked is None
+    assert gateway.snapshot()["cloud_usage"] == [
+        {
+            "request_time": pytest.approx(time.time(), abs=1),
+            "units": 7,
+        }
+    ]
+
+    gateway._with_locked_state(
+        lambda state: state["cloud_usage"][0].update(
+            {"request_time": time.time() - 61}
+        )
+    )
+    waiting_lease, _, _ = gateway._try_acquire(
+        waiting,
+        max_concurrent=2,
+    )
+
+    assert waiting_lease is not None
+    assert [item["units"] for item in gateway.snapshot()["cloud_usage"]] == [4]
+    gateway._release(waiting_lease)
+
+
+@pytest.mark.asyncio
+async def test_gateway_estimates_cloud_requests_but_not_local_requests(
+    tmp_path,
+    mocker,
+):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        ollama_num_parallel=2,
+        ollama_max_loaded_models=3,
+        cloud_tpm_budget=100,
+    )
+    mocker.patch("litellm.acompletion", return_value="completion")
+    mocker.patch("litellm.aembedding", return_value="embedding")
+    mocker.patch("litellm.arerank", return_value="rerank")
+
+    await gateway.request_completion(
+        {
+            "model": "openai/model",
+            "messages": [{"role": "user", "content": "123456"}],
+        }
+    )
+    await gateway.request_embedding(
+        {"model": "openai/embedding", "input": ["123456"]}
+    )
+    await gateway.request_rerank(
+        {
+            "model": "openai/rerank",
+            "query": "123",
+            "documents": ["123456"],
+        }
+    )
+    await gateway.request_completion(
+        {
+            "model": "ollama/local",
+            "messages": [{"role": "user", "content": "123456"}],
+        }
+    )
+
+    assert [item["units"] for item in gateway.snapshot()["cloud_usage"]] == [
+        4,
+        2,
+        3,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_request_larger_than_cloud_budget_fails_immediately(tmp_path):
+    gateway = ServicesGateway(
+        state_path=tmp_path / "gateway.json",
+        cloud_tpm_budget=10,
+    )
+
+    with pytest.raises(ValueError, match="exceeds CLOUD_TPM_BUDGET"):
+        async with gateway.slot(
+            "llm",
+            model="openai/model",
+            budget_units=11,
+        ):
+            pass
 
 
 @pytest.mark.asyncio
