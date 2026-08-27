@@ -38,6 +38,40 @@ async def test_startup_profile_saves_empty_context_response(mock_env, mocker):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("empty_output", ["", "   "])
+async def test_startup_profile_rejects_empty_llm_output(mock_env, mocker, empty_output):
+    get_storage().mkdir(
+        dataset_location_for_domain("avientus", "startups").raw_rel
+    )
+    mocker.patch(
+        "skills.startup_profile.startup_profile.InsightFile.find",
+        return_value=None,
+    )
+    mocker.patch("skills.startup_profile.startup_profile.sync_datasets")
+    save = mocker.patch(
+        "skills.startup_profile.startup_profile.InsightFile.save"
+    )
+    mocker.patch(
+        "skills.startup_profile.startup_profile.config_load",
+        return_value={
+            "startup_profile": {
+                "query": "Profile this startup.",
+                "llm_instructions": "Use only context.",
+            }
+        },
+    )
+    mocker.patch(
+        "skills.startup_profile.startup_profile.dataset_chat",
+        return_value=empty_output,
+    )
+
+    with pytest.raises(ValueError, match="empty response"):
+        await startup_profile("Avientus")
+
+    save.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_startup_profile_splits_query_lines_for_retrieval(mock_env, mocker):
     get_storage().mkdir(
         dataset_location_for_domain("avientus", "startups").raw_rel
