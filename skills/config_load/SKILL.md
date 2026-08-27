@@ -1,17 +1,19 @@
 ---
 name: config_load
-description: Compile Markdown-based configuration files from the configured Google Drive/rclone config tree into a cached hierarchical JSON file. Use when configuration prompts, skill settings, or the config cache need to be loaded, refreshed, or inspected.
+description: Compile repository Markdown configuration files into a cached hierarchical JSON file. Use when configuration prompts, skill settings, or the config cache need to be loaded, refreshed, or inspected.
 ---
 
 # config_load
 
 **Description:**
-Compiles Markdown-based configuration files from a Google Drive rclone mount into a single, hierarchical JSON file. It uses caching to ensure it only scans the drive when source `.md` files have been updated.
+Compiles Markdown-based configuration files from the repository's local
+`config/` tree into a single hierarchical JSON file. It uses caching to avoid
+recompiling unchanged source files.
 
 **Triggers:**
 - "Load skill configurations"
 - "Refresh the config cache"
-- "Compile the Google Drive config"
+- "Compile the local config"
 
 **Instructions:**
 1. Run the harness command:
@@ -23,4 +25,4 @@ Compiles Markdown-based configuration files from a Google Drive rclone mount int
 
 **Prerequisites:**
 - All runtime dependencies (including `rich`) are installed in the `sictic-env` Conda environment by `{{REPO_ROOT}}/install.sh`.
-- The Google Drive must be mounted via rclone to the path set in `REPO_PATH` (see `.env`).
+- `REPO_PATH` must point to the repository containing the `config/` tree.

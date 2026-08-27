@@ -5,8 +5,8 @@ Skills should use domain helpers such as `InsightFile` for managed artifacts,
 and pass relative paths to Storage for ordinary local data.
 
 RoutedStorage dispatches between the configured application-storage directory
-and repository-local runtime data. Google Drive synchronization is owned
-exclusively by the standalone gdrive_sync utility and is not a Storage backend.
+and repository-local runtime data. Optional external synchronization operates
+on those local files and is not a Storage backend.
 """
 from __future__ import annotations
 

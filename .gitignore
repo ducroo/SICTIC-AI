@@ -24,10 +24,19 @@ __pycache__/
 .storage-mirror/
 .installed-skills/
 .openclaw-skills/
+
+# Retired synchronization state and credentials remain private. The runtime no
+# longer reads them, but existing user files are deliberately left untouched.
 gdrive-mirror/
-gdrive-sync/.state/
-gdrive-sync/logs/
 gdrive_sync_state/
+gdrive-ops-credentials.json
+gdrive-ops-token.json
+
+rclone-sync/config.env
+rclone-sync/filters.txt.md5
+rclone-sync/logs/
+rclone-sync/run.lock/
+rclone-sync/state/
 
 venv/
 logs/
@@ -48,10 +57,6 @@ condaenv.*.requirements.txt
 
 # personal scratch files
 claude_resume.txt
-
-# Google Drive OAuth secrets (also expected under ~/.openclaw/ by default)
-gdrive-ops-credentials.json
-gdrive-ops-token.json
 
 # Live sync config (per-user folder IDs). Commit only sync.yaml.example.
 config/sync.yaml

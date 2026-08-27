@@ -82,7 +82,7 @@ def archive_dataset(dataset_name: Optional[str] = None, age_days: Optional[int] 
             if storage.exists(marker_path):
                 mtime = storage.mtime(marker_path)
                 if mtime is not None:
-                    # mtime could be None if the storage backend doesn't support it, but both Local and Google Drive do
+                    # mtime may be unavailable for a future storage backend.
                     file_age = now - mtime
                     if file_age > age_seconds:
                         _set_dataset_marker(slug, active=False)

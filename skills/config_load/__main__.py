@@ -7,7 +7,7 @@ from skills.config_load.config_load import _local_cache_paths, config_load
 
 logger = get_logger(__name__)
 
-app = typer.Typer(help="Load JSON configuration from Google Drive.")
+app = typer.Typer(help="Load JSON configuration from the local repository.")
 
 @app.command()
 def load():

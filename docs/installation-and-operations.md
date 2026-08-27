@@ -82,11 +82,9 @@ are:
 - `RETRIEVAL_*`: how wide retrieval runs and how much of an answer one document
   may occupy. See [Retrieval](#retrieval).
 
-The complete set and its local defaults are in `.env-template`.
-
-Cloud storage is optional. With blank `CLOUD_PROVIDER`, skills use only local
-storage and the installer skips Google Drive configuration. Set
-`CLOUD_PROVIDER=google` to enable the standalone synchronization utility.
+The complete set and its local defaults are in `.env-template`. Optional Google
+Drive synchronization is configured independently under `rclone-sync/`; it is
+not part of the application environment or installer.
 
 ## Background services
 
@@ -146,43 +144,38 @@ conda run -n sictic-env python -m skills.dataset_maintenance diagnose
 
 Consult each skill's `SKILL.md` for its current arguments and examples.
 
-## Google Drive synchronization
+## Google Drive synchronization with rclone
 
 All skills read and write the local filesystem below `LOCAL_STORAGE_PATH`.
-Google Drive access is isolated in the `gdrive_sync` utility under
-`gdrive-sync/`; normal application storage never accesses Drive directly.
+Google Drive synchronization is an optional external operation and never runs
+inside a skill or through the installer.
 
-Required `.env` values:
-
-- `CLOUD_PROVIDER=google`
-- `LOCAL_STORAGE_PATH`: the local application storage root.
-- `CLOUD_STORAGE_PATH`: a Drive folder ID, `root`, or folder path/name.
-- `GDRIVE_CREDENTIALS`: OAuth Desktop-App credentials JSON.
-- `GDRIVE_TOKEN`: cached OAuth token JSON.
-
-Ask your coding agent to guide you through creating a Google OAuth Desktop-App
-client and authenticating it.
-
-Common commands:
+Install rclone, create and authenticate a Google Drive remote with
+`rclone config`, then run:
 
 ```bash
-python -m gdrive_sync pull
-python -m gdrive_sync sync --conflict-policy cloud-wins
-python -m gdrive_sync sync --conflict-policy local-wins
+./rclone-sync/configure.sh
+./rclone-sync/rclone-sync.sh bootstrap-dry-run
+./rclone-sync/rclone-sync.sh bootstrap
 ```
 
-- `pull` makes local storage match Drive and establishes the initial baseline.
-- `cloud-wins` downloads cloud additions and updates without deleting files.
-- `local-wins` synchronizes both ways and keeps the local version on conflicts.
-- `--dry-run` previews changes; `--json` produces machine-readable output.
+The guided configuration stores machine-specific paths in the gitignored
+`rclone-sync/config.env`. The sync helper keeps its durable bisync listings
+under `rclone-sync/state/`, immutable run logs under `rclone-sync/logs/`, and a
+continuous operational log under `logs/rclone.log`.
 
-The initial pull can take hours for a large Drive. Later synchronizations use a
-stored baseline and the Google Drive Changes API. Google Drive shortcuts are not
-supported inside the synchronized root.
+Routine commands are:
 
-The synchronization baseline lives below
-`<REPO_PATH>/gdrive_sync_state/<pairing-id>/`. It is durable state and must
-not be deleted during cache cleanup.
+```bash
+./rclone-sync/rclone-sync.sh dry-run
+./rclone-sync/rclone-sync.sh sync
+```
+
+The helper imports Markdown as native Google Docs and exports native Google
+Docs as Markdown. It also uses access-marker, delete-limit, non-overlap, and
+conflict-copy safeguards. Read `rclone-sync/README.md` before bootstrap; rclone
+bisync is stateful, and an incorrect resync direction can overwrite the wrong
+version.
 
 ## Retrieval
 

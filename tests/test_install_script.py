@@ -26,9 +26,7 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
         "REPO_PATH=\n"
         "INSTALLED_SKILLS_PATH=\n"
         "LOCAL_STORAGE_PATH=\n"
-        "LOCAL_DATA_PATH=\n"
-        "CLOUD_PROVIDER=google\n"
-        "CLOUD_STORAGE_PATH=\n",
+        "LOCAL_DATA_PATH=\n",
         encoding="utf-8",
     )
     (source / ".env").write_text(
@@ -101,6 +99,8 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
     assert "STORAGE_PROVIDER=" not in env_file
     assert "DEFAULT_LLM=" not in env_file
     assert "OLLAMA_NUM_CTX=" not in env_file
+    assert "CLOUD_PROVIDER=google" in env_file
+    assert "CLOUD_STORAGE_PATH=" in env_file
 
 
 def test_install_script_supports_repository_only_mode(tmp_path):
@@ -122,9 +122,7 @@ def test_install_script_supports_repository_only_mode(tmp_path):
         "REPO_PATH=\n"
         "INSTALLED_SKILLS_PATH=\n"
         "LOCAL_STORAGE_PATH=\n"
-        "LOCAL_DATA_PATH=\n"
-        "CLOUD_PROVIDER=\n"
-        "CLOUD_STORAGE_PATH=\n",
+        "LOCAL_DATA_PATH=\n",
         encoding="utf-8",
     )
 
@@ -175,7 +173,7 @@ def test_install_script_supports_repository_only_mode(tmp_path):
     assert f"LOCAL_DATA_PATH={source}" in env_file
 
 
-def test_fresh_interactive_install_does_not_require_google(tmp_path):
+def test_fresh_interactive_install_does_not_configure_cloud_sync(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     source = tmp_path / "source"
     fake_site_packages = tmp_path / "site-packages"
@@ -238,5 +236,6 @@ def test_fresh_interactive_install_does_not_require_google(tmp_path):
     assert "Google Drive folder ID" not in result.stdout
     assert "Google credentials path" not in result.stdout
     env_file = (source / ".env").read_text(encoding="utf-8")
-    assert "CLOUD_PROVIDER=\n" in env_file
+    assert "CLOUD_PROVIDER=" not in env_file
+    assert "CLOUD_STORAGE_PATH=" not in env_file
     assert f"LOCAL_STORAGE_PATH={source / 'local_storage'}" in env_file

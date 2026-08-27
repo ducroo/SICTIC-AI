@@ -31,8 +31,8 @@ deprecation warning.
 - Several modules still read `REPO_PATH` directly for config and runtime files.
   The packaging PR should decide whether installed code treats the install
   directory as `REPO_PATH` or introduces a separate application root.
-- Google Drive sync remains intentionally isolated in `skills.gdrive_sync`, but
-  tests should continue asserting no general storage code imports Drive APIs.
+- Optional Google Drive synchronization remains external to the Python runtime;
+  general storage code should continue to operate on local files only.
 
 ## Recommended Next PRs
 

@@ -20,6 +20,9 @@
 #      installed skill directories are preserved under
 #      <target>/.skill-copy-backups/. Leave the target blank to work directly
 #      from the repository without installing agent-discoverable skill copies.
+#   4. Creates or updates .env for local storage, models, and service settings.
+#      Optional Google Drive synchronization is configured separately with the
+#      rclone-sync helper.
 #
 # Usage:
 #   ./install.sh                                      # interactive install
@@ -281,12 +284,7 @@ if [ -z "$SITE_PACKAGES" ] || [ ! -d "$SITE_PACKAGES" ]; then
     echo "install.sh: could not resolve site-packages in '$ENV_NAME'." >&2
     exit 1
 fi
-{
-    printf '%s\n' "$REPO_ROOT"
-    if [ -d "$REPO_ROOT/gdrive-sync/gdrive_sync" ]; then
-        printf '%s\n' "$REPO_ROOT/gdrive-sync"
-    fi
-} > "$SITE_PACKAGES/sictic-ai-repo.pth"
+printf '%s\n' "$REPO_ROOT" > "$SITE_PACKAGES/sictic-ai-repo.pth"
 
 # ---------------------------------------------------------------------------
 # Step 3: install skills
@@ -498,28 +496,6 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     env_set "INSTALLED_SKILLS_PATH" "$TARGET"
     ask_env "LOCAL_STORAGE_PATH" "Local application storage path" "$REPO_ROOT/local_storage" 1 0
     ask_env "LOCAL_DATA_PATH" "Local runtime cache path" "$REPO_ROOT" 1 0
-    cloud_provider_current=$(env_get CLOUD_PROVIDER || true)
-    if [ -n "$cloud_provider_current" ]; then
-        printf 'Cloud provider [current: %s] (google or none): ' "$cloud_provider_current"
-    else
-        printf 'Cloud provider [none] (google or none): '
-    fi
-    IFS= read -r cloud_provider_answer || cloud_provider_answer=""
-    if [ -z "$cloud_provider_answer" ]; then
-        cloud_provider_answer="$cloud_provider_current"
-    fi
-    case "$(printf '%s' "$cloud_provider_answer" | tr '[:upper:]' '[:lower:]')" in
-        ""|none) env_set "CLOUD_PROVIDER" "" ;;
-        google) env_set "CLOUD_PROVIDER" "google" ;;
-        *)
-            echo "  CLOUD_PROVIDER must be google or none." >&2
-            exit 1
-            ;;
-    esac
-    cloud_provider=$(env_get CLOUD_PROVIDER || true)
-    if [ "$cloud_provider" = "google" ]; then
-        ask_env "CLOUD_STORAGE_PATH" "Google Drive folder ID, root, or folder path/name" "" 1 0
-    fi
 
     ask_env "QDRANT_HOST" "Qdrant host" "$(env_get QDRANT_HOST || true)" 1 0
     ask_env "OLLAMA_HOST" "Ollama host (fallback for local Ollama models)" "$(env_get OLLAMA_HOST || true)" 1 0
@@ -551,10 +527,6 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_get OLLAMA_MAX_LOADED_MODELS || true)" 1 0
     ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_get OLLAMA_KV_CACHE_TYPE || true)" 0 0
     ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_get OLLAMA_FLASH_ATTENTION || true)" 0 0
-    if [ "$cloud_provider" = "google" ]; then
-        ask_env "GDRIVE_CREDENTIALS" "Google credentials path (blank to use default)" "$(env_get GDRIVE_CREDENTIALS || true)" 0 1
-        ask_env "GDRIVE_TOKEN" "Google token path (blank to use default)" "$(env_get GDRIVE_TOKEN || true)" 0 1
-    fi
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
     ask_env "APIFY_KEY" "Apify API key (blank if unused)" "$(env_get APIFY_KEY || true)" 0 1
     ask_env "DEALUM_API_KEY" "Dealum API key (blank if unused)" "$(env_get DEALUM_API_KEY || true)" 0 1
@@ -570,3 +542,6 @@ fi
 
 echo
 echo "Done."
+if [ -d "$REPO_ROOT/rclone-sync" ]; then
+    echo "Optional Google Drive synchronization: $REPO_ROOT/rclone-sync/README.md"
+fi
