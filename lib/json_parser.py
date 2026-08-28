@@ -7,6 +7,21 @@ logger = get_logger(__name__)
 
 
 _VALID_JSON_ESCAPES = {'"', "\\", "/", "b", "f", "n", "r", "t"}
+_REASONING_BLOCK_RE = re.compile(
+    r"<(think|thinking|reason|reasoning)>\s*.*?</\1>\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNCLOSED_REASONING_RE = re.compile(
+    r"^<(think|thinking|reason|reasoning)>.*",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def strip_reasoning_tags(raw_output: str) -> str:
+    """Remove chain-of-thought wrappers that local models put around JSON."""
+    stripped = _REASONING_BLOCK_RE.sub("", raw_output)
+    stripped = _UNCLOSED_REASONING_RE.sub("", stripped)
+    return stripped.strip()
 
 
 def _escape_invalid_json_backslashes(json_str: str) -> str:
@@ -132,7 +147,11 @@ def repair_json_payload(raw_output: str) -> dict | list:
     """Extracts and parses JSON from a raw LLM string."""
     if not raw_output:
         raise ValueError("Empty response from LLM.")
-        
+
+    raw_output = strip_reasoning_tags(raw_output)
+    if not raw_output:
+        raise ValueError("Empty response from LLM.")
+
     # 1. Try to find a markdown JSON block first
     match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_output)
     if match:

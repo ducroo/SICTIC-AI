@@ -6,6 +6,10 @@ from lib.runtime_noise import configure_runtime_noise
 configure_runtime_noise()
 
 from litellm.exceptions import APIConnectionError
+from lib.llm_timeouts import (
+    effective_request_timeout,
+    structured_num_predict,
+)
 from lib.services_gateway import gateway
 from lib.env import get_env_var
 from lib.logger import get_logger
@@ -13,16 +17,40 @@ from lib.model_config import llm_endpoint
 
 logger = get_logger(__name__)
 
+
 def _supports_explicit_prompt_caching(model: str) -> bool:
     if model.startswith(("ollama/", "mlx/")):
         return False
     return model.rsplit("/", 1)[-1].startswith("gpt-5.6")
 
 
+def ollama_format_from_response_format(response_format: Any) -> dict | str:
+    """Map LiteLLM json_schema payloads onto Ollama's native format field."""
+    if isinstance(response_format, dict):
+        schema = None
+        if response_format.get("type") == "json_schema":
+            schema = (response_format.get("json_schema") or {}).get("schema")
+        if isinstance(schema, dict) and schema:
+            return schema
+    return "json"
+
+
+def apply_ollama_structured_options(
+    kwargs: dict[str, Any],
+    response_format: Any,
+) -> None:
+    """Constrain local JSON calls: no thinking, native schema, bounded decode."""
+    kwargs["think"] = False
+    kwargs["format"] = ollama_format_from_response_format(response_format)
+    kwargs["num_predict"] = structured_num_predict()
+    kwargs.pop("response_format", None)
+
+
 async def llm_chat(
     prompt: str,
     response_format: Optional[Any] = None,
     cacheable_prompt_prefix: Optional[str] = None,
+    timeout: Optional[float] = None,
 ) -> Optional[str]:
     endpoint = llm_endpoint()
     default_model = endpoint.model
@@ -69,7 +97,15 @@ async def llm_chat(
     else:
         messages = [{"role": "user", "content": full_prompt}]
     kwargs: Dict[str, Any] = endpoint.litellm_kwargs()
-    kwargs.update({"messages": messages, "timeout": 3600.0})
+    kwargs.update(
+        {
+            "messages": messages,
+            "timeout": effective_request_timeout(
+                structured=response_format is not None,
+                override=timeout,
+            ),
+        }
+    )
 
     if use_explicit_cache:
         # LiteLLM 1.97 still drops prompt_cache_key when supplied as a named
@@ -86,13 +122,16 @@ async def llm_chat(
             }
         )
         kwargs["extra_body"] = extra_body
-    
+
     if response_format:
-        kwargs["response_format"] = response_format
+        if is_ollama:
+            apply_ollama_structured_options(kwargs, response_format)
+        else:
+            kwargs["response_format"] = response_format
 
     if is_ollama:
         kwargs["num_ctx"] = ctx
-    
+
     logger.info(f"Sending request to {default_model} with context {ctx} (estimated tokens: {estimated_tokens})...")
     try:
         response = await gateway.request_completion(kwargs)

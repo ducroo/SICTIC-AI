@@ -13,6 +13,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, AsyncIterator
 
+from lib.llm_timeouts import (
+    DEFAULT_LLM_REQUEST_TIMEOUT,
+    float_env,
+    lease_floor_seconds,
+)
 from lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,23 +28,14 @@ _POLL_INTERVAL = 0.05
 # A lease held longer than this is treated as leaked and reclaimed even if
 # the owning process is still alive: a hung provider call never returns, so
 # pid-liveness alone cannot distinguish a stuck job from a long one.
-_DEFAULT_LEASE_MAX_AGE = 1800.0
-_DEFAULT_LLM_REQUEST_TIMEOUT = 600.0
+# Must be at least as long as the LLM HTTP timeout, or a still-running call
+# loses its slot and a second job starts on the same GPU.
+_DEFAULT_LEASE_MAX_AGE = DEFAULT_LLM_REQUEST_TIMEOUT
+_DEFAULT_LLM_REQUEST_TIMEOUT = DEFAULT_LLM_REQUEST_TIMEOUT
 _DEFAULT_EMBEDDING_REQUEST_TIMEOUT = 300.0
 _DEFAULT_RERANK_REQUEST_TIMEOUT = 120.0
 _CLOUD_BUDGET_WINDOW_SECONDS = 60.0
 _LOCAL_MODEL_PREFIXES = ("ollama/", "mlx/")
-
-
-def _float_env(name: str, default: float) -> float:
-    raw = os.environ.get(name)
-    if raw is None or not raw.strip():
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        logger.warning("Ignoring non-numeric %s=%r", name, raw)
-        return default
 
 
 class GatewayTimeoutError(TimeoutError):
@@ -153,11 +149,13 @@ class ServicesGateway:
         )
         self.wait_timeout = wait_timeout
         self.poll_interval = poll_interval
-        self.lease_max_age = (
-            lease_max_age
-            if lease_max_age is not None
-            else _float_env("GATEWAY_LEASE_MAX_AGE", _DEFAULT_LEASE_MAX_AGE)
-        )
+        if lease_max_age is not None:
+            self.lease_max_age = lease_max_age
+        else:
+            self.lease_max_age = max(
+                float_env("GATEWAY_LEASE_MAX_AGE", _DEFAULT_LEASE_MAX_AGE),
+                lease_floor_seconds(),
+            )
         self.cloud_tpm_budget = (
             cloud_tpm_budget
             if cloud_tpm_budget is not None
@@ -626,7 +624,7 @@ class ServicesGateway:
         # its lease instead of blocking the machine-wide slot forever.
         kwargs.setdefault(
             "timeout",
-            _float_env(
+            float_env(
                 "EMBEDDING_REQUEST_TIMEOUT",
                 _DEFAULT_EMBEDDING_REQUEST_TIMEOUT,
             ),
@@ -658,7 +656,7 @@ class ServicesGateway:
         # its lease instead of blocking the machine-wide slot forever.
         kwargs.setdefault(
             "timeout",
-            _float_env(
+            float_env(
                 "LLM_REQUEST_TIMEOUT",
                 _DEFAULT_LLM_REQUEST_TIMEOUT,
             ),
@@ -688,7 +686,7 @@ class ServicesGateway:
         litellm.disable_aiohttp_transport = True
         kwargs.setdefault(
             "timeout",
-            _float_env(
+            float_env(
                 "RERANK_REQUEST_TIMEOUT",
                 _DEFAULT_RERANK_REQUEST_TIMEOUT,
             ),

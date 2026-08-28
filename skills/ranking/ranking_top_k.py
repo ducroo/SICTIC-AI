@@ -7,8 +7,10 @@ from lib.json_parser import repair_json_payload
 from lib.logger import get_logger
 from lib.structured_output import (
     copy_schema,
+    is_retryable_structured_error,
     json_schema_response_format,
     schema_prompt_block,
+    structured_correction_feedback,
     validate_json_schema,
 )
 from skills.config_load.config_load import config_load
@@ -147,6 +149,8 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
                     f"missing={inspection.missing}."
                 )
         except Exception as error:
+            if not is_retryable_structured_error(error):
+                raise
             attempt_errors.append(str(error))
             logger.warning(
                 "Ranking model returned an invalid response on attempt "
@@ -156,12 +160,7 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
                 error,
             )
             if attempt < _RANKING_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
+                retry_feedback = structured_correction_feedback(error)
             continue
 
         return inspection.ranked_ids

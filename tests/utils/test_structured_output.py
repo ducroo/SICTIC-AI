@@ -36,6 +36,23 @@ def test_json_schema_response_format_is_strict():
     assert result["json_schema"]["schema"] is SCHEMA
 
 
+def test_timeout_errors_are_not_retryable():
+    from lib.services_gateway import GatewayTimeoutError
+    from lib.structured_output import (
+        is_llm_timeout,
+        is_retryable_structured_error,
+    )
+
+    timeout = GatewayTimeoutError("Timed out after 3600s waiting for llm")
+    schema_error = ValueError("LLM response does not match the schema at $.status")
+
+    assert is_llm_timeout(timeout)
+    assert is_llm_timeout(TimeoutError("request timeout"))
+    assert not is_retryable_structured_error(timeout)
+    assert not is_retryable_structured_error(RuntimeError("provider unavailable"))
+    assert is_retryable_structured_error(schema_error)
+
+
 def test_schema_prompt_block_distinguishes_response_from_schema():
     prompt = schema_prompt_block(SCHEMA)
 

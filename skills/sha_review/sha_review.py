@@ -15,8 +15,10 @@ from lib.startups.sources import ensure_startup_dataset
 from lib.storage import get_storage
 from lib.structured_output import (
     copy_schema,
+    is_retryable_structured_error,
     json_schema_response_format,
     schema_prompt_block,
+    structured_correction_feedback,
     validate_json_schema,
 )
 from skills.batch_audit.batch_audit import batch_audit
@@ -106,6 +108,8 @@ async def _identify_sha(
                 )
             result = _parse_identification(raw_response, response_schema)
         except Exception as error:
+            if not is_retryable_structured_error(error):
+                raise
             errors.append(str(error))
             logger.warning(
                 "[%s] SHA document identification failed on attempt "
@@ -116,12 +120,7 @@ async def _identify_sha(
                 error,
             )
             if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
+                retry_feedback = structured_correction_feedback(error)
             continue
 
         break
@@ -290,6 +289,8 @@ async def _rank_templates(
                     "template."
                 )
         except Exception as error:
+            if not is_retryable_structured_error(error):
+                raise
             errors.append(str(error))
             logger.warning(
                 "SHA template ranking failed on attempt %d/%d: %s",
@@ -298,12 +299,7 @@ async def _rank_templates(
                 error,
             )
             if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
+                retry_feedback = structured_correction_feedback(error)
             continue
 
         break

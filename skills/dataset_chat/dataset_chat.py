@@ -33,6 +33,7 @@ async def dataset_chat(
     strict_insufficient_context: bool = True,
     response_format: Optional[Any] = None,
     cacheable_prompt_prefix: Optional[str] = None,
+    timeout: Optional[float] = None,
 ) -> Optional[str]:
     """Run one RAG using search queries and an independent LLM prompt."""
     if isinstance(queries, str):
@@ -108,4 +109,5 @@ async def dataset_chat(
         prompt=dynamic_prompt,
         response_format=response_format,
         cacheable_prompt_prefix=stable_prefix,
+        timeout=timeout,
     )

@@ -113,6 +113,7 @@ async def test_dataset_chat_forwards_response_format(mocker):
     )
 
     assert mock_llm.await_args.kwargs["response_format"] is response_format
+    assert mock_llm.await_args.kwargs["timeout"] is None
 
 
 @pytest.mark.asyncio

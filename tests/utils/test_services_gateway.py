@@ -44,6 +44,15 @@ def test_default_poll_interval_is_fifty_milliseconds(tmp_path):
     assert gateway.poll_interval == 0.05
 
 
+def test_lease_max_age_covers_llm_request_timeout(monkeypatch, tmp_path):
+    monkeypatch.delenv("GATEWAY_LEASE_MAX_AGE", raising=False)
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT", "7200")
+    monkeypatch.setenv("LLM_STRUCTURED_REQUEST_TIMEOUT", "180")
+    gateway = ServicesGateway(state_path=tmp_path / "gateway.json")
+
+    assert gateway.lease_max_age == 7200.0
+
+
 def test_gateway_initialization_has_no_file_side_effect(clean_gateway):
     assert not clean_gateway.state_path.exists()
 
@@ -656,7 +665,7 @@ async def test_completion_applies_default_request_timeout(
 
     await clean_gateway.request_completion({"model": "ollama/llm"})
 
-    assert completion.call_args.kwargs["timeout"] == 600.0
+    assert completion.call_args.kwargs["timeout"] == 3600.0
 
 
 @pytest.mark.asyncio

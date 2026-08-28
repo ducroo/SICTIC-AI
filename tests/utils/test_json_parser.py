@@ -78,3 +78,21 @@ def test_repair_json_payload_combines_backslash_and_trailing_comma_repairs():
 def test_repair_json_payload_does_not_repair_unquoted_property_names():
     with pytest.raises(ValueError, match="Expecting property name"):
         repair_json_payload('{startup_name: "Acme",}')
+
+
+def test_repair_json_payload_strips_think_blocks():
+    result = repair_json_payload(
+        "<think>The answer should be JSON.</think>\n"
+        '{"value": "ok"}'
+    )
+
+    assert result == {"value": "ok"}
+
+
+def test_repair_json_payload_strips_reasoning_blocks_around_fences():
+    result = repair_json_payload(
+        "<reasoning>planning</reasoning>\n"
+        '```json\n{"value":"ok"}\n```'
+    )
+
+    assert result == {"value": "ok"}

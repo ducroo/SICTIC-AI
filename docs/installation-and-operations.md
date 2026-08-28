@@ -81,6 +81,15 @@ are:
   endpoint, and API key. Blank `RERANK_MODEL` disables reranking.
 - `RETRIEVAL_*`: how wide retrieval runs and how much of an answer one document
   may occupy. See [Retrieval](#retrieval).
+- `LLM_REQUEST_TIMEOUT`: HTTP ceiling in seconds for free-form completions
+  (default 3600). Structured JSON calls use `LLM_STRUCTURED_REQUEST_TIMEOUT`
+  (default 180) and `LLM_STRUCTURED_NUM_PREDICT` (default 4096).
+- `GATEWAY_LEASE_MAX_AGE`: how long a gateway slot may be held before it is
+  treated as leaked. It is raised automatically to cover the longest LLM HTTP
+  timeout, so a still-running call cannot lose its slot to a second job.
+- `OLLAMA_NUM_PARALLEL`: concurrent local decode slots. Keep this at 1 or 2
+  for 27B-class models; the default of 8 is aimed at small 8B models. Too many
+  slots on a large model saturates KV cache and surfaces as hour-long timeouts.
 
 The complete set and its local defaults are in `.env-template`. Optional Google
 Drive synchronization is configured independently under `rclone-sync/`; it is
@@ -241,6 +250,23 @@ a share price becomes `15.15` rather than `15.151515151515152`, a
 percent-formatted cell becomes `24.69%` rather than `0.24685415429152754`, and a
 date becomes `2026-01-19`. Chunks from a workbook are cited by sheet name
 instead of a page number.
+
+## Local LLM timeouts and structured JSON
+
+Due-diligence skills ask the model for JSON that matches a schema. Local Qwen
+3.x models default to a thinking mode that both inflates latency and wraps JSON
+in `<think>` tags the schema cannot accept. Structured calls therefore disable
+thinking, send the schema through Ollama's native `format` field, and cap the
+number of generated tokens.
+
+Free-form completions may still run up to `LLM_REQUEST_TIMEOUT` (one hour by
+default). A JSON object that is not back within
+`LLM_STRUCTURED_REQUEST_TIMEOUT` is a failed request, not a slow one: schema
+retries do not repeat timeouts, and a timed-out audit check is recorded as an
+error instead of occupying the GPU for three hours.
+
+On a 27B local model, set `OLLAMA_NUM_PARALLEL=1` or `2`. Eight parallel slots
+are only appropriate for the small default 8B models.
 
 ### Upgrading an existing index
 

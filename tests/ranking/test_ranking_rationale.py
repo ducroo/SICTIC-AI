@@ -68,6 +68,31 @@ async def test_ranking_rationale_propagates_invalid_response(mocker):
 
 
 @pytest.mark.asyncio
+async def test_ranking_rationale_does_not_retry_timeouts(mocker):
+    mocker.patch(
+        "skills.ranking.ranking_rationale.config_load",
+        return_value={
+            "ranking_rationale": {
+                "rationale_instructions": "{{objective}}\n{{profiles_text}}",
+                "response_schema": RESPONSE_SCHEMA,
+            }
+        },
+    )
+    mock_llm = mocker.patch(
+        "skills.ranking.ranking_rationale.llm_chat",
+        side_effect=TimeoutError("LLM request timed out after 180s"),
+    )
+
+    with pytest.raises(TimeoutError, match="timed out"):
+        await ranking_rationale(
+            [{"id": "urs-gubser", "text": "Profile", "rank": 1}],
+            objective="Find experts",
+        )
+
+    assert mock_llm.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_ranking_rationale_retries_with_validation_feedback(mocker):
     mocker.patch(
         "skills.ranking.ranking_rationale.config_load",

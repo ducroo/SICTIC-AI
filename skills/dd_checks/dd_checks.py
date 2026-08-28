@@ -16,8 +16,10 @@ from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_raw_path
 from lib.structured_output import (
     copy_schema,
+    is_retryable_structured_error,
     json_schema_response_format,
     schema_prompt_block,
+    structured_correction_feedback,
     validate_json_schema,
 )
 from skills.dataset_chat.dataset_chat import _fallback_trigger
@@ -132,6 +134,8 @@ async def find_industry_type(
                 base_schema,
             )
         except Exception as error:
+            if not is_retryable_structured_error(error):
+                raise
             errors.append(str(error))
             logger.warning(
                 "[%s] Industry classification failed on attempt %d/%d: %s",
@@ -141,12 +145,7 @@ async def find_industry_type(
                 error,
             )
             if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
+                retry_feedback = structured_correction_feedback(error)
 
     raise RuntimeError(
         "Industry classification failed after "

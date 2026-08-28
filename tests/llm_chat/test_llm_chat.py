@@ -32,6 +32,8 @@ async def test_ollama_requests_always_include_computed_num_ctx(monkeypatch, mock
     monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "4096")
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "8192")
+    monkeypatch.delenv("LLM_STRUCTURED_REQUEST_TIMEOUT", raising=False)
+    monkeypatch.delenv("LLM_STRUCTURED_NUM_PREDICT", raising=False)
     mocker.patch.object(module.gateway, "request_completion", side_effect=fake_completion)
     log_info = mocker.patch.object(module.logger, "info")
 
@@ -50,7 +52,11 @@ async def test_ollama_requests_always_include_computed_num_ctx(monkeypatch, mock
 
     assert result == "ok"
     assert captured["num_ctx"] == 4096
-    assert captured["response_format"] == response_format
+    assert captured["think"] is False
+    assert captured["format"] == {"type": "object"}
+    assert captured["num_predict"] == 4096
+    assert captured["timeout"] == 180.0
+    assert "response_format" not in captured
     log_info.assert_any_call("LLM usage for %s: %s", "ollama/example", usage)
 
 
@@ -122,6 +128,7 @@ async def test_ollama_does_not_receive_openai_cache_parameters(monkeypatch, mock
     monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "4096")
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "8192")
+    monkeypatch.delenv("LLM_REQUEST_TIMEOUT", raising=False)
     mocker.patch.object(module.gateway, "request_completion", side_effect=fake_completion)
 
     await module.llm_chat(
@@ -133,3 +140,73 @@ async def test_ollama_does_not_receive_openai_cache_parameters(monkeypatch, mock
         {"role": "user", "content": "stable prefix\n\ndynamic question"}
     ]
     assert "extra_body" not in captured
+    assert captured["timeout"] == 3600.0
+    assert "think" not in captured
+    assert "format" not in captured
+
+
+@pytest.mark.asyncio
+async def test_cloud_structured_calls_keep_openai_response_format(
+    monkeypatch,
+    mocker,
+):
+    from skills.llm_chat import llm_chat as module
+
+    captured = {}
+
+    async def fake_completion(kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))],
+        )
+
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-5.6-luna")
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "4096")
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "8192")
+    monkeypatch.delenv("LLM_STRUCTURED_REQUEST_TIMEOUT", raising=False)
+    mocker.patch.object(module.gateway, "request_completion", side_effect=fake_completion)
+
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "fixture",
+            "strict": True,
+            "schema": {"type": "object"},
+        },
+    }
+    await module.llm_chat("short prompt", response_format=response_format)
+
+    assert captured["response_format"] is response_format
+    assert captured["timeout"] == 180.0
+    assert "think" not in captured
+    assert "format" not in captured
+
+
+@pytest.mark.asyncio
+async def test_explicit_timeout_overrides_structured_default(monkeypatch, mocker):
+    from skills.llm_chat import llm_chat as module
+
+    captured = {}
+
+    async def fake_completion(kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))],
+        )
+
+    monkeypatch.setenv("LLM_MODEL", "ollama/example")
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH", "4096")
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "8192")
+    mocker.patch.object(module.gateway, "request_completion", side_effect=fake_completion)
+
+    await module.llm_chat(
+        "short prompt",
+        response_format={"type": "json_object"},
+        timeout=42,
+    )
+
+    assert captured["timeout"] == 42
+    assert captured["format"] == "json"

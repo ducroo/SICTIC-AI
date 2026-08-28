@@ -12,8 +12,10 @@ from lib.model_config import llm_model
 from lib.slugify import slugify
 from lib.structured_output import (
     copy_schema,
+    is_retryable_structured_error,
     json_schema_response_format,
     schema_prompt_block,
+    structured_correction_feedback,
     validate_json_schema,
 )
 from skills.batch_audit.checklist import ChecklistCheck, parse_checklist
@@ -192,6 +194,8 @@ async def _run_check(
                 status_scale,
             )
         except Exception as error:
+            if not is_retryable_structured_error(error):
+                return _error_result(error)
             errors.append(str(error))
             logger.warning(
                 "[%s] Audit check %s failed on attempt %d/%d: %s",
@@ -202,12 +206,7 @@ async def _run_check(
                 error,
             )
             if attempt < MAX_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
+                retry_feedback = structured_correction_feedback(error)
     return _error_result(
         RuntimeError(
             f"Audit check failed after {MAX_ATTEMPTS} attempts: "

@@ -270,14 +270,16 @@ async def test_structured_batch_audit_preserves_missing_evidence_fallback(
 
 
 @pytest.mark.asyncio
-async def test_structured_batch_audit_records_exhausted_errors(
+async def test_structured_batch_audit_records_exhausted_schema_errors(
     mock_env,
     monkeypatch,
 ):
     _indexed_dataset()
+    calls = {"count": 0}
 
     async def failing_dataset_chat(**_kwargs):
-        raise RuntimeError("provider unavailable")
+        calls["count"] += 1
+        raise ValueError("LLM response does not match the schema at $.status")
 
     monkeypatch.setattr(
         "skills.batch_audit.structured.dataset_chat",
@@ -294,6 +296,7 @@ async def test_structured_batch_audit_records_exhausted_errors(
     )
 
     checks = json.loads(insight.content())["chapters"][0]["checks"]
+    assert calls["count"] == 6
     assert all(check["status"] is None for check in checks)
     assert all("failed after 3 attempts" in check["error"] for check in checks)
 
@@ -324,6 +327,38 @@ async def test_structured_batch_audit_records_exhausted_errors(
     recovered_checks = json.loads(recovered.content())["chapters"][0]["checks"]
     assert all(check["status"] == "Pass" for check in recovered_checks)
     assert all(check["error"] is None for check in recovered_checks)
+
+
+@pytest.mark.asyncio
+async def test_structured_batch_audit_does_not_retry_timeouts(
+    mock_env,
+    monkeypatch,
+):
+    _indexed_dataset()
+    calls = {"count": 0}
+
+    async def timing_out_dataset_chat(**_kwargs):
+        calls["count"] += 1
+        raise TimeoutError("LLM request timed out after 180s")
+
+    monkeypatch.setattr(
+        "skills.batch_audit.structured.dataset_chat",
+        timing_out_dataset_chat,
+    )
+
+    insight = await batch_audit_json(
+        dataset_name="example-startup",
+        skill_name="submission_ready",
+        checklist_markdown=CHECKLIST,
+        llm_instructions="Return JSON.",
+        status_scale=["Pass", "Fail", "Unclear"],
+        missing_evidence_status="Unclear",
+    )
+
+    checks = json.loads(insight.content())["chapters"][0]["checks"]
+    assert calls["count"] == 2
+    assert all("timed out" in check["error"] for check in checks)
+    assert all("failed after 3 attempts" not in check["error"] for check in checks)
 
 
 @pytest.mark.asyncio
