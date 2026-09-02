@@ -34,6 +34,10 @@ def _response(*entries):
     )
 
 
+async def _run_now(operation, **_kwargs):
+    return await operation(**_kwargs["operation_kwargs"])
+
+
 def test_reranking_is_disabled_without_a_configured_model(monkeypatch):
     monkeypatch.delenv("RERANK_MODEL", raising=False)
 
@@ -48,8 +52,8 @@ def test_reranking_is_enabled_once_configured(enabled_reranker):
 async def test_rerank_is_skipped_when_disabled(monkeypatch, mocker):
     monkeypatch.delenv("RERANK_MODEL", raising=False)
     request = mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(),
     )
     chunks = [_chunk("a"), _chunk("b")]
@@ -64,8 +68,8 @@ async def test_rerank_reorders_chunks_and_records_scores(
     mocker,
 ):
     mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(return_value=_response((2, 0.9), (0, 0.4))),
     )
     chunks = [_chunk("a"), _chunk("b"), _chunk("c")]
@@ -83,18 +87,50 @@ async def test_rerank_reorders_chunks_and_records_scores(
 @pytest.mark.asyncio
 async def test_rerank_sends_query_and_chunk_texts(enabled_reranker, mocker):
     request = mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(return_value=_response((0, 1.0), (1, 0.1))),
     )
 
     await rerank_chunks("patent ownership", [_chunk("a"), _chunk("b")])
 
-    kwargs = request.await_args.args[0]
-    assert kwargs["model"] == "infinity/BAAI/bge-reranker-v2-m3"
-    assert kwargs["api_base"] == "http://localhost:7997"
-    assert kwargs["query"] == "patent ownership"
-    assert kwargs["documents"] == ["text a", "text b"]
+    endpoint, query, documents = request.await_args.args
+    assert endpoint.model == "infinity/BAAI/bge-reranker-v2-m3"
+    assert endpoint.base_url == "http://localhost:7997"
+    assert query == "patent ownership"
+    assert documents == ["text a", "text b"]
+
+
+@pytest.mark.asyncio
+async def test_rerank_owns_provider_call_and_uses_scheduler(
+    enabled_reranker,
+    mocker,
+):
+    provider = mocker.patch(
+        "litellm.arerank",
+        new=mocker.AsyncMock(return_value=_response((0, 1.0))),
+    )
+    run = mocker.patch.object(
+        reranking.scheduler,
+        "run",
+        side_effect=_run_now,
+    )
+    endpoint = reranking.rerank_endpoint()
+
+    await reranking._request_rerank(endpoint, "query", ["first", "second"])
+
+    request = provider.await_args.kwargs
+    assert request["query"] == "query"
+    assert request["documents"] == ["first", "second"]
+    assert request["top_n"] == 2
+    assert request["timeout"] == 120.0
+    scheduled = run.await_args
+    assert scheduled.args[0] is reranking._execute_rerank
+    profile = reranking._inspect_rerank(
+        scheduled.kwargs["operation_kwargs"]
+    )
+    assert profile.descriptor == "infinity/BAAI/bge-reranker-v2-m3"
+    assert profile.input_size == len("queryfirstsecond")
 
 
 @pytest.mark.asyncio
@@ -103,8 +139,8 @@ async def test_rerank_keeps_retrieval_order_when_the_provider_fails(
     mocker,
 ):
     mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(side_effect=RuntimeError("reranker unreachable")),
     )
     chunks = [_chunk("a"), _chunk("b")]
@@ -115,8 +151,8 @@ async def test_rerank_keeps_retrieval_order_when_the_provider_fails(
 @pytest.mark.asyncio
 async def test_rerank_ignores_out_of_range_indices(enabled_reranker, mocker):
     mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(return_value=_response((7, 0.9), (1, 0.8))),
     )
     chunks = [_chunk("a"), _chunk("b")]
@@ -132,8 +168,8 @@ async def test_rerank_keeps_order_for_an_empty_result_set(
     mocker,
 ):
     mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(return_value=SimpleNamespace(results=[])),
     )
     chunks = [_chunk("a"), _chunk("b")]
@@ -144,8 +180,8 @@ async def test_rerank_keeps_order_for_an_empty_result_set(
 @pytest.mark.asyncio
 async def test_rerank_skips_single_chunk_results(enabled_reranker, mocker):
     request = mocker.patch.object(
-        reranking.gateway,
-        "request_rerank",
+        reranking,
+        "_request_rerank",
         new=mocker.AsyncMock(),
     )
 

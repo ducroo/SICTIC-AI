@@ -2,8 +2,8 @@ import os
 from typing import List
 
 from lib.datasets.ingestion import sync_datasets
-from lib.adapters.qdrant import QdrantAdapter
-from lib.logger import get_logger
+from lib.infrastructure.qdrant import QdrantAdapter
+from lib.infrastructure.logging import get_logger
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location_for_domain
 

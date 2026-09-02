@@ -7,7 +7,7 @@ import typer
 from lib.cli import run_command
 from lib.datasets.ingestion import sync_datasets
 from lib.insights import dataset_from_insight
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.dataset_maintenance.maintenance import (
     activate_dataset_marker,
     archive_dataset_marker,

@@ -1,12 +1,12 @@
-from skills.config_load.config_load import config_load
+from lib.infrastructure.configuration import load_repository_config
 from skills.person_profile.person_profile import person_profile_as_person_objects
-from skills.llm_chat.llm_chat import llm_chat
+from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.datasets.search import dataset_search
 from lib.model_config import llm_model
 from lib.insights import InsightFile, InsightResult
 from lib.datasets.ingestion import sync_datasets
 from lib.slugify import slugify
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -25,11 +25,11 @@ async def team_profile(startup_name: str) -> InsightResult:
     logger.info(f"[{dataset_name}] Starting Team Profiling")
 
     default_llm = llm_model()
-    config = config_load()
-    resume_queries = config["team_profile"]["resume_queries"]
-    assessment_prompt = config["team_profile"]["team_assessment_prompt"]
+    config = load_repository_config("team_profile")
+    resume_queries = config["resume_queries"]
+    assessment_prompt = config["team_assessment_prompt"]
     assessment_prompt = assessment_prompt.replace("{{startupname}}", startup_name)
-    classification_instructions = config.get("team_profile", {}).get(
+    classification_instructions = config.get(
         "linkedin_classification_prompt",
         "",
     )
@@ -96,9 +96,7 @@ async def team_profile(startup_name: str) -> InsightResult:
     full_prompt += f"{assessment_prompt}\n"
     
     try:
-        report_md = await llm_chat(prompt=full_prompt)
-        if not report_md:
-            raise ValueError("LLM returned empty response.")
+        report_md = await generate_markdown(full_prompt)
     except Exception as e:
         logger.error(f"[{dataset_name}] Failed to generate LLM report: {e}")
         raise RuntimeError(f"LLM Generation error: {e}")

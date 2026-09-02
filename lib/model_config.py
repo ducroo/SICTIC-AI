@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 
 
 @dataclass(frozen=True)
@@ -23,11 +22,7 @@ class ModelEndpoint:
 
 
 def _optional_env(name: str) -> Optional[str]:
-    value = os.environ.get(name)
-    if value is None:
-        return None
-    value = value.strip()
-    return value or None
+    return get_env_var(name, required=False)
 
 
 def _first_env(*names: str) -> Optional[str]:
@@ -68,7 +63,7 @@ def embedding_endpoint() -> ModelEndpoint:
 
 def rerank_endpoint() -> Optional[ModelEndpoint]:
     """Cross-encoder reranking endpoint, or None when reranking is disabled."""
-    model = _optional_env("RERANK_MODEL")
+    model = get_env_var("RERANK_MODEL", required=False)
     if not model:
         return None
     return ModelEndpoint(

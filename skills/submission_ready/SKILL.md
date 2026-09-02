@@ -29,7 +29,7 @@ Dealum. Do not use separately scraped website or LinkedIn content as evidence.
 8. Save the canonical JSON audit plus a timestamped rendered checklist and
    internal proposed action through `InsightFile`. Humans decide whether to
    contact the startup or change its Dealum stage; the skill does neither.
-   Use `config_key()` over the complete submission-ready configuration, stage,
+   Use `config_cache_key()` over the complete submission-ready configuration, stage,
    and canonical audit when evaluating artifact freshness.
 9. Return a flat `list[InsightFile]` containing checklist then response for
    each successful startup. The canonical JSON audits remain internal; any

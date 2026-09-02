@@ -3,11 +3,12 @@
 import re
 from typing import List
 from lib.storage import get_storage
-from lib.linkedin import LinkedInResolver, extract_linkedin_id
-from lib.adapters.web_search import WebSearchAdapter
+from lib.people.linkedin import extract_linkedin_id
+from lib.infrastructure.web_search import WebSearchAdapter
 from lib.insights import InsightFile
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.people.model import Person, normalize_email_addresses
+from lib.people.linkedin import LinkedInResolver
 from lib.datasets.paths import dataset_parsed_path
 from lib.slugify import slugify
 

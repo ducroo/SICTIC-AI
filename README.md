@@ -290,7 +290,7 @@ at `LOCAL_DATA_PATH`.
 | **`<LOCAL_DATA_PATH>/`** | **Machine-local parsed data and disposable runtime data.** |
 | ↳ `./docling_data/` | Durable parsed documents; not synchronized to cloud storage. |
 | ↳ `./cache/` | Disposable runtime cache and temporary state. |
-| ↳ `./cache/services-gateway.json` | Shared concurrency state for LLM, embedding, and Docling jobs. |
+| ↳ `./cache/scheduler.json` | Shared concurrency state for model and Docling jobs. |
 
 For example, place a pitch deck in
 `<LOCAL_STORAGE_PATH>/storage/startups/spacex/datasets/`. Running

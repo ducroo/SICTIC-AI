@@ -23,8 +23,9 @@ async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
         return [FakeInsight()]
     mock_startup.side_effect = mock_startup_coro
 
-    # Mock config_load
-    mock_config = mocker.patch("skills.potential_investors.potential_investors.config_load")
+    mock_config = mocker.patch(
+        "skills.potential_investors.potential_investors.load_repository_config"
+    )
     mock_config.return_value = {
         "potential_investors": {
             "objective": "Match investors to this profile: {{startup_profile}}"

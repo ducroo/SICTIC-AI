@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from lib.adapters.docling import (
-    ConversionStatus,
-    DoclingAdapter,
-    SPREADSHEET_MARKDOWN_MARKER,
-    is_spreadsheet_filename,
+import asyncio
+
+from lib.infrastructure.document_conversion import (
+    DocumentConversion,
+    SPREADSHEET_CONVERSION_MARKER,
+    convert_document,
 )
 from lib.datasets.manifest import (
     MANIFEST_FILENAME,
@@ -16,8 +17,8 @@ from lib.datasets.manifest import (
     ignored_parse_is_current as manifest_ignored_parse_is_current,
 )
 from lib.datasets.models import IngestionFailure, IngestionResult
-from lib.datasets.text_normalization import (
-    normalize_extracted_text,
+from lib.datasets.spreadsheet_markdown import is_spreadsheet_filename
+from lib.infrastructure.document_conversion.normalization import (
     requires_text_normalization,
 )
 from lib.datasets.source import (
@@ -25,8 +26,9 @@ from lib.datasets.source import (
     parsed_filepath,
     snapshot_source_files,
 )
-from lib.env import get_env_var
-from lib.logger import get_logger
+from lib.infrastructure.configuration import get_env_var
+from lib.infrastructure.errors import InfrastructureError
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 
@@ -42,7 +44,7 @@ def spreadsheet_cache_is_current(
         return True
     try:
         return storage.read_text(parsed_path).startswith(
-            SPREADSHEET_MARKDOWN_MARKER
+            SPREADSHEET_CONVERSION_MARKER
         )
     except Exception as error:
         logger.warning(
@@ -192,25 +194,27 @@ async def reconcile_conversions(
         dataset_name,
         len(files_to_convert),
     )
-    try:
-        max_concurrent = int(get_env_var("OLLAMA_NUM_PARALLEL"))
-    except Exception:
-        max_concurrent = 10
-
-    docling = DoclingAdapter(concurrency_limit=max_concurrent)
     completed = 0
-    async for conversion in docling.extract_documents(files_to_convert):
+    tasks = [
+        asyncio.create_task(_convert_source(file_data))
+        for file_data in files_to_convert
+    ]
+    for task in asyncio.as_completed(tasks):
+        filename, conversion, conversion_error = await task
         completed += 1
-        source = source_by_name[conversion.filename]
-        state = manifest.state(conversion.filename)
-        if conversion.status is ConversionStatus.FAILED:
+        source = source_by_name[filename]
+        state = manifest.state(filename)
+        if conversion_error is not None and not _is_unsupported_format_error(
+            conversion_error
+        ):
+            error_text = _short_error(conversion_error)
             state["attempted_source_sha256"] = source.sha256
-            state["last_conversion_error"] = conversion.error
+            state["last_conversion_error"] = error_text
             result.failures.append(
                 IngestionFailure(
-                    filename=conversion.filename,
+                    filename=filename,
                     stage="conversion",
-                    error=conversion.error,
+                    error=error_text,
                 )
             )
             logger.error(
@@ -218,13 +222,13 @@ async def reconcile_conversions(
                 dataset_name,
                 completed,
                 len(files_to_convert),
-                conversion.filename,
-                conversion.error,
+                filename,
+                error_text,
             )
-        elif conversion.status is ConversionStatus.IGNORED_EMPTY:
+        elif conversion_error is not None or not conversion.markdown:
             parsed_path = parsed_filepath(
                 parsed_rel,
-                conversion.filename,
+                filename,
             )
             if storage.exists(parsed_path):
                 storage.remove(parsed_path)
@@ -235,8 +239,10 @@ async def reconcile_conversions(
                     "source_sha256": source.sha256,
                     "source_mtime": source.mtime,
                     "parser_version": PARSER_VERSION,
-                    "ignored_reason": (
-                        conversion.reason or "no_extractable_text"
+                    "ignored_reason": _ignored_reason(
+                        filename,
+                        files_to_convert,
+                        conversion_error,
                     ),
                 }
             )
@@ -246,15 +252,15 @@ async def reconcile_conversions(
                 dataset_name,
                 completed,
                 len(files_to_convert),
-                conversion.filename,
+                filename,
                 state["ignored_reason"],
             )
         else:
             parsed_path = parsed_filepath(
                 parsed_rel,
-                conversion.filename,
+                filename,
             )
-            parsed_text = normalize_extracted_text(conversion.text)
+            parsed_text = conversion.markdown
             storage.write_text(parsed_path, parsed_text)
             state.update(
                 {
@@ -272,7 +278,56 @@ async def reconcile_conversions(
                 dataset_name,
                 completed,
                 len(files_to_convert),
-                conversion.filename,
+                filename,
             )
+            for warning in conversion.warnings:
+                logger.warning(
+                    "[%s] Conversion warning for %s: %s",
+                    dataset_name,
+                    filename,
+                    warning,
+                )
         manifest.save()
     return result
+
+
+async def _convert_source(
+    file_data: dict,
+) -> tuple[str, DocumentConversion | None, Exception | None]:
+    filename = file_data["filename"]
+    path = file_data["local_path"]
+
+    try:
+        conversion = await convert_document(path)
+        return filename, conversion, None
+    except Exception as error:
+        return filename, None, error
+
+
+def _is_unsupported_format_error(error: Exception) -> bool:
+    return (
+        isinstance(error, InfrastructureError)
+        and error.operation == "check_format"
+    )
+
+
+def _ignored_reason(
+    filename: str,
+    files_to_convert: list[dict],
+    error: Exception | None,
+) -> str:
+    if error is not None:
+        return "unsupported_format"
+    path = next(
+        item["local_path"]
+        for item in files_to_convert
+        if item["filename"] == filename
+    )
+    return "empty_source" if path.stat().st_size == 0 else "no_extractable_text"
+
+
+def _short_error(error: Exception, limit: int = 500) -> str:
+    text = str(error).replace("\n", " ").strip()
+    if len(text) > limit:
+        return text[:limit].rstrip() + "..."
+    return text

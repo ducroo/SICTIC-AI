@@ -2,11 +2,13 @@ import datetime
 
 import pytest
 
-from lib.adapters.docling.spreadsheets import format_cell_value
+from lib.infrastructure.document_conversion.docling_stack.spreadsheets import (
+    format_cell_value,
+)
 from lib.datasets.chunking import split_markdown
-from lib.datasets.markdown_tables import select_header
+from lib.markdown_tables import select_header
 from lib.datasets.spreadsheet_markdown import (
-    SPREADSHEET_MARKDOWN_MARKER,
+    LEGACY_SPREADSHEET_MARKER,
     is_spreadsheet_markdown,
     split_sheets,
 )
@@ -18,7 +20,7 @@ def sheet_markdown(*sheets: tuple[str, list[str]]) -> str:
     body = "\n\n".join(
         "\n".join([f"## {name}", *rows]) for name, rows in sheets
     )
-    return f"{SPREADSHEET_MARKDOWN_MARKER}\n\n{body}\n"
+    return f"{LEGACY_SPREADSHEET_MARKER}\n\n{body}\n"
 
 
 def investor_rows(count: int) -> list[str]:

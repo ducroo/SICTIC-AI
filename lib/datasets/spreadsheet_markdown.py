@@ -1,6 +1,6 @@
 """Shared structure of spreadsheet-derived Markdown.
 
-Kept free of heavy imports so both the Docling adapter and the chunker can
+Kept free of heavy imports so both the document-conversion stack and chunker can
 use it without pulling in document conversion dependencies.
 """
 
@@ -9,11 +9,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from lib.datasets.markdown_tables import select_header
+from lib.markdown_tables import parse_table
 
-SPREADSHEET_MARKDOWN_MARKER = "<!-- sictic-spreadsheet: compact-values-v3 -->"
-SPREADSHEET_MARKER_RE = re.compile(r"<!--\s*sictic-spreadsheet:[^>]*-->")
+LEGACY_SPREADSHEET_MARKER = "<!-- sictic-spreadsheet: compact-values-v3 -->"
+SPREADSHEET_MARKER_RE = re.compile(
+    r"<!--\s*(?:sictic-spreadsheet|sictic-document-conversion:\s*"
+    r"spreadsheet-values)[^>]*-->"
+)
 SHEET_HEADING_RE = re.compile(r"^##\s+(.*)$")
+SPREADSHEET_EXTENSIONS = (".xls", ".xlsx", ".xlsm")
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,10 @@ def is_spreadsheet_markdown(text: str) -> bool:
     return bool(SPREADSHEET_MARKER_RE.match(text.lstrip()))
 
 
+def is_spreadsheet_filename(filename: str) -> bool:
+    return filename.lower().endswith(SPREADSHEET_EXTENSIONS)
+
+
 def split_sheets(text: str) -> list[SheetSection]:
     """Split spreadsheet Markdown into per-worksheet sections."""
     body = SPREADSHEET_MARKER_RE.sub("", text, count=1)
@@ -39,12 +47,10 @@ def split_sheets(text: str) -> list[SheetSection]:
     def flush() -> None:
         if not rows:
             return
-        header_index = select_header(rows)
-        header = rows[header_index] if header_index >= 0 else ""
-        remaining = [
-            row for index, row in enumerate(rows) if index != header_index
-        ]
-        sections.append(SheetSection(name=name, header=header, rows=remaining))
+        table = parse_table(rows)
+        sections.append(
+            SheetSection(name=name, header=table.header, rows=table.rows)
+        )
 
     for line in body.splitlines():
         stripped = line.strip()

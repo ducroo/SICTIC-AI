@@ -8,7 +8,7 @@ from lib.datasets.models import Chunk
 from lib.datasets.paths import dataset_parsed_path
 from lib.datasets.search import dataset_search
 from lib.datasets.source import parsed_filepath
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 

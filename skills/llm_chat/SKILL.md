@@ -5,7 +5,8 @@ description: Ask the configured LLM_MODEL a question using user-provided context
 
 # LLM Chat Skill
 
-A robust support utility for interacting with Large Language Models (LLMs) via LiteLLM.
+A small command for testing the configured text-generation model. Runtime code
+uses the infrastructure `generate_markdown` and `generate_json` interfaces.
 
 ## Setup
 
@@ -28,13 +29,11 @@ provider configuration or debugging model behavior.
 # Basic usage with default model
 conda run -n sictic-env python -m skills.llm_chat "What is startup due diligence?"
 
-# Override the default model
-conda run -n sictic-env python -m skills.llm_chat "Summarize the risks." --model ollama/llama3
 ```
 
 ## Features
 
-- **LiteLLM Integration:** Unified interface for hitting different providers (Gemini, Ollama, etc.).
-- **Ollama Context Management:** Automatically sizes the prompt context between `OLLAMA_CONTEXT_LENGTH` and `OLLAMA_CONTEXT_LENGTH_MAX`.
+- **Provider-neutral generation:** Uses the shared AI text-generation infrastructure
+- **Ollama context management:** Sizes context between `OLLAMA_CONTEXT_LENGTH` and `OLLAMA_CONTEXT_LENGTH_MAX`
 - **Rich Formatting:** Console outputs and markdown are beautifully rendered using the `Rich` library.
-- **Robust Error Handling:** Catches connection errors and missing model definitions gracefully.
+- **Shared recovery:** Uses the standard provider-error handling and three-attempt limit

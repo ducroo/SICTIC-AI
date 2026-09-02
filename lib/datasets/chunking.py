@@ -6,7 +6,7 @@ from collections.abc import Iterator
 
 from langchain_text_splitters import MarkdownTextSplitter
 
-from lib.datasets.markdown_tables import (
+from lib.markdown_tables import (
     TABLE_SEGMENT,
     TableBlock,
     iter_segments,
@@ -15,10 +15,13 @@ from lib.datasets.markdown_tables import (
 from lib.datasets.models import Chunk
 from lib.datasets.page_markers import UNKNOWN_PAGE, split_text_by_pages
 from lib.datasets.spreadsheet_markdown import (
+    is_spreadsheet_filename,
     is_spreadsheet_markdown,
     split_sheets,
 )
-from lib.datasets.text_normalization import normalize_extracted_text
+from lib.infrastructure.document_conversion.normalization import (
+    normalize_extracted_text,
+)
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 100
@@ -36,7 +39,7 @@ PROSE_SPLITTER = MarkdownTextSplitter(
 
 def split_markdown(text: str, filename: str, mod_time: float) -> list[Chunk]:
     text = normalize_extracted_text(text)
-    if is_spreadsheet_markdown(text):
+    if is_spreadsheet_filename(filename) or is_spreadsheet_markdown(text):
         return split_spreadsheet(text, filename, mod_time)
 
     chunks: list[Chunk] = []

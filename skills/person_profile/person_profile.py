@@ -4,16 +4,16 @@ from dataclasses import dataclass
 from typing import List
 
 from lib.model_config import llm_model
-from skills.config_load.config_load import config_load
-from skills.llm_chat.llm_chat import llm_chat
+from lib.infrastructure.configuration import load_repository_config
+from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.insights import InsightFile, InsightResult
-from lib.linkedin import LinkedInResolver
-from lib.logger import get_logger
+from lib.people.linkedin import LinkedInResolver
+from lib.infrastructure.logging import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.dossier import build_person_dossier
 from lib.people.model import Person
 from lib.slugify import slugify
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
@@ -201,9 +201,9 @@ async def _generate_single_profile(
     default_llm = llm_model()
 
     try:
-        conf = config_load()
-        query_template = conf['person_profile']['query']
-        llm_instructions = conf['person_profile']['llm_instructions']
+        conf = load_repository_config("person_profile")
+        query_template = conf['query']
+        llm_instructions = conf['llm_instructions']
         try:
             query = query_template.replace("{{name}}", display_name)
         except KeyError:
@@ -263,11 +263,8 @@ async def _generate_single_profile(
             f"Context from {dataset_slug}:\n{full_context}\n\n"
             f"Query: {query}\n\nInstructions: {llm_instructions}"
         )
-        profile_output = await llm_chat(prompt=prompt)
+        profile_output = await generate_markdown(prompt)
     
-    if not profile_output or not profile_output.strip():
-        raise ValueError(f"LLM returned empty response for the person profile output of '{display_name}'.")
-
     profile_output = _ensure_profile_metadata_header(person, profile_output)
 
     # Save and update object

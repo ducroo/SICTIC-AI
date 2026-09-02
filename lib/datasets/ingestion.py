@@ -16,7 +16,7 @@ from lib.datasets.source import (
     SourceDocument,
     snapshot_source_files,
 )
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 

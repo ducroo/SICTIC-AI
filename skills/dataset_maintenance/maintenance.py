@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from lib.adapters.qdrant import QdrantAdapter, QdrantAdmin
+from lib.infrastructure.qdrant import QdrantAdapter, QdrantAdmin
 from lib.datasets.manifest import IngestionManifest
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.model_config import embedding_model
 from lib.slugify import slugify
 from lib.storage import get_storage

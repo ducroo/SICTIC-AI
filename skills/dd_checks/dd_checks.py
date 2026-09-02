@@ -1,29 +1,31 @@
+import asyncio
 import json
+from functools import partial
 from typing import Any
 
-from lib.model_config import llm_model
-from lib.insights import InsightFile, InsightResult
-from lib.json_parser import repair_json_payload
-from lib.storage import get_storage
-from skills.config_load.config_load import config_key, config_load
-from skills.batch_audit.batch_audit import batch_audit
-from skills.batch_audit.rendering import json_to_markdown_table
-from skills.batch_audit.schema import audit_errors, validate_audit_document
-from skills.dataset_chat.dataset_chat import dataset_chat
-from lib.slugify import slugify
-from lib.logger import get_logger
+from lib.batch_audit import batch_audit
+from lib.batch_audit.rendering import json_to_markdown_table
+from lib.batch_audit.schema import audit_errors, validate_audit_document
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_raw_path
-from lib.structured_output import (
+from lib.insights import InsightFile, InsightResult
+from lib.infrastructure.ai_text_generation import Review
+from lib.infrastructure.ai_text_generation.json import (
     copy_schema,
-    json_schema_response_format,
-    schema_prompt_block,
+    repair_json_payload,
     validate_json_schema,
 )
-from skills.dataset_chat.dataset_chat import _fallback_trigger
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
+from lib.infrastructure.logging import get_logger
+from lib.model_config import llm_model
+from lib.slugify import slugify
+from lib.storage import get_storage
+from skills.dataset_chat.dataset_chat import dataset_chat_json
 
 logger = get_logger(__name__)
-_STRUCTURED_OUTPUT_ATTEMPTS = 3
 
 
 def _industry_response_schema(
@@ -51,12 +53,9 @@ def parse_industry_type(
     response_schema: dict[str, Any],
 ) -> str:
     """Repair and validate a structured industry classification."""
-    allowed_by_lower = {
-        item.lower(): item for item in allowed_industry_types
-    }
     effective_schema = _industry_response_schema(
         response_schema,
-        set(allowed_by_lower),
+        allowed_industry_types,
     )
     result = repair_json_payload(response)
     validate_json_schema(
@@ -64,6 +63,16 @@ def parse_industry_type(
         effective_schema,
         label="DD industry-classification response",
     )
+    return _industry_type_from_result(result, allowed_industry_types)
+
+
+def _industry_type_from_result(
+    result: dict[str, Any],
+    allowed_industry_types: set[str],
+) -> str:
+    allowed_by_lower = {
+        item.lower(): item for item in allowed_industry_types
+    }
     industry_type = result["industry_type"]
     if industry_type is None:
         logger.warning(
@@ -79,6 +88,19 @@ def parse_industry_type(
     return allowed_by_lower[industry_type.lower()]
 
 
+def _review_industry_type(
+    output: dict | list,
+    allowed_industry_types: set[str],
+) -> Review[dict | list]:
+    if not isinstance(output, dict):
+        return Review(output, ("Industry classification must be an object",))
+    try:
+        _industry_type_from_result(output, allowed_industry_types)
+    except (KeyError, TypeError, ValueError) as error:
+        return Review(output, (str(error),))
+    return Review(output)
+
+
 async def find_industry_type(
     startup_name_lower: str,
     dd_config: dict,
@@ -91,68 +113,28 @@ async def find_industry_type(
         base_schema,
         allowed_industry_types,
     )
-    prompt = (
-        f"Query: {industry_prompt}\n\n"
-        f"Instructions: {industry_instructions}\n\n"
-        f"{schema_prompt_block(effective_schema)}"
+    result = await dataset_chat_json(
+        dataset_name=startup_name_lower,
+        queries=industry_prompt,
+        prompt=(
+            f"Query: {industry_prompt}\n\n"
+            f"Instructions: {industry_instructions}"
+        ),
+        schema=effective_schema,
+        reviewer=partial(
+            _review_industry_type,
+            allowed_industry_types=allowed_industry_types,
+        ),
     )
-    errors: list[str] = []
-    retry_feedback = ""
-
-    for attempt in range(1, _STRUCTURED_OUTPUT_ATTEMPTS + 1):
-        try:
-            industry_response = await dataset_chat(
-                dataset_name=startup_name_lower,
-                queries=industry_prompt,
-                prompt=prompt + retry_feedback,
-                response_format=json_schema_response_format(
-                    "dd_industry_classification",
-                    effective_schema,
-                ),
-            )
-            logger.info(
-                "[%s] Raw Industry Type LLM Response: %s",
-                startup_name_lower,
-                industry_response,
-            )
-            if not industry_response:
-                raise ValueError(
-                    "Industry-classification model returned no content."
-                )
-            if industry_response.strip() == _fallback_trigger():
-                logger.warning(
-                    "[%s] No industry evidence returned; "
-                    "defaulting to general.",
-                    startup_name_lower,
-                )
-                return "general"
-            return parse_industry_type(
-                industry_response,
-                allowed_industry_types,
-                base_schema,
-            )
-        except Exception as error:
-            errors.append(str(error))
-            logger.warning(
-                "[%s] Industry classification failed on attempt %d/%d: %s",
-                startup_name_lower,
-                attempt,
-                _STRUCTURED_OUTPUT_ATTEMPTS,
-                error,
-            )
-            if attempt < _STRUCTURED_OUTPUT_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
-
-    raise RuntimeError(
-        "Industry classification failed after "
-        f"{_STRUCTURED_OUTPUT_ATTEMPTS} attempts: "
-        + " | ".join(errors)
-    )
+    if result is None:
+        logger.warning(
+            "[%s] No industry evidence returned; defaulting to general.",
+            startup_name_lower,
+        )
+        return "general"
+    if not isinstance(result, dict):
+        raise ValueError("Industry classification must be an object")
+    return _industry_type_from_result(result, allowed_industry_types)
 
 async def chapter_by_chapter(
     startup_name_lower: str,
@@ -162,18 +144,26 @@ async def chapter_by_chapter(
     batch_instructions: str,
 ) -> list[str]:
     checklists = dd_config['checklists']
-    sections = []
-    failures: list[str] = []
+    selected_checklists: list[tuple[str, str]] = []
     for chapter in sorted_chapters:
         target_key = f"{chapter}_{industry_type}"
         fallback_key = f"{chapter}_general"
-        checklist_key = target_key if target_key in checklists else (fallback_key if fallback_key in checklists else None)
+        checklist_key = (
+            target_key
+            if target_key in checklists
+            else fallback_key if fallback_key in checklists else None
+        )
         if not checklist_key:
             continue
-            
-        checklist_string = checklists[checklist_key]
+
+        selected_checklists.append((chapter, checklists[checklist_key]))
+
+    async def audit_chapter(
+        chapter: str,
+        checklist_string: str,
+    ) -> tuple[str | None, str | None]:
         try:
-            audit_results = await batch_audit(
+            audit_insight = await batch_audit(
                 dataset_name=startup_name_lower,
                 checklist_markdown=checklist_string,
                 skill_name="dd_checks",
@@ -187,7 +177,6 @@ async def chapter_by_chapter(
                 ],
                 missing_evidence_status="Not Found",
             )
-            [audit_insight] = audit_results
             audit = validate_audit_document(json.loads(audit_insight.content()))
             technical_errors = audit_errors(audit)
             if technical_errors:
@@ -200,14 +189,22 @@ async def chapter_by_chapter(
                     f"{len(technical_errors)} technical failure(s): {details}"
                 )
             chapter_output = json_to_markdown_table(audit_insight)
-            sections.append(f"## Chapter: {chapter}\n\n{chapter_output}\n")
-        except Exception as e:
+            return f"## Chapter: {chapter}\n\n{chapter_output}\n", None
+        except Exception as error:
             logger.exception(
                 "[%s] Failed to process DD chapter %s",
                 startup_name_lower,
                 chapter,
             )
-            failures.append(f"{chapter}: {e}")
+            return None, f"{chapter}: {error}"
+
+    tasks = [
+        asyncio.create_task(audit_chapter(chapter, checklist))
+        for chapter, checklist in selected_checklists
+    ]
+    outcomes = await asyncio.gather(*tasks)
+    sections = [section for section, _error in outcomes if section is not None]
+    failures = [error for _section, error in outcomes if error is not None]
     if failures:
         raise RuntimeError(
             f"Failed to process {len(failures)} DD chapter(s): "
@@ -230,7 +227,7 @@ async def dd_checks(startup: str) -> InsightResult:
         raise ValueError(f"Dataset for {startup_slug} not found at {raw_path}.")
     await sync_datasets([startup_slug], raise_on_error=True)
         
-    config = config_load()
+    config = load_repository_config()
     dd_config = config['dd_checks']
     batch_instructions = config["batch_audit"]["llm_instructions"]
     checklists = dd_config['checklists']
@@ -254,7 +251,7 @@ async def dd_checks(startup: str) -> InsightResult:
         dd_config,
         batch_instructions,
     )
-    effective_config_key = config_key(
+    effective_config_key = config_cache_key(
         dd_config,
         config["batch_audit"],
         config["structured_output"],

@@ -7,7 +7,7 @@ from pathlib import PurePosixPath
 from lib.datasets.manifest import content_hash
 from lib.datasets.paths import dataset_location_for_domain
 from lib.insights.file import InsightFile
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 

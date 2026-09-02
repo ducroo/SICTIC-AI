@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lib.adapters.qdrant import QdrantAdapter
+from lib.infrastructure.qdrant import QdrantAdapter
 from lib.datasets.chunking import split_markdown
 from lib.datasets.embeddings import EmbeddingService
 from lib.datasets.manifest import (
@@ -19,7 +19,7 @@ from lib.datasets.source import (
     snapshot_source_files,
 )
 from lib.datasets.sparse import SPARSE_ENCODER_VERSION, encode_document
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 
@@ -129,7 +129,7 @@ async def reconcile_index(
 
     non_empty_files = [item for item in files_to_index if item[2].strip()]
     if non_empty_files:
-        qdrant.ensure_collection(embeddings.vector_size())
+        qdrant.ensure_collection(await embeddings.vector_size())
         collection_exists = True
 
     logger.info(

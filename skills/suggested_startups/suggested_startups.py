@@ -7,10 +7,13 @@ from typing import List, Optional
 
 from lib.datasets.paths import list_dataset_names
 from lib.insights import InsightFile, InsightResult
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.model_config import llm_model
 from lib.people.model import Person
-from skills.config_load.config_load import config_key, config_load
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
 from skills.suggested_startups.generation import (
     compile_startup_profiles,
     generate_report,
@@ -31,7 +34,7 @@ def _prepare_outputs(
     request: SuggestedStartupsRequest,
     skill_config: SuggestedStartupsConfig,
 ) -> list[tuple[Person, InsightFile]]:
-    request_key = config_key(
+    request_key = config_cache_key(
         skill_config.key,
         {
             "startups": request.startups,
@@ -59,7 +62,7 @@ async def suggested_startups(
     max_startups: int = 5,
 ) -> InsightResult:
     """Rank stored startup profiles for canonical investors in a dataset."""
-    config = config_load()
+    config = load_repository_config()
     skill_config = load_skill_config(config)
     request = resolve_request(
         dataset_name,

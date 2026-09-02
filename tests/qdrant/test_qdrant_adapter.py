@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from lib.adapters.qdrant import QdrantAdapter
+from lib.infrastructure.qdrant import QdrantAdapter
 
 
 def test_adapter_creates_collection_from_explicit_vector_size(mock_env, mocker):
-    client_class = mocker.patch("lib.adapters.qdrant.QdrantClient")
+    client_class = mocker.patch("lib.infrastructure.qdrant.QdrantClient")
     client = client_class.return_value
     client.get_collections.return_value.collections = []
 
@@ -115,7 +115,7 @@ def _query_adapter(client, *, exists: bool) -> QdrantAdapter:
 def test_query_returns_zero_chunks_and_warns_when_collection_is_missing(mocker):
     client = mocker.Mock()
     adapter = _query_adapter(client, exists=False)
-    warning = mocker.patch("lib.adapters.qdrant.logger.warning")
+    warning = mocker.patch("lib.infrastructure.qdrant.logger.warning")
 
     assert adapter.query([1.0], limit=25) == []
 
@@ -130,7 +130,7 @@ def test_query_returns_zero_chunks_and_warns_when_collection_is_empty(mocker):
     client = mocker.Mock()
     client.query_points.return_value = SimpleNamespace(points=[])
     adapter = _query_adapter(client, exists=True)
-    warning = mocker.patch("lib.adapters.qdrant.logger.warning")
+    warning = mocker.patch("lib.infrastructure.qdrant.logger.warning")
 
     assert adapter.query([1.0], limit=25) == []
 

@@ -3,8 +3,8 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from lib.cli import run_command
-from lib.logger import get_logger
-from skills.llm_chat.llm_chat import llm_chat
+from lib.infrastructure.ai_text_generation import generate_markdown
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -17,7 +17,7 @@ def main(
     prompt: str = typer.Argument(..., help="The prompt/message you want to send to the LLM.")
 ):
     content = run_command(
-        lambda: llm_chat(prompt),
+        lambda: generate_markdown(prompt),
         logger=logger,
         error_prefix="Execution failed",
     )

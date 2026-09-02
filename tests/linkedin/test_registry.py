@@ -1,6 +1,6 @@
 import json
 
-from lib.linkedin.registry import LinkedInRegistry
+from lib.people.linkedin.registry import LinkedInRegistry
 
 
 def test_registry_migrates_single_dataset_and_adds_associations(tmp_path):
@@ -49,5 +49,6 @@ def test_registry_can_find_identity_stored_under_legacy_name_key(tmp_path):
 
     key, entry = registry.find("schulerp", "schulerp")
 
-    assert key == "Patrick Schuler"
+    assert key == "schulerp"
     assert entry["linkedin_id"] == "schulerp"
+    assert entry["status"] == "open"

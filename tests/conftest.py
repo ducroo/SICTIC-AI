@@ -10,8 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # into the operational sictic-ai.log file.
 os.environ["SICTIC_TESTING"] = "1"
 
-# Import once so lib.env loads any local .env before tests force safe values.
-import lib.env  # noqa: E402,F401
+# Import once so configuration loads any local .env before tests force safe values.
+import lib.infrastructure.configuration  # noqa: E402,F401
 
 os.environ["REPO_PATH"] = str(REPO_ROOT)
 os.environ["INSTALLED_SKILLS_PATH"] = str(REPO_ROOT / "skills")
@@ -23,6 +23,9 @@ os.environ["LLM_API_KEY"] = ""
 os.environ["EMBEDDING_MODEL"] = "ollama/test-embedding:8b"
 os.environ["EMBEDDING_BASE_URL"] = "http://localhost:11434"
 os.environ["EMBEDDING_API_KEY"] = ""
+os.environ["RERANK_MODEL"] = ""
+os.environ["RERANK_BASE_URL"] = ""
+os.environ["RERANK_API_KEY"] = ""
 os.environ["VLM_MODEL"] = "ollama/test-vlm:1b"
 os.environ["VLM_BASE_URL"] = "http://localhost:11434"
 os.environ["VLM_API_KEY"] = ""

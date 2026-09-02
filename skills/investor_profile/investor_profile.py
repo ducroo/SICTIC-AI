@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 from typing import List
 
 from lib.insights import InsightFile, InsightResult, strip_model_tag
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.people.model import Person
 from lib.slugify import slugify
 from lib.storage import get_storage

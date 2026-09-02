@@ -2,12 +2,12 @@ from typing import List, Optional
 
 
 from lib.model_config import llm_model
-from skills.config_load.config_load import config_load
+from lib.infrastructure.configuration import load_repository_config
 from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.ephemeral_dataset import prepare_ephemeral_dataset
 from lib.insights import InsightFile, InsightResult
 from lib.slugify import slugify
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
@@ -25,11 +25,9 @@ async def startup_profile(startup: str, files: Optional[List[str]] = None) -> In
     await sync_datasets([startup_slug], raise_on_error=True)
     default_llm = llm_model()
 
-    config = config_load()
-    if 'startup_profile' not in config:
-        raise KeyError("startup_profile config missing")
-    query = config['startup_profile']['query']
-    llm_instructions = config['startup_profile']['llm_instructions']
+    config = load_repository_config("startup_profile")
+    query = config['query']
+    llm_instructions = config['llm_instructions']
     questions = [line.strip() for line in query.splitlines() if line.strip()]
 
     insight = InsightFile(

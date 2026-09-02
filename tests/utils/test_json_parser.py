@@ -1,6 +1,6 @@
 import pytest
 
-from lib.json_parser import repair_json_payload
+from lib.infrastructure.ai_text_generation.json import repair_json_payload
 
 
 def test_repair_json_payload_escapes_invalid_backslash_in_string():

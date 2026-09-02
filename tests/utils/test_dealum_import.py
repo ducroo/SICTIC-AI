@@ -49,7 +49,7 @@ class FakeDealumAdapter:
         return self.applications
 
     def extract_file_links(self, application):
-        from lib.adapters.dealum import DealumAdapter
+        from lib.infrastructure.dealum import DealumAdapter
 
         return DealumAdapter(api_key="x", dealroom_id="y").extract_file_links(application)
 

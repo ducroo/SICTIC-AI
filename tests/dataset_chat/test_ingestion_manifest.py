@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from lib.adapters.docling import ConversionStatus, DocumentConversionResult
+from lib.infrastructure.document_conversion import DocumentConversion
+from lib.infrastructure.errors import (
+    InfrastructureError,
+    InfrastructureErrorKind,
+)
 from lib.storage import LocalStorage
 from lib.datasets import conversion, indexing, source
 from lib.datasets.manifest import (
@@ -11,12 +15,6 @@ from lib.datasets.manifest import (
     IngestionManifest,
     content_hash,
 )
-
-
-async def _results(items):
-    for item in items:
-        yield item
-
 
 @pytest.mark.asyncio
 async def test_conversion_schedules_smallest_sources_first(tmp_path, mocker):
@@ -29,19 +27,12 @@ async def test_conversion_schedules_smallest_sources_first(tmp_path, mocker):
     mocker.patch.object(conversion, "get_storage", return_value=storage)
 
     observed = []
-    adapter = mocker.Mock()
 
-    async def extract_documents(items):
-        observed.extend(item["filename"] for item in items)
-        for item in items:
-            yield DocumentConversionResult(
-                filename=item["filename"],
-                status=ConversionStatus.SUCCESS,
-                text=item["filename"],
-            )
+    async def convert(path):
+        observed.append(path.name)
+        return DocumentConversion(markdown=path.name)
 
-    adapter.extract_documents.side_effect = extract_documents
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=adapter)
+    mocker.patch.object(conversion, "convert_document", side_effect=convert)
 
     await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -92,18 +83,16 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
     }
     manifest.save()
     mocker.patch.object(conversion, "get_storage", return_value=storage)
-
-    failed_adapter = mocker.Mock()
-    failed_adapter.extract_documents.return_value = _results(
-        [
-            DocumentConversionResult(
-                filename="report.pdf",
-                status=ConversionStatus.FAILED,
-                error="OCR unavailable",
-            )
-        ]
+    failed_conversion = mocker.patch.object(
+        conversion,
+        "convert_document",
+        side_effect=InfrastructureError(
+            "OCR unavailable",
+            kind=InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+            provider="docling_stack",
+            operation="convert_document",
+        ),
     )
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=failed_adapter)
 
     first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -112,17 +101,12 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
     failed_state = IngestionManifest.load(storage, parsed_rel).documents["report.pdf"]
     assert failed_state["source_sha256"] == content_hash(b"old source")
 
-    successful_adapter = mocker.Mock()
-    successful_adapter.extract_documents.return_value = _results(
-        [
-            DocumentConversionResult(
-                filename="report.pdf",
-                status=ConversionStatus.SUCCESS,
-                text="new parsed",
-            )
-        ]
+    mocker.stop(failed_conversion)
+    mocker.patch.object(
+        conversion,
+        "convert_document",
+        return_value=DocumentConversion(markdown="new parsed"),
     )
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=successful_adapter)
 
     second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -157,18 +141,11 @@ async def test_empty_conversion_is_ignored_cleans_stale_state_and_is_not_retried
     }
     manifest.save()
     mocker.patch.object(conversion, "get_storage", return_value=storage)
-
-    adapter = mocker.Mock()
-    adapter.extract_documents.return_value = _results(
-        [
-            DocumentConversionResult(
-                filename="image-only.pdf",
-                status=ConversionStatus.IGNORED_EMPTY,
-                reason="no_extractable_text",
-            )
-        ]
+    converter = mocker.patch.object(
+        conversion,
+        "convert_document",
+        return_value=DocumentConversion(markdown=""),
     )
-    mocker.patch.object(conversion, "DoclingAdapter", return_value=adapter)
 
     first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
     second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
@@ -176,7 +153,7 @@ async def test_empty_conversion_is_ignored_cleans_stale_state_and_is_not_retried
     assert first.ignored == 1
     assert first.failures == []
     assert second.ignored == 0
-    assert adapter.extract_documents.call_count == 1
+    assert converter.await_count == 1
     assert not storage.exists(f"{parsed_rel}/image-only.pdf.md")
     state = IngestionManifest.load(storage, parsed_rel).documents["image-only.pdf"]
     assert state == {
@@ -276,7 +253,7 @@ async def test_failed_index_does_not_advance_manifest_checkpoint(tmp_path, mocke
 
     embeddings = mocker.Mock()
     embeddings.model = "test-model"
-    embeddings.vector_size.return_value = 3
+    embeddings.vector_size = mocker.AsyncMock(return_value=3)
     mocker.patch.object(indexing, "EmbeddingService", return_value=embeddings)
     mocker.patch.object(
         indexing,
@@ -326,6 +303,7 @@ async def test_oversized_document_is_skipped_without_embedding(tmp_path, mocker)
 
     embeddings = mocker.Mock()
     embeddings.model = "test-model"
+    embeddings.vector_size = mocker.AsyncMock(return_value=3)
     mocker.patch.object(indexing, "EmbeddingService", return_value=embeddings)
 
     result = await indexing.reconcile_index(

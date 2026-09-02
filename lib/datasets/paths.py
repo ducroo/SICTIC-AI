@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.slugify import slugify
 from lib.storage import get_storage
 

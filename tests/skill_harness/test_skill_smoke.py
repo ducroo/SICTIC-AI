@@ -240,9 +240,9 @@ async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundarie
 
 @pytest.mark.asyncio
 async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
-    from skills.batch_audit.batch_audit import batch_audit
+    from lib.batch_audit import batch_audit
 
-    result = await batch_audit(
+    insight = await batch_audit(
         "example-startup",
         """# Commercial
 
@@ -253,9 +253,6 @@ async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
 Is there evidence of customer traction?
 """,
     )
-    assert_insight_result(result)
-    [insight] = result
-
     assert insight.exists()
     assert InsightFile(
         "example-startup",

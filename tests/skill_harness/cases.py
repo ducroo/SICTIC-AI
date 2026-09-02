@@ -6,9 +6,7 @@ ADMIN_ONLY_HARNESS_COMMANDS = {
 
 SKILL_COVERAGE = {
     "advocates": "local-smoke",
-    "batch_audit": "local-smoke",
     "bulk_refresh": "existing-unit",
-    "config_load": "existing-unit",
     "submission_ready": "local-smoke",
     "dataset_chat": "harness-smoke",
     "dataset_maintenance": "utility-smoke",
@@ -44,7 +42,6 @@ HARNESS_SMOKE_COMMANDS = {
     "/dataset_chat": "/dataset_chat example-startup What is the fixture?",
     "/startup_profile": "/startup_profile example-startup",
     "/startup_traction": "/startup_traction example-startup",
-    "/batch_audit": "/batch_audit example-startup {checklist}",
     "/person_profile": "/person_profile sictic-members Jane Doe",
     "/team_profile": "/team_profile example-startup",
     "/investor_profile": "/investor_profile --source-dataset sictic-members",

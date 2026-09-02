@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from skills.batch_audit.checklist import parse_checklist
-from skills.batch_audit.rendering import json_to_markdown_table
-from skills.batch_audit.schema import validate_audit_document
+from lib.batch_audit.checklist import parse_checklist
+from lib.batch_audit.rendering import json_to_markdown_table
+from lib.batch_audit.schema import validate_audit_document
 
 
 def test_parse_structured_markdown_checklist():

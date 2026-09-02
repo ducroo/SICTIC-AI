@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import importlib
 from pathlib import Path
@@ -123,7 +124,7 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     }
     monkeypatch.setattr(
         module,
-        "config_load",
+        "load_repository_config",
             lambda: {
                 "sha_review": sha_config,
                 "batch_audit": {"response_schema": {}, "llm_instructions": ""},
@@ -141,51 +142,48 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
 
     identification_prompts = []
 
-    async def fake_dataset_chat(*_args, **kwargs):
+    async def fake_dataset_chat_json(*_args, **kwargs):
         identification_prompts.append(kwargs["prompt"])
-        if len(identification_prompts) == 1:
-            return ""
-        return json.dumps(
-            {
-                "path": "legal/shareholders-agrement.pdf",
-                "document_match": "Medium",
-                "concerns": [
-                    "No signature page was found in the retrieved text.",
-                    "The agreement date could not be verified internally.",
-                ],
-                "paths_for_alternative_candidates": [],
-                "selection_reason": "Operative provisions substantively match a SHA.",
-            }
-        )
+        return {
+            "path": "legal/shareholders-agrement.pdf",
+            "document_match": "Medium",
+            "concerns": [
+                "No signature page was found in the retrieved text.",
+                "The agreement date could not be verified internally.",
+            ],
+            "paths_for_alternative_candidates": [],
+            "selection_reason": "Operative provisions substantively match a SHA.",
+        }
 
-    llm_calls = []
+    json_calls = []
 
-    async def fake_llm_chat(*, prompt, response_format=None):
-        llm_calls.append((prompt, response_format))
-        if response_format is not None:
-            if sum(call[1] is not None for call in llm_calls) == 1:
-                return json.dumps({"rankings": []})
-            return json.dumps(
+    async def fake_generate_json(prompt, schema, reviewer):
+        json_calls.append((prompt, schema, reviewer))
+        return {
+            "rankings": [
                 {
-                    "rankings": [
-                        {
-                            "template_key": "light",
-                            "rationale_for_rank": "Closest overall structure.",
-                        },
-                        {
-                            "template_key": "large",
-                            "rationale_for_rank": "More complex than the SHA.",
-                        },
-                    ]
-                }
-            )
+                    "template_key": "light",
+                    "rationale_for_rank": "Closest overall structure.",
+                },
+                {
+                    "template_key": "large",
+                    "rationale_for_rank": "More complex than the SHA.",
+                },
+            ]
+        }
+
+    async def fake_generate_markdown(prompt):
         return "## 1. Material finding\n\nAutomated review summary."
 
     audit_calls = []
+    audit_starts = []
 
     async def fake_batch_audit(**kwargs):
         audit_calls.append(kwargs)
         title = "Review Two" if "Review Two" in kwargs["checklist_markdown"] else "Review"
+        audit_starts.append(title)
+        await asyncio.sleep(0)
+        assert len(audit_starts) == 2
         audit = {
             "schema_version": 1,
             "skill": "sha_review",
@@ -214,7 +212,7 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
                 }
             ],
         }
-        return [SimpleNamespace(content=lambda: json.dumps(audit))]
+        return SimpleNamespace(content=lambda: json.dumps(audit))
 
     monkeypatch.setattr(module, "sync_datasets", fake_sync)
     monkeypatch.setattr(
@@ -222,8 +220,9 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         "ensure_startup_dataset",
         fake_ensure_startup_dataset,
     )
-    monkeypatch.setattr(module, "dataset_chat", fake_dataset_chat)
-    monkeypatch.setattr(module, "llm_chat", fake_llm_chat)
+    monkeypatch.setattr(module, "dataset_chat_json", fake_dataset_chat_json)
+    monkeypatch.setattr(module, "generate_json", fake_generate_json)
+    monkeypatch.setattr(module, "generate_markdown", fake_generate_markdown)
     monkeypatch.setattr(module, "batch_audit", fake_batch_audit)
 
     result = await module.sha_review("ACME")
@@ -250,14 +249,9 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     assert all(call["status_scale"] == status_scale for call in audit_calls)
     assert all(call["missing_evidence_status"] == "unclear" for call in audit_calls)
     assert "legal/shareholders-agreement.pdf.md" in audit_calls[0]["llm_instructions"]
-    assert len(identification_prompts) == 2
-    assert "### CORRECTION REQUIRED" not in identification_prompts[0]
-    assert "returned no content" in identification_prompts[1]
-    assert len(llm_calls) == 3
-    assert llm_calls[0][1] is not None
-    assert llm_calls[1][1] is not None
-    assert "does not match the schema" in llm_calls[1][0]
-    assert llm_calls[2][1] is None
+    assert len(identification_prompts) == 1
+    assert len(json_calls) == 1
+    assert json_calls[0][2]({"rankings": []}).problems
 
 
 @pytest.mark.parametrize(
@@ -273,34 +267,30 @@ def test_sha_identification_rejects_inconsistent_none_result(
     document_match,
 ):
     module = importlib.import_module("skills.sha_review.sha_review")
-    response = json.dumps(
-        {
-            "path": path,
-            "document_match": document_match,
-            "concerns": [],
-            "paths_for_alternative_candidates": [],
-            "selection_reason": "Fixture selection rationale.",
-        }
-    )
+    response = {
+        "path": path,
+        "document_match": document_match,
+        "concerns": [],
+        "paths_for_alternative_candidates": [],
+        "selection_reason": "Fixture selection rationale.",
+    }
 
     with pytest.raises(ValueError, match="null path if and only if"):
-        module._parse_identification(response, _actual_identification_schema())
+        module._parse_identification(response)
 
 
 def test_sha_identification_stops_only_when_no_candidate_exists(mock_env):
     module = importlib.import_module("skills.sha_review.sha_review")
-    response = json.dumps(
-        {
-            "path": None,
-            "document_match": "None",
-            "concerns": ["No substantive SHA candidate was retrieved."],
-            "paths_for_alternative_candidates": [],
-            "selection_reason": "The retrieved documents do not contain SHA terms.",
-        }
-    )
+    response = {
+        "path": None,
+        "document_match": "None",
+        "concerns": ["No substantive SHA candidate was retrieved."],
+        "paths_for_alternative_candidates": [],
+        "selection_reason": "The retrieved documents do not contain SHA terms.",
+    }
 
     with pytest.raises(
         ValueError,
         match="No plausible Shareholders' Agreement could be identified",
     ):
-        module._parse_identification(response, _actual_identification_schema())
+        module._parse_identification(response)

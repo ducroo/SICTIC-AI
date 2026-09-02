@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from lib.adapters import qdrant as qdrant_module
+from lib.infrastructure import qdrant as qdrant_module
 
 
 def _collection_info(

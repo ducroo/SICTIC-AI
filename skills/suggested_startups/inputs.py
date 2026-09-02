@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 from lib.insights import InsightFile, select_insights
 from lib.linkedin_ids import normalize_linkedin_id
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.model import Person
 from lib.slugify import slugify
-from skills.config_load.config_load import config_key
+from lib.infrastructure.configuration import config_cache_key
 
 logger = get_logger(__name__)
 
@@ -48,7 +48,7 @@ def load_skill_config(config: dict) -> SuggestedStartupsConfig:
         )
     return SuggestedStartupsConfig(
         prompt=prompt,
-        key=config_key(
+        key=config_cache_key(
             section,
             ranking_top_k,
             ranking_rationale,

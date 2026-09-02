@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.insights.manifest import config_hash
 from lib.insights.paths import model_slug
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
