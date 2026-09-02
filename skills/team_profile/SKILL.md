@@ -15,7 +15,7 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
    * Run `sync_datasets([dataset_slug], raise_on_error=True)` so parsed Markdown and Qdrant are current before analysis.
 
 2. **Configuration & Insight Cache:**
-   * Load `resume_queries`, `team_assessment_prompt`, and optional `linkedin_classification_prompt` from `config_load()["team_profile"]`.
+   * Load `resume_queries`, `team_assessment_prompt`, and optional `linkedin_classification_prompt` from `load_repository_config("team_profile")`.
    * Build an output insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="team_profile", model=llm_model(), config_key=<resume_queries_and_prompts>)`.
    * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing team profile when available.
 
@@ -29,7 +29,7 @@ This skill executes a multi-stage reconnaissance and evaluation pipeline for a g
    * Build a single context containing aggregated data-room mentions and discovered person profile summaries.
 
 5. **LLM Assessment & Output:**
-   * Call `llm_chat(prompt=<assembled_context_and_team_profile_instructions>)`.
+   * Call `generate_markdown(<assembled_context_and_team_profile_instructions>)`.
    * Save the Markdown report with `insight.save(report_md)`, log
      `insight.path`, and return `[insight]`.
 

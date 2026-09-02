@@ -6,7 +6,7 @@ import os
 from collections import Counter
 
 from lib.datasets.models import Chunk
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 

@@ -5,7 +5,7 @@ description: List, import, and diagnose manually scraped LinkedIn profiles.
 
 # LinkedIn Maintenance
 
-LinkedIn profile resolution is implemented in `lib.linkedin`. This skill owns
+LinkedIn profile resolution is implemented in `lib.people.linkedin`. This skill owns
 the human-in-the-loop scraping workflow.
 
 ```bash

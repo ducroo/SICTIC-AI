@@ -5,7 +5,7 @@ import typer
 
 from lib.cli import format_insights, run_command
 from lib.insights import InsightFile
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.startup_profile.startup_profile import startup_profile
 
 logger = get_logger(__name__)

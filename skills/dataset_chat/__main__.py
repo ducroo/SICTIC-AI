@@ -2,7 +2,7 @@ import typer
 from typing import Optional, List
 
 from lib.cli import run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.datasets.ingestion import sync_datasets
 from skills.dataset_chat.dataset_chat import dataset_chat
 from lib.datasets.search import dataset_search

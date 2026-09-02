@@ -73,7 +73,7 @@ async def test_ranking_skill_uses_investor_profile_insights(
         )
     mocker.patch.object(
         module,
-        "config_load",
+        "load_repository_config",
         return_value={
             config_key: {
                 "objective": "Objective {{startup_profile}}{{overview_event}}"
@@ -143,7 +143,7 @@ async def test_ranking_skills_pass_person_references_without_slugifying(
     config_key = func_name
     mocker.patch.object(
         module,
-        "config_load",
+        "load_repository_config",
         return_value={
             config_key: {
                 "objective": "Objective {{startup_profile}}{{overview_event}}"

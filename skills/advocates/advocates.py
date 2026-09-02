@@ -1,10 +1,13 @@
 from typing import List, Optional
 
 from lib.model_config import llm_model
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.insights import InsightFile, InsightResult
-from skills.config_load.config_load import config_key, config_load
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
 from skills.ranking.ranking_persons import ranking_persons
 
 logger = get_logger(__name__)
@@ -17,7 +20,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
     default_llm = llm_model()
     
     try:
-        config = config_load()
+        config = load_repository_config()
         objective_template = config['advocates']['objective']
     except Exception as e:
         logger.error(f"[{event_name_slug}] Failed to load configuration: {e}")
@@ -29,7 +32,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
         model=default_llm,
         identifier=event_name_slug,
         subdir=True,
-        config_key=config_key(
+        config_key=config_cache_key(
             config["advocates"],
             config.get("ranking_top_k", {}),
             config.get("ranking_rationale", {}),

@@ -2,7 +2,7 @@ import typer
 from typing import Optional
 
 from lib.cli import format_insights, run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.person_profile.person_profile import person_profile
 
 logger = get_logger(__name__)

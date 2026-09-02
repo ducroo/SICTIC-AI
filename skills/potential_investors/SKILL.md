@@ -22,7 +22,7 @@ description: This skill aims to find potential investors in the target startup. 
 
 2. **Configuration & Insight Cache:**
    * Load the potential-investor objective plus both shared ranking config sections.
-   * Construct the output insight with a `config_key()` covering those complete sections and the runtime target, exclusion, and `top_k` options.
+   * Construct the output insight with a `config_cache_key()` covering those complete sections and the runtime target, exclusion, and `top_k` options.
    * Ranking outputs are recomputed when this skill is explicitly invoked; they do not participate in dataset-revision freshness caching.
 
 3. **Startup Profile & Ranking:**

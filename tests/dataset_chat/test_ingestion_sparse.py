@@ -22,7 +22,7 @@ class _Embeddings:
     async def embed_many(self, texts):
         return [[1.0] for _ in texts]
 
-    def vector_size(self):
+    async def vector_size(self):
         return 1
 
 

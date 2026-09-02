@@ -1,23 +1,17 @@
 import asyncio
 import random
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Dict, List, Tuple
 
-from lib.json_parser import repair_json_payload
-from lib.logger import get_logger
-from lib.structured_output import (
-    copy_schema,
-    json_schema_response_format,
-    schema_prompt_block,
-    validate_json_schema,
-)
-from skills.config_load.config_load import config_load
-from skills.llm_chat.llm_chat import llm_chat
+from lib.infrastructure.ai_text_generation import Review, generate_json
+from lib.infrastructure.ai_text_generation.json import copy_schema
+from lib.infrastructure.logging import get_logger
+from lib.infrastructure.configuration import load_repository_config
 
 logger = get_logger(__name__)
 
 DEFAULT_BATCH_SIZE = 16
-_RANKING_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -82,114 +76,82 @@ def _inspect_ranked_ids(
     )
 
 
+def _review_ranking(
+    output: dict | list,
+    *,
+    expected_ids: list[str],
+) -> Review[dict | list]:
+    if not isinstance(output, dict):
+        return Review(output, ("Top-k ranking response must be an object.",))
+    try:
+        inspection = _inspect_ranked_ids(
+            output["ranked_profiles_ids"],
+            expected_ids,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        return Review(output, (str(error),))
+    if inspection.valid:
+        return Review(output)
+    logger.warning(
+        "Corrected duplicate ranking IDs; duplicates=%s, restored=%s",
+        inspection.duplicates,
+        inspection.missing,
+    )
+    return Review({"ranked_profiles_ids": inspection.repaired_ids})
+
+
 async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
     """Rank a small set of profiles and return all IDs best to worst."""
     profile_ids = list(profiles.keys())
     if len(profile_ids) <= 1:
         return profile_ids
 
-    section = config_load()["ranking_top_k"]
+    section = load_repository_config("ranking_top_k")
     response_schema = _specialize_schema(
         section["response_schema"],
         profile_ids,
     )
+    prefix = _ranking_prompt_prefix(
+        section["ranking_instructions"],
+        objective,
+    )
+    prompt = _ranking_batch_prompt(profiles)
+    response = await generate_json(
+        prompt,
+        response_schema,
+        partial(_review_ranking, expected_ids=profile_ids),
+        cacheable_prompt_prefix=prefix,
+    )
+    assert isinstance(response, dict)
+    return response["ranked_profiles_ids"]
+
+
+def _ranking_prompt_prefix(instructions: str, objective: str) -> str:
+    """Render the stable objective and instructions shared by every chunk."""
+    if instructions.count("{{objective}}") != 1:
+        raise ValueError(
+            "ranking_top_k.ranking_instructions must contain "
+            "{{objective}} exactly once."
+        )
+    return instructions.replace("{{objective}}", objective).strip()
+
+
+def _ranking_batch_prompt(profiles: Dict[str, str]) -> str:
+    """Render the profiles and identifiers that vary for each chunk."""
+    profile_ids = list(profiles)
     profiles_text = "\n\n".join(
         f"ID: {profile_id}\n{profiles[profile_id]}"
         for profile_id in profile_ids
     )
-    prompt = (
-        section["ranking_instructions"]
-        .replace("{{profiles_text}}", profiles_text)
-        .replace("{{objective}}", objective)
-        .replace("{{n_profiles}}", str(len(profiles)))
-        .replace("{{IDs_profiles}}", ", ".join(profile_ids))
+    return (
+        "## Profiles to rank\n\n"
+        f"{profiles_text}\n\n"
+        "## Current batch\n\n"
+        f"Number of profiles: {len(profile_ids)}\n"
+        f"Profile IDs: {', '.join(profile_ids)}\n\n"
+        "Return every supplied profile ID exactly once, ordered from best "
+        "to worst. Do not repeat, omit, or introduce profile IDs."
     )
-    prompt += (
-        "\n\nReturn every supplied profile ID exactly once; "
-        "do not repeat or omit IDs."
-    )
-    prompt += "\n\n" + schema_prompt_block(response_schema)
-
-    attempt_errors: list[str] = []
-    retry_feedback = ""
-    repairable_inspection: RankingInspection | None = None
-
-    for attempt in range(1, _RANKING_ATTEMPTS + 1):
-        repairable_inspection = None
-        final_prompt = prompt + retry_feedback
-
-        try:
-            response_content = await llm_chat(
-                final_prompt,
-                response_format=json_schema_response_format(
-                    "ranked_profile_ids",
-                    response_schema,
-                ),
-            )
-            if not response_content:
-                raise ValueError("Ranking model returned no content.")
-
-            parsed = repair_json_payload(response_content)
-            validate_json_schema(
-                parsed,
-                response_schema,
-                label="Top-k ranking response",
-            )
-            inspection = _inspect_ranked_ids(
-                parsed["ranked_profiles_ids"],
-                profile_ids,
-            )
-            if not inspection.valid:
-                repairable_inspection = inspection
-                raise ValueError(
-                    "Top-k ranking must contain every candidate ID exactly "
-                    f"once; duplicates={inspection.duplicates}, "
-                    f"missing={inspection.missing}."
-                )
-        except Exception as error:
-            attempt_errors.append(str(error))
-            logger.warning(
-                "Ranking model returned an invalid response on attempt "
-                "%s/%s: %s",
-                attempt,
-                _RANKING_ATTEMPTS,
-                error,
-            )
-            if attempt < _RANKING_ATTEMPTS:
-                retry_feedback = (
-                    "\n\n### CORRECTION REQUIRED\n\n"
-                    f"Your previous response was invalid: {error}\n"
-                    "Try again and return only a JSON object matching "
-                    "the schema."
-                )
-            continue
-
-        return inspection.ranked_ids
-
-    if repairable_inspection is None:
-        raise RuntimeError(
-            "Top-k ranking failed after "
-            f"{_RANKING_ATTEMPTS} attempts: "
-            + " | ".join(attempt_errors)
-        )
-
-    repaired_inspection = _inspect_ranked_ids(
-        repairable_inspection.repaired_ids,
-        profile_ids,
-    )
-    if not repaired_inspection.valid:
-        raise ValueError(
-            "Could not repair top-k ranking into a complete permutation."
-        )
-
-    logger.warning(
-        "Repaired duplicate ranking after %s attempts; duplicates=%s, "
-        "restored_missing=%s.",
-        _RANKING_ATTEMPTS,
-        repairable_inspection.duplicates,
-        repairable_inspection.missing,
-    )
-    return repaired_inspection.ranked_ids
 
 
 async def ranking_top_k(

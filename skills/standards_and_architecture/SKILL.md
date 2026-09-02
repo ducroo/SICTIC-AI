@@ -16,7 +16,7 @@ from skill code. The domain roots are defined in
 `config/storage_domains.json`; code must use `lib.datasets.paths` rather than
 hardcoding storage paths.
 
-*   `config/` — A folder structure filled with `.md` files containing prompts and settings. The `config_load` skill compiles these into a single JSON dictionary at runtime.
+*   `config/` — A folder structure filled with `.md` and `.json` files containing prompts and settings. The infrastructure configuration module compiles these into a single configuration tree at runtime.
 *   `storage/startups/<dataset_name>/datasets/` — raw startup data rooms.
     *   `__active_dataset__.md` — A readable marker file. If present, it signals to batch jobs (like `bulk_refresh`) that this startup should be actively processed.
 *   `storage/startups/<dataset_name>/insights/` — generated startup AI reports and profiles.
@@ -64,14 +64,14 @@ hardcoding storage paths.
   * **File Naming Convention:** All generated user-facing output files (like Markdown reports) must strictly follow `kebab-case`. The script must build a raw filename string and pass it through the global `slugify()` utility (found in `lib.slugify`) to guarantee uniform sanitization of spaces, underscores, and accents before appending the `.md` extension. System identifiers (like dictionary keys, dataset IDs, and `.py` module names) should remain in `snake_case`.
 * **Logging vs. Printing:** 
   * Extensive logging must be implemented using the centralized logger utility. 
-  * Every script must import it at the top level: `from lib.logger import get_logger` followed by `logger = get_logger(__name__)`.
+  * Every script must import it at the top level: `from lib.infrastructure.logging import get_logger` followed by `logger = get_logger(__name__)`.
   * This ensures all logs, across all skills and levels (INFO, WARNING, ERROR, DEBUG), flow into the single `{{REPO_ROOT}}/logs/sictic-ai.log` file chronologically.
   * `print()` and `rich` consoles are reserved **strictly** for final output delivery to the user/GUI. All internal state, progress steps, and warnings must use the `logger`.
 * **CLI/Routing:** 
   * `typer` is used for function descriptions, CLI routing, and argument parsing.
   * Every executable skill must have a clearly defined Typer entry point.
   * **Thin CLI (Separation of Concerns):** Typer entry points (`__main__.py`) must contain **zero** business logic. They only parse arguments, handle top-level exception catching, and pass execution to core engine modules.
-  * **Configuration & Prompts:** Hardcoding prompts inside Python files is forbidden. All prompts, instructions, and tuning parameters must be stored under the repository's `config/` folder and fetched dynamically via the `config_load()` utility. Never use default values when sourcing variables from configurations (e.g., avoid `.get(key, default)`); always use direct key access (e.g., `config['key']`) so the script fails cleanly and loudly via `KeyError` if the configuration is missing.
+  * **Configuration & Prompts:** Hardcoding prompts inside Python files is forbidden. All prompts, instructions, and tuning parameters must be stored under the repository's `config/` folder and fetched dynamically via `load_repository_config(*sections)`. Never use default values when sourcing required configuration; use direct key access so missing configuration fails clearly.
 * **Encapsulated Dependencies:** Functions should instantiate their own single-use dependencies (like Docling/Rclone for ingestion) rather than forcing parent functions to instantiate and pass them down, unless injecting a shared persistent state like a database connection pool.
 * **Error Handling & Boundaries:** 
   * Strict error reporting is mandatory.
@@ -91,19 +91,24 @@ compose these shared libraries rather than duplicating path, cache, identity, or
 freshness logic.
 
 1. **Runtime and Storage Foundation**
-   * `lib.env`: Environment access and `.env` loading.
-   * `lib.logger`: Centralized logging to `logs/sictic-ai.log`.
+   * `lib.infrastructure.configuration`: Repository configuration, environment access and `.env` loading.
+   * `lib.infrastructure.logging`: Centralized logging to `logs/sictic-ai.log`.
    * `lib.model_config`: Runtime model and endpoint configuration.
-   * `lib.services_gateway`: IPC gateway for concurrency control across LLM,
-     embedding, and Docling calls. Its shared state lives at
-     `<LOCAL_DATA_PATH>/cache/services-gateway.json`.
+   * `lib.infrastructure.scheduler`: Cross-process scheduling for local-service
+     concurrency and cloud token limits. Its shared state lives at
+     `<LOCAL_DATA_PATH>/cache/scheduler.json`.
+   * Model, embedding, reranking, and document-conversion modules schedule
+     provider operations through `lib.infrastructure.scheduler`.
    * `lib.slugify`: Canonical filename and identifier slugification.
    * `lib.storage`: Relative-path storage abstraction. Application data is
      routed to `LOCAL_STORAGE_PATH`; machine-local runtime data under `cache/`
      and `docling_data/` is routed to `LOCAL_DATA_PATH`/`REPO_PATH`.
-   * `lib.adapters`: External integration adapters such as Apify, Dealum,
-     Docling, Qdrant, and web search. Adapters should stay provider-specific and
-     must not own business-domain decisions.
+   * `lib.infrastructure.dealum`: Provider-specific Dealum API access
+   * `lib.infrastructure.qdrant`: Dataset-scoped Qdrant storage and database
+     administration
+   * `lib.infrastructure.web_search`: Provider-specific web search access
+     backed by Apify. Infrastructure adapters must not own business-domain
+     decisions.
 
 2. **Dataset Domain (`lib.datasets`)**
    * Owns dataset discovery, storage-domain path resolution, active/archive
@@ -170,20 +175,13 @@ freshness logic.
      and never overwrites that manual source of truth.
    * `dossier.py` builds a person's document dossier and incidental mentions
      from parsed dataset content and semantic search.
+   * `linkedin/` owns LinkedIn identifier parsing, dataset-local profile files,
+     the outstanding-profile registry, Apify job reconciliation, manual
+     imports, technical payload cleaning, and `Person` enrichment. Stored
+     profiles exclude web links and low-signal provider fields before dataset
+     indexing. Only generic Apify access remains in `lib.infrastructure.apify`.
 
-6. **LinkedIn Domain (`lib.linkedin`)**
-   * Owns LinkedIn identifier parsing, profile payload cleanup, dataset-local
-     LinkedIn cache files, the unresolved-profile registry, and profile
-     resolution/scraping orchestration.
-   * `LinkedInResolver` is dataset-scoped. It reads/writes profile JSON under
-     the dataset raw path's `linkedin/` directory and updates the shared
-     missing-profile registry in `cache/linkedin_missing_profiles.json`.
-   * `lib.linkedin` intentionally depends on `lib.people.model.Person`, and
-     `lib.people.discovery` intentionally calls `LinkedInResolver`. Treat this
-     as the current people/LinkedIn boundary; do not introduce additional
-     identity models.
-
-7. **Small Utilities**
+6. **Small Utilities**
    * `lib.insights.select_insights(source_datasets, skill)` returns the
      preferred stored file for every logical insight without materializing or
      ingesting a dataset.
@@ -200,7 +198,7 @@ Skills are user-facing orchestration packages. A skill may call other skills
 when it is composing user-facing workflows, but reusable infrastructure belongs
 in `lib/`.
 
-* `config_load`: Compiles Markdown configuration into runtime prompt/settings
+* `lib.infrastructure.configuration`: Compiles repository configuration into runtime prompts and settings
   dictionaries.
 * `dataset_chat`: User-facing RAG question answering over datasets. Shared
   ingestion/search code belongs in `lib.datasets`.

@@ -2,7 +2,7 @@ import typer
 from typing import Optional
 
 from lib.cli import run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.bulk_refresh.bulk_refresh import bulk_refresh
 
 logger = get_logger(__name__)

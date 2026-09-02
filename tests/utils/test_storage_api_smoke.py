@@ -21,7 +21,7 @@ try:
 except ImportError:
     pytest = None  # script-mode fallback below handles assertions inline
 
-import lib.env  # triggers .env auto-load
+import lib.infrastructure.configuration  # triggers .env auto-load
 from lib import storage as storage_module
 from lib.storage import get_storage, reset_storage_singleton
 

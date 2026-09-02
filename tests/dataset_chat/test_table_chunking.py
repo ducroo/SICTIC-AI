@@ -1,5 +1,5 @@
 from lib.datasets.chunking import TABLE_CHUNK_SIZE, split_markdown
-from lib.datasets.markdown_tables import (
+from lib.markdown_tables import (
     PROSE_SEGMENT,
     TABLE_SEGMENT,
     iter_segments,

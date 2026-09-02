@@ -8,9 +8,9 @@ from lib.slugify import slugify
 from lib.storage import get_storage
 from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location, list_all_dataset_names
-from skills.config_load.config_load import (
-    config_key as serialize_config_key,
-    config_load,
+from lib.infrastructure.configuration import (
+    config_cache_key as serialize_config_key,
+    load_repository_config,
 )
 
 
@@ -155,7 +155,7 @@ def _source_datasets(skill: str, dataset: str) -> list[str] | None:
 
 def migrate_insight_manifests(*, apply: bool = False) -> InsightMigrationResult:
     storage = get_storage()
-    config = config_load()
+    config = load_repository_config()
     candidates = adopted = manual = skipped = 0
     skipped_by_reason: dict[str, int] = {}
     datasets = list_all_dataset_names()

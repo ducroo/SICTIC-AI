@@ -25,7 +25,7 @@ from lib.insights.selection import (
     is_reusable,
     ranked_models,
 )
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.storage import get_storage
 
 logger = get_logger(__name__)

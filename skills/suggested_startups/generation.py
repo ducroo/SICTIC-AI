@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from lib.insights import InsightFile
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.startups.dealum.manifest import dealum_url_for_startup
 from skills.ranking.ranking_rationale import ranking_rationale
 from skills.ranking.ranking_top_k import ranking_top_k

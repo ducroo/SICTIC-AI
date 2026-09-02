@@ -4,7 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from lib.adapters.docling.converter import export_document_markdown
+from lib.infrastructure.document_conversion.docling_stack.docling import (
+    export_document_markdown,
+)
 from lib.datasets.chunking import split_markdown
 from lib.datasets.models import Chunk
 from lib.datasets.page_markers import format_page_marker, split_text_by_pages

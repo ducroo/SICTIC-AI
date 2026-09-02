@@ -1,7 +1,7 @@
 from typing import Any, List, Optional
 
 from lib.insights import InsightFile, select_insights
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.model import Person, normalize_email_addresses
 from lib.slugify import slugify

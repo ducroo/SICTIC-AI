@@ -19,7 +19,7 @@ description: Collate a comprehensive profile on a specific person by searching a
    * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing profile when available; otherwise generate the profile and persist it with `insight.save(...)`. Do not hardcode `<REPO_PATH>/insights/...` paths.
 
 2. **Data Retrieval & Synthesis:**
-   * If the cache misses, dynamically load the following from `config.json` via `config_load()`:
+   * If the cache misses, dynamically load the following via `load_repository_config("person_profile")`:
      * **Query:** `config['person_profile']['query']` (The question/prompt string to search for the person).
      * **Instructions:** `config['person_profile']['llm_instructions']` (The strict formatting instructions for the LLM).
    * Invoke `dataset_chat` with the following parameters:

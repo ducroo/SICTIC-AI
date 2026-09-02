@@ -1,7 +1,7 @@
 import typer
 
 from lib.cli import run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.ranking.ranking_persons import ranking_persons
 
 logger = get_logger(__name__)

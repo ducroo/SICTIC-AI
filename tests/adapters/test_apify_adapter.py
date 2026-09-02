@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from lib.adapters.apify import ApifyAdapter
+from lib.infrastructure.apify import ApifyAdapter
 
 
 class _FakeDataset:

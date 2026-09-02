@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from lib.adapters.dealum import DealumAdapter
-from lib.logger import get_logger
+from lib.infrastructure.dealum import DealumAdapter
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.startups.identity import canonical_startup_slug
 

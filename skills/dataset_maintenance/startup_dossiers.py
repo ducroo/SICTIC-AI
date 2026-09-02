@@ -12,9 +12,9 @@ import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import lib.env  # noqa: F401
+import lib.infrastructure.configuration  # noqa: F401
 from lib.datasets.state import ACTIVE_MARKER, ARCHIVED_MARKER, MARKER_TEXT
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.startups.dossier import STARTUP_DATASET_SUBDIRS
 from lib.startups.identity import canonical_startup_slug
 

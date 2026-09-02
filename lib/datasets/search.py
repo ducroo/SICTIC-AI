@@ -10,8 +10,8 @@ from lib.datasets.retrieval import (
     max_chunks_per_document,
 )
 from lib.datasets.sparse import encode_query
-from lib.adapters.qdrant import QdrantAdapter
-from lib.logger import get_logger
+from lib.infrastructure.qdrant import QdrantAdapter
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 
 logger = get_logger(__name__)

@@ -8,7 +8,7 @@ from pathlib import Path
 from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location
 from lib.insights.locking import atomic_write, manifest_write_lock
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 

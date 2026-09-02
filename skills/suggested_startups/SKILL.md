@@ -19,11 +19,11 @@ description: Rank a provided list of startups against a list of investors by mat
 1. **Input Resolution:**
    * Slugify `dataset_name`.
    * Resolve investors to canonical `Person` objects from `persons_in_dataset(dataset_slug)` and preserve their LinkedIn IDs throughout profile lookup.
-   * If `startups` is empty, discover startup datasets with `list_dataset_names("startups")`, excluding configured community and ignored datasets from `config_load()["bulk_refresh"]`.
+   * If `startups` is empty, discover startup datasets with `list_dataset_names("startups")`, excluding configured community and ignored datasets from `load_repository_config("bulk_refresh")`.
 
 2. **Configuration:**
-   * Load the strategic-fit objective from `config_load()["suggested_startups"]`.
-   * Build one `config_key()` from the complete suggested-startups, `ranking_top_k`, and `ranking_rationale` config sections plus the selected startups and `max_startups`.
+   * Load the strategic-fit objective from `load_repository_config("suggested_startups")`.
+   * Build one `config_cache_key()` from the complete suggested-startups, `ranking_top_k`, and `ranking_rationale` config sections plus the selected startups and `max_startups`.
    * Do not copy, parse, embed, or index investor or startup-profile insights.
 
 3. **Per-Investor Output:**

@@ -10,7 +10,7 @@ from typing import Literal
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, list_all_dataset_names
 from lib.datasets.state import is_active_dataset
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from skills.skill_registry import SKILL_REGISTRY, expand_skill_dependencies
 

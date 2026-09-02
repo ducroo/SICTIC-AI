@@ -3,7 +3,7 @@ from typing import Optional, Union
 
 from pydantic import BaseModel
 
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 

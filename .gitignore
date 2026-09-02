@@ -57,6 +57,12 @@ condaenv.*.requirements.txt
 
 # personal scratch files
 claude_resume.txt
+.env-old
+.tmp/
+local-storage/
+output/
+outputs/
+storage/
 
 # Live sync config (per-user folder IDs). Commit only sync.yaml.example.
 config/sync.yaml

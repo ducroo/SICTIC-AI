@@ -1,6 +1,6 @@
 from pathlib import PurePosixPath
 
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.slugify import slugify
 
 

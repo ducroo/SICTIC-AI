@@ -2,7 +2,7 @@
 
 import pytest
 
-from lib.adapters.qdrant import QdrantAdapter, QdrantAdmin
+from lib.infrastructure.qdrant import QdrantAdapter, QdrantAdmin
 from lib.datasets.chunking import split_markdown
 from lib.datasets.indexing import replace_document
 from lib.datasets.sparse import encode_query
@@ -39,7 +39,7 @@ class _SteeredEmbeddings:
     async def embed_many(self, texts):
         return [self._vector(text) for text in texts]
 
-    def vector_size(self) -> int:
+    async def vector_size(self) -> int:
         return 4
 
 

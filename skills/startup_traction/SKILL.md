@@ -22,7 +22,7 @@ Use this skill when the user asks to summarize, extract, or list traction, comme
    * Run `sync_datasets([dataset_slug], raise_on_error=True)` so OCR and embeddings are current before analysis.
 
 2. **Configuration Loading:**
-   * Call `config_load()` and extract:
+   * Call `load_repository_config("startup_traction")` and extract:
      * `query = config["startup_traction"]["query"]`
      * `llm_instructions = config["startup_traction"]["llm_instructions"]`
 

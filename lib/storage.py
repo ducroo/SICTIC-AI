@@ -248,7 +248,7 @@ def get_storage() -> Storage:
     if _storage_singleton is not None:
         return _storage_singleton
 
-    from lib.env import get_env_var
+    from lib.infrastructure.configuration import get_env_var
     repo_path = os.environ.get("REPO_PATH")
     local_data_path = (
         os.environ.get("LOCAL_DATA_PATH")

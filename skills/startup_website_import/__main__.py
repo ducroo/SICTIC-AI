@@ -3,7 +3,7 @@ from __future__ import annotations
 import typer
 
 from lib.cli import run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.startup_website_import.startup_website_import import (
     startup_website_import,
 )

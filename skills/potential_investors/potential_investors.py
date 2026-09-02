@@ -1,10 +1,13 @@
 from typing import List, Optional
 
 from lib.model_config import llm_model
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.insights import InsightFile, InsightResult
-from skills.config_load.config_load import config_key, config_load
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
 from skills.startup_profile.startup_profile import startup_profile
 from skills.ranking.ranking_persons import ranking_persons
 
@@ -23,7 +26,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
     default_llm = llm_model()
 
     try:
-        config = config_load()
+        config = load_repository_config()
         objective_template = config['potential_investors']['objective']
     except Exception as e:
         logger.error(f"[{startup_slug}] Failed to load configuration: {e}")
@@ -32,7 +35,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         dataset=startup_slug,
         skill="potential_investors",
         model=default_llm,
-        config_key=config_key(
+        config_key=config_cache_key(
             config["potential_investors"],
             config.get("ranking_top_k", {}),
             config.get("ranking_rationale", {}),

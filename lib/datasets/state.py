@@ -1,7 +1,7 @@
 import time
 from typing import Optional
 
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 from lib.datasets.paths import (

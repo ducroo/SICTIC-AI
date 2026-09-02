@@ -19,12 +19,10 @@ async def test_startup_profile_saves_empty_context_response(mock_env, mocker):
         "skills.startup_profile.startup_profile.InsightFile.save"
     )
     mocker.patch(
-        "skills.startup_profile.startup_profile.config_load",
+        "skills.startup_profile.startup_profile.load_repository_config",
         return_value={
-            "startup_profile": {
-                "query": "Profile this startup.",
-                "llm_instructions": "Use only context.",
-            }
+            "query": "Profile this startup.",
+            "llm_instructions": "Use only context.",
         },
     )
     mocker.patch(
@@ -52,12 +50,10 @@ async def test_startup_profile_rejects_empty_llm_output(mock_env, mocker, empty_
         "skills.startup_profile.startup_profile.InsightFile.save"
     )
     mocker.patch(
-        "skills.startup_profile.startup_profile.config_load",
+        "skills.startup_profile.startup_profile.load_repository_config",
         return_value={
-            "startup_profile": {
-                "query": "Profile this startup.",
-                "llm_instructions": "Use only context.",
-            }
+            "query": "Profile this startup.",
+            "llm_instructions": "Use only context.",
         },
     )
     mocker.patch(
@@ -83,12 +79,10 @@ async def test_startup_profile_splits_query_lines_for_retrieval(mock_env, mocker
     mocker.patch("skills.startup_profile.startup_profile.sync_datasets")
     mocker.patch("skills.startup_profile.startup_profile.InsightFile.save")
     mocker.patch(
-        "skills.startup_profile.startup_profile.config_load",
+        "skills.startup_profile.startup_profile.load_repository_config",
         return_value={
-            "startup_profile": {
-                "query": "1. Oneliner\n\n2. Industry\n3. Technology",
-                "llm_instructions": "Use only context.",
-            }
+            "query": "1. Oneliner\n\n2. Industry\n3. Technology",
+            "llm_instructions": "Use only context.",
         },
     )
     chat = mocker.patch(

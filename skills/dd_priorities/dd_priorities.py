@@ -1,9 +1,9 @@
 from lib.insights import InsightFile, InsightResult
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.model_config import llm_model
 from lib.startups.identity import canonical_startup_slug
-from skills.config_load.config_load import config_load
-from skills.llm_chat.llm_chat import llm_chat
+from lib.infrastructure.configuration import load_repository_config
+from lib.infrastructure.ai_text_generation import generate_markdown
 
 logger = get_logger(__name__)
 
@@ -36,8 +36,8 @@ async def dd_priorities(startup: str) -> InsightResult:
             f"Run /dd_checks {startup_slug} again."
         )
 
-    config = config_load()
-    instructions = config["dd_priorities"]["llm_instructions"].replace(
+    config = load_repository_config("dd_priorities")
+    instructions = config["llm_instructions"].replace(
         "{{startup}}",
         startup,
     )
@@ -64,10 +64,8 @@ async def dd_priorities(startup: str) -> InsightResult:
         "### INSTRUCTIONS ###\n\n"
         f"{instructions}"
     )
-    result = await llm_chat(prompt=prompt)
-    if not result or not result.strip():
-        raise ValueError("LLM returned an empty DD priorities report.")
+    result = await generate_markdown(prompt)
 
-    output_insight.save(result.strip())
+    output_insight.save(result)
     logger.info("[%s] DD priorities saved to %s", startup_slug, output_insight.path)
     return [output_insight]

@@ -66,7 +66,6 @@ def test_every_skill_has_explicit_harness_coverage_classification():
 def test_insight_skill_apis_declare_uniform_result_contract():
     entrypoints = {
         "advocates": "skills.advocates.advocates",
-        "batch_audit": "skills.batch_audit.batch_audit",
         "dd_checks": "skills.dd_checks.dd_checks",
         "dd_priorities": "skills.dd_priorities.dd_priorities",
         "expert_search": "skills.expert_search.expert_search",

@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any
 
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.startups.identity import canonical_startup_slug
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_raw_path

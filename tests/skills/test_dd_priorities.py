@@ -42,7 +42,7 @@ async def test_dd_priorities_synthesizes_saved_dd_checks_report(
         )
 
     monkeypatch.setattr(
-        "skills.dd_priorities.dd_priorities.llm_chat",
+        "skills.dd_priorities.dd_priorities.generate_markdown",
         fake_llm_chat,
     )
 
@@ -82,7 +82,7 @@ async def test_dd_priorities_resolves_startup_alias(
         return "No material concerns supported."
 
     monkeypatch.setattr(
-        "skills.dd_priorities.dd_priorities.llm_chat",
+        "skills.dd_priorities.dd_priorities.generate_markdown",
         fake_llm_chat,
     )
 

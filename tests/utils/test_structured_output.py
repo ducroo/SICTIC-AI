@@ -1,6 +1,6 @@
 import pytest
 
-from lib.structured_output import (
+from lib.infrastructure.ai_text_generation.json import (
     json_schema_response_format,
     parse_json_response,
     schema_prompt_block,
@@ -29,7 +29,7 @@ def test_parse_json_response_reports_validation_path():
 
 
 def test_json_schema_response_format_is_strict():
-    result = json_schema_response_format("test response", SCHEMA)
+    result = json_schema_response_format(SCHEMA, name="test response")
 
     assert result["json_schema"]["name"] == "test_response"
     assert result["json_schema"]["strict"] is True

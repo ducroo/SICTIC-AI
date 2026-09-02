@@ -4,7 +4,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.slugify import slugify
 
 
