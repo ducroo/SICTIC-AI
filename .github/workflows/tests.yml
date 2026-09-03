@@ -1,0 +1,30 @@
+# Runs the test suite on every pull request and every push to main.
+#
+# There are ninety test files in this repository and, until now, nothing ran
+# them automatically. This is the cheapest safety net available: it uses tests
+# that already exist.
+
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: sictic-env
+          auto-activate-base: false
+
+      - name: Run the test suite
+        shell: bash -el {0}
+        env:
+          SICTIC_TESTING: "1"
+        run: pytest -q -m "not live"
