@@ -14,6 +14,19 @@ logger = get_logger(__name__)
 # Field values that assert absence/uncertainty and therefore need no quote.
 _NO_QUOTE_VALUES = frozenset({"unstated", "unclear", "not_subordinated"})
 
+# Booleans whose False asserts "no such clause exists" (an absence claim that
+# no quote can prove) rather than a documented property of an existing clause.
+# These always need a missing_terms entry when False, quoted or not.
+_PRESENCE_BOOLEAN_FIELDS = frozenset(
+    {
+        "qefr_present",
+        "coc_present",
+        "maturity_conversion_present",
+        "mfn_clause",
+        "pro_rata_rights",
+    }
+)
+
 # Top-level {value, quote} fields of the extraction schema.
 _QUOTED_FIELDS = (
     "borrower_name",
@@ -60,11 +73,13 @@ def _needs_quote(value: Any) -> bool:
     return True
 
 
-def _is_absence_claim(value: Any, quote: Any) -> bool:
+def _is_absence_claim(field: str, value: Any, quote: Any) -> bool:
     """True when the field asserts absence and must appear in missing_terms."""
     if value is None:
         return True
     if isinstance(value, str) and value == "unstated":
+        return True
+    if value is False and field in _PRESENCE_BOOLEAN_FIELDS:
         return True
     if value is False and quote is None:
         return True
@@ -96,7 +111,7 @@ def review_cla_extraction(document_text: str):
                     f"text: {quote!r}. Copy the snippet exactly as it "
                     "appears (whitespace differences are tolerated)."
                 )
-            if _is_absence_claim(value, quote):
+            if _is_absence_claim(field, value, quote):
                 absence_fields.append(field)
 
         for lender in output.get("lenders", []):

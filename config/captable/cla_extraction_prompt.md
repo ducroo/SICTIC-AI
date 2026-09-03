@@ -17,9 +17,12 @@ Evidence rules (strictly enforced; violations are rejected):
 2. When a term is genuinely absent or unreadable, set its value to null (or
    the "unstated"/"unclear" enum member where the schema has one) and set the
    quote to null. NEVER guess a value.
-3. For every term you report as null/unstated — and for every boolean you
-   report as false or null WITHOUT a supporting quote — add an entry to
-   `missing_terms`. Use the exact schema field name as `term` (e.g.
+3. For every term you report as null/unstated, add an entry to
+   `missing_terms`. The same applies to every presence-type boolean
+   (`qefr_present`, `coc_present`, `maturity_conversion_present`,
+   `mfn_clause`, `pro_rata_rights`) you report as false — "no such clause
+   exists" is an absence claim that a quote cannot prove — and to any other
+   boolean reported false or null without a supporting quote. Use the exact schema field name as `term` (e.g.
    "valuation_cap", not "cap") and list in `sections_scanned` the concrete
    sections/headings/pages of the document you checked before concluding the
    term is absent. An empty `sections_scanned` is rejected. Being thorough

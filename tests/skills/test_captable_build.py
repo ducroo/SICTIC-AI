@@ -189,3 +189,28 @@ def test_extraction_reviewer_rejects_uncovered_absence() -> None:
 
 def test_normalize_for_matching_collapses_ocr_whitespace() -> None:
     assert normalize_for_matching("a\n  b\tc") == "a b c"
+
+
+def test_extraction_reviewer_rejects_quoted_false_presence_boolean() -> None:
+    """A quote cannot prove that no MFN clause exists anywhere."""
+    reviewer = review_cla_extraction(DOC_TEXT)
+    extraction = _minimal_extraction(
+        mfn_clause={"value": False, "quote": "Convertible Loan Agreement"}
+    )
+    extraction["missing_terms"] = [
+        entry
+        for entry in extraction["missing_terms"]
+        if entry["term"] != "mfn_clause"
+    ]
+    assert any(
+        "mfn_clause" in problem for problem in reviewer(extraction).problems
+    )
+
+
+def test_extraction_reviewer_accepts_quoted_false_property_boolean() -> None:
+    """A verified quote may evidence a property like voluntary conversion."""
+    reviewer = review_cla_extraction(DOC_TEXT)
+    extraction = _minimal_extraction(
+        qefr_mandatory={"value": False, "quote": "Convertible Loan Agreement"}
+    )
+    assert not reviewer(extraction).problems
