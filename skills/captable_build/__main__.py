@@ -118,8 +118,22 @@ def build_cmd(
     fresh: bool = typer.Option(
         False, "--fresh", help="Discard stored work products first."
     ),
+    model: str = typer.Option(
+        None,
+        "--model",
+        help=(
+            "LLM override for this run (e.g. gemini/gemini-3.5-flash-lite "
+            "for cheap smoke tests; results are lower quality — do not use "
+            "for real due-diligence output)."
+        ),
+    ),
 ):
     """Run the full pipeline, stages 1-7."""
+    if model:
+        import os
+
+        os.environ["LLM_MODEL"] = model
+        logger.warning("LLM override for this run: %s", model)
     result = run_command(
         lambda: build(dataset_name, fresh=fresh),
         logger=logger,

@@ -1,0 +1,68 @@
+{
+  "_purpose": "Known-answer key for the synthetic captable fixture dataset. Used by recall/accuracy evals and cheap smoke runs. Deliberate absences: valuation_floor and pro_rata_rights do not appear in the CLA and MUST be reported absent, not invented.",
+  "cla": {
+    "document": "synthetic_cla.md",
+    "status": "executed",
+    "execution_date": "2026-01-15",
+    "lenders": [{"name": "Petra Muster", "kind": "individual", "domicile": "CH"}],
+    "principal_total": 250000,
+    "principal_currency": "CHF",
+    "interest_mode": "fixed",
+    "interest_rate_pct": 5,
+    "interest_day_count": "act/365",
+    "interest_compounding": "simple",
+    "maturity_date": "2027-12-31",
+    "qefr_present": true,
+    "qefr_min_raise": 2000000,
+    "qefr_mandatory": true,
+    "coc_present": true,
+    "coc_mandatory": false,
+    "coc_repayment_multiple": 2.0,
+    "maturity_conversion_present": true,
+    "maturity_conversion_mandatory": false,
+    "valuation_cap": 8000000,
+    "discount_pct": 20,
+    "valuation_floor": null,
+    "denominator_basis": "fully_diluted",
+    "subordinated": true,
+    "subordination_scope": "loan_balance_full",
+    "mfn_clause": true,
+    "pro_rata_rights": null,
+    "conversion_capital_sources": ["consents"],
+    "shareholder_consents_referenced": true,
+    "sha_accession_required": true,
+    "governing_law": "Swiss law",
+    "expected_missing_terms": ["valuation_floor", "pro_rata_rights"]
+  },
+  "captable": {
+    "document": "synthetic_captable.md",
+    "as_of_date": "2026-03-31",
+    "totals": {
+      "common": 800000,
+      "preferred_a": 500000,
+      "diluted_total": 1275000
+    },
+    "treasury_common": 100000,
+    "option_deltas_plus_pools": 75000,
+    "diluted_equation": "800000 + 500000 - 100000 + 75000 = 1275000",
+    "holder_count_min": 6
+  },
+  "register": {
+    "document": "synthetic_register.md",
+    "as_of_date": "2026-03-31",
+    "entries": 4,
+    "name_variant_test": "Anna Barbara Beispiel must reconcile with cap-table 'Anna Beispiel'"
+  },
+  "pool": {
+    "document": "synthetic_pool_overview.md",
+    "total": 25000,
+    "consistent_with_captable": true
+  },
+  "expected_validation": {
+    "issued_total_common": "pass",
+    "issued_total_preferred": "pass",
+    "diluted_equation": "pass",
+    "register_reconciliation": "pass",
+    "pool_consistency": "pass"
+  }
+}

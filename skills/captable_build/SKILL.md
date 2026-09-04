@@ -60,3 +60,25 @@ Intermediate results are stored under the startup's
 The dataset must be synced (parsed Markdown present). Uses the configured
 LLM via the services gateway; no Qdrant queries are needed for these two
 stages.
+
+## Development & testing costs
+
+Full builds on real data rooms cost real money (roughly USD 0.5-1.5 per
+startup on gemini-3.5-flash, output/thinking tokens dominating). For
+pipeline smoke tests use the synthetic fixture dataset and the cheap-model
+override together:
+
+```bash
+# one-time install of the fixture dataset (see tests/fixtures/captable/):
+mkdir -p "$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets"
+cp tests/fixtures/captable/synthetic_*.md \
+   "$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets/"
+# then, after a dataset sync:
+python -m skills.captable_build build --dataset synthcap \
+    --model gemini/gemini-3.5-flash-lite --fresh
+```
+
+A full smoke build costs ~USD 0.01. `tests/fixtures/captable/
+ground_truth.json` is the answer key (including two deliberately absent CLA
+terms for the missing-terms recall check). Lite-model output is measurably
+worse — never use `--model` overrides for real due-diligence output.
