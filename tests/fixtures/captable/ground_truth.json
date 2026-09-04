@@ -73,8 +73,10 @@
     "issued_total_common": "pass",
     "issued_total_preferred": "pass",
     "diluted_equation": "pass",
-    "register_reconciliation": "pass",
-    "pool_consistency": "pass"
+    "register_reconciliation": "pass (nearest-dated: March register vs March cap table)",
+    "pool_consistency": "pass (nearest-dated)",
+    "diluted_rowsum": "pass",
+    "shrinking_holder": "warn (planted Bruno anomaly — the ONLY expected cross-version finding)"
   },
   "captable_v2": {
     "document": "synthetic_captable_v2.md",
@@ -89,6 +91,11 @@
       "shrinking_holder": "Bruno Muster 300000 -> 250000 without documented transfer (deliberate anomaly, must WARN)",
       "shrinking_share_class": "must NOT fire (common unchanged, preferred grew)"
     },
-    "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both snapshots must exist afterwards."
+    "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both snapshots must exist afterwards.",
+    "cumulative_invested_chf": 1450000,
+    "note_investments": "Alpina 1,000,000 + Helvetia 450,000; deliberately != issued share count 1,400,000 (stamp-duty de-spoofing)"
+  },
+  "esignature": {
+    "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)"
   }
 }

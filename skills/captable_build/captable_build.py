@@ -1,11 +1,16 @@
 """Build structured cap-table/CLA facts for one startup dataset (issue #17).
 
-Slice 1 implements the first two pipeline stages:
+Seven pipeline stages (see docs/captable.md for the architecture):
 1. classify every dataset document,
-2. extract the term schema from each convertible loan agreement.
+2. extract the term schema from every convertible loan agreement,
+3. assess each CLA deterministically against market-standard bands,
+4. aggregate CLAs (identical-terms grouping, 10/20 non-bank counts),
+5. extract cap-table versions, the share register, and pool overviews,
+6. validate everything in code (totals, reconciliations, lifecycle),
+7. store the versioned snapshot under insights/captable/snapshots/.
 
-Later slices add the qualitative checklist, aggregation, cap-table
-extraction, code validation, and the versioned snapshot store.
+The LLM finds, classifies, and extracts values with verified verbatim
+quotes; every calculation and consistency judgment is plain Python.
 """
 
 from __future__ import annotations
