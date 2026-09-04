@@ -171,3 +171,35 @@ def test_cross_snapshot_flags_class_wipeout() -> None:
     current = {"totals": {"by_class": []}, "stakeholders": []}
     findings = check_cross_snapshot(previous, current)
     assert any(f["check"] == "shrinking_share_class" for f in findings)
+
+
+def test_esign_finds_envelope_in_kerned_tj_array() -> None:
+    """Cut finding: TJ kerning offsets must not hide the envelope id."""
+    from lib.captable.esign import scan_esign_markers
+
+    blob = (b"[(Docu) -250 (sign Envel) 20 (ope ID: 642F9CEF-5BA7-4D50)] TJ")
+    markers = scan_esign_markers(blob)
+    assert markers["docusign_envelope_ids"] == ["642F9CEF-5BA7-4D50"]
+
+
+def test_duplicate_note_labels_do_not_collapse() -> None:
+    """Cut finding: two notes named identically must both be priced."""
+    from lib.captable.model import Note, convert_in_round
+
+    scenarios = convert_in_round(
+        pre_money_valuation=4_000_000,
+        new_investment=1_000_000,
+        existing_shares={"founders": 1_000_000},
+        notes=[
+            Note("note", 100_000, discount_pct=20),
+            Note("note", 200_000, discount_pct=20),
+        ],
+        methods=("pre_money",),
+    )
+    s = scenarios[0]
+    assert len(s.note_prices) == 2
+    # both balances convert at the discounted price (PPS 4.0 * 0.8 = 3.2)
+    total_note_shares = sum(
+        count for holder, count in s.shares.items() if "note" in holder
+    )
+    assert total_note_shares == pytest.approx(300_000 / 3.2)

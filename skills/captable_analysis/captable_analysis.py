@@ -18,6 +18,8 @@ from lib.datasets.paths import dataset_insights_path
 from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
+from lib.insights import InsightFile
+from lib.model_config import llm_model
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
@@ -288,6 +290,19 @@ async def captable_analysis(
         f"{insights_rel}/captable/analysis_scenarios.json",
         json.dumps(computed, ensure_ascii=False, indent=2),
     )
-    storage.write_text(f"{insights_rel}/captable/analysis.md", narrative)
-    logger.info("[%s] Stored captable analysis.", dataset_name)
-    return {"computed": computed, "narrative": narrative}
+    # The narrative is model-dependent, so it goes through the repo's
+    # InsightFile convention (model-slug filename, manifest, freshness).
+    # The snapshot store itself stays as designed (§2.3): versioned by
+    # as-of date, not by model — a deliberate deviation.
+    insight = InsightFile(dataset_name, "captable_analysis", llm_model())
+    insight.save(narrative)
+    logger.info(
+        "[%s] Stored captable analysis insight at %s",
+        dataset_name,
+        insight.path,
+    )
+    return {
+        "computed": computed,
+        "narrative": narrative,
+        "insight_path": insight.path,
+    }

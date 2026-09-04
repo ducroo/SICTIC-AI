@@ -82,3 +82,13 @@ A full smoke build costs ~USD 0.01. `tests/fixtures/captable/
 ground_truth.json` is the answer key (including two deliberately absent CLA
 terms for the missing-terms recall check). Lite-model output is measurably
 worse — never use `--model` overrides for real due-diligence output.
+
+## Storage conventions
+
+The analysis narrative (`captable_analysis`) is stored through the repo's
+`InsightFile` convention (model-slug filename, manifest, freshness). The
+snapshot store (`insights/captable/snapshots/<as_of>.json`, `latest.json`,
+`captable.md`) deliberately does NOT use `InsightFile`: snapshots are
+versioned by evidence date, not by generating model, and are consumed as
+machine-readable inputs (by `captable_analysis` and, later, `sha_review`)
+rather than as regenerable per-model insights.

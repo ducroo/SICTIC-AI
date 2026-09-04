@@ -46,13 +46,28 @@ def _normalize_pdf_text(chunk: bytes) -> bytes:
     return re.sub(rb"[()\\]|\s*Tj\s*|\s*TJ\s*", b"", chunk)
 
 
+def _joined_string_literals(chunk: bytes) -> bytes:
+    """Concatenate parenthesized string literals, dropping TJ kerning.
+
+    ``[(Docu) -250 (sign Envel) 20 (ope ID:)] TJ`` becomes
+    ``Docusign Envelope ID:`` (kerning numbers and array syntax removed),
+    which the marker patterns can match directly.
+    """
+    literals = re.findall(rb"\((?:[^()\\]|\\.)*\)", chunk)
+    return b"".join(literal[1:-1] for literal in literals)
+
+
 def scan_esign_markers(pdf_bytes: bytes) -> dict[str, list[str]]:
     """Return e-signature markers found anywhere in a PDF's content."""
     markers: dict[str, list[str]] = {}
     envelope_ids: set[str] = set()
     providers: set[str] = set()
     for raw_chunk in _searchable_chunks(pdf_bytes):
-        for chunk in (raw_chunk, _normalize_pdf_text(raw_chunk)):
+        for chunk in (
+            raw_chunk,
+            _normalize_pdf_text(raw_chunk),
+            _joined_string_literals(raw_chunk),
+        ):
             for match in re.finditer(_ENVELOPE_PATTERN, chunk, re.I):
                 envelope_ids.add(match.group(1).decode("ascii", "replace"))
             for name, pattern in _PROVIDER_PATTERNS:

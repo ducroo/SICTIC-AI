@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
-from lib.datasets.source import parsed_filepath, snapshot_source_files
+from lib.datasets.source import list_source_files, parsed_filepath
 from lib.infrastructure.logging import get_logger
 from lib.storage import get_storage
 
@@ -43,18 +43,18 @@ def load_parsed_documents(dataset_name: str) -> list[ParsedDocument]:
     raw_rel = dataset_raw_path(dataset_name)
     parsed_rel = dataset_parsed_path(dataset_name)
     documents: list[ParsedDocument] = []
-    for source in snapshot_source_files(storage, raw_rel):
-        parsed_path = parsed_filepath(parsed_rel, source.filename)
+    for filename, _mtime in list_source_files(storage, raw_rel):
+        parsed_path = parsed_filepath(parsed_rel, filename)
         if not storage.exists(parsed_path):
             logger.warning(
                 "[%s] No parsed text for %r; run a dataset sync first.",
                 dataset_name,
-                source.filename,
+                filename,
             )
             continue
         documents.append(
             ParsedDocument(
-                filename=source.filename,
+                filename=filename,
                 text=storage.read_text(parsed_path),
             )
         )

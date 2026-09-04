@@ -218,7 +218,23 @@ def convert_in_round(
 
     ``existing_shares`` maps holder -> pre-round fully-diluted shares (the
     denominator basis the CLA prescribes is the caller's responsibility).
+    Duplicate note labels are uniquified so per-note prices never collapse.
     """
+    seen: dict[str, int] = {}
+    uniquified = []
+    for note in notes:
+        count = seen.get(note.label, 0)
+        seen[note.label] = count + 1
+        if count:
+            note = Note(
+                label=f"{note.label} #{count + 1}",
+                balance=note.balance,
+                cap=note.cap,
+                discount_pct=note.discount_pct,
+                floor=note.floor,
+            )
+        uniquified.append(note)
+    notes = uniquified
     fd_pre = sum(existing_shares.values())
     scenarios = []
     for method in methods:

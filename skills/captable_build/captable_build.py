@@ -83,26 +83,39 @@ async def extract(dataset_name: str) -> dict[str, Any]:
         document.filename: document.text
         for document in load_parsed_documents(dataset_name)
     }
-    extractions = []
-    failures = []
     for filename in cla_filenames:
         if filename not in texts:
             raise ValueError(
                 f"Classified CLA {filename!r} has no parsed text."
             )
-        logger.info("[%s] Extracting CLA terms from %r", dataset_name, filename)
-        try:
-            extractions.append(
-                await extract_cla(dataset_name, filename, texts[filename])
-            )
-        except Exception as error:  # one bad document must not sink the corpus
+    import asyncio
+
+    logger.info(
+        "[%s] Extracting CLA terms from %d documents in parallel",
+        dataset_name,
+        len(cla_filenames),
+    )
+    outcomes = await asyncio.gather(
+        *(
+            extract_cla(dataset_name, filename, texts[filename])
+            for filename in cla_filenames
+        ),
+        return_exceptions=True,
+    )
+    extractions = []
+    failures = []
+    for filename, outcome in zip(cla_filenames, outcomes):
+        if isinstance(outcome, BaseException):
+            # one bad document must not sink the corpus
             logger.error(
                 "[%s] CLA extraction failed for %r: %s",
                 dataset_name,
                 filename,
-                error,
+                outcome,
             )
-            failures.append({"document": filename, "error": str(error)})
+            failures.append({"document": filename, "error": str(outcome)})
+        else:
+            extractions.append(outcome)
 
     result = {"dataset": dataset_name, "clas": extractions, "failures": failures}
     rel = _store_work(dataset_name, "cla_extraction.json", result)
@@ -197,40 +210,42 @@ async def table(dataset_name: str) -> dict[str, Any]:
         "failures": [],
     }
 
+    import asyncio
+
+    jobs: list[tuple[str, str, Any]] = []
     captable_doc = latest_of("current_cap_table")
     if captable_doc and captable_doc in texts:
-        try:
-            result["captable"] = await extract_captable(
-                dataset_name, captable_doc, texts[captable_doc]
-            )
-        except Exception as error:
-            result["failures"].append(
-                {"document": captable_doc, "error": str(error)}
-            )
+        jobs.append(
+            ("captable", captable_doc,
+             extract_captable(dataset_name, captable_doc, texts[captable_doc]))
+        )
     register_doc = latest_of("share_register")
     if register_doc and register_doc in texts:
-        try:
-            result["register"] = await extract_register(
-                dataset_name, register_doc, texts[register_doc]
-            )
-        except Exception as error:
-            result["failures"].append(
-                {"document": register_doc, "error": str(error)}
-            )
+        jobs.append(
+            ("register", register_doc,
+             extract_register(dataset_name, register_doc, texts[register_doc]))
+        )
     for entry in classification["documents"]:
         if entry["document_class"] != "esop_psop_plan":
             continue
         filename = entry["filename"]
-        if filename not in texts:
-            continue
-        try:
-            result["pool_documents"].append(
-                await extract_pools(dataset_name, filename, texts[filename])
+        if filename in texts:
+            jobs.append(
+                ("pool", filename,
+                 extract_pools(dataset_name, filename, texts[filename]))
             )
-        except Exception as error:
+    outcomes = await asyncio.gather(
+        *(coro for _slot, _doc, coro in jobs), return_exceptions=True
+    )
+    for (slot, document, _coro), outcome in zip(jobs, outcomes):
+        if isinstance(outcome, BaseException):
             result["failures"].append(
-                {"document": filename, "error": str(error)}
+                {"document": document, "error": str(outcome)}
             )
+        elif slot == "pool":
+            result["pool_documents"].append(outcome)
+        else:
+            result[slot] = outcome
 
     rel = _store_work(dataset_name, "table_extraction.json", result)
     logger.info("[%s] Stored table extraction at %s", dataset_name, rel)
@@ -394,12 +409,29 @@ async def aggregate(dataset_name: str) -> dict[str, Any]:
     extraction = await _extraction_or_run(dataset_name)
     storage = get_storage()
     raw_rel = dataset_raw_path(dataset_name)
+    cache = _load_work(dataset_name, "esign_markers.json") or {}
     markers: dict[str, dict] = {}
+    cache_dirty = False
     for cla in extraction["clas"]:
         document = cla["document"]
         pdf_rel = f"{raw_rel}/{document}"
-        if document.lower().endswith(".pdf") and storage.exists(pdf_rel):
-            markers[document] = scan_esign_markers(storage.read_bytes(pdf_rel))
+        if not document.lower().endswith(".pdf") or not storage.exists(pdf_rel):
+            continue
+        cached = cache.get(document)
+        # cache key: file size (cheap, stable for our immutable data rooms;
+        # the saving is skipping the zlib stream scan, not the read)
+        pdf_bytes = storage.read_bytes(pdf_rel)
+        if cached and cached.get("size") == len(pdf_bytes):
+            markers[document] = cached["markers"]
+            continue
+        markers[document] = scan_esign_markers(pdf_bytes)
+        cache[document] = {
+            "size": len(pdf_bytes),
+            "markers": markers[document],
+        }
+        cache_dirty = True
+    if cache_dirty:
+        _store_work(dataset_name, "esign_markers.json", cache)
     from lib.infrastructure.configuration import load_repository_config
 
     rules = load_repository_config("captable")["assessment_rules"]
