@@ -7,17 +7,37 @@ Python.
 
 ## Status
 
-Slice 1: document classification (stage 1) and CLA term extraction
-(stage 2). Later slices add the qualitative SECA checklist, multi-CLA
-aggregation, cap-table extraction, code validation, and the versioned
-snapshot store under `insights/captable/snapshots/`.
+Full pipeline (stages 1-7): classification, CLA extraction, deterministic
+assessment, aggregation, cap-table/register/pool extraction, code
+validation, and the versioned snapshot store.
 
 ## Usage
 
 ```bash
-python -m skills.captable_build classify --dataset <startup>
-python -m skills.captable_build extract  --dataset <startup>
+python -m skills.captable_build build    --dataset <startup> [--fresh]
+# or stage by stage:
+python -m skills.captable_build classify  --dataset <startup>
+python -m skills.captable_build extract   --dataset <startup>
+python -m skills.captable_build assess    --dataset <startup>
+python -m skills.captable_build aggregate --dataset <startup>
+python -m skills.captable_build table     --dataset <startup>
+python -m skills.captable_build snapshot  --dataset <startup>
 ```
+
+`build` runs everything, reusing stored intermediate results (`--fresh`
+discards them), and writes `insights/captable/snapshots/<as_of>.json`,
+`latest.json`, and a table-only `captable.md`. `assess` applies pure-Python
+market-standard rules (bands in `config/captable/assessment_rules.json`).
+`aggregate` groups identical-terms tranches for the 10/20 non-bank rules,
+sums outstanding principal over executed loans only, supersedes term
+sheets, flags expired maturities, and corroborates execution via
+e-signature markers in the PDF streams. `table` extracts the current cap
+table (group-aware, treasury/pool semantics), the share register (current
+holdings for reconciliation), and ESOP/PSOP pool overviews. `snapshot`
+validates everything in code (totals, the diluted = issued - treasury +
+options/pools equation, register reconciliation, pool cross-document
+consistency, nominal floor per art. 624 CO, CLA lifecycle,
+cross-snapshot consistency) and stores the versioned snapshot.
 
 `classify` labels every parsed document of the dataset (cap table vs
 forecast model vs share register vs executed CLA vs term sheet, …) with an

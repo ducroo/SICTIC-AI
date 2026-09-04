@@ -7,8 +7,11 @@ from lib.infrastructure.logging import get_logger
 from skills.captable_build.captable_build import (
     aggregate,
     assess,
+    build,
     classify,
     extract,
+    snapshot,
+    table,
 )
 
 logger = get_logger(__name__)
@@ -73,6 +76,54 @@ def aggregate_cmd(
         lambda: aggregate(dataset_name),
         logger=logger,
         error_prefix="CLA aggregation failed",
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("table")
+def table_cmd(
+    dataset_name: str = typer.Option(
+        ..., "--dataset", "-d", help="Target startup dataset name."
+    ),
+):
+    """Extract cap table, share register, and pools (stage 5)."""
+    result = run_command(
+        lambda: table(dataset_name),
+        logger=logger,
+        error_prefix="Table extraction failed",
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("snapshot")
+def snapshot_cmd(
+    dataset_name: str = typer.Option(
+        ..., "--dataset", "-d", help="Target startup dataset name."
+    ),
+):
+    """Validate and store the versioned snapshot (stages 6-7)."""
+    result = run_command(
+        lambda: snapshot(dataset_name),
+        logger=logger,
+        error_prefix="Snapshot failed",
+    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("build")
+def build_cmd(
+    dataset_name: str = typer.Option(
+        ..., "--dataset", "-d", help="Target startup dataset name."
+    ),
+    fresh: bool = typer.Option(
+        False, "--fresh", help="Discard stored work products first."
+    ),
+):
+    """Run the full pipeline, stages 1-7."""
+    result = run_command(
+        lambda: build(dataset_name, fresh=fresh),
+        logger=logger,
+        error_prefix="Build failed",
     )
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 

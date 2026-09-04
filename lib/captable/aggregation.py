@@ -37,6 +37,23 @@ def normalize_lender_name(name: str) -> str:
     return " ".join(cleaned.split())
 
 
+def names_match(a: str, b: str) -> bool:
+    """Same person/entity despite middle names or extra legal-form tokens.
+
+    True when the tokens of one normalized name are a subset of the other's
+    ("anna beispiel" vs "anna barbara beispiel"), requiring at least two shared tokens
+    (or exact equality for single-token names) to avoid false positives.
+    """
+    tokens_a = set(normalize_lender_name(a).split())
+    tokens_b = set(normalize_lender_name(b).split())
+    if not tokens_a or not tokens_b:
+        return False
+    if tokens_a == tokens_b:
+        return True
+    smaller, larger = sorted((tokens_a, tokens_b), key=len)
+    return len(smaller) >= 2 and smaller <= larger
+
+
 def terms_group_key(extraction: dict[str, Any]) -> tuple:
     """The identical-terms tuple used for 10/20 non-bank grouping."""
     return (

@@ -149,6 +149,197 @@ async def assess(dataset_name: str) -> dict[str, Any]:
     return result
 
 
+async def table(dataset_name: str) -> dict[str, Any]:
+    """Stage 5: extract cap table, share register, and pool documents."""
+    from lib.captable.table_extraction import (
+        extract_captable,
+        extract_pools,
+        extract_register,
+    )
+
+    storage = get_storage()
+    classification_rel = _work_path(dataset_name, "classification.json")
+    if storage.exists(classification_rel):
+        classification = json.loads(storage.read_text(classification_rel))
+    else:
+        classification = await classify(dataset_name)
+
+    def latest_of(document_class: str) -> str | None:
+        candidates = [
+            entry
+            for entry in classification["documents"]
+            if entry["document_class"] == document_class
+        ]
+        if not candidates:
+            return None
+        return max(
+            candidates, key=lambda entry: entry.get("as_of_date") or ""
+        )["filename"]
+
+    texts = {
+        document.filename: document.text
+        for document in load_parsed_documents(dataset_name)
+    }
+    result: dict[str, Any] = {
+        "dataset": dataset_name,
+        "captable": None,
+        "register": None,
+        "pool_documents": [],
+        "failures": [],
+    }
+
+    captable_doc = latest_of("current_cap_table")
+    if captable_doc and captable_doc in texts:
+        try:
+            result["captable"] = await extract_captable(
+                dataset_name, captable_doc, texts[captable_doc]
+            )
+        except Exception as error:
+            result["failures"].append(
+                {"document": captable_doc, "error": str(error)}
+            )
+    register_doc = latest_of("share_register")
+    if register_doc and register_doc in texts:
+        try:
+            result["register"] = await extract_register(
+                dataset_name, register_doc, texts[register_doc]
+            )
+        except Exception as error:
+            result["failures"].append(
+                {"document": register_doc, "error": str(error)}
+            )
+    for entry in classification["documents"]:
+        if entry["document_class"] != "esop_psop_plan":
+            continue
+        filename = entry["filename"]
+        if filename not in texts:
+            continue
+        try:
+            result["pool_documents"].append(
+                await extract_pools(dataset_name, filename, texts[filename])
+            )
+        except Exception as error:
+            result["failures"].append(
+                {"document": filename, "error": str(error)}
+            )
+
+    rel = _store_work(dataset_name, "table_extraction.json", result)
+    logger.info("[%s] Stored table extraction at %s", dataset_name, rel)
+    return result
+
+
+async def snapshot(dataset_name: str) -> dict[str, Any]:
+    """Stages 6+7: validate, assemble, and store the versioned snapshot."""
+    from lib.captable.snapshot import assemble_snapshot, render_markdown
+    from lib.captable.validate import check_cross_snapshot, validate_captable
+    from lib.datasets.paths import dataset_insights_path
+
+    storage = get_storage()
+    classification = _load_work(dataset_name, "classification.json")
+    tables = _load_work(dataset_name, "table_extraction.json")
+    cla_extraction = _load_work(dataset_name, "cla_extraction.json")
+    assessment = _load_work(dataset_name, "assessment.json")
+    aggregation = _load_work(dataset_name, "aggregation.json")
+    missing = [
+        name
+        for name, value in (
+            ("classification", classification),
+            ("table_extraction", tables),
+            ("cla_extraction", cla_extraction),
+            ("assessment", assessment),
+            ("aggregation", aggregation),
+        )
+        if value is None
+    ]
+    if missing:
+        raise ValueError(
+            f"Missing work products {missing}; run the earlier stages "
+            "(or `build`) first."
+        )
+
+    captable = tables.get("captable")
+    register = tables.get("register")
+    pool_docs = tables.get("pool_documents", [])
+    validation = validate_captable(
+        captable or {},
+        register=register,
+        pool_docs=pool_docs,
+        clas=cla_extraction.get("clas", []),
+    )
+
+    snap = assemble_snapshot(
+        dataset_name,
+        classification=classification,
+        captable=captable,
+        register=register,
+        pool_docs=pool_docs,
+        cla_extraction=cla_extraction,
+        assessment=assessment,
+        aggregation=aggregation,
+        validation=validation,
+    )
+
+    insights_rel = dataset_insights_path(dataset_name)
+    snapshots_dir = f"{insights_rel}/captable/snapshots"
+    storage.mkdir(snapshots_dir)
+    # Cross-snapshot checks against the previous version of this as-of state
+    # and the latest older state, when they exist.
+    previous_rels = sorted(
+        rel
+        for rel in storage.list(snapshots_dir, suffix=".json")
+        if rel != f"{snap['as_of_date']}.json"
+    )
+    if previous_rels:
+        previous = json.loads(
+            storage.read_text(f"{snapshots_dir}/{previous_rels[-1]}")
+        )
+        snap["validation"] = snap["validation"] + check_cross_snapshot(
+            previous, snap
+        )
+
+    payload = json.dumps(snap, ensure_ascii=False, indent=2)
+    storage.write_text(f"{snapshots_dir}/{snap['as_of_date']}.json", payload)
+    storage.write_text(f"{insights_rel}/captable/latest.json", payload)
+    storage.write_text(
+        f"{insights_rel}/captable/captable.md", render_markdown(snap)
+    )
+    logger.info(
+        "[%s] Stored snapshot %s and captable.md",
+        dataset_name,
+        snap["as_of_date"],
+    )
+    return snap
+
+
+async def build(dataset_name: str, *, fresh: bool = False) -> dict[str, Any]:
+    """Run the full pipeline (stages 1-7), reusing stored work products.
+
+    With ``fresh=True`` all stored work products are discarded first.
+    """
+    storage = get_storage()
+    if fresh:
+        for name in (
+            "classification.json",
+            "cla_extraction.json",
+            "assessment.json",
+            "aggregation.json",
+            "table_extraction.json",
+        ):
+            rel = _work_path(dataset_name, name)
+            if storage.exists(rel):
+                storage.remove(rel)
+
+    if _load_work(dataset_name, "classification.json") is None:
+        await classify(dataset_name)
+    if _load_work(dataset_name, "cla_extraction.json") is None:
+        await extract(dataset_name)
+    await assess(dataset_name)
+    await aggregate(dataset_name)
+    if _load_work(dataset_name, "table_extraction.json") is None:
+        await table(dataset_name)
+    return await snapshot(dataset_name)
+
+
 async def aggregate(dataset_name: str) -> dict[str, Any]:
     """Stage 4: aggregate all extracted CLAs of the dataset."""
     from lib.captable.aggregation import aggregate_clas
