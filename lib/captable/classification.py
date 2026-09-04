@@ -108,11 +108,17 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
     documents = load_parsed_documents(dataset_name)
 
     # Gemini's structured-output schema rejects the pinned-filename schema
-    # beyond ~8 enum entries (400 "invalid argument"), so classify in chunks.
+    # beyond ~8 enum entries (400 "invalid argument"), so classify in chunks
+    # and run the chunks concurrently.
+    import asyncio
+
     chunk_size = int(settings.get("max_documents_per_call", 8))
-    entries: list[dict[str, Any]] = []
-    for start in range(0, len(documents), chunk_size):
-        chunk = documents[start : start + chunk_size]
+    chunks = [
+        documents[start : start + chunk_size]
+        for start in range(0, len(documents), chunk_size)
+    ]
+
+    async def classify_chunk(chunk: list[ParsedDocument]) -> list[dict]:
         filenames = [document.filename for document in chunk]
         schema = _specialized_schema(
             config["classification_response_schema"], filenames
@@ -129,7 +135,15 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
         )
         if not isinstance(result, dict):
             raise ValueError("Classification response must be a JSON object.")
-        entries.extend(result["documents"])
+        return result["documents"]
+
+    entries: list[dict[str, Any]] = [
+        entry
+        for chunk_entries in await asyncio.gather(
+            *(classify_chunk(chunk) for chunk in chunks)
+        )
+        for entry in chunk_entries
+    ]
 
     min_confidence = float(settings["min_confidence_warn"])
     for entry in entries:

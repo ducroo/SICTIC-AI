@@ -22,9 +22,6 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any, Iterable
 
-_SEVERITY_ORDER = ("info", "medium", "high", "severe")
-
-
 def _value(entry: Any) -> Any:
     if isinstance(entry, dict) and "value" in entry:
         return entry["value"]
@@ -54,30 +51,45 @@ def names_match(a: str, b: str) -> bool:
     return len(smaller) >= 2 and smaller <= larger
 
 
-def canonical_lender_key(
-    name: str, known_keys: Iterable[str]
-) -> str:
-    """Map a lender name onto an existing key when names_match says it is
-    the same person/entity ('Anna Beispiel' vs 'Anna Barbara Beispiel'), preferring
-    the longer (more specific) form as the canonical key."""
-    key = normalize_lender_name(name)
-    for existing in known_keys:
-        if names_match(key, existing):
-            return existing if len(existing) >= len(key) else key
-    return key
+def canonical_lender_map(names: Iterable[str]) -> dict[str, str]:
+    """Map every normalized lender name to one canonical key per identity.
+
+    Names that names_match ('Anna Beispiel' vs 'Anna Barbara Beispiel') share the
+    longest (most specific) form as their canonical key, regardless of the
+    order in which they appear.
+    """
+    normalized = [normalize_lender_name(name) for name in names]
+    # longest first so shorter variants attach to the specific form
+    canonical: dict[str, str] = {}
+    for key in sorted(set(normalized), key=len, reverse=True):
+        for existing in canonical.values():
+            if names_match(key, existing):
+                canonical[key] = existing
+                break
+        else:
+            canonical[key] = key
+    return canonical
 
 
 def terms_group_key(extraction: dict[str, Any]) -> tuple:
-    """The identical-terms tuple used for 10/20 non-bank grouping."""
+    """The identical-terms tuple used for 10/20 non-bank grouping.
+
+    Dates and currency are normalized first: "31.12.2027" and "2027-12-31"
+    are the same terms, and splitting one round across spelling variants
+    would under-report the 10-non-bank count.
+    """
+    maturity = _value(extraction.get("maturity_date"))
+    parsed = _parse_date(maturity)
+    currency = _value(extraction.get("principal_currency"))
     return (
         _value(extraction.get("interest_mode")),
         _value(extraction.get("interest_rate_pct")),
         _value(extraction.get("discount_pct")),
         _value(extraction.get("valuation_cap")),
         _value(extraction.get("valuation_floor")),
-        _value(extraction.get("maturity_date")),
+        parsed.isoformat() if parsed else maturity,
         _value(extraction.get("qefr_min_raise")),
-        _value(extraction.get("principal_currency")),
+        currency.strip().upper() if isinstance(currency, str) else currency,
     )
 
 
@@ -186,18 +198,25 @@ def aggregate_clas(
             superseded_term_sheets.append(sheet["document"])
             sheet_amount = _value(sheet.get("principal_total"))
             for lender_key in matching:
-                executed_amount = sum(
-                    amount
+                matching_extractions = {
+                    id(e): e
                     for executed_key, extractions_for in
                     executed_by_lender.items()
                     if names_match(lender_key, executed_key)
                     for e in extractions_for
-                    for name, amount in _loan_amounts(e)
-                    if names_match(
-                        normalize_lender_name(name), lender_key
-                    )
-                    and amount is not None
-                )
+                }.values()
+                counted: set[str] = set()
+                executed_amount = 0.0
+                for e in matching_extractions:
+                    for name, amount in _loan_amounts(e):
+                        norm = normalize_lender_name(name)
+                        if (
+                            names_match(norm, lender_key)
+                            and amount is not None
+                            and (id(e), norm) not in counted
+                        ):
+                            counted.add((id(e), norm))
+                            executed_amount += amount
                 if (
                     sheet_amount is not None
                     and abs(executed_amount - sheet_amount) > 0.01
@@ -216,6 +235,16 @@ def aggregate_clas(
             )
 
     # --- Identical-terms grouping (10/20 non-bank rules) ------------------
+    canonical = canonical_lender_map(
+        name
+        for extraction in executed
+        for name, _amount in _loan_amounts(extraction)
+    )
+
+    def canon(name: str) -> str:
+        key = normalize_lender_name(name)
+        return canonical.get(key, key)
+
     groups: dict[tuple, dict[str, Any]] = {}
     for extraction in executed:
         key = terms_group_key(extraction)
@@ -226,9 +255,7 @@ def aggregate_clas(
         )
         group["documents"].append(extraction["document"])
         for name, amount in _loan_amounts(extraction):
-            group["lenders"].add(
-                canonical_lender_key(name, group["lenders"])
-            )
+            group["lenders"].add(canon(name))
             if amount is None:
                 group["unknown_amounts"] += 1
             else:
@@ -238,9 +265,7 @@ def aggregate_clas(
     syndicate_present = False
     for extraction in executed:
         for lender in extraction.get("lenders") or []:
-            all_lenders.add(
-                canonical_lender_key(lender.get("name", ""), all_lenders)
-            )
+            all_lenders.add(canon(lender.get("name", "")))
             if lender.get("kind") in ("syndicate", "nominee"):
                 syndicate_present = True
     if syndicate_present:
@@ -339,7 +364,7 @@ def aggregate_clas(
     per_lender: dict[str, dict[str, Any]] = {}
     for extraction in executed:
         for name, amount in _loan_amounts(extraction):
-            key = canonical_lender_key(name, per_lender.keys())
+            key = canon(name)
             row = per_lender.setdefault(
                 key, {"name": name, "loans": 0, "total_principal": 0.0}
             )

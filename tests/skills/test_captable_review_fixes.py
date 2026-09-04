@@ -203,3 +203,86 @@ def test_duplicate_note_labels_do_not_collapse() -> None:
         count for holder, count in s.shares.items() if "note" in holder
     )
     assert total_note_shares == pytest.approx(300_000 / 3.2)
+
+
+# --- Ultra review (cloud) findings ------------------------------------------
+
+
+def test_terms_group_key_normalizes_date_and_currency() -> None:
+    """Ultra bug_005: '31.12.2027' and '2027-12-31' are the same terms."""
+    from lib.captable.aggregation import terms_group_key
+
+    a = _cla(maturity_date=_q("31.12.2027"), principal_currency=_q(" chf "))
+    b = _cla(maturity_date=_q("2027-12-31"), principal_currency=_q("CHF"))
+    assert terms_group_key(a) == terms_group_key(b)
+
+
+def test_canonical_map_is_order_independent() -> None:
+    """Ultra bug_001: short-name-first order must not double-count."""
+    short_first = [
+        _cla("a.pdf", [{"name": "Anna Beispiel", "kind": "individual",
+                        "domicile": "CH", "principal_amount": 10_000,
+                        "quote": "q"}]),
+        _cla("b.pdf", [{"name": "Anna Barbara Beispiel", "kind": "individual",
+                        "domicile": "CH", "principal_amount": 5_000,
+                        "quote": "q"}]),
+    ]
+    result = aggregate_clas(short_first, run_date=date(2026, 1, 1))
+    assert result["ten_twenty_rule"]["total_lenders_all_terms"] == 1
+    assert len(result["per_lender"]) == 1
+    assert result["per_lender"][0]["total_principal"] == 15_000
+
+
+def test_resolve_as_of_ignores_unparseable_strings() -> None:
+    """Ultra bug_002: 'around Q3 2025' must not beat a real ISO date."""
+    from lib.captable.snapshot import resolve_as_of
+
+    classification = {
+        "documents": [
+            {"filename": "a.md", "as_of_date": "2026-06-30"},
+            {"filename": "b.md", "as_of_date": "around Q3 2025"},
+        ]
+    }
+    best, _notes = resolve_as_of(
+        {"as_of_date": {"value": None}}, classification, ["a.md", "b.md"]
+    )
+    assert best == "2026-06-30"
+
+
+def test_compound_annual_survives_leap_day() -> None:
+    """Ultra bug_003: Feb 29 execution date must not crash."""
+    from lib.captable.model import loan_balance
+
+    balance = loan_balance(
+        100_000, 5, date(2024, 2, 29), date(2026, 6, 30),
+        day_count="act/365", compounding="compound_annual",
+    )
+    assert balance > 100_000
+
+
+def test_supersession_single_cla_variant_names_not_doubled() -> None:
+    """Ultra bug_011: one executed CLA listing a person twice under variant
+    names must not double its executed amount."""
+    executed = _cla(
+        "ex.pdf",
+        [
+            {"name": "Anna Beispiel", "kind": "individual", "domicile": "CH",
+             "principal_amount": 100_000, "quote": "q"},
+            {"name": "Anna Barbara Beispiel", "kind": "individual",
+             "domicile": "CH", "principal_amount": 50_000, "quote": "q"},
+        ],
+        principal_total=_q(150_000),
+    )
+    sheet = _cla(
+        "ts.pdf",
+        [{"name": "Anna Beispiel", "kind": "individual", "domicile": "CH",
+          "principal_amount": 150_000, "quote": "q"}],
+        status="term_sheet",
+        principal_total=_q(150_000),
+    )
+    result = aggregate_clas([executed, sheet], run_date=date(2026, 1, 1))
+    assert result["superseded_term_sheets"] == ["ts.pdf"]
+    # 150k executed matches the 150k term sheet: no discrepancy question
+    assert not any(
+        "clarify the difference" in q for q in result["diligence_questions"]
+    )

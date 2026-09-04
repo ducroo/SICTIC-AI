@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+SEVERITY_ORDER = ("info", "medium", "high", "severe")
+
 STATUS_STANDARD = "present_market_standard"
 STATUS_DEVIATING = "present_deviating"
 STATUS_ABSENT = "absent"
@@ -383,9 +385,10 @@ def assess_cla(
 
 
 def worst_severity(findings: list[dict[str, str]]) -> str:
-    order = ["info", "medium", "high", "severe"]
     worst = "info"
     for finding in findings:
-        if order.index(finding["severity"]) > order.index(worst):
+        if SEVERITY_ORDER.index(finding["severity"]) > SEVERITY_ORDER.index(
+            worst
+        ):
             worst = finding["severity"]
     return worst

@@ -226,48 +226,83 @@ def check_pool_consistency(
     captable: dict, pool_docs: list[dict]
 ) -> list[dict]:
     """Pool figures agree across the cap table and pool documents."""
-    figures: dict[str, set[float]] = {}
+    # Compare pools by identity, not as bags of floats. Exact kinds pair
+    # directly; sources often label the same economic pool differently
+    # ("grantable" vs "esop"), so within the employee-equity family a
+    # cross-kind pair is made only when each source has exactly ONE pool in
+    # that family (unambiguous). One-sided coverage is a note, never a
+    # contradiction.
+    employee_family = {"esop", "psop", "grantable", "authorized_capital"}
+
+    def family(kind: str) -> str:
+        return "employee" if kind in employee_family else kind
+
+    per_source: dict[str, dict[str, float]] = {}
     for pool in captable.get("pools", []):
         if pool.get("total") is not None:
-            figures.setdefault("captable", set()).add(pool["total"])
+            per_source.setdefault("captable", {})[
+                pool.get("kind") or "other"
+            ] = pool["total"]
     for doc in pool_docs:
         for pool in doc.get("pools", []):
             if pool.get("total") is not None:
-                figures.setdefault(doc.get("document", "?"), set()).add(
-                    pool["total"]
-                )
-    all_totals = sorted({t for values in figures.values() for t in values})
-    if len(figures) < 2:
+                per_source.setdefault(doc.get("document", "?"), {})[
+                    pool.get("kind") or "other"
+                ] = pool["total"]
+
+    def comparable_pairs():
+        sources = list(per_source.items())
+        for i, (source_a, pools_a) in enumerate(sources):
+            for source_b, pools_b in sources[i + 1 :]:
+                for kind in set(pools_a) & set(pools_b):
+                    yield (kind, source_a, pools_a[kind],
+                           source_b, pools_b[kind])
+                fam_a = {
+                    k: v for k, v in pools_a.items()
+                    if family(k) == "employee" and k not in pools_b
+                }
+                fam_b = {
+                    k: v for k, v in pools_b.items()
+                    if family(k) == "employee" and k not in pools_a
+                }
+                if len(fam_a) == 1 and len(fam_b) == 1:
+                    (kind_a, val_a), = fam_a.items()
+                    (kind_b, val_b), = fam_b.items()
+                    yield (f"{kind_a}~{kind_b}", source_a, val_a,
+                           source_b, val_b)
+
+    pairs = list(comparable_pairs())
+    if not pairs:
         return [
             _finding(
                 "pool_consistency",
                 "skipped",
                 "info",
-                "Fewer than two sources with pool figures.",
+                "No pool is comparably reported by two or more sources.",
             )
         ]
-    source_sets = list(figures.values())
-    consistent = all(
-        any(
-            abs(t - other) <= max(1.0, t * TOLERANCE)
-            for other in other_values
-        )
-        for index, values in enumerate(source_sets)
-        for t in values
-        for other_index, other_values in enumerate(source_sets)
-        if other_index != index
-    )
-    per_source = {
-        source: sorted(values) for source, values in figures.items()
-    }
+    conflicts = [
+        f"{kind}: {source_a}={val_a:,.0f} vs {source_b}={val_b:,.0f}"
+        for kind, source_a, val_a, source_b, val_b in pairs
+        if abs(val_a - val_b) > max(1.0, val_a * TOLERANCE)
+    ]
+    if conflicts:
+        return [
+            _finding(
+                "pool_consistency",
+                "fail",
+                "high",
+                "Pool totals disagree across sources: "
+                + "; ".join(conflicts)
+                + ". No reliable pool ledger; request the grant register.",
+            )
+        ]
     return [
         _finding(
             "pool_consistency",
-            "pass" if consistent else "fail",
-            "info" if consistent else "high",
-            f"Pool totals per source: {per_source}. "
-            + ("" if consistent else "Sources disagree — no reliable pool "
-               "ledger; request the grant register."),
+            "pass",
+            "info",
+            f"{len(pairs)} pool figure(s) agree across sources.",
         )
     ]
 

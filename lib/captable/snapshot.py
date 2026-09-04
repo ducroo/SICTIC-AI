@@ -68,9 +68,13 @@ def resolve_as_of(
     if stated:
         return stated, assumptions
     dates = [
-        normalize_iso_date(entry.get("as_of_date"))
+        normalized
         for entry in classification.get("documents", [])
         if entry.get("filename") in source_documents and entry.get("as_of_date")
+        for normalized in [normalize_iso_date(entry.get("as_of_date"))]
+        # only ISO-shaped dates may compete: an unparseable string starting
+        # with a letter would lexicographically beat every real date
+        if normalized and re.fullmatch(r"\d{4}(-\d{2}(-\d{2})?)?", normalized)
     ]
     if dates:
         best = max(dates)

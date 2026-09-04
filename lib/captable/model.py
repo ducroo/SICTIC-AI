@@ -13,6 +13,7 @@ picks a method silently.
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -67,9 +68,9 @@ def loan_balance(
         balance = principal
         cursor = start
         while cursor < end:
-            anniversary = min(
-                end, date(cursor.year + 1, cursor.month, cursor.day)
-            )
+            year, month = cursor.year + 1, cursor.month
+            day = min(cursor.day, calendar.monthrange(year, month)[1])
+            anniversary = min(end, date(year, month, day))
             balance *= 1 + rate_pct / 100.0 * year_fraction(
                 cursor, anniversary, day_count
             )

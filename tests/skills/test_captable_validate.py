@@ -211,3 +211,22 @@ def test_normalize_iso_date_variants() -> None:
     assert normalize_iso_date("2026-03") == "2026-03"
     assert normalize_iso_date(None) is None
     assert normalize_iso_date("as per blank") == "as per blank"  # unchanged
+
+
+def test_pool_consistency_tolerates_one_sided_coverage() -> None:
+    """Ultra bug_010: a pool only one source covers is not a contradiction."""
+    captable = {
+        "pools": [
+            {"kind": "esop", "label": "ESOP", "total": 100_000,
+             "granted": None, "unallocated": None},
+            {"kind": "psop", "label": "PSOP", "total": 50_000,
+             "granted": None, "unallocated": None},
+        ]
+    }
+    pool_doc = {
+        "document": "pool.xlsx",
+        "pools": [{"kind": "esop", "label": "ESOP", "total": 100_000,
+                   "granted": None, "unallocated": None}],
+    }
+    finding = check_pool_consistency(captable, [pool_doc])[0]
+    assert finding["status"] == "pass"
