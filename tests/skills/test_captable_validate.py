@@ -198,3 +198,16 @@ def test_names_match_handles_middle_names() -> None:
     assert names_match("Anna Barbara-Beispiel", "Anna Barbara Beispiel")
     assert not names_match("Anna Beispiel", "Timo Beispiel")
     assert not names_match("Ali", "Anna Beispiel")  # single token too weak
+
+
+def test_normalize_iso_date_variants() -> None:
+    from lib.captable.snapshot import normalize_iso_date
+
+    assert normalize_iso_date("2026-06-30") == "2026-06-30"
+    assert normalize_iso_date("30 June 2026") == "2026-06-30"
+    assert normalize_iso_date("June 30, 2026") == "2026-06-30"
+    assert normalize_iso_date("30.06.2026") == "2026-06-30"
+    assert normalize_iso_date("March 2026") == "2026-03"
+    assert normalize_iso_date("2026-03") == "2026-03"
+    assert normalize_iso_date(None) is None
+    assert normalize_iso_date("as per blank") == "as per blank"  # unchanged

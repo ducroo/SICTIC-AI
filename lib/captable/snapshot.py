@@ -8,10 +8,51 @@ date under ``insights/captable/snapshots/``, all kept forever, plus
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 TOOL_VERSION = "captable_build/0.3"
+
+_MONTHS = {
+    month.lower(): index
+    for index, month in enumerate(
+        ["January", "February", "March", "April", "May", "June", "July",
+         "August", "September", "October", "November", "December"],
+        start=1,
+    )
+}
+
+
+def normalize_iso_date(value: str | None) -> str | None:
+    """Normalize model-extracted date strings to ISO (YYYY[-MM[-DD]]).
+
+    Handles "2026-06-30", "30 June 2026", "June 30, 2026", "30.06.2026",
+    "2026-06", "2026". Returns the input unchanged when unparseable —
+    callers treat that as evidence to keep, not to discard.
+    """
+    if not value:
+        return value
+    text = value.strip()
+    if re.fullmatch(r"\d{4}(-\d{2}(-\d{2})?)?", text):
+        return text
+    match = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.(\d{4})", text)
+    if match:
+        day, month, year = match.groups()
+        return f"{year}-{int(month):02d}-{int(day):02d}"
+    match = re.fullmatch(r"(\d{1,2})\.?\s+([A-Za-zä]+)\s+(\d{4})", text)
+    if match and match.group(2).lower() in _MONTHS:
+        day, month_name, year = match.groups()
+        return f"{year}-{_MONTHS[month_name.lower()]:02d}-{int(day):02d}"
+    match = re.fullmatch(r"([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})", text)
+    if match and match.group(1).lower() in _MONTHS:
+        month_name, day, year = match.groups()
+        return f"{year}-{_MONTHS[month_name.lower()]:02d}-{int(day):02d}"
+    match = re.fullmatch(r"([A-Za-z]+)\s+(\d{4})", text)
+    if match and match.group(1).lower() in _MONTHS:
+        month_name, year = match.groups()
+        return f"{year}-{_MONTHS[month_name.lower()]:02d}"
+    return value
 
 
 def resolve_as_of(
@@ -21,11 +62,13 @@ def resolve_as_of(
 ) -> tuple[str, list[str]]:
     """Best-evidence as-of date plus the assumptions that derivation makes."""
     assumptions = []
-    stated = ((captable or {}).get("as_of_date") or {}).get("value")
+    stated = normalize_iso_date(
+        ((captable or {}).get("as_of_date") or {}).get("value")
+    )
     if stated:
         return stated, assumptions
     dates = [
-        entry.get("as_of_date")
+        normalize_iso_date(entry.get("as_of_date"))
         for entry in classification.get("documents", [])
         if entry.get("filename") in source_documents and entry.get("as_of_date")
     ]
