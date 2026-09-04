@@ -136,7 +136,9 @@ measurably worse — never use the override for real due-diligence output.
 - Syndicate members are not resolved (the 10/20 outputs say so rather
   than reporting a false pass).
 - Conversion notices are classified but not yet read to flip a CLA's
-  status to `converted`.
+  status to `converted`; similarly, the register's transfer/acquisition
+  entries are not yet mined as evidence for cross-version share movements
+  (a documented transfer could resolve a `shrinking_holder` warning).
 - Classification confidence varies slightly across runs (LLM-judged);
   classes have been stable in testing, and an eval suite over the fixture
   answer key is the planned guardrail.
