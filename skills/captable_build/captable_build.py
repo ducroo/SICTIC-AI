@@ -205,6 +205,7 @@ async def table(dataset_name: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "dataset": dataset_name,
         "captable": None,
+        "captable_versions": [],
         "register": None,
         "pool_documents": [],
         "failures": [],
@@ -214,11 +215,19 @@ async def table(dataset_name: str) -> dict[str, Any]:
 
     jobs: list[tuple[str, str, Any]] = []
     captable_doc = latest_of("current_cap_table")
-    if captable_doc and captable_doc in texts:
-        jobs.append(
-            ("captable", captable_doc,
-             extract_captable(dataset_name, captable_doc, texts[captable_doc]))
-        )
+    # Extract EVERY cap-table version: registers/pool docs are reconciled
+    # against the version nearest their own date, and older versions are
+    # historical states in their own right (design §2.3).
+    for entry in classification["documents"]:
+        if entry["document_class"] != "current_cap_table":
+            continue
+        filename = entry["filename"]
+        if filename in texts:
+            jobs.append(
+                ("captable_version", filename,
+                 extract_captable(dataset_name, filename, texts[filename]))
+            )
+    del captable_doc  # resolved after gathering, from the versions list
     register_doc = latest_of("share_register")
     if register_doc and register_doc in texts:
         jobs.append(
@@ -244,8 +253,21 @@ async def table(dataset_name: str) -> dict[str, Any]:
             )
         elif slot == "pool":
             result["pool_documents"].append(outcome)
+        elif slot == "captable_version":
+            result["captable_versions"].append(outcome)
         else:
             result[slot] = outcome
+
+    def version_date(version: dict[str, Any]) -> str:
+        from lib.captable.snapshot import normalize_iso_date
+
+        stated = (version.get("as_of_date") or {}).get("value")
+        return normalize_iso_date(stated) or ""
+
+    if result["captable_versions"]:
+        result["captable"] = max(
+            result["captable_versions"], key=version_date
+        )
 
     rel = _store_work(dataset_name, "table_extraction.json", result)
     logger.info("[%s] Stored table extraction at %s", dataset_name, rel)
@@ -282,6 +304,9 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
         )
 
     captable = tables.get("captable")
+    captable_versions = tables.get("captable_versions") or (
+        [captable] if captable else []
+    )
     register = tables.get("register")
     pool_docs = tables.get("pool_documents", [])
     extraction_failures = list(tables.get("failures", []))
@@ -294,11 +319,47 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
                 "of this snapshot are EMPTY, not clean.",
             }
         )
+    from lib.captable.snapshot import normalize_iso_date
+
+    def _months(iso: str) -> int | None:
+        if len(iso) >= 7:
+            return int(iso[:4]) * 12 + int(iso[5:7])
+        if len(iso) == 4:
+            return int(iso) * 12 + 6  # year-only: assume mid-year
+        return None
+
+    def nearest_version(source: dict | None) -> dict | None:
+        """Cap-table version dated nearest the source document's as-of."""
+        if not source or not captable_versions:
+            return None
+        entry = source.get("as_of_date")
+        target = normalize_iso_date(
+            entry.get("value") if isinstance(entry, dict) else entry
+        )
+        target_months = _months(target) if target else None
+        if target_months is None:
+            return None
+        candidates = []
+        for version in captable_versions:
+            version_iso = normalize_iso_date(
+                (version.get("as_of_date") or {}).get("value")
+            )
+            version_months = _months(version_iso) if version_iso else None
+            if version_months is not None:
+                candidates.append(
+                    (abs(version_months - target_months), version)
+                )
+        if not candidates:
+            return None
+        return min(candidates, key=lambda pair: pair[0])[1]
+
     validation = validate_captable(
         captable or {},
         register=register,
         pool_docs=pool_docs,
         clas=cla_extraction.get("clas", []),
+        register_captable=nearest_version(register),
+        pool_captable=nearest_version(pool_docs[0] if pool_docs else None),
     )
 
     if extraction_failures:

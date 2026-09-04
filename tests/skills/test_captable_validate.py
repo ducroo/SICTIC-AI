@@ -61,7 +61,10 @@ def _captable_realistic() -> dict:
             "diluted_total": 23_070_088,
             "quote": "Total | 23070088 | 10000000 | 10570088",
         },
-        "fully_diluted_definition": {"value": "full_pools", "quote": None},
+        "fully_diluted_definition": {
+            "value": "full_pools",
+            "quote": "diluted figures include the full grantable pool",
+        },
         "assumptions": [],
     }
 

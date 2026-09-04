@@ -119,9 +119,10 @@ def _dates_differ(a: str | None, b: str | None) -> bool:
 def check_diluted_rowsum(captable: dict) -> list[dict]:
     """Sum of per-holder diluted counts matches the stated diluted total.
 
-    The diluted *equation* can pass while rows were double-counted or a
-    pool line silently merged; summing the rows forces such judgement
-    calls into the open.
+    Note the scope honestly: this sums the EXTRACTED holder set, so it
+    catches extraction-internal inconsistencies (dropped or double-counted
+    rows vs the stated total). Merges the extractor performed on source
+    rows are disclosed via the extraction's own `assumptions`, not here.
     """
     totals = captable.get("totals") or {}
     diluted_total = totals.get("diluted_total")
@@ -373,9 +374,13 @@ def check_pool_consistency(
             _dates_differ(captable_as_of, doc_date)
             for doc_date in doc_dates.values()
         )
+        dates_text = ", ".join(
+            f"{doc} as of {doc_date or 'unknown'}"
+            for doc, doc_date in doc_dates.items()
+        )
         skew_note = (
-            f" [sources speak as of different dates: captable "
-            f"{captable_as_of}, {doc_dates} — the difference may reflect "
+            f" [sources speak as of different dates: cap table as of "
+            f"{captable_as_of}, {dates_text} — the difference may reflect "
             "grants between those dates]"
             if skewed
             else ""
@@ -534,8 +539,10 @@ def check_cross_snapshot(previous: dict, current: dict) -> list[dict]:
                     "warn",
                     "medium",
                     f"{stakeholder.get('name')!r}: "
-                    f"{prev_sum:,.0f} -> {_holdings_sum(stakeholder):,.0f} "
-                    "without a documented transfer.",
+                    f"{prev_sum:,.0f} -> {_holdings_sum(stakeholder):,.0f}; "
+                    "no transfer document identified in the data room (the "
+                    "counterparty may be visible on the cap table itself — "
+                    "verify and request the transfer agreement).",
                 )
             )
     return findings
@@ -547,14 +554,26 @@ def validate_captable(
     register: dict | None = None,
     pool_docs: list[dict] | None = None,
     clas: list[dict] | None = None,
+    register_captable: dict | None = None,
+    pool_captable: dict | None = None,
 ) -> list[dict]:
-    """Run all single-snapshot checks."""
+    """Run all single-snapshot checks.
+
+    ``register_captable``/``pool_captable`` let the caller reconcile the
+    register and pool documents against the cap-table version NEAREST
+    their own as-of dates (root-cause fix for date-skew artifacts); they
+    default to the primary (latest) cap table.
+    """
     findings = []
     findings += check_issued_totals(captable)
     findings += check_diluted_equation(captable)
     findings += check_diluted_rowsum(captable)
-    findings += check_register_reconciliation(captable, register)
-    findings += check_pool_consistency(captable, pool_docs or [])
+    findings += check_register_reconciliation(
+        register_captable or captable, register
+    )
+    findings += check_pool_consistency(
+        pool_captable or captable, pool_docs or []
+    )
     findings += check_cla_lifecycle(captable, register, clas or [])
     findings += check_nominal_floor(captable, clas or [])
     return findings

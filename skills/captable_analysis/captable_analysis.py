@@ -277,6 +277,38 @@ def build_scenarios(
             note.label: round(note.balance, 2) for note in notes
         },
         "scenarios": [scenario_dict(s) for s in scenarios],
+        "scenario_flags": [
+            {
+                "item": "founder_majority_post_round",
+                "status": "flag",
+                "severity": "high",
+                "detail": (
+                    f"Founders fall below 50% fully diluted in every "
+                    f"modelled scenario ("
+                    + ", ".join(
+                        f"{sd['method']}: {sd['founders_post_round_pct']}%"
+                        for sd in (scenario_dict(s) for s in scenarios)
+                    )
+                    + ") — the current-state founder_majority rubric item "
+                    "does not survive the hypothetical round."
+                ),
+            }
+        ]
+        if scenarios
+        and all(
+            scenario_dict(s)["founders_post_round_pct"] < 50
+            for s in scenarios
+        )
+        else [],
+        "stamp_duty": {
+            "estimate_chf": round(duty, 2),
+            "exemption_chf": 1_000_000,
+            "exemption_remaining_chf": round(
+                max(0.0, 1_000_000 - cumulative_paid_in), 2
+            ),
+            "note": "1% on contributions above the CHF 1M lifetime "
+            "exemption; historical paid-in capital counts against it.",
+        },
         "stamp_duty_estimate_chf": round(duty, 2),
         "ownership_by_role_today": {
             k: round(v, 2)

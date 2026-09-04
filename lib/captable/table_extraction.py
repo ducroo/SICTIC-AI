@@ -30,6 +30,18 @@ def _review_captable(document_text: str):
                 f"totals.quote not found verbatim in the document: {quote!r}."
             )
 
+        # A fully-diluted definition must be evidenced by definitional
+        # wording, not by a table/totals row (the model's favorite dodge).
+        fd = output.get("fully_diluted_definition") or {}
+        if fd.get("value") not in (None, "unstated"):
+            fd_quote = fd.get("quote") or ""
+            if not fd_quote or "|" in fd_quote:
+                problems.append(
+                    "fully_diluted_definition: a table row is not evidence "
+                    "of which dilution concept the numbers use; quote the "
+                    "definitional wording or set the value to 'unstated'."
+                )
+
         # Row-completeness guard: the sum of extracted holdings must match
         # the table's own per-class totals, otherwise rows were dropped.
         sums: dict[str, float] = {}

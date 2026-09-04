@@ -31,10 +31,15 @@ Extraction rules:
 8. `as_of_date`: the date the table speaks as of, with a verbatim quote;
    null if the document does not state one (do NOT invent one from context).
 9. `fully_diluted_definition`: which dilution concept the table's diluted
-   column uses, if determinable; otherwise "unstated".
+   column uses — but ONLY when the document explicitly describes it (e.g.
+   "fully diluted includes the full unallocated pool"). A totals row or
+   the mere presence of a diluted column is NOT evidence; in that case use
+   "unstated" with a null quote.
 10. Record anything ambiguous (duplicate-looking rows, unlabeled columns,
     rows you could not confidently attribute) as an entry in `assumptions`
-    rather than guessing silently.
+    rather than guessing silently. In particular, whenever you merge a
+    group row with its single identical member (rule 1), record the merge
+    in `assumptions` naming both row labels and the count.
 11. Departed holders: rows grouped under a "former ..." heading get
     `role: departed`.
 
