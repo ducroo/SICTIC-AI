@@ -71,9 +71,22 @@ Field guidance:
   the future" wording); `principal_only` when only the principal is
   subordinated; `unclear` when subordinated but the covered amount is
   ambiguous; `not_subordinated` when there is no subordination.
-- `conversion_capital_source`: how conversion shares are meant to be created:
-  shareholder consent declarations (`consents`), conditional capital
-  (`conditional_capital`), a capital band (`kapitalband`), or `unstated`.
+- `coc_repayment_multiple`: if, at a change of control, the lender may demand
+  REPAYMENT at a multiple of the principal instead of converting (e.g. "2.5x
+  the Principal Amount"), the multiple as a number (2.5); null when no such
+  option exists.
+- `conversion_capital_sources`: ALL mechanisms the document contemplates for
+  creating the conversion shares — shareholder consent declarations
+  (`consents`), conditional capital (`conditional_capital`), a capital band
+  (`kapitalband`). List every one that appears; empty array when none is
+  stated. The quote must come from a clause that establishes or relies on
+  the mechanism (an undertaking, covenant, condition, or annex reference) —
+  NOT from a representations/warranties carve-out that merely mentions it.
+- `shareholder_consents_referenced`: does the document reference shareholder
+  consent/support declarations for the conversion (annexed or to be
+  obtained)?
+- `sha_accession_required`: must the lender accede to the shareholders'
+  agreement as a condition of conversion?
 - `mfn_clause`: a most-favored-nation clause upgrading this lender to better
   terms granted to later lenders.
 - `pro_rata_rights`: participation rights of the lender in the future equity

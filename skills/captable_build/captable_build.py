@@ -84,17 +84,88 @@ async def extract(dataset_name: str) -> dict[str, Any]:
         for document in load_parsed_documents(dataset_name)
     }
     extractions = []
+    failures = []
     for filename in cla_filenames:
         if filename not in texts:
             raise ValueError(
                 f"Classified CLA {filename!r} has no parsed text."
             )
         logger.info("[%s] Extracting CLA terms from %r", dataset_name, filename)
-        extractions.append(
-            await extract_cla(dataset_name, filename, texts[filename])
-        )
+        try:
+            extractions.append(
+                await extract_cla(dataset_name, filename, texts[filename])
+            )
+        except Exception as error:  # one bad document must not sink the corpus
+            logger.error(
+                "[%s] CLA extraction failed for %r: %s",
+                dataset_name,
+                filename,
+                error,
+            )
+            failures.append({"document": filename, "error": str(error)})
 
-    result = {"dataset": dataset_name, "clas": extractions}
+    result = {"dataset": dataset_name, "clas": extractions, "failures": failures}
     rel = _store_work(dataset_name, "cla_extraction.json", result)
     logger.info("[%s] Stored CLA extraction at %s", dataset_name, rel)
+    return result
+
+
+def _load_work(dataset_name: str, name: str) -> Any | None:
+    storage = get_storage()
+    rel = _work_path(dataset_name, name)
+    if storage.exists(rel):
+        return json.loads(storage.read_text(rel))
+    return None
+
+
+async def _extraction_or_run(dataset_name: str) -> dict[str, Any]:
+    stored = _load_work(dataset_name, "cla_extraction.json")
+    if stored is not None:
+        return stored
+    return await extract(dataset_name)
+
+
+async def assess(dataset_name: str) -> dict[str, Any]:
+    """Stage 3: deterministically assess every extracted CLA."""
+    from lib.captable.assessment import assess_cla, worst_severity
+    from lib.infrastructure.configuration import load_repository_config
+
+    rules = load_repository_config("captable")["assessment_rules"]
+    extraction = await _extraction_or_run(dataset_name)
+    assessments = []
+    for cla in extraction["clas"]:
+        findings = assess_cla(cla, rules)
+        assessments.append(
+            {
+                "document": cla["document"],
+                "status": cla.get("status"),
+                "worst_severity": worst_severity(findings),
+                "findings": findings,
+            }
+        )
+    result = {"dataset": dataset_name, "assessments": assessments}
+    rel = _store_work(dataset_name, "assessment.json", result)
+    logger.info("[%s] Stored CLA assessment at %s", dataset_name, rel)
+    return result
+
+
+async def aggregate(dataset_name: str) -> dict[str, Any]:
+    """Stage 4: aggregate all extracted CLAs of the dataset."""
+    from lib.captable.aggregation import aggregate_clas
+    from lib.captable.esign import scan_esign_markers
+    from lib.datasets.paths import dataset_raw_path
+
+    extraction = await _extraction_or_run(dataset_name)
+    storage = get_storage()
+    raw_rel = dataset_raw_path(dataset_name)
+    markers: dict[str, dict] = {}
+    for cla in extraction["clas"]:
+        document = cla["document"]
+        pdf_rel = f"{raw_rel}/{document}"
+        if document.lower().endswith(".pdf") and storage.exists(pdf_rel):
+            markers[document] = scan_esign_markers(storage.read_bytes(pdf_rel))
+    result = aggregate_clas(extraction["clas"], esign_markers=markers)
+    result["dataset"] = dataset_name
+    rel = _store_work(dataset_name, "aggregation.json", result)
+    logger.info("[%s] Stored CLA aggregation at %s", dataset_name, rel)
     return result

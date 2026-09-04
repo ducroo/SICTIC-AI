@@ -94,6 +94,7 @@ def _minimal_extraction(**overrides) -> dict:
         "qefr_mandatory": quoted_null,
         "coc_present": quoted_null,
         "coc_mandatory": quoted_null,
+        "coc_repayment_multiple": quoted_null,
         "maturity_conversion_present": quoted_null,
         "maturity_conversion_mandatory": quoted_null,
         "valuation_cap": quoted_null,
@@ -105,7 +106,9 @@ def _minimal_extraction(**overrides) -> dict:
         "subordination_scope": {"value": "unclear", "quote": None},
         "mfn_clause": quoted_null,
         "pro_rata_rights": quoted_null,
-        "conversion_capital_source": {"value": "unstated", "quote": None},
+        "conversion_capital_sources": {"value": [], "quote": None},
+        "shareholder_consents_referenced": quoted_null,
+        "sha_accession_required": quoted_null,
         "governing_law": quoted_null,
     }
     fields.update(overrides)
@@ -116,6 +119,7 @@ def _minimal_extraction(**overrides) -> dict:
         and (
             entry.get("value") is None
             or entry.get("value") == "unstated"
+            or entry.get("value") == []
             or (entry.get("value") is False and entry.get("quote") is None)
         )
     ]
@@ -187,8 +191,14 @@ def test_extraction_reviewer_rejects_uncovered_absence() -> None:
     )
 
 
-def test_normalize_for_matching_collapses_ocr_whitespace() -> None:
-    assert normalize_for_matching("a\n  b\tc") == "a b c"
+def test_normalize_for_matching_is_robust_to_ocr_and_markdown() -> None:
+    assert normalize_for_matching("a\n  b\tc") == "abc"
+    # markdown table pipes dropped by the model when quoting
+    doc = normalize_for_matching("| Initial Lenders | Helvetia Growth AG |")
+    assert normalize_for_matching("Initial Lenders Helvetia Growth AG") in doc
+    # OCR intra-word spacing
+    doc = normalize_for_matching("E m i l W e g")
+    assert normalize_for_matching("Emil Weg") in doc
 
 
 def test_extraction_reviewer_rejects_quoted_false_presence_boolean() -> None:
@@ -212,5 +222,34 @@ def test_extraction_reviewer_accepts_quoted_false_property_boolean() -> None:
     reviewer = review_cla_extraction(DOC_TEXT)
     extraction = _minimal_extraction(
         qefr_mandatory={"value": False, "quote": "Convertible Loan Agreement"}
+    )
+    assert not reviewer(extraction).problems
+
+
+def test_quoted_fields_cover_schema() -> None:
+    """Every {value, quote}-shaped top-level property must be reviewed."""
+    from lib.captable.cla_extraction import _QUOTED_FIELDS
+
+    schema = _load("cla_extraction_response_schema.json")
+    quoted_shape = set()
+    for name, prop in schema["properties"].items():
+        ref = prop.get("$ref", "")
+        keys = set(prop.get("properties", {}))
+        if ref.startswith("#/$defs/quoted_") or keys == {"value", "quote"}:
+            quoted_shape.add(name)
+    assert quoted_shape == set(_QUOTED_FIELDS), (
+        f"schema/reviewer drift: only_in_schema="
+        f"{sorted(quoted_shape - set(_QUOTED_FIELDS))}, "
+        f"only_in_reviewer={sorted(set(_QUOTED_FIELDS) - quoted_shape)}"
+    )
+
+
+def test_extraction_reviewer_accepts_ellipsis_split_quote() -> None:
+    reviewer = review_cla_extraction(DOC_TEXT)
+    extraction = _minimal_extraction(
+        valuation_cap={
+            "value": 5000000,
+            "quote": "The valuation cap ... CHF 5,000,000",
+        }
     )
     assert not reviewer(extraction).problems

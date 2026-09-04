@@ -44,6 +44,7 @@ _QUOTED_FIELDS = (
     "qefr_mandatory",
     "coc_present",
     "coc_mandatory",
+    "coc_repayment_multiple",
     "maturity_conversion_present",
     "maturity_conversion_mandatory",
     "valuation_cap",
@@ -55,13 +56,32 @@ _QUOTED_FIELDS = (
     "subordination_scope",
     "mfn_clause",
     "pro_rata_rights",
-    "conversion_capital_source",
+    "conversion_capital_sources",
+    "shareholder_consents_referenced",
+    "sha_accession_required",
     "governing_law",
 )
 
 
 def _quote_found(quote: str, normalized_text: str) -> bool:
-    return normalize_for_matching(quote) in normalized_text
+    """A quote matches when every ellipsis-separated fragment is found.
+
+    Models abbreviate long clauses with "..."/"…"; requiring each fragment
+    verbatim keeps the evidence property while tolerating the abbreviation.
+    """
+    import re
+
+    fragments = [
+        fragment
+        for fragment in re.split(r"\.{3,}|…", quote)
+        if fragment.strip()
+    ]
+    if not fragments:
+        return False
+    return all(
+        normalize_for_matching(fragment) in normalized_text
+        for fragment in fragments
+    )
 
 
 def _needs_quote(value: Any) -> bool:
@@ -70,6 +90,8 @@ def _needs_quote(value: Any) -> bool:
         return False
     if isinstance(value, str) and value in _NO_QUOTE_VALUES:
         return False
+    if isinstance(value, list) and not value:
+        return False  # empty conversion_capital_sources = absence claim
     return True
 
 
@@ -82,6 +104,8 @@ def _is_absence_claim(field: str, value: Any, quote: Any) -> bool:
     if value is False and field in _PRESENCE_BOOLEAN_FIELDS:
         return True
     if value is False and quote is None:
+        return True
+    if isinstance(value, list) and not value:
         return True
     return False
 

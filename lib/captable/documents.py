@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
@@ -21,8 +22,14 @@ class ParsedDocument:
 
 
 def normalize_for_matching(text: str) -> str:
-    """Collapse whitespace so OCR quotes can be matched robustly."""
-    return " ".join(text.split())
+    """Project text to a bare alphanumeric stream for quote matching.
+
+    Robust against markdown table pipes the model drops when quoting,
+    punctuation/OCR wobble, and intra-word spacing artifacts ("E m i l"
+    for "Hakan"). The original quote text is what gets stored; this
+    projection is only used to confirm the quote exists in the document.
+    """
+    return re.sub(r"[^0-9a-zA-ZÀ-ɏ]+", "", text).casefold()
 
 
 def load_parsed_documents(dataset_name: str) -> list[ParsedDocument]:

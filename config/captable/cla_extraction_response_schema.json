@@ -41,8 +41,9 @@
     "maturity_conversion_present", "maturity_conversion_mandatory",
     "valuation_cap", "discount_pct", "discount_schedule", "valuation_floor",
     "denominator_basis", "subordinated", "subordination_scope",
-    "mfn_clause", "pro_rata_rights", "conversion_capital_source",
-    "governing_law", "missing_terms"
+    "mfn_clause", "pro_rata_rights", "conversion_capital_sources",
+    "shareholder_consents_referenced", "sha_accession_required",
+    "coc_repayment_multiple", "governing_law", "missing_terms"
   ],
   "properties": {
     "lenders": {
@@ -123,6 +124,7 @@
     "qefr_mandatory": {"$ref": "#/$defs/quoted_boolean"},
     "coc_present": {"$ref": "#/$defs/quoted_boolean"},
     "coc_mandatory": {"$ref": "#/$defs/quoted_boolean"},
+    "coc_repayment_multiple": {"$ref": "#/$defs/quoted_number"},
     "maturity_conversion_present": {"$ref": "#/$defs/quoted_boolean"},
     "maturity_conversion_mandatory": {"$ref": "#/$defs/quoted_boolean"},
     "valuation_cap": {"$ref": "#/$defs/quoted_number"},
@@ -156,18 +158,24 @@
     },
     "mfn_clause": {"$ref": "#/$defs/quoted_boolean"},
     "pro_rata_rights": {"$ref": "#/$defs/quoted_boolean"},
-    "conversion_capital_source": {
+    "conversion_capital_sources": {
       "type": "object",
       "additionalProperties": false,
       "required": ["value", "quote"],
       "properties": {
         "value": {
-          "type": "string",
-          "enum": ["consents", "conditional_capital", "kapitalband", "unstated"]
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["consents", "conditional_capital", "kapitalband"]
+          },
+          "description": "All mechanisms the document contemplates; empty array when unstated."
         },
         "quote": {"type": ["string", "null"]}
       }
     },
+    "shareholder_consents_referenced": {"$ref": "#/$defs/quoted_boolean"},
+    "sha_accession_required": {"$ref": "#/$defs/quoted_boolean"},
     "governing_law": {"$ref": "#/$defs/quoted_string"},
     "missing_terms": {
       "type": "array",

@@ -106,26 +106,33 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
     config = load_repository_config("captable")
     settings = config["classification_settings"]
     documents = load_parsed_documents(dataset_name)
-    filenames = [document.filename for document in documents]
 
-    schema = _specialized_schema(
-        config["classification_response_schema"], filenames
-    )
-    prompt = _classification_prompt(
-        config["classification_prompt"],
-        documents,
-        int(settings["excerpt_characters"]),
-    )
-    result = await generate_json(
-        prompt,
-        schema,
-        reviewer=_review_classification(filenames),
-    )
-    if not isinstance(result, dict):
-        raise ValueError("Classification response must be a JSON object.")
+    # Gemini's structured-output schema rejects the pinned-filename schema
+    # beyond ~8 enum entries (400 "invalid argument"), so classify in chunks.
+    chunk_size = int(settings.get("max_documents_per_call", 8))
+    entries: list[dict[str, Any]] = []
+    for start in range(0, len(documents), chunk_size):
+        chunk = documents[start : start + chunk_size]
+        filenames = [document.filename for document in chunk]
+        schema = _specialized_schema(
+            config["classification_response_schema"], filenames
+        )
+        prompt = _classification_prompt(
+            config["classification_prompt"],
+            chunk,
+            int(settings["excerpt_characters"]),
+        )
+        result = await generate_json(
+            prompt,
+            schema,
+            reviewer=_review_classification(filenames),
+        )
+        if not isinstance(result, dict):
+            raise ValueError("Classification response must be a JSON object.")
+        entries.extend(result["documents"])
 
     min_confidence = float(settings["min_confidence_warn"])
-    for entry in result["documents"]:
+    for entry in entries:
         if float(entry["confidence"]) < min_confidence:
             logger.warning(
                 "[%s] Low-confidence classification %r for %r (%.0f).",
@@ -134,4 +141,4 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
                 entry["filename"],
                 float(entry["confidence"]),
             )
-    return {"dataset": dataset_name, "documents": result["documents"]}
+    return {"dataset": dataset_name, "documents": entries}
