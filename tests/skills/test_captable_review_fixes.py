@@ -363,3 +363,25 @@ def test_scenarios_label_pools_and_report_founder_post_round() -> None:
     assert result["snapshot_as_of"] == "2026-06-30"
     assert any("accrued to the analysis date" in a
                for a in result["assumptions"])
+
+
+def test_esign_not_applicable_for_non_pdf_sources() -> None:
+    """User-test round 3: a markdown CLA has no PDF to scan — that is not
+    evidence against execution and must not raise a diligence question."""
+    cla = _cla("synthetic_cla.md")
+    result = aggregate_clas(
+        [cla], run_date=date(2026, 1, 1), esign_markers={}
+    )
+    entry = result["esignature"][0]
+    assert entry["corroborated"] == "not_applicable"
+    assert not any(
+        "e-signature" in q for q in result["diligence_questions"]
+    )
+    # a scanned-but-empty PDF still raises the question
+    result2 = aggregate_clas(
+        [_cla("real.pdf")],
+        run_date=date(2026, 1, 1),
+        esign_markers={"real.pdf": {}},
+    )
+    assert result2["esignature"][0]["corroborated"] is False
+    assert any("e-signature" in q for q in result2["diligence_questions"])

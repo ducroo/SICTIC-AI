@@ -206,8 +206,13 @@ def test_syndicate_caveat_on_ten_twenty() -> None:
 
 
 def test_unclaimed_esign_markers_raise_question() -> None:
+    """A PDF that WAS scanned and yielded no markers raises the question
+    (an unscanned/non-PDF source deliberately does not — see
+    test_esign_not_applicable_for_non_pdf_sources)."""
     result = aggregate_clas(
-        [_cla()], run_date=date(2026, 1, 1), esign_markers={}
+        [_cla("a.pdf")],
+        run_date=date(2026, 1, 1),
+        esign_markers={"a.pdf": {}},
     )
     assert any(
         "no e-signature markers" in q for q in result["diligence_questions"]

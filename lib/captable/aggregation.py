@@ -339,11 +339,27 @@ def aggregate_clas(
         )
 
     # --- E-signature corroboration ---------------------------------------
+    # ``esign_markers`` carries a key ONLY for documents whose raw PDF was
+    # actually scanned; absence of the key means the source is not a PDF
+    # (or unavailable), which is NOT evidence against execution — the
+    # extraction's quoted signature block stands on its own there.
     esignature = []
     for extraction in executed + term_sheets:
         document = extraction["document"]
-        markers = esign_markers.get(document) or {}
         claimed = _value(extraction.get("signatures_complete"))
+        if document not in esign_markers:
+            esignature.append(
+                {
+                    "document": document,
+                    "signatures_complete_claimed": claimed,
+                    "esign_markers": None,
+                    "corroborated": "not_applicable",
+                    "note": "source is not a scannable PDF; execution "
+                    "evidence rests on the extracted signature block",
+                }
+            )
+            continue
+        markers = esign_markers[document] or {}
         corroborated = bool(markers) and claimed is True
         esignature.append(
             {

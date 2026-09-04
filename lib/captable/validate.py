@@ -401,7 +401,11 @@ def check_pool_consistency(
             "pool_consistency",
             "pass",
             "info",
-            f"{len(pairs)} pool figure(s) agree across sources.",
+            f"{len(pairs)} pool figure"
+            + ("s" if len(pairs) != 1 else "")
+            + " agree"
+            + ("" if len(pairs) != 1 else "s")
+            + " across sources.",
         )
     ]
 

@@ -55,6 +55,14 @@ reported in `missing_terms` with the sections that were scanned.
 Intermediate results are stored under the startup's
 `insights/captable/work/` folder as JSON.
 
+Note on `missing_terms` semantics: for presence-type booleans
+(`mfn_clause`, `pro_rata_rights`, the trigger `*_present` fields) a value
+of `false` is an ABSENCE CLAIM — "scanned, no such clause found" — and
+therefore also appears in `missing_terms` with the sections scanned. This
+is deliberate (the anti-laziness evidence contract), not a contradiction:
+`false` states the conclusion, the `missing_terms` entry carries the
+scan evidence for it.
+
 ## Requirements
 
 The dataset must be synced (parsed Markdown present). Uses the configured
