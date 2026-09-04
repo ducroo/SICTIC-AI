@@ -104,10 +104,65 @@ def check_diluted_equation(captable: dict) -> list[dict]:
     ]
 
 
+def _source_as_of(source: dict | None) -> str | None:
+    from lib.captable.snapshot import normalize_iso_date
+
+    entry = (source or {}).get("as_of_date")
+    value = entry.get("value") if isinstance(entry, dict) else entry
+    return normalize_iso_date(value) if isinstance(value, str) else None
+
+
+def _dates_differ(a: str | None, b: str | None) -> bool:
+    return bool(a and b and a[:7] != b[:7])  # different month = skew
+
+
+def check_diluted_rowsum(captable: dict) -> list[dict]:
+    """Sum of per-holder diluted counts matches the stated diluted total.
+
+    The diluted *equation* can pass while rows were double-counted or a
+    pool line silently merged; summing the rows forces such judgement
+    calls into the open.
+    """
+    totals = captable.get("totals") or {}
+    diluted_total = totals.get("diluted_total")
+    if not diluted_total:
+        return []
+    rowsum = 0.0
+    for stakeholder in captable.get("stakeholders", []):
+        if stakeholder.get("kind") == "treasury":
+            continue
+        diluted = stakeholder.get("diluted_count")
+        rowsum += (
+            diluted if diluted is not None else _holdings_sum(stakeholder)
+        )
+    ok = abs(rowsum - diluted_total) / diluted_total <= TOLERANCE
+    return [
+        _finding(
+            "diluted_rowsum",
+            "pass" if ok else "fail",
+            "info" if ok else "high",
+            f"sum of holder diluted counts {rowsum:,.0f} vs stated "
+            f"diluted total {diluted_total:,.0f}"
+            + (
+                ""
+                if ok
+                else " — rows were dropped, double-counted, or a pool "
+                "line was merged without disclosure"
+            ),
+        )
+    ]
+
+
 def check_register_reconciliation(
     captable: dict, register: dict | None
 ) -> list[dict]:
-    """Register current holdings match the cap table per shareholder."""
+    """Register current holdings match the cap table per shareholder.
+
+    When the register and the cap table speak as of different dates, a
+    count difference may be a legitimate transfer in between — mismatches
+    are then reported at medium severity with the date gap stated, never
+    as hard highs.
+    """
     if not register:
         return [
             _finding(
@@ -119,6 +174,17 @@ def check_register_reconciliation(
             )
         ]
     findings = []
+    register_as_of = _source_as_of(register)
+    captable_as_of = _source_as_of(captable)
+    skewed = _dates_differ(register_as_of, captable_as_of)
+    skew_note = (
+        f" [register as of {register_as_of} vs cap table as of "
+        f"{captable_as_of} — the difference may be a legitimate transfer "
+        "between those dates; reconcile against a same-dated cap table]"
+        if skewed
+        else ""
+    )
+    mismatch_severity = "medium" if skewed else "high"
     cap_by_name: dict[str, dict[str, float]] = {}
     for stakeholder in captable.get("stakeholders", []):
         key = normalize_lender_name(stakeholder.get("name", ""))
@@ -173,11 +239,11 @@ def check_register_reconciliation(
                     _finding(
                         "register_mismatch",
                         "fail",
-                        "high",
+                        mismatch_severity,
                         f"{entry.get('name')!r} total shares: register "
                         f"{register_total:,.0f} vs cap table "
                         f"{cap_total:,.0f} (class ids not mappable to "
-                        "common/preferred; totals compared)",
+                        f"common/preferred; totals compared){skew_note}",
                     )
                 )
             else:
@@ -203,20 +269,32 @@ def check_register_reconciliation(
                     _finding(
                         "register_mismatch",
                         "fail",
-                        "high",
+                        mismatch_severity,
                         f"{entry.get('name')!r} {register_field}: register "
                         f"{register_count:,.0f} vs cap table "
-                        f"{cap_count:,.0f}",
+                        f"{cap_count:,.0f}{skew_note}",
                     )
                 )
             else:
                 matched += 1
+    holder_count = sum(
+        1
+        for s in captable.get("stakeholders", [])
+        if s.get("kind") in ("individual", "entity")
+    )
+    coverage_note = (
+        f" Register covers {len(register.get('entries', []))} holders vs "
+        f"{holder_count} individual/entity holders in the cap table."
+        if len(register.get("entries", [])) < holder_count
+        else ""
+    )
     findings.append(
         _finding(
             "register_reconciliation",
             "pass" if mismatches == 0 else "fail",
-            "info" if mismatches == 0 else "high",
-            f"{matched} holdings reconciled, {mismatches} mismatches.",
+            "info" if mismatches == 0 else mismatch_severity,
+            f"{matched} holdings reconciled, {mismatches} mismatches."
+            f"{skew_note}{coverage_note}",
         )
     )
     return findings
@@ -287,14 +365,30 @@ def check_pool_consistency(
         if abs(val_a - val_b) > max(1.0, val_a * TOLERANCE)
     ]
     if conflicts:
+        captable_as_of = _source_as_of(captable)
+        doc_dates = {
+            doc.get("document", "?"): _source_as_of(doc) for doc in pool_docs
+        }
+        skewed = any(
+            _dates_differ(captable_as_of, doc_date)
+            for doc_date in doc_dates.values()
+        )
+        skew_note = (
+            f" [sources speak as of different dates: captable "
+            f"{captable_as_of}, {doc_dates} — the difference may reflect "
+            "grants between those dates]"
+            if skewed
+            else ""
+        )
         return [
             _finding(
                 "pool_consistency",
                 "fail",
-                "high",
+                "medium" if skewed else "high",
                 "Pool totals disagree across sources: "
                 + "; ".join(conflicts)
-                + ". No reliable pool ledger; request the grant register.",
+                + ". No reliable pool ledger; request the grant register."
+                + skew_note,
             )
         ]
     return [
@@ -458,6 +552,7 @@ def validate_captable(
     findings = []
     findings += check_issued_totals(captable)
     findings += check_diluted_equation(captable)
+    findings += check_diluted_rowsum(captable)
     findings += check_register_reconciliation(captable, register)
     findings += check_pool_consistency(captable, pool_docs or [])
     findings += check_cla_lifecycle(captable, register, clas or [])

@@ -60,7 +60,11 @@ def _parse_date(value: Any) -> date | None:
 
 
 def _existing_shares(snapshot: dict[str, Any]) -> dict[str, float]:
-    """Pre-round fully-diluted shares per holder (treasury excluded)."""
+    """Pre-round fully-diluted shares per holder (treasury excluded).
+
+    Pool/reserved positions still dilute, but they are not shareholders —
+    label them so scenario ownership tables don't list them beside people.
+    """
     shares: dict[str, float] = {}
     for stakeholder in snapshot.get("stakeholders", []):
         if stakeholder.get("kind") == "treasury":
@@ -72,7 +76,10 @@ def _existing_shares(snapshot: dict[str, Any]) -> dict[str, float]:
                 for h in stakeholder.get("holdings", [])
             )
         if diluted:
-            shares[stakeholder.get("name", "unknown")] = diluted
+            name = stakeholder.get("name", "unknown")
+            if stakeholder.get("kind") in ("pool", "authorized_capital"):
+                name = f"[reserved pool] {name}"
+            shares[name] = diluted
     return shares
 
 
@@ -151,7 +158,11 @@ def build_scenarios(
 ) -> dict[str, Any]:
     """Deterministic scenario computation; all defaults become assumptions."""
     valuation_date = valuation_date or date.today()
-    assumptions: list[str] = []
+    assumptions: list[str] = [
+        f"Loan balances are accrued to the analysis date "
+        f"{valuation_date}; the snapshot itself describes the company as "
+        f"of {snapshot.get('as_of_date', 'unknown')}."
+    ]
     notes, note_assumptions = _notes_from_snapshot(snapshot, valuation_date)
     assumptions += note_assumptions
 
@@ -213,24 +224,51 @@ def build_scenarios(
     note_balance_total = sum(note.balance for note in notes)
     duty = stamp_duty(cumulative_paid_in, investment + note_balance_total)
     if duty:
+        from lib.captable.model import STAMP_DUTY_EXEMPTION_CHF
+
+        remaining = max(0.0, STAMP_DUTY_EXEMPTION_CHF - cumulative_paid_in)
+        exemption_note = (
+            f"the CHF {STAMP_DUTY_EXEMPTION_CHF:,.0f} lifetime exemption "
+            + (
+                f"is already exhausted by {cumulative_paid_in:,.0f} of "
+                "historical paid-in capital"
+                if remaining == 0
+                else f"has {remaining:,.0f} remaining"
+            )
+        )
         assumptions.append(
             "Stamp-duty estimate treats cumulative invested amounts in the "
-            "cap table as the paid-in capital history."
+            f"cap table as the paid-in capital history; {exemption_note}."
         )
 
+    founder_names = {
+        stakeholder.get("name", "unknown")
+        for stakeholder in snapshot.get("stakeholders", [])
+        if stakeholder.get("role") == "founder"
+    }
+
     def scenario_dict(s):
+        founders_post = sum(
+            pct
+            for holder, pct in s.ownership_pct.items()
+            if holder in founder_names
+        )
         return {
             "method": s.method,
-            "price_per_share": s.price_per_share,
+            "price_per_share": round(s.price_per_share, 4),
             "ownership_pct": {
                 k: round(v, 2) for k, v in sorted(s.ownership_pct.items())
             },
-            "note_conversion_prices": s.note_prices,
+            "founders_post_round_pct": round(founders_post, 2),
+            "note_conversion_prices": {
+                k: round(v, 4) for k, v in s.note_prices.items()
+            },
             "warnings": s.warnings,
         }
 
     return {
         "valuation_date": str(valuation_date),
+        "snapshot_as_of": snapshot.get("as_of_date"),
         "hypothetical_round": {
             "pre_money": pre_money,
             "investment": investment,
@@ -259,6 +297,11 @@ async def captable_analysis(
     snapshot = _load_snapshot(dataset_name, as_of)
     computed = build_scenarios(
         snapshot, pre_money=pre_money, investment=investment
+    )
+    computed["rubric_scope_note"] = (
+        "Rubric findings describe the company AS OF the snapshot date, "
+        "not the hypothetical post-round state; see "
+        "scenarios[].founders_post_round_pct for post-round ownership."
     )
     computed["rubric"] = apply_rubric(snapshot)
     computed["validation"] = snapshot.get("validation", [])

@@ -286,3 +286,80 @@ def test_supersession_single_cla_variant_names_not_doubled() -> None:
     assert not any(
         "clarify the difference" in q for q in result["diligence_questions"]
     )
+
+
+# --- MCP user-test findings (2026-09-04 Desktop session) --------------------
+
+
+def test_register_skew_downgrades_mismatch_severity() -> None:
+    """A March register vs a June cap table is a dated comparison, not a
+    hard inconsistency — mismatches report medium with the gap stated."""
+    captable = {
+        "as_of_date": {"value": "2026-06-30"},
+        "stakeholders": [
+            {"name": "Bruno Muster", "kind": "individual", "role": "founder",
+             "holdings": [{"class_id": "common", "count": 250_000}]}
+        ],
+    }
+    register = {
+        "as_of_date": {"value": "2026-03-31"},
+        "entries": [
+            {"name": "Bruno Muster", "current_common": 300_000,
+             "current_preferred": None, "current_participation_pct": 23,
+             "first_acquisition_date": None, "last_change_date": None}
+        ],
+    }
+    findings = check_register_reconciliation(captable, register)
+    mismatch = next(f for f in findings if f["check"] == "register_mismatch")
+    assert mismatch["severity"] == "medium"
+    assert "2026-03" in mismatch["detail"] and "2026-06" in mismatch["detail"]
+
+
+def test_diluted_rowsum_catches_double_counted_pool() -> None:
+    from lib.captable.validate import check_diluted_rowsum
+
+    captable = {
+        "stakeholders": [
+            {"name": "A", "kind": "individual", "role": "founder",
+             "holdings": [{"class_id": "common", "count": 900_000}],
+             "diluted_count": 900_000},
+            {"name": "Pool", "kind": "authorized_capital", "role": "pool",
+             "holdings": [], "diluted_count": 50_000},
+            {"name": "Pool duplicate", "kind": "pool", "role": "pool",
+             "holdings": [], "diluted_count": 50_000},
+        ],
+        "totals": {"by_class": [], "diluted_total": 950_000},
+    }
+    finding = check_diluted_rowsum(captable)[0]
+    assert finding["status"] == "fail"
+    assert "merged" in finding["detail"]
+
+
+def test_scenarios_label_pools_and_report_founder_post_round() -> None:
+    from skills.captable_analysis.captable_analysis import build_scenarios
+
+    snapshot = {
+        "as_of_date": "2026-06-30",
+        "share_classes": [{"id": "common", "name": "Common",
+                           "nominal_value": 0.1, "votes_per_share": None}],
+        "stakeholders": [
+            {"name": "Anna", "kind": "individual", "role": "founder",
+             "holdings": [{"class_id": "common", "count": 600_000}],
+             "diluted_count": 600_000, "invested_amount": 0},
+            {"name": "Authorized Capital", "kind": "authorized_capital",
+             "role": "pool", "holdings": [], "diluted_count": 100_000,
+             "invested_amount": 0},
+        ],
+        "convertibles": [],
+    }
+    result = build_scenarios(
+        snapshot, pre_money=7_000_000, investment=1_000_000,
+        valuation_date=date(2026, 9, 4),
+    )
+    scenario = result["scenarios"][0]
+    assert "[reserved pool] Authorized Capital" in scenario["ownership_pct"]
+    assert "Authorized Capital" not in scenario["ownership_pct"]
+    assert 0 < scenario["founders_post_round_pct"] < 100
+    assert result["snapshot_as_of"] == "2026-06-30"
+    assert any("accrued to the analysis date" in a
+               for a in result["assumptions"])
