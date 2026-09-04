@@ -43,7 +43,7 @@ def apply_rubric(snapshot: dict[str, Any]) -> list[dict]:
     investors = pct.get("investor", 0.0)
     departed = pct.get("departed", 0.0)
 
-    if founders and founders < 50:
+    if pct and founders < 50:
         findings.append(
             _finding(
                 "founder_majority",
@@ -64,7 +64,7 @@ def apply_rubric(snapshot: dict[str, Any]) -> list[dict]:
             )
         )
 
-    if founders and investors > 2 * founders:
+    if pct and investors > 2 * max(founders, 1e-9):
         findings.append(
             _finding(
                 "investor_dominance",

@@ -98,6 +98,12 @@ def _notes_from_snapshot(
             assumptions.append(
                 f"{cla.get('document')}: compounding unstated; simple assumed."
             )
+        elif compounding == "compound_other":
+            assumptions.append(
+                f"{cla.get('document')}: non-annual compounding stated; "
+                "computed as ANNUAL compounding (approximation, slightly "
+                "understates the balance)."
+            )
         start = _parse_date(_value(cla.get("execution_date")))
         if start is None:
             start = valuation_date
@@ -105,12 +111,19 @@ def _notes_from_snapshot(
                 f"{cla.get('document')}: execution date unparseable; "
                 "no interest accrued in the scenarios."
             )
+        elif start > valuation_date:
+            start = valuation_date
+            assumptions.append(
+                f"{cla.get('document')}: execution date "
+                f"{_value(cla.get('execution_date'))!r} lies after the "
+                "valuation date (typo/OCR?); no interest accrued."
+            )
         balance = loan_balance(
             float(principal),
             float(rate),
             start,
             valuation_date,
-            day_count=day_count if day_count != "act/act" else "act/act",
+            day_count=day_count,
             compounding="compound_annual"
             if str(compounding).startswith("compound")
             else "simple",

@@ -165,6 +165,8 @@ async def table(dataset_name: str) -> dict[str, Any]:
         classification = await classify(dataset_name)
 
     def latest_of(document_class: str) -> str | None:
+        from lib.captable.snapshot import normalize_iso_date
+
         candidates = [
             entry
             for entry in classification["documents"]
@@ -172,9 +174,16 @@ async def table(dataset_name: str) -> dict[str, Any]:
         ]
         if not candidates:
             return None
-        return max(
-            candidates, key=lambda entry: entry.get("as_of_date") or ""
-        )["filename"]
+
+        def sort_key(entry):
+            normalized = normalize_iso_date(entry.get("as_of_date")) or ""
+            # ISO strings sort correctly; unparseable dates rank last so a
+            # dated document always beats an undatable one.
+            import re
+            is_iso = bool(re.fullmatch(r"\d{4}(-\d{2}(-\d{2})?)?", normalized))
+            return (is_iso, normalized if is_iso else "")
+
+        return max(candidates, key=sort_key)["filename"]
 
     texts = {
         document.filename: document.text
@@ -260,12 +269,35 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
     captable = tables.get("captable")
     register = tables.get("register")
     pool_docs = tables.get("pool_documents", [])
+    extraction_failures = list(tables.get("failures", []))
+    if captable is None:
+        extraction_failures.append(
+            {
+                "document": None,
+                "error": "No current cap table was extracted (none "
+                "classified, or extraction failed) — ownership sections "
+                "of this snapshot are EMPTY, not clean.",
+            }
+        )
     validation = validate_captable(
         captable or {},
         register=register,
         pool_docs=pool_docs,
         clas=cla_extraction.get("clas", []),
     )
+
+    if extraction_failures:
+        validation = [
+            {
+                "check": "table_extraction",
+                "status": "fail",
+                "severity": "severe",
+                "detail": failure["error"]
+                if failure.get("document") is None
+                else f"{failure['document']}: {failure['error'][:160]}",
+            }
+            for failure in extraction_failures
+        ] + validation
 
     snap = assemble_snapshot(
         dataset_name,
@@ -284,25 +316,38 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
     storage.mkdir(snapshots_dir)
     # Cross-snapshot checks against the previous version of this as-of state
     # and the latest older state, when they exist.
-    previous_rels = sorted(
+    # The snapshot filename must be a single flat path segment.
+    safe_as_of = str(snap["as_of_date"]).replace("/", "-").replace("\\", "-")
+    older_rels = sorted(
         rel
         for rel in storage.list(snapshots_dir, suffix=".json")
-        if rel != f"{snap['as_of_date']}.json"
+        if rel != f"{safe_as_of}.json" and rel[:-5] < safe_as_of
     )
-    if previous_rels:
+    if older_rels:
         previous = json.loads(
-            storage.read_text(f"{snapshots_dir}/{previous_rels[-1]}")
+            storage.read_text(f"{snapshots_dir}/{older_rels[-1]}")
         )
         snap["validation"] = snap["validation"] + check_cross_snapshot(
             previous, snap
         )
 
     payload = json.dumps(snap, ensure_ascii=False, indent=2)
-    storage.write_text(f"{snapshots_dir}/{snap['as_of_date']}.json", payload)
-    storage.write_text(f"{insights_rel}/captable/latest.json", payload)
-    storage.write_text(
-        f"{insights_rel}/captable/captable.md", render_markdown(snap)
+    storage.write_text(f"{snapshots_dir}/{safe_as_of}.json", payload)
+    newer_exists = any(
+        rel[:-5] > safe_as_of
+        for rel in storage.list(snapshots_dir, suffix=".json")
+        if rel != f"{safe_as_of}.json"
     )
+    if not newer_exists:
+        storage.write_text(f"{insights_rel}/captable/latest.json", payload)
+        storage.write_text(
+            f"{insights_rel}/captable/captable.md", render_markdown(snap)
+        )
+    else:
+        logger.warning(
+            "[%s] A newer snapshot exists; latest.json left untouched.",
+            dataset_name,
+        )
     logger.info(
         "[%s] Stored snapshot %s and captable.md",
         dataset_name,
@@ -355,7 +400,16 @@ async def aggregate(dataset_name: str) -> dict[str, Any]:
         pdf_rel = f"{raw_rel}/{document}"
         if document.lower().endswith(".pdf") and storage.exists(pdf_rel):
             markers[document] = scan_esign_markers(storage.read_bytes(pdf_rel))
-    result = aggregate_clas(extraction["clas"], esign_markers=markers)
+    from lib.infrastructure.configuration import load_repository_config
+
+    rules = load_repository_config("captable")["assessment_rules"]
+    result = aggregate_clas(
+        extraction["clas"],
+        esign_markers=markers,
+        conversion_window_days=int(
+            rules.get("maturity_conversion_window_days", 30)
+        ),
+    )
     result["dataset"] = dataset_name
     rel = _store_work(dataset_name, "aggregation.json", result)
     logger.info("[%s] Stored CLA aggregation at %s", dataset_name, rel)

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Iterable
 
 _SEVERITY_ORDER = ("info", "medium", "high", "severe")
 
@@ -54,6 +54,19 @@ def names_match(a: str, b: str) -> bool:
     return len(smaller) >= 2 and smaller <= larger
 
 
+def canonical_lender_key(
+    name: str, known_keys: Iterable[str]
+) -> str:
+    """Map a lender name onto an existing key when names_match says it is
+    the same person/entity ('Anna Beispiel' vs 'Anna Barbara Beispiel'), preferring
+    the longer (more specific) form as the canonical key."""
+    key = normalize_lender_name(name)
+    for existing in known_keys:
+        if names_match(key, existing):
+            return existing if len(existing) >= len(key) else key
+    return key
+
+
 def terms_group_key(extraction: dict[str, Any]) -> tuple:
     """The identical-terms tuple used for 10/20 non-bank grouping."""
     return (
@@ -69,16 +82,38 @@ def terms_group_key(extraction: dict[str, Any]) -> tuple:
 
 
 def _loan_amounts(extraction: dict[str, Any]) -> list[tuple[str, float | None]]:
-    """(lender name, amount) pairs for one agreement."""
+    """(lender name, amount) pairs for one agreement.
+
+    When per-lender amounts are unstated but the agreement states a total,
+    the total is used (single lender) or apportioned equally (multi-lender,
+    flagged upstream via aggregate assumptions) — an agreement's stated
+    principal must never silently count as zero outstanding.
+    """
     lenders = extraction.get("lenders") or []
     total = _value(extraction.get("principal_total"))
     if len(lenders) == 1:
         name = lenders[0].get("name", "unknown")
         amount = lenders[0].get("principal_amount")
         return [(name, amount if amount is not None else total)]
+    stated = [lender.get("principal_amount") for lender in lenders]
+    if total is not None and all(amount is None for amount in stated):
+        share = total / len(lenders)
+        return [
+            (lender.get("name", "unknown"), share) for lender in lenders
+        ]
+    remainder = None
+    if total is not None:
+        known = sum(a for a in stated if a is not None)
+        missing = sum(1 for a in stated if a is None)
+        if missing:
+            remainder = max(0.0, total - known) / missing
     pairs = []
     for lender in lenders:
-        pairs.append((lender.get("name", "unknown"), lender.get("principal_amount")))
+        amount = lender.get("principal_amount")
+        pairs.append(
+            (lender.get("name", "unknown"),
+             amount if amount is not None else remainder)
+        )
     return pairs
 
 
@@ -113,6 +148,19 @@ def aggregate_clas(
     ]
     diligence_questions: list[str] = []
     caveats: list[str] = []
+    for extraction in executed:
+        lenders = extraction.get("lenders") or []
+        if (
+            len(lenders) > 1
+            and all(l.get("principal_amount") is None for l in lenders)
+            and _value(extraction.get("principal_total")) is not None
+        ):
+            diligence_questions.append(
+                f"{extraction['document']!r}: per-lender loan amounts are "
+                "unstated; the agreement total was apportioned equally "
+                "across lenders for aggregation — request the per-lender "
+                "breakdown."
+            )
 
     # --- Term-sheet supersession and discrepancies ------------------------
     executed_by_lender: dict[str, list[dict]] = {}
@@ -128,16 +176,26 @@ def aggregate_clas(
         sheet_lenders = {
             normalize_lender_name(name) for name, _ in _loan_amounts(sheet)
         }
-        matching = sheet_lenders & set(executed_by_lender)
+        matching = {
+            key
+            for key in sheet_lenders
+            for executed_key in executed_by_lender
+            if names_match(key, executed_key)
+        }
         if matching:
             superseded_term_sheets.append(sheet["document"])
             sheet_amount = _value(sheet.get("principal_total"))
             for lender_key in matching:
                 executed_amount = sum(
                     amount
-                    for e in executed_by_lender[lender_key]
+                    for executed_key, extractions_for in
+                    executed_by_lender.items()
+                    if names_match(lender_key, executed_key)
+                    for e in extractions_for
                     for name, amount in _loan_amounts(e)
-                    if normalize_lender_name(name) == lender_key
+                    if names_match(
+                        normalize_lender_name(name), lender_key
+                    )
                     and amount is not None
                 )
                 if (
@@ -168,7 +226,9 @@ def aggregate_clas(
         )
         group["documents"].append(extraction["document"])
         for name, amount in _loan_amounts(extraction):
-            group["lenders"].add(normalize_lender_name(name))
+            group["lenders"].add(
+                canonical_lender_key(name, group["lenders"])
+            )
             if amount is None:
                 group["unknown_amounts"] += 1
             else:
@@ -178,7 +238,9 @@ def aggregate_clas(
     syndicate_present = False
     for extraction in executed:
         for lender in extraction.get("lenders") or []:
-            all_lenders.add(normalize_lender_name(lender.get("name", "")))
+            all_lenders.add(
+                canonical_lender_key(lender.get("name", ""), all_lenders)
+            )
             if lender.get("kind") in ("syndicate", "nominee"):
                 syndicate_present = True
     if syndicate_present:
@@ -277,7 +339,7 @@ def aggregate_clas(
     per_lender: dict[str, dict[str, Any]] = {}
     for extraction in executed:
         for name, amount in _loan_amounts(extraction):
-            key = normalize_lender_name(name)
+            key = canonical_lender_key(name, per_lender.keys())
             row = per_lender.setdefault(
                 key, {"name": name, "loans": 0, "total_principal": 0.0}
             )

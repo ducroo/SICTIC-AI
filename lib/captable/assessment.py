@@ -134,10 +134,41 @@ def assess_cla(
             )
         )
 
+    # --- Interest above safe-harbor note rate -----------------------------
+    note_rate = rules.get("interest_safe_harbor_note_rate_pct")
+    rate = v("interest_rate_pct")
+    if (
+        note_rate is not None
+        and rate is not None
+        and rate > float(note_rate)
+        and v("interest_mode") != "safe_harbor_capped"
+    ):
+        findings.append(
+            _finding(
+                "interest_rate",
+                STATUS_DEVIATING,
+                "medium",
+                f"Interest {rate:g}% exceeds the {float(note_rate):g}% "
+                "safe-harbor reference without a safe-harbor cap — "
+                "withholding/hidden-dividend exposure if the lender is a "
+                "related party; verify against the current ESTV circular.",
+            )
+        )
+
     # --- Subordination ----------------------------------------------------
     subordinated = v("subordinated")
     scope = v("subordination_scope")
-    if subordinated is False or scope == "not_subordinated":
+    if subordinated is None and scope in (None, "unclear"):
+        findings.append(
+            _finding(
+                "subordination",
+                STATUS_ABSENT,
+                "high",
+                "No subordination information could be extracted — treat "
+                "as unsubordinated until the clause is located.",
+            )
+        )
+    elif subordinated is False or scope == "not_subordinated":
         findings.append(
             _finding(
                 "subordination",

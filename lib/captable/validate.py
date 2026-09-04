@@ -148,9 +148,44 @@ def check_register_reconciliation(
                 )
             )
             continue
+        hinted = {
+            class_id
+            for class_id in cap_row
+            if "common" in (class_id or "").lower()
+            or "preferred" in (class_id or "").lower()
+            or "stamm" in (class_id or "").lower()
+            or "vorzug" in (class_id or "").lower()
+        }
+        hints_usable = hinted == set(cap_row)
+        if not hints_usable:
+            # Class ids don't map onto common/preferred vocabulary —
+            # reconcile the holder's TOTAL shares instead of guessing.
+            register_total = sum(
+                entry.get(f) or 0.0
+                for f in ("current_common", "current_preferred")
+            )
+            cap_total = sum(cap_row.values())
+            if abs(cap_total - register_total) > max(
+                1.0, register_total * TOLERANCE
+            ):
+                mismatches += 1
+                findings.append(
+                    _finding(
+                        "register_mismatch",
+                        "fail",
+                        "high",
+                        f"{entry.get('name')!r} total shares: register "
+                        f"{register_total:,.0f} vs cap table "
+                        f"{cap_total:,.0f} (class ids not mappable to "
+                        "common/preferred; totals compared)",
+                    )
+                )
+            else:
+                matched += 1
+            continue
         for register_field, class_hint in (
-            ("current_common", "common"),
-            ("current_preferred", "preferred"),
+            ("current_common", ("common", "stamm")),
+            ("current_preferred", ("preferred", "vorzug")),
         ):
             register_count = entry.get(register_field)
             if register_count is None:
@@ -158,7 +193,7 @@ def check_register_reconciliation(
             cap_count = sum(
                 count
                 for class_id, count in cap_row.items()
-                if class_hint in (class_id or "")
+                if any(h in (class_id or "").lower() for h in class_hint)
             )
             if abs(cap_count - register_count) > max(
                 1.0, register_count * TOLERANCE
@@ -169,7 +204,7 @@ def check_register_reconciliation(
                         "register_mismatch",
                         "fail",
                         "high",
-                        f"{entry.get('name')!r} {class_hint}: register "
+                        f"{entry.get('name')!r} {register_field}: register "
                         f"{register_count:,.0f} vs cap table "
                         f"{cap_count:,.0f}",
                     )
@@ -211,13 +246,16 @@ def check_pool_consistency(
                 "Fewer than two sources with pool figures.",
             )
         ]
+    source_sets = list(figures.values())
     consistent = all(
         any(
             abs(t - other) <= max(1.0, t * TOLERANCE)
-            for other in next(iter(figures.values()))
+            for other in other_values
         )
-        for values in figures.values()
+        for index, values in enumerate(source_sets)
         for t in values
+        for other_index, other_values in enumerate(source_sets)
+        if other_index != index
     )
     per_source = {
         source: sorted(values) for source, values in figures.items()
@@ -264,7 +302,15 @@ def check_cla_lifecycle(
                     if names_match(key, reg_key):
                         acquired = reg_date
                         break
-            if execution and acquired and str(acquired) > str(execution):
+            from lib.captable.aggregation import _parse_date
+
+            acquired_date = _parse_date(acquired)
+            execution_date = _parse_date(execution)
+            if (
+                acquired_date
+                and execution_date
+                and acquired_date > execution_date
+            ):
                 findings.append(
                     _finding(
                         "cla_possibly_converted",
@@ -334,8 +380,8 @@ def check_cross_snapshot(previous: dict, current: dict) -> list[dict]:
         for t in (current.get("totals") or {}).get("by_class", [])
     }
     for class_id, prev_count in prev_totals.items():
-        curr_count = curr_totals.get(class_id)
-        if prev_count and curr_count and curr_count < prev_count:
+        curr_count = curr_totals.get(class_id) or 0.0
+        if prev_count and curr_count < prev_count:
             findings.append(
                 _finding(
                     "shrinking_share_class",
