@@ -118,6 +118,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
                 "confidence": 80,
                 "evidence": ["Fixture company evidence."],
             }
+        if "names" in properties:
+            return {"names": [fixtures.person_name]}
         raise AssertionError("Unexpected dataset-chat JSON schema")
 
     async def fake_structured_audit_chat(*_args, **kwargs):
@@ -128,6 +130,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
             if "balanced" in statuses
             else "Pass"
             if "Pass" in statuses
+            else "Assessed"
+            if "Assessed" in statuses
             else "Fine"
         )
         return {
@@ -279,6 +283,18 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "skills.suggested_startups.inputs"
     )
     team_profile_mod = importlib.import_module("skills.team_profile.team_profile")
+    team_profile_revised_mod = importlib.import_module(
+        "skills.team_profile_revised.team_profile_revised"
+    )
+    monkeypatch.setattr(
+        team_profile_revised_mod, "ensure_startup_dataset", fake_ensure_startup_dataset
+    )
+    monkeypatch.setattr(team_profile_revised_mod, "startup_profile", fake_startup_profile)
+    monkeypatch.setattr(team_profile_revised_mod, "generate_markdown", fake_llm_chat)
+    persons_skill = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
+    monkeypatch.setattr(persons_skill, "dataset_chat_json", fake_dataset_chat_json)
+    monkeypatch.setattr(persons_skill, "LinkedInResolver", FakeLinkedInResolver)
+
 
     monkeypatch.setattr(startup_sources, "ensure_startup_dataset", fake_ensure_startup_dataset)
     monkeypatch.setattr(people_discovery, "persons_in_dataset", fake_persons_in_dataset)
@@ -293,6 +309,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         startup_traction_mod,
         person_profile_mod,
         team_profile_mod,
+        team_profile_revised_mod,
         dd_checks_mod,
         sha_review_mod,
         submission_ready_mod,

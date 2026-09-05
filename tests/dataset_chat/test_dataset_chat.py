@@ -222,3 +222,29 @@ async def test_dataset_chat_budgets_context_without_front_truncation(mocker, mon
     assert len(prompt) < 2048 * 3
     assert "doc-0.md" in prompt
     assert "doc-9.md" not in prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("prefix", "allow_empty", "generates"),
+    [("Profile evidence: cv.pdf — page 1.", True, True),
+     ("Profile evidence: cv.pdf — page 1.", False, False),
+     (None, True, False)],
+)
+async def test_json_empty_retrieval_requires_explicit_shared_evidence_mode(
+    mocker, prefix, allow_empty, generates,
+):
+    mocker.patch("skills.dataset_chat.dataset_chat.dataset_search", return_value=[])
+    generate = mocker.patch("skills.dataset_chat.dataset_chat.generate_json", return_value={"answer": "documented"})
+    result = await dataset_chat_json(
+        "test", "founder experience", "Assess experience", {"type": "object"},
+        cacheable_prompt_prefix=prefix,
+        allow_empty_retrieval=allow_empty,
+    )
+    assert generate.await_count == int(generates)
+    if generates:
+        assert result == {"answer": "documented"}
+        assert prefix in generate.await_args.kwargs["cacheable_prompt_prefix"]
+        assert "No question-specific evidence was retrieved" in generate.await_args.args[0]
+    else:
+        assert result is None

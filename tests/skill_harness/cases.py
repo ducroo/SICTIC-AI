@@ -19,6 +19,7 @@ SKILL_COVERAGE = {
     "linkedin_maintenance": "utility-smoke",
     "llm_chat": "utility-smoke",
     "person_profile": "local-smoke",
+    "persons_in_dataset": "existing-unit",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
     "sha_review": "local-smoke",
@@ -28,6 +29,7 @@ SKILL_COVERAGE = {
     "startup_website_import": "utility-smoke",
     "suggested_startups": "local-smoke",
     "team_profile": "local-smoke",
+    "team_profile_revised": "local-smoke",
 }
 
 SKILL_COVERAGE_REASONS = {
@@ -42,8 +44,10 @@ HARNESS_SMOKE_COMMANDS = {
     "/dataset_chat": "/dataset_chat example-startup What is the fixture?",
     "/startup_profile": "/startup_profile example-startup",
     "/startup_traction": "/startup_traction example-startup",
+    "/persons_in_dataset": "/persons_in_dataset sictic-members",
     "/person_profile": "/person_profile sictic-members Jane Doe",
     "/team_profile": "/team_profile example-startup",
+    "/team_profile_revised": "/team_profile_revised example-startup",
     "/investor_profile": "/investor_profile --source-dataset sictic-members",
     "/expert_search": "/expert_search example-startup",
     "/potential_investors": "/potential_investors example-startup",

@@ -167,12 +167,12 @@ freshness logic.
 
 5. **People Domain (`lib.people`)**
    * Owns the canonical `Person` model, person identity matching/merging,
-     editable person discovery lists, and person dossier assembly.
+     editable person roster parsing, and person dossier assembly.
    * `model.py` defines the `Person` dataclass and email/name matching helpers.
-   * `discovery.py` owns `persons_in_dataset(...)`. It first reads the manual
-     `persons_in_dataset` insight if present; otherwise it discovers cached,
-     web, and in-dataset LinkedIn identities, writes a manual editable insight,
-     and never overwrites that manual source of truth.
+   * `discovery.py` reads and renders the manual persons roster. Its synchronous
+     `persons_in_dataset(...)` compatibility reader requires an existing roster;
+     it performs no discovery or enrichment. The async `persons_in_dataset`
+     skill owns discovery and creation of the editable manual insight.
    * `dossier.py` builds a person's document dossier and incidental mentions
      from parsed dataset content and semantic search.
    * `linkedin/` owns LinkedIn identifier parsing, dataset-local profile files,
@@ -206,6 +206,11 @@ in `lib/`.
   generated-dataset hydration commands.
 * `linkedin_maintenance`: Human-in-the-loop tooling for missing profiles,
   manual imports, and registry diagnosis.
+* `persons_in_dataset`: Reads the authoritative manual roster first; when absent,
+  discovers related names from indexed data-room evidence without requiring
+  LinkedIn or public search, and retains explicit in-dataset LinkedIn IDs.
+  `person_profile` and downstream consumers only read the existing roster;
+  discovery runs explicitly or as a bulk-refresh dependency.
 * `person_profile`, `investor_profile`, `startup_profile`, `team_profile`,
   `startup_traction`, `dd_checks`: Insight-producing profile and due-diligence
   skills. They must save reports through `InsightFile` and their primary Python

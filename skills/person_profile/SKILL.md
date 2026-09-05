@@ -40,6 +40,15 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 ## Usage
 
+For composition without public enrichment, call `person_profile(...)` or
+`person_profile_as_person_objects(...)` with `allow_public_sources=False`.
+This requires the existing manual persons roster and skips LinkedIn resolution.
+A missing roster raises an error directing the caller to run `persons_in_dataset`;
+profile generation never discovers people. Set `assess_founder_traits=True` to append
+the configured narrative N001 assessment for explicitly identified active
+founders. These options use separate profile cache identifiers; default
+callers retain the existing enriched profile behaviour.
+
 ```bash
 conda run -n sictic-env python -m skills.harness /person_profile "<DATASET_NAME>" "<NAME>"
 
@@ -47,3 +56,5 @@ conda run -n sictic-env python -m skills.person_profile \
   --dataset "<DATASET_NAME>" \
   --person "<NAME_1>, <NAME_2>"
 ```
+
+Person discovery is owned by `skills/persons_in_dataset`. This skill uses the library roster reader, then gathers evidence and writes individual profiles. Only an explicit discovery run creates a missing roster.
