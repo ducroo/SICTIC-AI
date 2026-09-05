@@ -42,5 +42,28 @@ def run_cmd(
     typer.echo(result["narrative"])
 
 
+@app.command("render")
+def render_cmd(
+    dataset_name: str = typer.Option(
+        ..., "--dataset", "-d", help="Target startup dataset name."
+    ),
+    as_of: str = typer.Option(
+        None, "--as-of", help="Render a specific snapshot (default: latest)."
+    ),
+):
+    """Render the snapshot as a self-contained HTML page (no LLM call)."""
+    from skills.captable_analysis.captable_analysis import render_captable
+
+    result = run_command(
+        lambda: render_captable(dataset_name, as_of=as_of),
+        logger=logger,
+        error_prefix="Render failed",
+    )
+    typer.echo(
+        f"Rendered {result['path']} (scenarios included: "
+        f"{result['scenarios_included']})"
+    )
+
+
 if __name__ == "__main__":
     app()

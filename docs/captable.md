@@ -73,8 +73,10 @@ data room ──1 classify──2 extract CLAs──3 assess──4 aggregate─
    events).
 7. **Snapshot**: `insights/captable/snapshots/<as_of>.json` (one per
    evidenced state, all kept), `latest.json` (never overwritten by an
-   older rebuild), and a table-only `captable.md`. As-of dates are
-   normalized to ISO in code; unparseable date strings never win.
+   older rebuild), a table-only `captable.md`, and a visual one-pager
+   `captable.html` rendered deterministically from the snapshot (see
+   below). As-of dates are normalized to ISO in code; unparseable date
+   strings never win.
 
 ## Analysis (`captable_analysis`)
 
@@ -89,6 +91,18 @@ choice can move founder ownership by several points. Adds the CHF 1M
 stamp-duty exemption tracking, per-scenario `founders_post_round_pct`, and
 the handbook red-flag rubric (scoped to the snapshot date). The LLM writes
 a narrative constrained to the computed JSON.
+
+## Visual one-pager (`captable_analysis render`)
+
+The division-of-labor rule extends to the last mile: the HTML page a
+reviewer actually looks at is rendered **in pure Python from the stored
+snapshot** — no LLM ever re-types a number into the visual. Every build
+writes `insights/captable/captable.html`; `render` re-renders on demand
+(and includes the conversion-scenario table when the stored analysis was
+computed over the same snapshot state). Ownership percentages use the
+same denominator as the rubric, so chart and analysis can never disagree.
+Ad-hoc visual exploration in a chat client stays fine — but the standard
+deliverable is this deterministic page.
 
 ## Semantics contracts worth knowing
 
@@ -108,6 +122,7 @@ a narrative constrained to the computed JSON.
 python -m skills.captable_build build --dataset <startup> [--fresh]
 python -m skills.captable_analysis run --dataset <startup> \
     [--as-of DATE] [--pre-money N] [--investment N]
+python -m skills.captable_analysis render --dataset <startup> [--as-of DATE]
 ```
 
 Stage-by-stage commands and details: `skills/captable_build/SKILL.md` and

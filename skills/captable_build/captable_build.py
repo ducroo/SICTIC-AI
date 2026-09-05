@@ -420,9 +420,14 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
         if rel != f"{safe_as_of}.json"
     )
     if not newer_exists:
+        from lib.captable.render_html import render_html
+
         storage.write_text(f"{insights_rel}/captable/latest.json", payload)
         storage.write_text(
             f"{insights_rel}/captable/captable.md", render_markdown(snap)
+        )
+        storage.write_text(
+            f"{insights_rel}/captable/captable.html", render_html(snap)
         )
     else:
         logger.warning(

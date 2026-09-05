@@ -318,6 +318,40 @@ def build_scenarios(
     }
 
 
+def render_captable(
+    dataset_name: str, *, as_of: str | None = None
+) -> dict[str, Any]:
+    """Deterministically render a snapshot as a self-contained HTML page.
+
+    No LLM call: every number is copied from the stored snapshot (and,
+    when a matching ``analysis_scenarios.json`` exists, from the computed
+    analysis). Percentages are computed in code with the same denominator
+    as ``rubric.ownership_by_role``.
+    """
+    from lib.captable.render_html import render_html
+
+    snapshot = _load_snapshot(dataset_name, as_of)
+    storage = get_storage()
+    insights_rel = dataset_insights_path(dataset_name)
+    analysis = None
+    scenarios_rel = f"{insights_rel}/captable/analysis_scenarios.json"
+    if storage.exists(scenarios_rel):
+        candidate = json.loads(storage.read_text(scenarios_rel))
+        # Only attach scenarios computed over THIS snapshot state; stale
+        # scenarios from another as-of would put two dates on one page.
+        if candidate.get("snapshot_as_of") == snapshot.get("as_of_date"):
+            analysis = candidate
+    html = render_html(snapshot, analysis)
+    rel = (
+        f"{insights_rel}/captable/snapshots/{as_of}.html"
+        if as_of
+        else f"{insights_rel}/captable/captable.html"
+    )
+    storage.write_text(rel, html)
+    logger.info("[%s] Rendered cap-table HTML at %s", dataset_name, rel)
+    return {"path": rel, "html": html, "scenarios_included": bool(analysis)}
+
+
 async def captable_analysis(
     dataset_name: str,
     *,

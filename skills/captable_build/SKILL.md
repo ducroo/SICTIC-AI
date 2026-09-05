@@ -26,7 +26,9 @@ python -m skills.captable_build snapshot  --dataset <startup>
 
 `build` runs everything, reusing stored intermediate results (`--fresh`
 discards them), and writes `insights/captable/snapshots/<as_of>.json`,
-`latest.json`, and a table-only `captable.md`. `assess` applies pure-Python
+`latest.json`, a table-only `captable.md`, and a deterministic visual
+one-pager `captable.html` (re-render or add scenarios via
+`python -m skills.captable_analysis render`). `assess` applies pure-Python
 market-standard rules (bands in `config/captable/assessment_rules.json`).
 `aggregate` groups identical-terms tranches for the 10/20 non-bank rules,
 sums outstanding principal over executed loans only, supersedes term

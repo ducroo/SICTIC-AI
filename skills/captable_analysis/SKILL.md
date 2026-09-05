@@ -36,6 +36,24 @@ Reads `insights/captable/latest.json` (or the named snapshot), then:
 - labels reserved positions as `[reserved pool] …` in scenario ownership so
   pools are never listed as shareholders.
 
+## Rendering (`render`)
+
+```bash
+python -m skills.captable_analysis render --dataset <startup> [--as-of DATE]
+```
+
+Renders the snapshot as a self-contained HTML one-pager — **no LLM
+call**: every number is copied verbatim from the validated snapshot
+(ownership bar by role, holder table with classification badges, share
+classes, pools, CLA overhang with maturity/e-sign status, validation
+traffic lights), so the visual a reviewer looks at can never drift from
+the stored data. Percentages use the same denominator as
+`rubric.ownership_by_role`. When `analysis_scenarios.json` exists AND was
+computed over the same snapshot state, the conversion-scenario table is
+included; stale scenarios from another as-of are skipped. Written to
+`insights/captable/captable.html` (or `snapshots/<as_of>.html`);
+`captable_build` also writes it automatically on every build.
+
 ## Outputs
 
 - `insights/captable/analysis_scenarios.json` — the computed JSON
