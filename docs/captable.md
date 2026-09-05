@@ -11,6 +11,11 @@ and outstanding Convertible Loan Agreements (CLAs):
 The goal is not to replace legal or financial diligence: outputs highlight
 what is present, what is missing, and what needs expert follow-up.
 
+The reasoning behind the design — the SECA CLA anatomy, the Swiss
+corporate-law and tax rules baked into the checks, the conversion-math
+foundations, and each design decision with its why — is documented in
+[captable-design.md](captable-design.md).
+
 ## Division of labor (the core design rule)
 
 The LLM **finds, classifies, and extracts** values — always with a verbatim
