@@ -260,6 +260,8 @@ Internal building blocks are intentionally omitted.
 | `startup_website_import` | ✅ | Imports a startup's public website into its due-diligence dataset. |
 | `market_review` | ◻️ | Reviews market size, customer needs, competition, and substitutes. |
 | `sha_review` | 🚧 | Reviews shareholders' agreements, investment terms and conditions, and capitalization tables. |
+| `captable_build` | ✅ | Extracts, assesses, and validates a startup's cap table and convertible loans into a versioned snapshot (see [docs/captable.md](docs/captable.md)). |
+| `captable_analysis` | ✅ | Computes conversion scenarios, stamp duty, and red-flag analysis over a stored cap-table snapshot; renders a visual one-pager. |
 | `companyresearch.ch` | 🚧 | Uses the companyresearch.ch API to collect publicly available information about a startup. |
 | **Ongoing monitoring** | | |
 | `alerts_and_news` | ◻️ | Monitors and interprets relevant portfolio-company news and updates. |

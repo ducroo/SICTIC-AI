@@ -336,7 +336,8 @@ def _scenarios_section(analysis: dict | None) -> str:
     )
     stamp = analysis.get("stamp_duty") or {}
     return (
-        f"<p>Hypothetical round: pre-money {_fmt(hypothetical.get('pre_money'))}"
+        "<p>Hypothetical round: pre-money "
+        f"{_fmt(hypothetical.get('pre_money'))}"
         f", investment {_fmt(hypothetical.get('investment'))} "
         f"(computed {escape(str(analysis.get('valuation_date', '')))}; "
         "all defaults are recorded as assumptions).</p>"
