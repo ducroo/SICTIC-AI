@@ -60,21 +60,25 @@ async def test_data_room_mode_reads_all_people_without_discovery_or_public_enric
 
 
 @pytest.mark.asyncio
-async def test_data_room_variant_does_not_reuse_or_overwrite_default_profile(local_profiles):
+async def test_generation_settings_invalidate_cache_without_changing_filename(local_profiles):
     module = local_profiles
-    person = Person(full_name="Jane Doe", linkedin_profile={"headline": "External-only biography"})
-    default_profile = InsightFile(
-        "acme", "person_profile", "manual", identifier=person.identifier, subdir=True,
-    )
-    default_profile.save("Original enriched profile")
+    person = Person(full_name="Jane Doe", linkedin_id="jane-doe-123", linkedin_profile={"headline": "External-only biography"})
+    original = await module._generate_single_profile("acme", person)
     result = await module._generate_single_profile(
         "acme", person, allow_public_sources=False, assess_founder_traits=True,
     )
-    assert result.path != default_profile.path
-    assert default_profile.content() == "Original enriched profile"
+    assert result.path == original.path
+    assert result.filename == "jane-doe-123-test-model-1b.md"
+    assert module.generate_markdown.await_count == 2
     prompt = module.generate_markdown.await_args.args[0]
     assert "External-only biography" not in prompt
     assert "cv.pdf" in prompt
+    await module._generate_single_profile(
+        "acme", person, allow_public_sources=False, assess_founder_traits=True,
+    )
+    assert module.generate_markdown.await_count == 2
+    await module._generate_single_profile("acme", person)
+    assert module.generate_markdown.await_count == 3
 
 
 @pytest.mark.asyncio
@@ -140,3 +144,39 @@ async def test_missing_roster_never_triggers_discovery(local_profiles):
     local_profiles.discovery_test_module.dataset_chat_json.assert_not_awaited()
     local_profiles.sync_datasets.assert_not_awaited()
     local_profiles.generate_markdown.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("public,traits", [(True, False), (True, True), (False, False), (False, True)])
+@pytest.mark.parametrize("linkedin_id,emails,expected", [
+    ("jane-123", ["unrelated@example.com"], "jane-123"),
+    ("", ["unrelated@example.com"], "unrelated-example-com"),
+    ("", [], "jane-doe"),
+])
+async def test_profile_filename_uses_standard_identifier_order(local_profiles, linkedin_id, emails, expected, public, traits):
+    person = Person(full_name="Jane Doe", linkedin_id=linkedin_id, email_addresses=emails)
+    result = await local_profiles._generate_single_profile(
+        "acme", person, allow_public_sources=public, assess_founder_traits=traits,
+    )
+    assert result.filename == f"{expected}-test-model-1b.md"
+
+
+@pytest.mark.asyncio
+async def test_manual_profile_remains_authoritative(local_profiles):
+    manual = InsightFile("acme", "person_profile", "manual", identifier="jane-123", subdir=True)
+    manual.save("Human reviewed profile")
+    result = await local_profiles._generate_single_profile(
+        "acme", Person(full_name="Jane Doe", linkedin_id="jane-123"),
+        allow_public_sources=False, assess_founder_traits=True,
+    )
+    assert result.path == manual.path
+    assert result.content() == "Human reviewed profile"
+    local_profiles.generate_markdown.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_email_only_person_uses_email_identifier(local_profiles):
+    result = await local_profiles._generate_single_profile(
+        "acme", Person(email_addresses=["person@example.com"]),
+    )
+    assert result.filename == "person-example-com-test-model-1b.md"

@@ -11,11 +11,12 @@ from lib.people.model import Person, normalize_email_addresses
 
 
 _IDENTITY_COLUMNS = {
-    "full_name": {"full_name", "name", "investor_name", "expert_name"},
-    "email_addresses": {"email", "email_address", "email_addresses"},
+    "full_name": {"full_name", "fullname", "name", "investor_name", "expert_name"},
+    "email_addresses": {"email", "email_address", "email_addresses", "emailaddresses"},
     "linkedin_id": {
         "linkedin",
         "linkedin_id",
+        "linkedinid",
         "linkedin_profile",
         "linkedin_url",
     },
@@ -23,7 +24,9 @@ _IDENTITY_COLUMNS = {
 
 
 def _column_name(value: str) -> str:
-    value = re.sub(r"[*_`]", "", value).strip().lower()
+    # Preserve internal underscores in standard identity column names. Strip
+    # only surrounding emphasis, and unescape separators used by roster files.
+    value = value.strip().strip("*_`").replace(r"\_", "_").replace(r"\-", "-").lower()
     return re.sub(r"[^a-z0-9]+", "_", value).strip("_")
 
 

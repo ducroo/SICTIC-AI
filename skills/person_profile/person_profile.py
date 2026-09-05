@@ -232,25 +232,20 @@ async def _generate_single_profile(
     except KeyError as e:
         raise ValueError(f"Missing configuration for person_profile: {e}")
 
-    # Keep constrained variants separate from the default, enriched profiles.
-    variant = "" if allow_public_sources else "-data-room"
-    if assess_founder_traits:
-        variant += "-founder-assessment"
-    effective_config_key = query + llm_instructions
-    if variant:
-        effective_config_key = config_cache_key(
-            effective_config_key,
-            {
-                "allow_public_sources": allow_public_sources,
-                "include_dataset_context": include_dataset_context,
-                "assess_founder_traits": assess_founder_traits,
-            },
-        )
+    # Generation settings affect freshness, never the standard profile filename.
+    effective_config_key = config_cache_key(
+        query + llm_instructions,
+        {
+            "allow_public_sources": allow_public_sources,
+            "include_dataset_context": include_dataset_context,
+            "assess_founder_traits": assess_founder_traits,
+        },
+    )
     insight = InsightFile(
         dataset=dataset_slug,
         skill="person_profile",
         model=default_llm,
-        identifier=identifier + variant,
+        identifier=identifier,
         subdir=True,
         config_key=effective_config_key,
     )

@@ -156,10 +156,7 @@ async def _prepare_generation(
         selected.append(chunk_markdown)
         used_characters += next_size
 
-    context = "\n\n---\n\n".join(selected) or (
-        "No question-specific evidence was retrieved. Assess only evidence "
-        "already present in the shared context; otherwise report insufficient information."
-    )
+    context = "\n\n---\n\n".join(selected)
     logger.info(
         "[%s] Using %s of %s chunks (%s characters)",
         dataset_name,

@@ -46,8 +46,11 @@ This requires the existing manual persons roster and skips LinkedIn resolution.
 A missing roster raises an error directing the caller to run `persons_in_dataset`;
 profile generation never discovers people. Set `assess_founder_traits=True` to append
 the configured narrative N001 assessment for explicitly identified active
-founders. These options use separate profile cache identifiers; default
-callers retain the existing enriched profile behaviour.
+founders. Every profile uses `<identifier>-<model>.md`, with the identifier selected
+by `Person.identifier`: LinkedIn ID, otherwise email address, otherwise full name,
+using the standard slugification. Generation options never extend the filename. Generation
+settings affect cache metadata only; changing them regenerates the same profile
+file. Manual overrides retain their normal precedence.
 
 ```bash
 conda run -n sictic-env python -m skills.harness /person_profile "<DATASET_NAME>" "<NAME>"

@@ -1,9 +1,10 @@
 import importlib
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from lib.insights import InsightFile
+from lib.people.model import Person
 from lib.datasets.paths import dataset_location_for_domain
 from lib.storage import get_storage
 from lib.people.discovery import persons_in_dataset as read_roster
@@ -14,6 +15,8 @@ def discovery(mock_env, monkeypatch):
     get_storage().mkdir(dataset_location_for_domain("acme", "startups").raw_rel)
     module = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
     monkeypatch.setattr(module, "sync_datasets", AsyncMock())
+    monkeypatch.setattr(module, "LinkedInResolver", Mock())
+    module.LinkedInResolver.return_value.get_cached_persons.return_value = []
     monkeypatch.setattr(module, "dataset_chat_json", AsyncMock(return_value={"names": ["Jane Doe", "Jane Doe", "Ann Advisor"]}))
     return module
 
@@ -102,5 +105,65 @@ async def test_manual_roster_prevents_document_scan(discovery, monkeypatch):
         raise AssertionError("Manual roster must prevent discovery")
     monkeypatch.setattr(discovery, "_add_dataset_linkedin_ids", forbidden)
     assert await discovery.persons_in_dataset_as_person_objects("acme") == []
+    discovery.sync_datasets.assert_not_awaited()
+    discovery.dataset_chat_json.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cached_person_identity_and_metadata_survive_name_discovery(discovery):
+    cached = Person(
+        full_name="Jane Doe", linkedin_id="jane-123",
+        email_addresses=["jane@example.com"],
+        linkedin_profile={"headline": "Known profile"},
+    )
+    discovery.LinkedInResolver.return_value.get_cached_persons.return_value = [cached]
+    discovery.dataset_chat_json.return_value = {"names": ["Jane Doe PhD", "Jane Doe", "Ann Advisor"]}
+    people = await discovery.persons_in_dataset_as_person_objects("acme")
+    assert len(people) == 2
+    assert people[0] is cached
+    assert cached.full_name == "Jane Doe PhD"
+    assert cached.linkedin_id == "jane-123"
+    assert cached.email_addresses == ["jane@example.com"]
+    assert cached.linkedin_profile == {"headline": "Known profile"}
+    assert read_roster("acme")[0].linkedin_id == "jane-123"
+    assert read_roster("acme")[0].email_addresses == ["jane@example.com"]
+    discovery.LinkedInResolver.return_value.get_profiles.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_named_link_connects_cached_id_and_discovered_name(discovery):
+    discovery.LinkedInResolver.return_value.get_cached_persons.return_value = [
+        Person(linkedin_id="jane-123", email_addresses=["jane@example.com"]),
+    ]
+    discovery.dataset_chat_json.return_value = {"names": ["Jane Doe"]}
+    directory = dataset_location_for_domain("acme", "startups").parsed_rel
+    get_storage().write_text(f"{directory}/a.md", "https://linkedin.com/in/jane-123/")
+    get_storage().write_text(f"{directory}/z.md", "[Jane Doe](https://linkedin.com/in/jane-123/)")
+    people = await discovery.persons_in_dataset_as_person_objects("acme")
+    assert len(people) == 1
+    assert people[0].full_name == "Jane Doe"
+    assert people[0].linkedin_id == "jane-123"
+    assert people[0].email_addresses == ["jane@example.com"]
+
+
+@pytest.mark.asyncio
+async def test_distinct_linkedin_ids_are_not_merged(discovery):
+    discovery.LinkedInResolver.return_value.get_cached_persons.return_value = [
+        Person(full_name="Jane Doe", linkedin_id="jane-one"),
+        Person(full_name="Jane Doe", linkedin_id="jane-two"),
+    ]
+    discovery.dataset_chat_json.return_value = {"names": ["Jane Doe"]}
+    people = await discovery.persons_in_dataset_as_person_objects("acme")
+    assert {p.linkedin_id for p in people} == {"jane-one", "jane-two"}
+
+
+@pytest.mark.asyncio
+async def test_manual_roster_prevents_cached_person_loading(discovery):
+    InsightFile("acme", "persons_in_dataset", "manual").save(
+        "| full-name | linkedin-id |\n|---|---|\n| Reviewed Person | reviewed-id |\n"
+    )
+    people = await discovery.persons_in_dataset_as_person_objects("acme")
+    assert [p.linkedin_id for p in people] == ["reviewed-id"]
+    discovery.LinkedInResolver.assert_not_called()
     discovery.sync_datasets.assert_not_awaited()
     discovery.dataset_chat_json.assert_not_awaited()

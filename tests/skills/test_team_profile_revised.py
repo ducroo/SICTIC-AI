@@ -175,9 +175,9 @@ async def test_harness_dispatches_revised_command(revised_runtime):
     assert "Founder evidence" in output
 
 
-def test_bulk_refresh_revised_dependencies_do_not_request_public_profiles():
+def test_bulk_refresh_revised_waits_for_person_profiles():
     from skills.skill_registry import expand_skill_dependencies
 
     assert expand_skill_dependencies(["team-profile-revised"]) == [
-        "startup-profile", "team-profile-revised",
+        "startup-profile", "persons-in-dataset", "person-profile", "team-profile-revised",
     ]
