@@ -191,3 +191,76 @@ async def test_embedding_request_retries_rate_limits(monkeypatch) -> None:
     assert result == [0.0, 1.0]
     assert calls == 2
     assert len(waits) == 1
+
+
+@pytest.mark.asyncio
+async def test_generation_also_waits_out_503_overload(
+    monkeypatch, mock_env
+) -> None:
+    """Gemini 'high demand' 503s are as transient as 429s."""
+    from lib.infrastructure.ai_text_generation import generation
+
+    waits: list[float] = []
+    _no_sleep(monkeypatch, waits)
+    calls = 0
+
+    async def fake_request_text(*, prompt, attempt, **_kwargs) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise InfrastructureError(
+                "503 high demand",
+                kind=InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+                provider="gemini/test",
+                operation="generate_text",
+            )
+        return '{"value": 2}'
+
+    monkeypatch.setattr(generation, "_request_text", fake_request_text)
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": "integer"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    result = await generation.generate_json("prompt", schema)
+    assert result == {"value": 2}
+    assert len(waits) == 1
+
+
+@pytest.mark.asyncio
+async def test_embedding_retries_service_unavailable(monkeypatch) -> None:
+    from litellm.exceptions import ServiceUnavailableError
+
+    from lib.datasets import embeddings as embeddings_module
+
+    waits: list[float] = []
+    _no_sleep(monkeypatch, waits)
+    calls = 0
+
+    async def fake_scheduler_run(operation, operation_kwargs) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise ServiceUnavailableError(
+                message="503", model="test", llm_provider="gemini"
+            )
+
+        class _Response:
+            data = [{"embedding": [1.0]}]
+
+        return _Response()
+
+    monkeypatch.setattr(
+        embeddings_module.scheduler, "run", fake_scheduler_run
+    )
+    service = embeddings_module.EmbeddingService.__new__(
+        embeddings_module.EmbeddingService
+    )
+    service.model = "gemini/test-embedding"
+    service.endpoint = None
+    monkeypatch.setattr(
+        embeddings_module, "_request_timeout", lambda: 1.0
+    )
+    assert await service.embed("x") == [1.0]
+    assert calls == 2

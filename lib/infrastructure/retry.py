@@ -1,11 +1,12 @@
-"""Wait-and-retry for provider rate limits (HTTP 429).
+"""Wait-and-retry for transient provider errors (HTTP 429/503).
 
-A rate-limited call is not a failed attempt: the request never ran, the
-provider just asked us to slow down. Callers wrap one logical request in
-``with_rate_limit_retry`` so throttling is absorbed by waiting out the
-provider's rolling minute instead of burning correction attempts (text
-generation) or failing outright (embeddings, which previously had no
-retry at all).
+A rate-limited or overloaded call is not a failed attempt: the request
+never ran, the provider just asked us to come back later. Callers wrap
+one logical request in ``with_rate_limit_retry`` (with a predicate
+naming the transient errors of their provider layer) so throttling and
+momentary overload are absorbed by waiting instead of burning correction
+attempts (text generation) or failing outright (embeddings, which
+previously had no retry at all).
 """
 
 from __future__ import annotations

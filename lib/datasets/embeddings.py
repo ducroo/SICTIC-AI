@@ -106,9 +106,15 @@ class EmbeddingService:
 
 
 def _is_rate_limit_error(error: BaseException) -> bool:
-    from litellm.exceptions import RateLimitError
+    from litellm.exceptions import (
+        InternalServerError,
+        RateLimitError,
+        ServiceUnavailableError,
+    )
 
-    return isinstance(error, RateLimitError)
+    return isinstance(
+        error, (RateLimitError, ServiceUnavailableError, InternalServerError)
+    )
 
 
 async def _execute_embedding(

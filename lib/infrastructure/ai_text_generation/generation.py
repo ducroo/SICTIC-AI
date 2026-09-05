@@ -49,19 +49,22 @@ T = TypeVar("T", str, dict, list)
 Reviewer = Callable[[T], Review[T]]
 
 
-def _is_rate_limit(error: BaseException) -> bool:
-    return (
-        isinstance(error, InfrastructureError)
-        and error.kind is InfrastructureErrorKind.RATE_LIMIT
+def _is_transient_provider_error(error: BaseException) -> bool:
+    """Rate limits (429) and provider overload/outage (503 and friends):
+    the request never ran — waiting beats failing."""
+    return isinstance(error, InfrastructureError) and error.kind in (
+        InfrastructureErrorKind.RATE_LIMIT,
+        InfrastructureErrorKind.SERVICE_UNAVAILABLE,
     )
 
 
 async def _request_text_waiting_out_rate_limits(**kwargs: Any) -> str:
-    """One logical attempt: 429s wait for the quota window, they don't
-    count as failed generation attempts (the request never ran)."""
+    """One logical attempt: 429s/503s wait for the provider to recover,
+    they don't count as failed generation attempts (the request never
+    ran)."""
     return await with_rate_limit_retry(
         lambda: _request_text(**kwargs),
-        is_rate_limit=_is_rate_limit,
+        is_rate_limit=_is_transient_provider_error,
         logger=logger,
         label=f"{kwargs.get('output_type', 'text')} generation",
     )
