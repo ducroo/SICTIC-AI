@@ -1,20 +1,15 @@
-"""Discover and maintain the editable person list for a dataset."""
+"""Read and render the authoritative editable person roster. No discovery."""
 
-import re
 from typing import List
 from lib.storage import get_storage
 from lib.people.linkedin import extract_linkedin_id
-from lib.infrastructure.web_search import WebSearchAdapter
 from lib.insights import InsightFile
 from lib.infrastructure.logging import get_logger
 from lib.people.model import Person, normalize_email_addresses
-from lib.people.linkedin import LinkedInResolver
-from lib.datasets.paths import dataset_parsed_path
 from lib.slugify import slugify
 
 logger = get_logger(__name__)
 
-_LINKEDIN_URL_PATTERN = re.compile(r'linkedin\.com/(?:in|pub)/([a-zA-Z0-9\-]+)', re.IGNORECASE)
 
 
 def _manual_header_key(value: str) -> str:
@@ -116,90 +111,26 @@ def _render_manual_persons_table(dataset_name: str, persons: List[Person]) -> st
     return "\n".join(lines) + "\n"
 
 
-def persons_in_dataset(dataset_name: str) -> List[Person]:
-    """
-    Discovers all unique persons associated with a dataset; only hunts for linkedin profiles
-    
-    Discovery phases:
-    1. Checks if a manual override file exists (Source of Truth).
-    2. Checks local LinkedIn cache for already fully-populated Person objects.
-    3. Web Search (Google for dataset + site:linkedin.com/in/) to find missing profiles.
-    4. Regex scan of datasets2md for explicit linkedin URLs.
-    
-    Returns a deduplicated list of Person objects.
-    """
+def manual_persons_in_dataset(dataset_name: str) -> List[Person] | None:
+    """Read the authoritative editable roster without discovery or enrichment."""
+    insight = InsightFile(
+        dataset=slugify(dataset_name), skill="persons_in_dataset", model="manual"
+    )
     storage = get_storage()
-    dataset_slug = slugify(dataset_name)
+    if not storage.exists(insight.path):
+        return None
+    persons = _parse_manual_persons_table(storage.read_text(insight.path))
+    if persons is None:
+        raise ValueError(f"Unsupported manual persons roster: {insight.path}")
+    logger.info("[%s] Loaded %d persons from manual roster %s", dataset_name, len(persons), insight.path)
+    return persons
 
-    manual_insight = InsightFile(
-        dataset=dataset_slug,
-        skill="persons_in_dataset",
-        model="manual",
-    )
-    manual_rel = manual_insight.path
 
-    # 1. Manual Override File (Source of Truth)
-    if storage.exists(manual_rel):
-        logger.info(f"[{dataset_name}] Found manual persons insight: {manual_rel}")
-        discovered_persons = _parse_manual_persons_table(storage.read_text(manual_rel))
-        if discovered_persons is not None:
-            logger.info(f"[{dataset_name}] Loaded {len(discovered_persons)} persons from manual insight.")
-            return discovered_persons
-        logger.info(f"[{dataset_name}] Ignoring unsupported manual persons insight: {manual_rel}")
-
-    # Otherwise, proceed with discovery
-    discovered_persons: List[Person] = []
-    
-    def _add_person(new_p: Person):
-        if not any(ex.matches(new_p) for ex in discovered_persons):
-            discovered_persons.append(new_p)
-    
-    logger.info(f"[{dataset_name}] Starting people discovery...")
-    
-    # 2. Local Cache
-    linkedin_resolver = LinkedInResolver(dataset_slug)
-    cached = linkedin_resolver.get_cached_persons()
-    for p in cached:
-        _add_person(p)
-            
-    # Skip web discovery for community members (too broad/already provided directly)
-    if dataset_slug != "sictic-members":
-        # 3. Web Search
-        try:
-            google = WebSearchAdapter()
-            query = f"{dataset_name} site:linkedin.com/in/"
-            logger.info(f"[{dataset_name}] Searching web for: {query}")
-            results = google.search(query)
-            for r in results:
-                link = r.get("link", "")
-                slug = extract_linkedin_id(link)
-                if slug:
-                    _add_person(Person(linkedin_id=slug))
-        except Exception as e:
-            logger.warning(f"[{dataset_name}] Web search discovery failed: {e}")
-            
-        # 4. Regex across datasets2md
-        md_dir = dataset_parsed_path(dataset_slug)
-        if storage.exists(md_dir):
-            logger.info(f"[{dataset_name}] Scanning {md_dir} for explicit LinkedIn URLs...")
-            files = storage.list(md_dir, suffix=".md")
-            
-            for f in files:
-                try:
-                    content = storage.read_text(f"{md_dir}/{f}")
-                    matches = _LINKEDIN_URL_PATTERN.findall(content)
-                    for match in matches:
-                        if match:
-                            _add_person(Person(linkedin_id=match.lower()))
-                except Exception as e:
-                    logger.warning(f"Failed to read {f} for regex scanning: {e}")
-                    
-    logger.info(f"[{dataset_name}] Discovery complete. Found {len(discovered_persons)} unique persons.")
-    
-    # Write the results to the manual insight so deal leads can edit it later.
-    manual_insight.save(
-        _render_manual_persons_table(dataset_name, discovered_persons)
-    )
-    logger.info(f"[{dataset_name}] Wrote discovered persons list to {manual_rel}")
-    
-    return discovered_persons
+def persons_in_dataset(dataset_name: str) -> List[Person]:
+    """Read the roster for synchronous consumers; discovery belongs to the skill."""
+    persons = manual_persons_in_dataset(dataset_name)
+    if persons is None:
+        raise FileNotFoundError(
+            f"No persons roster for {dataset_name}; run the persons_in_dataset skill first."
+        )
+    return persons

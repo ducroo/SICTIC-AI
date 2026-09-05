@@ -148,6 +148,7 @@ async def _run_check(
     response_schema: dict[str, Any],
     status_scale: list[str],
     missing_evidence_status: str,
+    allow_empty_retrieval: bool = False,
 ) -> dict[str, Any]:
     try:
         result = await dataset_chat_json(
@@ -160,6 +161,7 @@ async def _run_check(
                 status_scale=status_scale,
             ),
             cacheable_prompt_prefix=_llm_prompt_prefix(llm_instructions),
+            **({"allow_empty_retrieval": True} if allow_empty_retrieval else {}),
         )
         if result is None:
             return _missing_evidence_result(missing_evidence_status)
@@ -184,8 +186,14 @@ async def batch_audit(
     llm_instructions: str | None = None,
     status_scale: list[str] | None = None,
     missing_evidence_status: str | None = None,
+    allow_empty_retrieval: bool = False,
 ) -> InsightFile:
-    """Run a structured Markdown checklist and save its canonical JSON Insight."""
+    """Run a structured Markdown checklist and save its canonical JSON Insight.
+
+    Set allow_empty_retrieval only when llm_instructions includes shared
+    documentary evidence that can support checks without additional chunks.
+    Search failures still produce technical errors rather than missing evidence.
+    """
     if llm_instructions is None:
         llm_instructions = load_repository_config(
             "batch_audit", "llm_instructions"
@@ -229,6 +237,7 @@ async def batch_audit(
             "llm_instructions": llm_instructions,
             "status_scale": status_scale,
             "missing_evidence_status": missing_evidence_status,
+            **({"allow_empty_retrieval": True} if allow_empty_retrieval else {}),
             "numbering": [
                 {
                     "chapter": chapter.number,
@@ -285,6 +294,7 @@ async def batch_audit(
                     response_schema,
                     status_scale,
                     missing_evidence_status,
+                    **({"allow_empty_retrieval": True} if allow_empty_retrieval else {}),
                 )
             )
             for check in checks

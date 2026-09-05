@@ -68,9 +68,11 @@ def test_insight_skill_apis_declare_uniform_result_contract():
         "advocates": "skills.advocates.advocates",
         "dd_checks": "skills.dd_checks.dd_checks",
         "dd_priorities": "skills.dd_priorities.dd_priorities",
+        "deep_dive_invitation": "skills.deep_dive_invitation.deep_dive_invitation",
         "expert_search": "skills.expert_search.expert_search",
         "investor_profile": "skills.investor_profile.investor_profile",
         "person_profile": "skills.person_profile.person_profile",
+        "persons_in_dataset": "skills.persons_in_dataset.persons_in_dataset",
         "potential_investors": "skills.potential_investors.potential_investors",
         "sha_review": "skills.sha_review.sha_review",
         "startup_profile": "skills.startup_profile.startup_profile",
@@ -78,6 +80,7 @@ def test_insight_skill_apis_declare_uniform_result_contract():
         "submission_ready": "skills.submission_ready.submission_ready",
         "suggested_startups": "skills.suggested_startups.suggested_startups",
         "team_profile": "skills.team_profile.team_profile",
+        "team_profile_revised": "skills.team_profile_revised.team_profile_revised",
     }
 
     for function_name, module_name in entrypoints.items():

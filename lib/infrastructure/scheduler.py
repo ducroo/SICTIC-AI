@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 
 _RESOURCE_KEYS = ("docling", "model", "embedding", "llm", "rerank")
-_DEFAULT_WAIT_TIMEOUT = 3600.0
+_DEFAULT_WAIT_TIMEOUT = 5 * 60 * 60
 _POLL_INTERVAL = 0.05
 # Active slots refresh their lease periodically. A lease without a recent
 # heartbeat is reclaimed even when its process remains alive.
@@ -161,7 +161,7 @@ class Scheduler:
         state_path: str | os.PathLike | None = None,
         ollama_num_parallel: int | None = None,
         ollama_max_loaded_models: int | None = None,
-        wait_timeout: float = _DEFAULT_WAIT_TIMEOUT,
+        wait_timeout: float | None = None,
         poll_interval: float = _POLL_INTERVAL,
         lease_max_age: float | None = None,
         cloud_tpm_budget: int | None = None,
@@ -180,7 +180,14 @@ class Scheduler:
             if ollama_max_loaded_models is not None
             else _int_env("OLLAMA_MAX_LOADED_MODELS", 1)
         )
-        self.wait_timeout = wait_timeout
+        self.wait_timeout = (
+            wait_timeout
+            if wait_timeout is not None
+            else _float_env(
+                "SCHEDULER_WAIT_TIMEOUT",
+                _DEFAULT_WAIT_TIMEOUT,
+            )
+        )
         self.poll_interval = poll_interval
         self.lease_max_age = (
             lease_max_age
@@ -195,6 +202,8 @@ class Scheduler:
             if cloud_tpm_budget is not None
             else _int_env("CLOUD_TPM_BUDGET", 0)
         )
+        if self.wait_timeout <= 0:
+            raise ValueError("wait_timeout must be positive")
         if self.lease_max_age <= 0:
             raise ValueError("lease_max_age must be positive")
         self._policy = SchedulerPolicy(

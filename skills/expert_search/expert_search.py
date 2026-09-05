@@ -13,7 +13,7 @@ from skills.ranking.ranking_persons import ranking_persons
 
 logger = get_logger(__name__)
 
-async def expert_search(startup_name: str, target_experts: Optional[List[str]] = None, exclude_experts: Optional[List[str]] = None, top_k: int = 8) -> InsightResult:
+async def expert_search(startup_name: str, target_experts: Optional[List[str]] = None, exclude_experts: Optional[List[str]] = None, top_k: int = 16) -> InsightResult:
     """
     Provides a ranked list of potential experts for a given startup based on quickselect ranking and LLM refinement.
     """
@@ -35,6 +35,7 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
         dataset=startup_slug,
         skill="expert_search",
         model=default_llm,
+        source_datasets=[startup_slug, "sictic-members"],
         config_key=config_cache_key(
             config["expert_search"],
             config.get("ranking_top_k", {}),
@@ -47,6 +48,7 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
             },
         ),
     )
+    if reusable := insight.find(selection="reusable"): return [reusable]
     # 1. Fetch Startup Profile
     logger.info(f"[{startup_slug}] Fetching startup profile...")
     try:

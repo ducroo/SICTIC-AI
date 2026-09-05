@@ -73,8 +73,13 @@ async def dataset_chat_json(
     *,
     max_chunks: int = 25,
     cacheable_prompt_prefix: str | None = None,
+    allow_empty_retrieval: bool = False,
 ) -> dict | list | None:
-    """Generate schema-conformant JSON grounded in one dataset retrieval."""
+    """Generate schema-conformant JSON grounded in one dataset retrieval.
+
+    allow_empty_retrieval permits a supplied prefix containing documentary
+    evidence to stand alone when retrieval succeeds without matching chunks.
+    """
     prepared = await _prepare_generation(
         dataset_name,
         queries,
@@ -82,6 +87,7 @@ async def dataset_chat_json(
         max_chunks=max_chunks,
         strict_insufficient_context=False,
         cacheable_prompt_prefix=cacheable_prompt_prefix,
+        allow_empty_retrieval=allow_empty_retrieval,
     )
     if prepared is None:
         return None
@@ -102,6 +108,7 @@ async def _prepare_generation(
     max_chunks: int,
     strict_insufficient_context: bool,
     cacheable_prompt_prefix: str | None,
+    allow_empty_retrieval: bool = False,
 ) -> tuple[str | None, str] | None:
     search_queries = _search_queries(queries)
     prompt = prompt.strip()
@@ -119,7 +126,7 @@ async def _prepare_generation(
         max_chunks=max_chunks,
         raise_on_error=True,
     )
-    if not chunks:
+    if not chunks and not (allow_empty_retrieval and stable_input):
         logger.warning(
             "[%s] No chunks retrieved; refusing empty-context AI answer",
             dataset_name,
@@ -149,7 +156,10 @@ async def _prepare_generation(
         selected.append(chunk_markdown)
         used_characters += next_size
 
-    context = "\n\n---\n\n".join(selected)
+    context = "\n\n---\n\n".join(selected) or (
+        "No question-specific evidence was retrieved. Assess only evidence "
+        "already present in the shared context; otherwise report insufficient information."
+    )
     logger.info(
         "[%s] Using %s of %s chunks (%s characters)",
         dataset_name,

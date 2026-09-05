@@ -118,6 +118,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
                 "confidence": 80,
                 "evidence": ["Fixture company evidence."],
             }
+        if "names" in properties:
+            return {"names": [fixtures.person_name]}
         raise AssertionError("Unexpected dataset-chat JSON schema")
 
     async def fake_structured_audit_chat(*_args, **kwargs):
@@ -128,6 +130,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
             if "balanced" in statuses
             else "Pass"
             if "Pass" in statuses
+            else "Assessed"
+            if "Assessed" in statuses
             else "Fine"
         )
         return {
@@ -167,7 +171,11 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return reviewer(result).output if reviewer else result
 
     async def fake_ranking_persons(*_args, **_kwargs):
-        return "| Rank | Person | Rationale |\n|---|---|---|\n| 1 | Jane Doe | Fixture match |"
+        return (
+            "| Rank | Full Name | Email Addresses | LinkedIn ID | Rationale |\n"
+            "|---|---|---|---|---|\n"
+            "| 1 | Jane Doe | jane@example.com | jane-doe | Fixture match |"
+        )
 
     async def fake_startup_profile(startup, *_args, **_kwargs):
         insight = InsightFile(startup, "startup_profile", "manual")
@@ -263,6 +271,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     dd_priorities_mod = importlib.import_module(
         "skills.dd_priorities.dd_priorities"
     )
+    deep_dive_invitation_mod = importlib.import_module(
+        "skills.deep_dive_invitation.deep_dive_invitation"
+    )
     sha_review_mod = importlib.import_module("skills.sha_review.sha_review")
     expert_search_mod = importlib.import_module("skills.expert_search.expert_search")
     investor_profile_mod = importlib.import_module("skills.investor_profile.investor_profile")
@@ -279,6 +290,18 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "skills.suggested_startups.inputs"
     )
     team_profile_mod = importlib.import_module("skills.team_profile.team_profile")
+    team_profile_revised_mod = importlib.import_module(
+        "skills.team_profile_revised.team_profile_revised"
+    )
+    monkeypatch.setattr(
+        team_profile_revised_mod, "ensure_startup_dataset", fake_ensure_startup_dataset
+    )
+    monkeypatch.setattr(team_profile_revised_mod, "startup_profile", fake_startup_profile)
+    monkeypatch.setattr(team_profile_revised_mod, "generate_markdown", fake_llm_chat)
+    persons_skill = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
+    monkeypatch.setattr(persons_skill, "dataset_chat_json", fake_dataset_chat_json)
+    monkeypatch.setattr(persons_skill, "LinkedInResolver", FakeLinkedInResolver)
+
 
     monkeypatch.setattr(startup_sources, "ensure_startup_dataset", fake_ensure_startup_dataset)
     monkeypatch.setattr(people_discovery, "persons_in_dataset", fake_persons_in_dataset)
@@ -293,6 +316,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         startup_traction_mod,
         person_profile_mod,
         team_profile_mod,
+        team_profile_revised_mod,
         dd_checks_mod,
         sha_review_mod,
         submission_ready_mod,
@@ -355,6 +379,28 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(person_profile_mod, "build_person_dossier", fake_build_person_dossier)
     monkeypatch.setattr(expert_search_mod, "startup_profile", fake_startup_profile)
     monkeypatch.setattr(potential_investors_mod, "startup_profile", fake_startup_profile)
+
+    async def fake_dealum_import(startup):
+        return SimpleNamespace(
+            dataset_slug="example-startup",
+            dealum_name=startup,
+            dealum_url="https://dealum.example/application/1",
+            application_path=None,
+        )
+
+    async def fake_expert_search(startup, **_kwargs):
+        insight = InsightFile(startup, "expert_search", "manual")
+        insight.save(await fake_ranking_persons())
+        return [insight]
+
+    monkeypatch.setattr(deep_dive_invitation_mod, "dealum_import", fake_dealum_import)
+    monkeypatch.setattr(deep_dive_invitation_mod, "startup_profile", fake_startup_profile)
+    monkeypatch.setattr(deep_dive_invitation_mod, "expert_search", fake_expert_search)
+    monkeypatch.setattr(
+        deep_dive_invitation_mod,
+        "member_preferences",
+        lambda *_args, **_kwargs: [fixtures.person],
+    )
 
     for module in [expert_search_mod, potential_investors_mod, advocates_mod]:
         monkeypatch.setattr(module, "ranking_persons", fake_ranking_persons)
