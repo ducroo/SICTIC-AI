@@ -99,7 +99,7 @@ async def test_revised_pipeline_shares_profiles_and_reuses_caches(revised_runtim
     [result] = await runtime.module.team_profile_revised("ACME")
     runtime.startup_call.assert_awaited_once_with("acme")
     runtime.person_call.assert_awaited_once_with(
-        "acme", names=None, allow_public_sources=False, assess_founder_traits=True,
+        "acme", names=None,
     )
     assert result.skill == "team_profile_revised"
     assert "cv.pdf — page 1" in result.content()

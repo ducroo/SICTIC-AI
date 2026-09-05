@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -26,7 +27,8 @@ def local_profiles(mock_env, monkeypatch):
     monkeypatch.setattr(module, "sync_datasets", AsyncMock())
     discovery_module = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
     monkeypatch.setattr(discovery_module, "sync_datasets", AsyncMock())
-    monkeypatch.setattr(module, "LinkedInResolver", Mock(side_effect=AssertionError("LinkedIn resolution is forbidden")))
+    monkeypatch.setattr(module, "LinkedInResolver", Mock())
+    module.LinkedInResolver.return_value.get_profiles.side_effect = lambda people: people
     discovery = AsyncMock(return_value={"names": ["Jane Doe", "Jane Doe", "Ann Advisor"]})
     monkeypatch.setattr(discovery_module, "dataset_chat_json", discovery)
     module.discovery_test_module = discovery_module
@@ -40,61 +42,55 @@ def local_profiles(mock_env, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_data_room_mode_reads_all_people_without_discovery_or_public_enrichment(local_profiles):
+async def test_standard_profile_reads_roster_and_enriches_without_discovery(local_profiles):
     module = local_profiles
     people = await module.person_profile_as_person_objects(
-        "acme", allow_public_sources=False, assess_founder_traits=True,
+        "acme",
     )
     assert [person.full_name for person in people] == ["Jane Doe", "Ann Advisor"]
     assert all(person.person_profile_markdown.startswith("Full-name:") for person in people)
-    module.LinkedInResolver.assert_not_called()
+    assert module.LinkedInResolver.return_value.get_profiles.call_count == 1
     assert module.generate_markdown.await_count == 2
     assert all("cv.pdf" in call.args[0] for call in module.generate_markdown.await_args_list)
 
     # The editable roster is reused; derived profiles use the revision cache.
     await module.person_profile_as_person_objects(
-        "acme", allow_public_sources=False, assess_founder_traits=True,
+        "acme",
     )
     module.discovery_test_module.dataset_chat_json.assert_not_awaited()
     assert module.generate_markdown.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_generation_settings_invalidate_cache_without_changing_filename(local_profiles):
+async def test_standard_profile_includes_linkedin_and_founder_traits_and_reuses_cache(local_profiles):
     module = local_profiles
-    person = Person(full_name="Jane Doe", linkedin_id="jane-doe-123", linkedin_profile={"headline": "External-only biography"})
+    person = Person(full_name="Jane Doe", linkedin_id="jane-doe-123", linkedin_profile={"headline": "LinkedIn biography"})
     original = await module._generate_single_profile("acme", person)
-    result = await module._generate_single_profile(
-        "acme", person, allow_public_sources=False, assess_founder_traits=True,
-    )
+    result = await module._generate_single_profile("acme", person)
     assert result.path == original.path
     assert result.filename == "jane-doe-123-test-model-1b.md"
-    assert module.generate_markdown.await_count == 2
+    module.generate_markdown.assert_awaited_once()
     prompt = module.generate_markdown.await_args.args[0]
-    assert "External-only biography" not in prompt
+    assert "LinkedIn biography" in prompt
     assert "cv.pdf" in prompt
-    await module._generate_single_profile(
-        "acme", person, allow_public_sources=False, assess_founder_traits=True,
-    )
-    assert module.generate_markdown.await_count == 2
-    await module._generate_single_profile("acme", person)
-    assert module.generate_markdown.await_count == 3
+    assert "Founder traits — N001" in prompt
+    assert "Insufficient information" in prompt
 
 
 @pytest.mark.asyncio
-async def test_explicit_person_in_data_room_mode_does_not_expand_target_set(local_profiles):
+async def test_explicit_person_does_not_expand_target_set(local_profiles):
     people = await local_profiles.person_profile_as_person_objects(
-        "acme", names="Jane Doe", allow_public_sources=False,
+        "acme", names="Jane Doe",
     )
     assert [person.full_name for person in people] == ["Jane Doe"]
     assert local_profiles.generate_markdown.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_empty_data_room_discovery_returns_no_people(local_profiles):
+async def test_empty_roster_returns_no_people(local_profiles):
     InsightFile("acme", "persons_in_dataset", "manual").save("| full-name | linkedin-id |\n|---|---|\n")
     assert await local_profiles.person_profile_as_person_objects(
-        "acme", allow_public_sources=False,
+        "acme",
     ) == []
     local_profiles.generate_markdown.assert_not_awaited()
     local_profiles.LinkedInResolver.assert_not_called()
@@ -139,7 +135,7 @@ async def test_missing_roster_never_triggers_discovery(local_profiles):
     get_storage().mkdir(location.raw_rel)
     with pytest.raises(FileNotFoundError, match="run the persons_in_dataset skill first"):
         await local_profiles.person_profile_as_person_objects(
-            "missing-roster", allow_public_sources=False,
+            "missing-roster",
         )
     local_profiles.discovery_test_module.dataset_chat_json.assert_not_awaited()
     local_profiles.sync_datasets.assert_not_awaited()
@@ -147,16 +143,15 @@ async def test_missing_roster_never_triggers_discovery(local_profiles):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("public,traits", [(True, False), (True, True), (False, False), (False, True)])
 @pytest.mark.parametrize("linkedin_id,emails,expected", [
     ("jane-123", ["unrelated@example.com"], "jane-123"),
     ("", ["unrelated@example.com"], "unrelated-example-com"),
     ("", [], "jane-doe"),
 ])
-async def test_profile_filename_uses_standard_identifier_order(local_profiles, linkedin_id, emails, expected, public, traits):
+async def test_profile_filename_uses_standard_identifier_order(local_profiles, linkedin_id, emails, expected):
     person = Person(full_name="Jane Doe", linkedin_id=linkedin_id, email_addresses=emails)
     result = await local_profiles._generate_single_profile(
-        "acme", person, allow_public_sources=public, assess_founder_traits=traits,
+        "acme", person,
     )
     assert result.filename == f"{expected}-test-model-1b.md"
 
@@ -167,7 +162,6 @@ async def test_manual_profile_remains_authoritative(local_profiles):
     manual.save("Human reviewed profile")
     result = await local_profiles._generate_single_profile(
         "acme", Person(full_name="Jane Doe", linkedin_id="jane-123"),
-        allow_public_sources=False, assess_founder_traits=True,
     )
     assert result.path == manual.path
     assert result.content() == "Human reviewed profile"
@@ -180,3 +174,30 @@ async def test_email_only_person_uses_email_identifier(local_profiles):
         "acme", Person(email_addresses=["person@example.com"]),
     )
     assert result.filename == "person-example-com-test-model-1b.md"
+
+
+@pytest.mark.asyncio
+async def test_registry_profiles_are_reused_by_team_workflow(local_profiles, monkeypatch):
+    from skills.skill_registry import SKILL_REGISTRY
+
+    profiles = local_profiles
+    team = importlib.import_module("skills.team_profile_revised.team_profile_revised")
+    startup = InsightFile("acme", "startup_profile", "manual")
+    startup.save("Acme startup evidence")
+    monkeypatch.setattr(team, "ensure_startup_dataset", AsyncMock(return_value=SimpleNamespace(dataset_slug="acme")))
+    monkeypatch.setattr(team, "sync_datasets", AsyncMock())
+    monkeypatch.setattr(team, "startup_profile", AsyncMock(return_value=[startup]))
+    monkeypatch.setattr(team, "_run_audits", AsyncMock(return_value=[]))
+    monkeypatch.setattr(team, "generate_markdown", AsyncMock(return_value="Team synthesis"))
+
+    original = await SKILL_REGISTRY["person-profile"].func("acme")
+    contents = {insight.path: insight.content() for insight in original}
+    assert profiles.generate_markdown.await_count == 2
+    await team.team_profile_revised("acme")
+    await SKILL_REGISTRY["person-profile"].func("acme")
+    await team.team_profile_revised("acme")
+
+    assert profiles.generate_markdown.await_count == 2
+    assert {insight.path: insight.content() for insight in original} == contents
+    team._run_audits.assert_awaited_once()
+    team.generate_markdown.assert_awaited_once()
