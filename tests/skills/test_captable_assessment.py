@@ -234,3 +234,15 @@ def test_esign_scan_finds_markers_inside_flate_stream() -> None:
     blob = b"%PDF-1.7\nstream\n" + payload + b"endstream\n%%EOF"
     markers = scan_esign_markers(blob)
     assert markers["docusign_envelope_ids"] == ["8D144D1A-7658-4395"]
+
+
+def test_qefr_new_money_component_is_reported() -> None:
+    findings = assess_cla(
+        _cla(qefr_min_new_money=_q(8_000_000)), RULES
+    )
+    finding = next(f for f in findings if f["item"] == "qefr_trigger")
+    assert "new" in finding["detail"] and "8,000,000" in finding["detail"]
+
+    findings = assess_cla(_cla(qefr_min_new_money=_q(None)), RULES)
+    finding = next(f for f in findings if f["item"] == "qefr_trigger")
+    assert "no separate new-investor minimum" in finding["detail"]

@@ -213,14 +213,23 @@ def assess_cla(
     # --- QEFR trigger -----------------------------------------------------
     qefr_present = v("qefr_present")
     qefr_min = v("qefr_min_raise")
+    qefr_new_money = v("qefr_min_new_money")
     if qefr_present is True and qefr_min is not None:
+        new_money_note = (
+            f", of which at least {qefr_new_money:,.0f} must come from new "
+            "investors (insiders alone cannot trigger the mandatory "
+            "conversion)"
+            if qefr_new_money is not None
+            else " with no separate new-investor minimum identified — check"
+            " whether existing lenders alone could trigger the conversion"
+        )
         findings.append(
             _finding(
                 "qefr_trigger",
                 STATUS_STANDARD,
                 "info",
                 f"Qualified-round conversion with a minimum raise of "
-                f"{qefr_min:,.0f}.",
+                f"{qefr_min:,.0f}{new_money_note}.",
             )
         )
     elif qefr_present is True:

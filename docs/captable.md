@@ -34,9 +34,12 @@ data room ──1 classify──2 extract CLAs──3 assess──4 aggregate─
 2. **Extract CLA terms** per document against a SECA-derived schema:
    lenders (multi-lender agreements supported, per-lender amounts
    apportioned from the total when unstated — disclosed), principal,
-   interest (mode, rate, day-count, compounding), maturity, conversion
-   triggers (QEFR with minimum raise, change of control incl. repayment
-   multiple, maturity), cap / discount / floor, denominator basis,
+   interest (mode, rate, day-count, compounding, and the safe-harbor rate
+   itself when the contract quantifies it), maturity, conversion
+   triggers (QEFR with minimum raise and its new-investor minimum, change
+   of control incl. repayment multiple, maturity incl. a fixed maturity
+   conversion price where the price definition varies by trigger),
+   cap / discount / floor, denominator basis,
    subordination and its scope, MFN, pro-rata rights, conversion capital
    sources, consents, SHA accession. Every value carries a verified quote;
    absent terms land in `missing_terms` with the sections scanned.
@@ -82,7 +85,14 @@ data room ──1 classify──2 extract CLAs──3 assess──4 aggregate─
 
 Reads a snapshot and computes, in pure Python
 (`lib/captable/model.py`): loan balances accrued under four day-count
-conventions with simple/annual compounding; SECA-style conversion pricing
+conventions with simple/annual compounding (safe-harbor-capped loans
+accrue at the documented safe-harbor rate, not the stated ceiling — an
+unquantified safe-harbor cap falls back to the ceiling with a loud
+overstatement disclosure); a `maturity_conversion_at_fixed_price` block
+whenever a CLA fixes a per-share price for post-maturity conversion
+(the discount/cap scenario prices apply to round conversions only, and
+the fixed price times the current fully-diluted count reveals the
+company's own value anchor); SECA-style conversion pricing
 (lower of cap-derived and discounted price, floors, nominal warnings); and
 a hypothetical round converted under **all three market methods side by
 side** — pre-money, percentage-ownership (fixed-point solver for the
@@ -154,6 +164,12 @@ measurably worse — never use the override for real due-diligence output.
   status to `converted`; similarly, the register's transfer/acquisition
   entries are not yet mined as evidence for cross-version share movements
   (a documented transfer could resolve a `shrinking_holder` warning).
+- Interest accrual starts at the execution date; the contractual value
+  date of the actual disbursement (often a few business days later) is
+  not extracted, so balances are marginally conservative-high.
+- CLA disclosure schedules are not mined for non-captable diligence facts
+  (license royalties, litigation, etc.) — that belongs to the dd_checks
+  checklist flow, not this skill.
 - Classification confidence varies slightly across runs (LLM-judged);
   classes have been stable in testing, and an eval suite over the fixture
   answer key is the planned guardrail.

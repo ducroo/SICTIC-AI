@@ -49,7 +49,11 @@ Field guidance:
   this is that lender's amount.
 - `interest_mode`: `interest_free` when the loan bears no interest; `fixed`
   for a plain rate; `safe_harbor_capped` when tied to the Swiss federal tax
-  administration safe-harbor rate.
+  administration safe-harbor rate (e.g. "the LOWER of X% and the ESTV/SFTA
+  safe harbor rate"). In that case `interest_rate_pct` is the stated ceiling
+  (X) and `interest_safe_harbor_rate_pct` is the safe-harbor rate ITSELF if
+  the document states it (contracts often quantify it in passing, e.g.
+  "currently 1.75%"); null when the document does not put a number on it.
 - `interest_day_count`: only if the text states the convention (e.g. "365-day
   year" = act/365, "actual number of days elapsed ... 360" = act/360,
   "30/360" = 30/360).
@@ -58,6 +62,20 @@ Field guidance:
   `coc_*` = change of control; `maturity_conversion_*` = conversion at or
   around the maturity date. `*_mandatory` is true for mandatory/automatic
   conversion, false for voluntary/at-lender's-option.
+- `qefr_min_new_money`: qualified-round definitions often have TWO components
+  — a total-round minimum (→ `qefr_min_raise`) AND a minimum that must come
+  from NEW investors ("of which at least CHF X from new investors"). Report
+  the new-money component here; null only when the definition truly has a
+  single threshold. This matters: without a new-money component, insiders
+  alone could trigger the mandatory conversion.
+- `maturity_conversion_price`: conversion-price definitions frequently vary
+  BY TRIGGER (read the full "Conversion Price" definition including all
+  lettered clauses and annexes): discount/cap pricing may apply only to
+  round conversions while maturity (and sometimes CoC) conversion uses a
+  FIXED per-share price. Report that fixed maturity price here; if the
+  maturity conversion instead uses the discount/cap mechanics, null. A
+  missed fixed price silently mis-prices the exact scenario that applies to
+  an expired loan.
 - `valuation_cap` / `valuation_floor`: the CHF (or loan-currency) company
   valuation amounts, not per-share prices.
 - `discount_pct`: the discount as a percentage (e.g. 20 for "80% of the

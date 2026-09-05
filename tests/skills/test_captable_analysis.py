@@ -94,3 +94,60 @@ def test_explicit_round_parameters_override_defaults() -> None:
     )
     assert result["hypothetical_round"]["pre_money"] == 10_000_000
     assert result["hypothetical_round"]["investment"] == 3_000_000
+
+
+def _snapshot_with_safe_harbor(safe_harbor: float | None) -> dict:
+    snapshot = _snapshot()
+    cla = snapshot["convertibles"][0]
+    cla["interest_rate_pct"] = {"value": 8}
+    cla["interest_mode"] = {"value": "safe_harbor_capped"}
+    cla["interest_safe_harbor_rate_pct"] = {"value": safe_harbor}
+    return snapshot
+
+
+def test_safe_harbor_cap_is_applied_to_the_balance() -> None:
+    """Real-data verification (round 4): the extraction knew safe_harbor_capped but
+    the analysis accrued the full ceiling rate (~CHF 464k overstated)."""
+    result = build_scenarios(
+        _snapshot_with_safe_harbor(1.75), valuation_date=date(2026, 1, 1)
+    )
+    balance = list(result["note_balances"].values())[0]
+    # one year of 1.75% (the safe-harbor figure), NOT 8%
+    assert abs(balance - 101_750) < 100
+    assert any("safe-harbor" in a for a in result["assumptions"])
+
+
+def test_unquantified_safe_harbor_uses_ceiling_and_discloses() -> None:
+    result = build_scenarios(
+        _snapshot_with_safe_harbor(None), valuation_date=date(2026, 1, 1)
+    )
+    balance = list(result["note_balances"].values())[0]
+    assert abs(balance - 108_000) < 100  # ceiling rate, but disclosed
+    assert any("OVERSTATES" in a for a in result["assumptions"])
+
+
+def test_fixed_maturity_price_block() -> None:
+    """Real-data verification (round 4): a fixed maturity conversion price governs
+    the expired-loan scenario and implies the company's own value anchor."""
+    snapshot = _snapshot()
+    snapshot["convertibles"][0]["maturity_conversion_price"] = {
+        "value": 1.2981
+    }
+    result = build_scenarios(snapshot, valuation_date=date(2026, 1, 1))
+    entries = result["maturity_conversion_at_fixed_price"]
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["price_per_share"] == 1.2981
+    # balance (105k at 5%) divided by the fixed price
+    assert abs(entry["implied_shares_at_balance"] - 105_000 / 1.2981) < 1
+    # price x existing fully-diluted shares (1,050,000; treasury excluded)
+    assert (
+        abs(entry["implied_company_value_at_price"] - 1.2981 * 1_050_000)
+        < 1
+    )
+    assert any("MATURITY" in a for a in result["assumptions"])
+
+
+def test_no_fixed_maturity_price_means_empty_block() -> None:
+    result = build_scenarios(_snapshot(), valuation_date=date(2026, 1, 1))
+    assert result["maturity_conversion_at_fixed_price"] == []

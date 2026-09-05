@@ -95,6 +95,25 @@ def _notes_from_snapshot(
         if not principal:
             continue
         rate = _value(cla.get("interest_rate_pct")) or 0.0
+        if _value(cla.get("interest_mode")) == "safe_harbor_capped":
+            safe_harbor = _value(cla.get("interest_safe_harbor_rate_pct"))
+            if safe_harbor is not None and safe_harbor < rate:
+                assumptions.append(
+                    f"{cla.get('document')}: interest is the LOWER of the "
+                    f"stated {rate}% and the tax safe-harbor rate; computed "
+                    f"with the document's safe-harbor figure ({safe_harbor}%)."
+                    " The safe-harbor rate is set yearly — verify the "
+                    "currently applicable ESTV rate."
+                )
+                rate = safe_harbor
+            elif safe_harbor is None:
+                assumptions.append(
+                    f"{cla.get('document')}: interest is capped at the tax "
+                    f"safe-harbor rate, which the document does not quantify;"
+                    f" computed with the stated {rate}% ceiling, which likely"
+                    " OVERSTATES the balance — obtain the applicable ESTV "
+                    "safe-harbor rate."
+                )
         day_count = _value(cla.get("interest_day_count"))
         if day_count in (None, "unstated"):
             day_count = "act/365"
@@ -200,6 +219,51 @@ def build_scenarios(
         )
 
     existing = _existing_shares(snapshot)
+
+    # A fixed maturity conversion price governs conversion AFTER maturity;
+    # the discount/cap scenario prices apply to round conversions only.
+    # Computing both keeps an expired loan from being priced with the
+    # wrong mechanism.
+    maturity_fixed_entries = []
+    total_existing_shares = sum(existing.values())
+    for cla in snapshot.get("convertibles", []):
+        if cla.get("status") != "executed":
+            continue
+        fixed_price = _value(cla.get("maturity_conversion_price"))
+        if not fixed_price:
+            continue
+        balance = next(
+            (
+                note.balance
+                for note in notes
+                if note.label == f"lenders of {cla.get('document')}"
+            ),
+            None,
+        )
+        maturity_fixed_entries.append(
+            {
+                "document": cla.get("document"),
+                "price_per_share": round(float(fixed_price), 4),
+                "implied_shares_at_balance": round(balance / fixed_price, 2)
+                if balance
+                else None,
+                "implied_company_value_at_price": round(
+                    fixed_price * total_existing_shares, 2
+                )
+                if total_existing_shares
+                else None,
+            }
+        )
+    if maturity_fixed_entries:
+        assumptions.append(
+            "At least one CLA fixes a per-share price for MATURITY "
+            "conversion; the hypothetical-round scenarios (discount/cap "
+            "pricing) apply to round conversions only. See "
+            "maturity_conversion_at_fixed_price for the post-maturity "
+            "mechanics and the company value that price implies over the "
+            "current fully-diluted share count."
+        )
+
     nominal_values = [
         c.get("nominal_value")
         for c in snapshot.get("share_classes", [])
@@ -276,6 +340,7 @@ def build_scenarios(
         "note_balances": {
             note.label: round(note.balance, 2) for note in notes
         },
+        "maturity_conversion_at_fixed_price": maturity_fixed_entries,
         "scenarios": [scenario_dict(s) for s in scenarios],
         "scenario_flags": [
             {

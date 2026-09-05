@@ -314,8 +314,13 @@ def aggregate_clas(
                             f"Maturity {maturity} and the "
                             f"{conversion_window_days}-day conversion window "
                             "have passed; no conversion/repayment evidence "
-                            "in the data room. Request conversion notices, "
-                            "extension agreements, or repayment records."
+                            "in the data room. Request conversion notices "
+                            "(incl. any lender-majority conversion demand "
+                            "made within the contractual post-maturity "
+                            "window), extension agreements, or repayment "
+                            "records — or confirmation that the balance "
+                            "remains outstanding as a (typically "
+                            "subordinated) debt."
                         ),
                     }
                 )
