@@ -18,7 +18,14 @@ Reads `insights/captable/latest.json` (or the named snapshot), then:
 - accrues each executed CLA's loan balance to the analysis date under its
   extracted day-count and compounding (unstated → act/365 simple, recorded
   as an assumption; the accrual date vs the snapshot's as-of date is always
-  disclosed),
+  disclosed); safe-harbor-capped loans accrue at the documented safe-harbor
+  rate rather than the stated ceiling — an unquantified cap falls back to
+  the ceiling with a loud overstatement disclosure,
+- reports a `maturity_conversion_at_fixed_price` block whenever a CLA
+  fixes a per-share price for post-maturity conversion (implied shares at
+  the accrued balance, and the company value that price implies over the
+  current fully-diluted count — the discount/cap scenario prices apply to
+  round conversions only),
 - computes conversion scenarios for a hypothetical round under all three
   market methods (`pre_money` / `percentage_ownership` /
   `dollars_invested`), side by side — CLAs are usually silent on the

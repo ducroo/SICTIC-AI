@@ -43,6 +43,15 @@ Note: cumulative invested capital (CHF 1,450,000) is deliberately NOT
 equal to the issued share count (1,400,000) so the stamp-duty figure can
 never be mistaken for a share count.
 
+Not exercised by this fixture (deliberately plain terms — the fields
+come back null, which is correct): the safe-harbor interest cap
+(`interest_safe_harbor_rate_pct`; the fixture loan is plain fixed-rate),
+a QEFR new-investor minimum (`qefr_min_new_money`; single threshold
+only), and a fixed maturity conversion price
+(`maturity_conversion_price`; the fixture converts at discount/cap).
+Extending the fixture to cover them is a candidate for the eval-suite
+follow-up.
+
 All names and numbers are invented; any resemblance to real companies is
 coincidental. Keep it that way — synthetic fixtures exist so development
 sessions never need real data-room content.

@@ -48,7 +48,11 @@ as-of date, language, confidence, and rationale.
 `extract` reuses the stored classification (or classifies first), then
 extracts the SECA-derived term schema from every CLA document: lenders
 (multi-lender agreements supported), principal, interest (mode, rate,
-day-count, compounding), maturity, conversion triggers, cap/discount/floor,
+day-count, compounding, and the safe-harbor rate itself when the contract
+quantifies it), maturity, conversion triggers (QEFR incl. its
+new-investor minimum, change of control incl. repayment multiple,
+maturity incl. a fixed maturity conversion price where the
+conversion-price definition varies by trigger), cap/discount/floor,
 denominator basis, subordination and its scope, MFN, pro-rata rights, and
 the capital source for conversion shares. Every value carries a verbatim
 quote that is verified against the parsed document text; absent terms are
