@@ -30,6 +30,58 @@ The extraction schema mirrors its data core:
 | Execution evidence | execution date + signatures. An unsigned CLA in a data room is effectively a term sheet: it is demoted and drops out of outstanding-principal totals. |
 | Disclosure duty | art. 634a para 3 / art. 652c CO (since 2023): conversion discloses subscriber identity and amounts in the articles and commercial register. |
 
+## Complete term inventory (the completeness checklist)
+
+Following the repo pattern — what a skill looks for lives in **config**,
+like the `config/dd_checks/checklists/*.md` and
+`config/sha_review/checklists/*.md` files that drive those skills — the
+authoritative term list is `config/captable/
+cla_extraction_response_schema.json` (machine-enforced on every
+extraction) with its bands in `assessment_rules.json`. The inventory
+below mirrors it for human completeness review; a unit test pins this
+document to the schema so the two cannot drift.
+
+**Per-CLA extraction fields (38):**
+
+- *Identity & lifecycle*: `lenders` (each with name, kind, domicile,
+  per-lender `principal_amount`), `borrower_name`, `status`
+  (executed | term_sheet | converted | repaid), `status_evidence`,
+  `execution_date`, `signatures_complete`, `governing_law`
+- *Principal*: `principal_total`, `principal_currency`
+- *Interest*: `interest_mode`, `interest_rate_pct`,
+  `interest_safe_harbor_rate_pct`, `interest_day_count`,
+  `interest_compounding`
+- *Maturity & conversion triggers*: `maturity_date`; QEFR —
+  `qefr_present`, `qefr_min_raise`, `qefr_min_new_money`,
+  `qefr_mandatory`; change of control — `coc_present`, `coc_mandatory`,
+  `coc_repayment_multiple`; maturity conversion —
+  `maturity_conversion_present`, `maturity_conversion_mandatory`,
+  `maturity_conversion_price`
+- *Pricing*: `valuation_cap`, `discount_pct`, `discount_schedule`,
+  `valuation_floor`, `denominator_basis`
+- *Protections & mechanics*: `subordinated`, `subordination_scope`,
+  `mfn_clause`, `pro_rata_rights`, `conversion_capital_sources`,
+  `shareholder_consents_referenced`, `sha_accession_required`
+- *Evidence contract*: `missing_terms` (each entry with the sections
+  scanned)
+
+Every value field carries a machine-verified verbatim quote.
+
+**Deterministic assessment items (12)** over those fields
+(`lib/captable/assessment.py`, bands in `assessment_rules.json`):
+`discount`, `interest_rate`, `qefr_trigger`, `change_of_control`,
+`maturity_date`, `valuation_cap`, `denominator_basis`, `subordination`,
+`conversion_capital`, `mfn_clause`, `pro_rata_rights`, `sha_accession` —
+three states each (standard / deviating / absent) plus a severity.
+
+**Cap-table / register / pool extraction** (own schemas in the same
+config folder): `as_of_date`, `share_classes` (id, name, nominal value,
+votes), `stakeholders` (name, group, kind, role, holdings by class,
+diluted count, invested amount), `pools` (kind, label, total, granted,
+unallocated), `totals` (by class + diluted), `fully_diluted_definition`,
+`assumptions`; the register anchors current holdings, the pool overview
+feeds cross-document consistency.
+
 ## Handbook-derived heuristics behind the rubric and checks
 
 1. **"Fully diluted" is ambiguous** (full pools vs granted-only vs
