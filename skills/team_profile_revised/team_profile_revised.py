@@ -107,8 +107,6 @@ async def team_profile_revised(startup_name: str) -> InsightResult:
     persons = await person_profile_as_person_objects(
         dataset_slug,
         names=None,
-        allow_public_sources=False,
-        assess_founder_traits=True,
     )
     shared_context = _profiles_context(startup_insights, persons)
     output = InsightFile(

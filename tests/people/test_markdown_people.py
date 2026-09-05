@@ -1,3 +1,6 @@
+import pytest
+from lib.people.discovery import _parse_manual_persons_table
+
 from lib.people import Person, markdown_table_to_person_objects
 
 
@@ -47,3 +50,24 @@ def test_person_merge_combines_preferences_and_namespaced_adhoc_data():
         "rank": "1",
         "rationale": "Relevant",
     }
+
+
+@pytest.mark.parametrize("headers", [
+    "full_name | linkedin_id | email_addresses",
+    "full-name | linkedin-id | email-addresses",
+    "fullName | linkedinId | emailAddresses",
+    r"full\_name | linkedin\_id | email\_addresses",
+])
+def test_person_table_parser_matches_roster_identity_headers(headers):
+    markdown = f"| {headers} |\n|---|---|---|\n| Jane Doe | jane-123 | jane@example.com |"
+    people = markdown_table_to_person_objects(markdown, tag="review")
+    assert people == _parse_manual_persons_table(markdown)
+    assert people == [Person(full_name="Jane Doe", linkedin_id="jane-123", email_addresses=["jane@example.com"])]
+
+
+def test_person_table_parser_accepts_emphasized_underscore_headers():
+    markdown = "| **full_name** | `linkedin_id` | __email_addresses__ |\n|---|---|---|\n| Jane Doe | jane-123 | jane@example.com |"
+    people = markdown_table_to_person_objects(markdown, tag="review")
+    assert people[0].linkedin_id == "jane-123"
+    assert people[0].full_name == "Jane Doe"
+    assert people[0].email_addresses == ["jane@example.com"]

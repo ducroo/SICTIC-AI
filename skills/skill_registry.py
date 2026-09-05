@@ -49,9 +49,7 @@ SKILL_REGISTRY = {
     "team-profile-revised": SkillSpec(
         func=team_profile_revised,
         domains=frozenset({"startups"}),
-        # The skill prepares its data-room-only person profiles itself. The
-        # default person-profile dependency would invoke public enrichment.
-        depends_on=("startup-profile",),
+        depends_on=("startup-profile", "person-profile"),
     ),
     "startup-traction": SkillSpec(
         func=startup_traction,

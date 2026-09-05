@@ -22,11 +22,25 @@ _PROFILE_URL = re.compile(
 )
 
 
+def _merge_discovered_person(persons: list[Person], candidate: Person) -> None:
+    """Use the shared person identity and merge rules for every discovery source."""
+    existing = candidate.find_best_match(persons)
+    if existing is None:
+        persons.append(candidate)
+        return
+    existing.merge(candidate)
+    # An explicit named link may connect a name-only entry and an ID-only entry.
+    # Reconcile both while retaining Person.matches' distinct-ID safeguard.
+    for other in list(persons):
+        if other is not existing and existing.matches(other):
+            existing.merge(other)
+            persons.remove(other)
+
+
 def _add_dataset_linkedin_ids(dataset_name: str, persons: list[Person]) -> None:
     """Retain explicit profile URLs, including people absent from name retrieval."""
     storage = get_storage()
     directory = dataset_parsed_path(dataset_name)
-    ids = {p.linkedin_id for p in persons if p.linkedin_id}
     filenames = [name for name, _ in storage.list_with_mtime(directory, recursive=True)
                  if name.lower().endswith(".md")]
     for filename in sorted(filenames):
@@ -36,15 +50,17 @@ def _add_dataset_linkedin_ids(dataset_name: str, persons: list[Person]) -> None:
             if not _PROFILE_URL.fullmatch(url.split("?", 1)[0].rstrip("/")):
                 continue
             identifier = extract_linkedin_id(url)
-            matches = [p for p in persons if p.full_name and slugify(p.full_name) == slugify(label)]
-            if len(matches) == 1 and not matches[0].linkedin_id and identifier not in ids:
-                matches[0].linkedin_id = identifier
-                ids.add(identifier)
+            named = Person(full_name=label).find_best_match(
+                [person for person in persons if person.full_name]
+            )
+            if named is not None:
+                _merge_discovered_person(
+                    persons, Person(full_name=named.full_name, linkedin_id=identifier)
+                )
         for match in _PROFILE_URL.finditer(content):
             identifier = extract_linkedin_id(match.group())
-            if identifier and identifier not in ids:
-                persons.append(Person(linkedin_id=identifier))
-                ids.add(identifier)
+            if identifier:
+                _merge_discovered_person(persons, Person(linkedin_id=identifier))
 
 
 def _parse_person_names(result: dict) -> list[Person]:
@@ -53,10 +69,10 @@ def _parse_person_names(result: dict) -> list[Person]:
         isinstance(name, str) and name.strip() for name in names
     ):
         raise ValueError("Data-room person discovery requires a list of non-blank names.")
-    persons: dict[str, Person] = {}
+    persons: list[Person] = []
     for name in names:
-        persons.setdefault(slugify(name), Person(full_name=name.strip()))
-    return list(persons.values())
+        _merge_discovered_person(persons, Person(full_name=name.strip()))
+    return persons
 
 
 def _review_person_names(result: dict | list) -> Review[dict | list]:
@@ -72,17 +88,19 @@ def _review_person_names(result: dict | list) -> Review[dict | list]:
 async def persons_in_dataset_as_person_objects(dataset_name: str) -> list[Person]:
     """Use the manual roster first, otherwise discover names from dataset evidence.
 
-    No web search, LinkedIn fetch, or biography generation. Community members
-    can be seeded from their existing local LinkedIn cache.
+    No web search, LinkedIn fetch, or biography generation. Existing local
+    LinkedIn person objects seed discovery before dataset evidence is added.
     """
     dataset_slug = slugify(dataset_name)
     manual = manual_persons_in_dataset(dataset_slug)
     if manual is not None:
         return manual
     logger.info("[%s] Discovering people for missing roster", dataset_slug)
-    if dataset_slug == "sictic-members":
-        persons = await asyncio.to_thread(LinkedInResolver(dataset_slug).get_cached_persons)
-    else:
+    persons: list[Person] = []
+    cached = await asyncio.to_thread(LinkedInResolver(dataset_slug).get_cached_persons)
+    for person in cached:
+        _merge_discovered_person(persons, person)
+    if dataset_slug != "sictic-members":
         await sync_datasets([dataset_slug], raise_on_error=True)
         config = load_repository_config("persons_in_dataset", "discovery")
         result = await dataset_chat_json(
@@ -97,7 +115,8 @@ async def persons_in_dataset_as_person_objects(dataset_name: str) -> list[Person
         # authoritative roster and suppress later discovery.
         if result is not None and not isinstance(result, dict):
             raise ValueError("Person discovery must return an object.")
-        persons = _parse_person_names(result) if result is not None else []
+        for person in _parse_person_names(result) if result is not None else []:
+            _merge_discovered_person(persons, person)
         _add_dataset_linkedin_ids(dataset_slug, persons)
     if not persons:
         logger.info("[%s] No people found; leaving roster absent", dataset_slug)

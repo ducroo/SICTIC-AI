@@ -99,7 +99,7 @@ async def test_revised_pipeline_shares_profiles_and_reuses_caches(revised_runtim
     [result] = await runtime.module.team_profile_revised("ACME")
     runtime.startup_call.assert_awaited_once_with("acme")
     runtime.person_call.assert_awaited_once_with(
-        "acme", names=None, allow_public_sources=False, assess_founder_traits=True,
+        "acme", names=None,
     )
     assert result.skill == "team_profile_revised"
     assert "cv.pdf — page 1" in result.content()
@@ -175,9 +175,9 @@ async def test_harness_dispatches_revised_command(revised_runtime):
     assert "Founder evidence" in output
 
 
-def test_bulk_refresh_revised_dependencies_do_not_request_public_profiles():
+def test_bulk_refresh_revised_waits_for_person_profiles():
     from skills.skill_registry import expand_skill_dependencies
 
     assert expand_skill_dependencies(["team-profile-revised"]) == [
-        "startup-profile", "team-profile-revised",
+        "startup-profile", "persons-in-dataset", "person-profile", "team-profile-revised",
     ]

@@ -58,8 +58,6 @@ async def _person_profile_result(
     names: str | list[str] = None,
     *,
     include_dataset_context: bool = True,
-    allow_public_sources: bool = True,
-    assess_founder_traits: bool = False,
 ) -> _PersonProfileResult:
     """
     Collate a comprehensive profile on a specific person (or list of persons) by searching 
@@ -73,8 +71,6 @@ async def _person_profile_result(
     logger.info(f"[{dataset_slug}] Reading the dataset persons roster...")
     # discovered_persons is now a List[Person]
     discovered_persons = persons_in_dataset(dataset_slug)
-    if not allow_public_sources:
-        await sync_datasets([dataset_slug], raise_on_error=True)
 
     target_persons: List[Person] = []
     
@@ -101,16 +97,13 @@ async def _person_profile_result(
 
     # 2. Batch Resolution
     logger.info(f"[{dataset_slug}] Resolving profiles for {len(target_persons)} entities...")
-    if allow_public_sources:
-        linkedin_resolver = LinkedInResolver(dataset_slug)
-        all_profiles_raw = await asyncio.to_thread(
-            linkedin_resolver.get_profiles,
-            target_persons,
-        )
-        await sync_datasets([dataset_slug], raise_on_error=True)
-    else:
-        all_profiles_raw = target_persons
-    
+    linkedin_resolver = LinkedInResolver(dataset_slug)
+    all_profiles_raw = await asyncio.to_thread(
+        linkedin_resolver.get_profiles,
+        target_persons,
+    )
+    await sync_datasets([dataset_slug], raise_on_error=True)
+
     # De-duplicate the resolved profiles using Person entity resolution
     profiles_to_process: List[Person] = []
     for p in all_profiles_raw:
@@ -131,8 +124,6 @@ async def _person_profile_result(
                 dataset_slug,
                 person,
                 include_dataset_context=include_dataset_context,
-                allow_public_sources=allow_public_sources,
-                assess_founder_traits=assess_founder_traits,
             )
 
     generated = await asyncio.gather(
@@ -171,16 +162,12 @@ async def person_profile(
     names: str | list[str] = None,
     *,
     include_dataset_context: bool = True,
-    allow_public_sources: bool = True,
-    assess_founder_traits: bool = False,
 ) -> InsightResult:
     """Generate person profiles and return their managed insight artifacts."""
     result = await _person_profile_result(
         dataset_name,
         names,
         include_dataset_context=include_dataset_context,
-        allow_public_sources=allow_public_sources,
-        assess_founder_traits=assess_founder_traits,
     )
     return result.insights
 
@@ -190,16 +177,12 @@ async def person_profile_as_person_objects(
     names: str | list[str] = None,
     *,
     include_dataset_context: bool = True,
-    allow_public_sources: bool = True,
-    assess_founder_traits: bool = False,
 ) -> list[Person]:
     """Generate person profiles and return the populated Person objects."""
     result = await _person_profile_result(
         dataset_name,
         names,
         include_dataset_context=include_dataset_context,
-        allow_public_sources=allow_public_sources,
-        assess_founder_traits=assess_founder_traits,
     )
     return result.persons
 
@@ -208,8 +191,6 @@ async def _generate_single_profile(
     person: Person,
     *,
     include_dataset_context: bool = True,
-    allow_public_sources: bool = True,
-    assess_founder_traits: bool = False,
 ) -> InsightFile:
     """
     Worker function to generate a single profile from a fully populated Person Wrapper.
@@ -223,8 +204,7 @@ async def _generate_single_profile(
         conf = load_repository_config("person_profile")
         query_template = conf['query']
         llm_instructions = conf['llm_instructions']
-        if assess_founder_traits:
-            llm_instructions += "\n\n" + conf["founder_traits_instructions"]
+        llm_instructions += "\n\n" + conf["founder_traits_instructions"]
         try:
             query = query_template.replace("{{name}}", display_name)
         except KeyError:
@@ -232,25 +212,18 @@ async def _generate_single_profile(
     except KeyError as e:
         raise ValueError(f"Missing configuration for person_profile: {e}")
 
-    # Keep constrained variants separate from the default, enriched profiles.
-    variant = "" if allow_public_sources else "-data-room"
-    if assess_founder_traits:
-        variant += "-founder-assessment"
-    effective_config_key = query + llm_instructions
-    if variant:
-        effective_config_key = config_cache_key(
-            effective_config_key,
-            {
-                "allow_public_sources": allow_public_sources,
-                "include_dataset_context": include_dataset_context,
-                "assess_founder_traits": assess_founder_traits,
-            },
-        )
+    # Generation settings affect freshness, never the standard profile filename.
+    effective_config_key = config_cache_key(
+        query + llm_instructions,
+        {
+            "include_dataset_context": include_dataset_context,
+        },
+    )
     insight = InsightFile(
         dataset=dataset_slug,
         skill="person_profile",
         model=default_llm,
-        identifier=identifier + variant,
+        identifier=identifier,
         subdir=True,
         config_key=effective_config_key,
     )
@@ -282,7 +255,7 @@ async def _generate_single_profile(
             for m in mentions:
                 context_parts.append(m.to_md())
 
-    if allow_public_sources and person.linkedin_profile:
+    if person.linkedin_profile:
         linkedin_str = json.dumps(person.linkedin_profile, indent=2)
         context_parts.append("### LINKEDIN PROFILE\n\n" + linkedin_str)
 

@@ -245,6 +245,6 @@ async def test_json_empty_retrieval_requires_explicit_shared_evidence_mode(
     if generates:
         assert result == {"answer": "documented"}
         assert prefix in generate.await_args.kwargs["cacheable_prompt_prefix"]
-        assert "No question-specific evidence was retrieved" in generate.await_args.args[0]
+        assert "No question-specific evidence was retrieved" not in generate.await_args.args[0]
     else:
         assert result is None

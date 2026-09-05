@@ -19,15 +19,14 @@ description: Collate a comprehensive profile on a specific person by searching a
    * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing profile when available; otherwise generate the profile and persist it with `insight.save(...)`. Do not hardcode `<REPO_PATH>/insights/...` paths.
 
 2. **Data Retrieval & Synthesis:**
-   * If the cache misses, dynamically load the following via `load_repository_config("person_profile")`:
-     * **Query:** `config['person_profile']['query']` (The question/prompt string to search for the person).
-     * **Instructions:** `config['person_profile']['llm_instructions']` (The strict formatting instructions for the LLM).
-   * Invoke `dataset_chat` with the following parameters:
-     * `dataset_name=dataset_name`
-     * `questions=query.format(name=name)`
-     * `llm_instructions=llm_instructions`
-     * `return_full_docs=True`
-     * `max_chunks=25`
+   * Read the existing manual roster and enrich its people through `LinkedInResolver`.
+   * Synchronize the dataset before checking profile freshness.
+   * Load `query`, `llm_instructions`, and `founder_traits_instructions` via
+     `load_repository_config("person_profile")`; both instruction sections always
+     form the standard prompt and freshness key.
+   * On a cache miss, use `build_person_dossier` for dataset evidence when
+     `include_dataset_context` is enabled, add the resolved LinkedIn payload,
+     and synthesize through `generate_markdown`.
 
 3. **Output Generation:**
    * Save every synthesized profile through `InsightFile`.
@@ -40,14 +39,18 @@ description: Collate a comprehensive profile on a specific person by searching a
 
 ## Usage
 
-For composition without public enrichment, call `person_profile(...)` or
-`person_profile_as_person_objects(...)` with `allow_public_sources=False`.
-This requires the existing manual persons roster and skips LinkedIn resolution.
+Both `person_profile(...)` and `person_profile_as_person_objects(...)` use the
+same standard generation workflow: read the authoritative manual roster, resolve
+LinkedIn profiles, gather dataset evidence, and apply the configured biographical
+and founder-trait instructions. Founder traits are assessed for explicitly
+identified active founders; unsupported assessments report insufficient information.
 A missing roster raises an error directing the caller to run `persons_in_dataset`;
-profile generation never discovers people. Set `assess_founder_traits=True` to append
-the configured narrative N001 assessment for explicitly identified active
-founders. These options use separate profile cache identifiers; default
-callers retain the existing enriched profile behaviour.
+profile generation never discovers people.
+
+Every profile uses `<identifier>-<model>.md`, with the identifier selected by
+`Person.identifier`: LinkedIn ID, otherwise email address, otherwise full name,
+using standard slugification. The retained `include_dataset_context` option affects
+freshness metadata, never filenames. Manual overrides retain their normal precedence.
 
 ```bash
 conda run -n sictic-env python -m skills.harness /person_profile "<DATASET_NAME>" "<NAME>"
