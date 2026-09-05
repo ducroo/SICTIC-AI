@@ -12,6 +12,7 @@ from lib.infrastructure.errors import (
     InfrastructureErrorKind,
 )
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.retry import with_rate_limit_retry
 from lib.infrastructure.scheduler import scheduler
 from lib.infrastructure.scheduler_operations import (
     JobProfile,
@@ -87,14 +88,27 @@ class EmbeddingService:
         return await asyncio.gather(*(self.embed(text) for text in texts))
 
     async def _request(self, texts: list[str]) -> Any:
-        return await scheduler.run(
-            _execute_embedding,
-            operation_kwargs={
-                "endpoint": self.endpoint,
-                "texts": texts,
-                "timeout": _request_timeout(),
-            },
+        # One 429 must not kill a whole skill run: wait out the quota
+        # window instead (the scheduler slot is released between tries).
+        return await with_rate_limit_retry(
+            lambda: scheduler.run(
+                _execute_embedding,
+                operation_kwargs={
+                    "endpoint": self.endpoint,
+                    "texts": texts,
+                    "timeout": _request_timeout(),
+                },
+            ),
+            is_rate_limit=_is_rate_limit_error,
+            logger=logger,
+            label=f"Embedding ({self.model})",
         )
+
+
+def _is_rate_limit_error(error: BaseException) -> bool:
+    from litellm.exceptions import RateLimitError
+
+    return isinstance(error, RateLimitError)
 
 
 async def _execute_embedding(
