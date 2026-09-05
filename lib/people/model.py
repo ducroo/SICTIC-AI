@@ -71,6 +71,11 @@ class Person:
     dossier: List[Chunk] = field(default_factory=list)
     mentions: List[Chunk] = field(default_factory=list)
     person_profile_markdown: str = ""
+    adhoc_data: Dict[str, Dict[str, Any]] = field(
+        default_factory=dict,
+        compare=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         self.linkedin_id = normalize_linkedin_id(self.linkedin_id)
@@ -161,6 +166,9 @@ class Person:
             
         if not self.person_profile_markdown and other.person_profile_markdown:
             self.person_profile_markdown = other.person_profile_markdown
+
+        for namespace, values in other.adhoc_data.items():
+            self.adhoc_data.setdefault(namespace, {}).update(values)
             
         # Merge dictionary/list data
         if other.dossier:

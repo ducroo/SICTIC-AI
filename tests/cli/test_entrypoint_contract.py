@@ -51,6 +51,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.submission_ready.__main__",
         "skills.dataset_chat.__main__",
         "skills.dataset_maintenance.__main__",
+        "skills.deep_dive_invitation.__main__",
         "skills.dd_checks.__main__",
         "skills.dd_priorities.__main__",
         "skills.dealum_import.__main__",
@@ -59,6 +60,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.investor_profile.__main__",
         "skills.linkedin_maintenance.__main__",
         "skills.llm_chat.__main__",
+        "skills.member_preferences.__main__",
         "skills.person_profile.__main__",
         "skills.potential_investors.__main__",
         "skills.ranking.__main__",
@@ -167,6 +169,47 @@ def test_suggested_startups_cli_accepts_comma_separated_investors(monkeypatch):
         "investors": ["Lucas du Croo de Jongh", "Bolko Hohaus"],
         "max_startups": 10,
     }
+
+
+def test_deep_dive_invitation_cli_accepts_plural_contact_options(monkeypatch):
+    module = importlib.import_module("skills.deep_dive_invitation.__main__")
+    captured = {}
+
+    async def fake_deep_dive_invitation(startup, founders, investors):
+        captured["startup"] = startup
+        captured["founders"] = founders
+        captured["investors"] = investors
+        return []
+
+    monkeypatch.setattr(
+        module,
+        "deep_dive_invitation",
+        fake_deep_dive_invitation,
+    )
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--startup",
+            "Example Startup",
+            "--founders",
+            "Jane Founder <jane@example.com>, John Founder",
+            "--investors",
+            "member@example.com, FONGIT",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["startup"] == "Example Startup"
+    assert [person.full_name for person in captured["founders"]] == [
+        "Jane Founder",
+        "John Founder",
+    ]
+    assert captured["founders"][0].email_addresses == ["jane@example.com"]
+    assert [person.display_name for person in captured["investors"]] == [
+        "member@example.com",
+        "FONGIT",
+    ]
 
 
 def test_startup_profile_cli_accepts_comma_separated_startups(monkeypatch):

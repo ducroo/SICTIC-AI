@@ -175,6 +175,36 @@ async def _potential_investors(args: List[str]) -> str:
     return _format_result(await potential_investors(ns.startup))
 
 
+async def _member_preferences(args: List[str]) -> str:
+    parser = _parser("/member_preferences")
+    parser.add_argument("--dataset", "-d", default="sictic-members")
+    ns = parser.parse_args(args)
+    from skills.member_preferences.member_preferences import (
+        member_preferences,
+        render_member_preferences,
+    )
+
+    return render_member_preferences(member_preferences(ns.dataset))
+
+
+async def _deep_dive_invitation(args: List[str]) -> str:
+    parser = _parser("/deep_dive_invitation")
+    parser.add_argument("--startup", "-s", nargs="+", required=True)
+    parser.add_argument("--founders", nargs="*", default=[])
+    parser.add_argument("--investors", nargs="*", default=[])
+    ns = parser.parse_args(args)
+    from skills.deep_dive_invitation.deep_dive_invitation import (
+        deep_dive_invitation,
+        parse_people_csv,
+    )
+
+    return _format_result(await deep_dive_invitation(
+        " ".join(ns.startup),
+        founders=parse_people_csv(" ".join(ns.founders)),
+        investors=parse_people_csv(" ".join(ns.investors)),
+    ))
+
+
 async def _advocates(args: List[str]) -> str:
     parser = _parser("/advocates")
     parser.add_argument("event")
@@ -269,6 +299,18 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/investor_profile", "/investor_profile [--source-dataset dataset]", "Build investor profiles.", _investor_profile),
         HarnessCommand("/expert_search", "/expert_search <startup>", "Rank relevant experts.", _expert_search),
         HarnessCommand("/potential_investors", "/potential_investors <startup>", "Rank potential investors.", _potential_investors),
+        HarnessCommand(
+            "/member_preferences",
+            "/member_preferences [--dataset sictic-members]",
+            "Return member communication preferences.",
+            _member_preferences,
+        ),
+        HarnessCommand(
+            "/deep_dive_invitation",
+            "/deep_dive_invitation --startup name [--founders contacts] [--investors contacts]",
+            "Create a review-only deep-dive invitation draft.",
+            _deep_dive_invitation,
+        ),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investor x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand(

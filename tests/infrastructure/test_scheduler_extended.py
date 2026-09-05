@@ -64,6 +64,20 @@ def test_default_poll_interval_is_fifty_milliseconds(tmp_path):
     assert scheduler.poll_interval == 0.05
 
 
+def test_default_wait_timeout_is_five_hours(tmp_path):
+    scheduler = Scheduler(state_path=tmp_path / "scheduler.json")
+
+    assert scheduler.wait_timeout == 5 * 60 * 60
+
+
+def test_wait_timeout_can_be_configured(monkeypatch, tmp_path):
+    monkeypatch.setenv("SCHEDULER_WAIT_TIMEOUT", "7200")
+
+    scheduler = Scheduler(state_path=tmp_path / "scheduler.json")
+
+    assert scheduler.wait_timeout == 7200
+
+
 def test_scheduler_initialization_has_no_file_side_effect(clean_scheduler):
     assert not clean_scheduler.state_path.exists()
 
