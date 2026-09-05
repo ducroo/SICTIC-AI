@@ -58,6 +58,15 @@ the capital source for conversion shares. Every value carries a verbatim
 quote that is verified against the parsed document text; absent terms are
 reported in `missing_terms` with the sections that were scanned.
 
+**The term list is a team-editable checklist**:
+`config/captable/cla_terms.md` drives the extraction schema, the
+per-term model guidance, quote verification, and missing-terms handling
+— adding a term or refining guidance is a config edit, no code change
+(the same pattern as `config/dd_checks/checklists/`). Fields the
+pipeline computes on are guarded and cannot be removed or re-typed
+without a loud load-time error. New terms appear in stored snapshots
+after the next fresh extraction run.
+
 Intermediate results are stored under the startup's
 `insights/captable/work/` folder as JSON.
 

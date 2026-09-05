@@ -11,59 +11,9 @@ from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Field values that assert absence/uncertainty and therefore need no quote.
+# Field values that assert absence/uncertainty and therefore need no quote
+# (documented in the cla_terms.md grammar section).
 _NO_QUOTE_VALUES = frozenset({"unstated", "unclear", "not_subordinated"})
-
-# Booleans whose False asserts "no such clause exists" (an absence claim that
-# no quote can prove) rather than a documented property of an existing clause.
-# These always need a missing_terms entry when False, quoted or not.
-_PRESENCE_BOOLEAN_FIELDS = frozenset(
-    {
-        "qefr_present",
-        "coc_present",
-        "maturity_conversion_present",
-        "mfn_clause",
-        "pro_rata_rights",
-    }
-)
-
-# Top-level {value, quote} fields of the extraction schema.
-_QUOTED_FIELDS = (
-    "borrower_name",
-    "execution_date",
-    "signatures_complete",
-    "principal_total",
-    "principal_currency",
-    "interest_mode",
-    "interest_rate_pct",
-    "interest_safe_harbor_rate_pct",
-    "interest_day_count",
-    "interest_compounding",
-    "maturity_date",
-    "qefr_present",
-    "qefr_min_raise",
-    "qefr_min_new_money",
-    "qefr_mandatory",
-    "coc_present",
-    "coc_mandatory",
-    "coc_repayment_multiple",
-    "maturity_conversion_present",
-    "maturity_conversion_mandatory",
-    "maturity_conversion_price",
-    "valuation_cap",
-    "discount_pct",
-    "discount_schedule",
-    "valuation_floor",
-    "denominator_basis",
-    "subordinated",
-    "subordination_scope",
-    "mfn_clause",
-    "pro_rata_rights",
-    "conversion_capital_sources",
-    "shareholder_consents_referenced",
-    "sha_accession_required",
-    "governing_law",
-)
 
 
 def _quote_found(quote: str, normalized_text: str) -> bool:
@@ -98,13 +48,15 @@ def _needs_quote(value: Any) -> bool:
     return True
 
 
-def _is_absence_claim(field: str, value: Any, quote: Any) -> bool:
+def _is_absence_claim(
+    field: str, value: Any, quote: Any, presence_fields: frozenset[str]
+) -> bool:
     """True when the field asserts absence and must appear in missing_terms."""
     if value is None:
         return True
     if isinstance(value, str) and value == "unstated":
         return True
-    if value is False and field in _PRESENCE_BOOLEAN_FIELDS:
+    if value is False and field in presence_fields:
         return True
     if value is False and quote is None:
         return True
@@ -113,8 +65,17 @@ def _is_absence_claim(field: str, value: Any, quote: Any) -> bool:
     return False
 
 
-def review_cla_extraction(document_text: str):
-    """Build a reviewer enforcing the evidence rules against ``document_text``."""
+def review_cla_extraction(
+    document_text: str,
+    quoted_fields: tuple[str, ...],
+    presence_fields: frozenset[str],
+):
+    """Build a reviewer enforcing the evidence rules against ``document_text``.
+
+    ``quoted_fields``/``presence_fields`` come from the team-editable
+    ``config/captable/cla_terms.md`` via ``cla_terms.build_cla_schema`` —
+    a term added there is automatically quote-verified here.
+    """
     normalized_text = normalize_for_matching(document_text)
 
     def reviewer(output: Any) -> Review[Any]:
@@ -123,7 +84,7 @@ def review_cla_extraction(document_text: str):
         problems: list[str] = []
         absence_fields: list[str] = []
 
-        for field in _QUOTED_FIELDS:
+        for field in quoted_fields:
             entry = output.get(field)
             if not isinstance(entry, dict):
                 continue  # schema validation reports shape errors
@@ -138,7 +99,7 @@ def review_cla_extraction(document_text: str):
                     f"text: {quote!r}. Copy the snippet exactly as it "
                     "appears (whitespace differences are tolerated)."
                 )
-            if _is_absence_claim(field, value, quote):
+            if _is_absence_claim(field, value, quote, presence_fields):
                 absence_fields.append(field)
 
         for lender in output.get("lenders", []):
@@ -177,15 +138,23 @@ async def extract_cla(
     document_text: str,
 ) -> dict[str, Any]:
     """Extract the term schema from one CLA/term-sheet document."""
+    from lib.captable.cla_terms import build_cla_schema
+
     config = load_repository_config("captable")
+    built = build_cla_schema(config)
     prompt = (
         f"{config['cla_extraction_prompt'].strip()}\n\n"
+        f"{built['prompt_block']}\n\n"
         f"### DOCUMENT: {filename}\n\n{document_text}"
     )
     result = await generate_json(
         prompt,
-        config["cla_extraction_response_schema"],
-        reviewer=review_cla_extraction(document_text),
+        built["schema"],
+        reviewer=review_cla_extraction(
+            document_text,
+            built["quoted_fields"],
+            built["presence_fields"],
+        ),
     )
     if not isinstance(result, dict):
         raise ValueError("CLA extraction response must be a JSON object.")

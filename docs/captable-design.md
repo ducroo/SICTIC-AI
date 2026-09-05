@@ -30,42 +30,36 @@ The extraction schema mirrors its data core:
 | Execution evidence | execution date + signatures. An unsigned CLA in a data room is effectively a term sheet: it is demoted and drops out of outstanding-principal totals. |
 | Disclosure duty | art. 634a para 3 / art. 652c CO (since 2023): conversion discloses subscriber identity and amounts in the articles and commercial register. |
 
-## Complete term inventory (the completeness checklist)
+## The term checklist (team-editable, completeness lives in config)
 
 Following the repo pattern — what a skill looks for lives in **config**,
 like the `config/dd_checks/checklists/*.md` and
 `config/sha_review/checklists/*.md` files that drive those skills — the
-authoritative term list is `config/captable/
-cla_extraction_response_schema.json` (machine-enforced on every
-extraction) with its bands in `assessment_rules.json`. The inventory
-below mirrors it for human completeness review; a unit test pins this
-document to the schema so the two cannot drift.
+CLA term list is itself an editable checklist:
+**`config/captable/cla_terms.md`**. Each `### field (type)` entry there
+becomes one field of the extraction schema, its body text becomes the
+model guidance for that term, and every value field carries a
+machine-verified verbatim quote. **Adding a term or refining guidance is
+a config edit — no code change** (the schema, the prompt, quote
+verification, and missing_terms handling all follow the checklist
+automatically). The assessment bands live in `assessment_rules.json`.
 
-**Per-CLA extraction fields (38):**
-
-- *Identity & lifecycle*: `lenders` (each with name, kind, domicile,
-  per-lender `principal_amount`), `borrower_name`, `status`
-  (executed | term_sheet | converted | repaid), `status_evidence`,
-  `execution_date`, `signatures_complete`, `governing_law`
-- *Principal*: `principal_total`, `principal_currency`
-- *Interest*: `interest_mode`, `interest_rate_pct`,
-  `interest_safe_harbor_rate_pct`, `interest_day_count`,
-  `interest_compounding`
-- *Maturity & conversion triggers*: `maturity_date`; QEFR —
-  `qefr_present`, `qefr_min_raise`, `qefr_min_new_money`,
-  `qefr_mandatory`; change of control — `coc_present`, `coc_mandatory`,
-  `coc_repayment_multiple`; maturity conversion —
-  `maturity_conversion_present`, `maturity_conversion_mandatory`,
-  `maturity_conversion_price`
-- *Pricing*: `valuation_cap`, `discount_pct`, `discount_schedule`,
-  `valuation_floor`, `denominator_basis`
-- *Protections & mechanics*: `subordinated`, `subordination_scope`,
-  `mfn_clause`, `pro_rata_rights`, `conversion_capital_sources`,
-  `shareholder_consents_referenced`, `sha_accession_required`
-- *Evidence contract*: `missing_terms` (each entry with the sections
-  scanned)
-
-Every value field carries a machine-verified verbatim quote.
+The one guarded exception: fields the pipeline **computes on** —
+removing or re-typing them in the checklist would silently zero out
+downstream numbers, so `lib/captable/cla_terms.py` fails loudly at load
+time instead (`CODE_CONSUMED_FIELDS`). That core is: `lenders`,
+`status`, `missing_terms` (structural shapes owned by code);
+`execution_date`, `signatures_complete`, `principal_total`,
+`principal_currency`, `maturity_date` and the numbers
+`interest_rate_pct`, `interest_safe_harbor_rate_pct`, `qefr_min_raise`,
+`qefr_min_new_money`, `coc_repayment_multiple`,
+`maturity_conversion_price`, `valuation_cap`, `discount_pct`,
+`valuation_floor`; the enums `interest_mode`, `interest_day_count`,
+`interest_compounding`, `denominator_basis`, `subordination_scope`,
+`conversion_capital_sources`; and the booleans `qefr_present`,
+`coc_present`, `maturity_conversion_present`, `subordinated`,
+`mfn_clause`, `pro_rata_rights`, `shareholder_consents_referenced`,
+`sha_accession_required`. A unit test pins this list to the code.
 
 **Deterministic assessment items (12)** over those fields
 (`lib/captable/assessment.py`, bands in `assessment_rules.json`):

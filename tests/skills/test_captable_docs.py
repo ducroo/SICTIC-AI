@@ -9,22 +9,21 @@ from pathlib import Path
 DESIGN_DOC = Path("docs/captable-design.md").read_text(encoding="utf-8")
 
 
-def test_every_cla_schema_field_is_documented() -> None:
-    """docs/captable-design.md promises a complete term inventory —
-    adding a schema field without documenting it must fail here."""
-    schema = json.loads(
-        Path(
-            "config/captable/cla_extraction_response_schema.json"
-        ).read_text(encoding="utf-8")
-    )
+def test_every_code_consumed_field_is_documented() -> None:
+    """The full term list is team-editable config
+    (config/captable/cla_terms.md — the checklist itself); the design
+    doc documents the code-consumed core, which must stay complete."""
+    from lib.captable.cla_terms import CODE_CONSUMED_FIELDS
+
+    assert "cla_terms.md" in DESIGN_DOC
     missing = [
         field
-        for field in schema["properties"]
+        for field in CODE_CONSUMED_FIELDS
         if f"`{field}`" not in DESIGN_DOC
     ]
     assert not missing, (
-        "CLA schema fields missing from docs/captable-design.md's term "
-        f"inventory: {missing}"
+        "code-consumed CLA fields missing from docs/captable-design.md: "
+        f"{missing}"
     )
 
 

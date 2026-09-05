@@ -11,6 +11,7 @@ from lib.captable.classification import (
     _specialized_schema,
 )
 from lib.captable.cla_extraction import review_cla_extraction
+from lib.captable.cla_terms import build_cla_schema
 from lib.captable.documents import normalize_for_matching
 from lib.infrastructure.ai_text_generation.json import validate_schema
 
@@ -21,12 +22,32 @@ def _load(name: str) -> dict:
     return json.loads((CONFIG_DIR / name).read_text(encoding="utf-8"))
 
 
+# The extraction schema is generated from the team-editable term
+# checklist (config/captable/cla_terms.md) at runtime.
+_BUILT = build_cla_schema(
+    {
+        "cla_terms": (CONFIG_DIR / "cla_terms.md").read_text(
+            encoding="utf-8"
+        ),
+        "cla_extraction_base_schema": _load(
+            "cla_extraction_base_schema.json"
+        ),
+    }
+)
+
+
+def _reviewer(document_text: str):
+    return review_cla_extraction(
+        document_text, _BUILT["quoted_fields"], _BUILT["presence_fields"]
+    )
+
+
 def test_classification_schema_is_valid() -> None:
     validate_schema(_load("classification_response_schema.json"))
 
 
 def test_cla_extraction_schema_is_valid() -> None:
-    validate_schema(_load("cla_extraction_response_schema.json"))
+    validate_schema(_BUILT["schema"])
 
 
 def test_document_classes_match_schema_enum() -> None:
@@ -138,12 +159,12 @@ DOC_TEXT = (
 
 
 def test_extraction_reviewer_accepts_covered_absences() -> None:
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     assert not reviewer(_minimal_extraction()).problems
 
 
 def test_extraction_reviewer_accepts_real_quote() -> None:
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
         valuation_cap={
             "value": 5000000,
@@ -154,7 +175,7 @@ def test_extraction_reviewer_accepts_real_quote() -> None:
 
 
 def test_extraction_reviewer_rejects_fabricated_quote() -> None:
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
         valuation_cap={
             "value": 5000000,
@@ -167,7 +188,7 @@ def test_extraction_reviewer_rejects_fabricated_quote() -> None:
 
 
 def test_extraction_reviewer_rejects_value_without_quote() -> None:
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
         discount_pct={"value": 20, "quote": None}
     )
@@ -178,7 +199,7 @@ def test_extraction_reviewer_rejects_value_without_quote() -> None:
 
 
 def test_extraction_reviewer_rejects_uncovered_absence() -> None:
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction()
     extraction["missing_terms"] = [
         entry
@@ -203,7 +224,7 @@ def test_normalize_for_matching_is_robust_to_ocr_and_markdown() -> None:
 
 def test_extraction_reviewer_rejects_quoted_false_presence_boolean() -> None:
     """A quote cannot prove that no MFN clause exists anywhere."""
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
         mfn_clause={"value": False, "quote": "Convertible Loan Agreement"}
     )
@@ -219,7 +240,7 @@ def test_extraction_reviewer_rejects_quoted_false_presence_boolean() -> None:
 
 def test_extraction_reviewer_accepts_quoted_false_property_boolean() -> None:
     """A verified quote may evidence a property like voluntary conversion."""
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
         qefr_mandatory={"value": False, "quote": "Convertible Loan Agreement"}
     )
@@ -228,24 +249,23 @@ def test_extraction_reviewer_accepts_quoted_false_property_boolean() -> None:
 
 def test_quoted_fields_cover_schema() -> None:
     """Every {value, quote}-shaped top-level property must be reviewed."""
-    from lib.captable.cla_extraction import _QUOTED_FIELDS
-
-    schema = _load("cla_extraction_response_schema.json")
     quoted_shape = set()
-    for name, prop in schema["properties"].items():
+    for name, prop in _BUILT["schema"]["properties"].items():
         ref = prop.get("$ref", "")
         keys = set(prop.get("properties", {}))
         if ref.startswith("#/$defs/quoted_") or keys == {"value", "quote"}:
             quoted_shape.add(name)
-    assert quoted_shape == set(_QUOTED_FIELDS), (
+    assert quoted_shape == set(_BUILT["quoted_fields"]), (
         f"schema/reviewer drift: only_in_schema="
-        f"{sorted(quoted_shape - set(_QUOTED_FIELDS))}, "
-        f"only_in_reviewer={sorted(set(_QUOTED_FIELDS) - quoted_shape)}"
+        f"{sorted(quoted_shape - set(_BUILT['quoted_fields']))}, "
+        f"only_in_reviewer="
+        f"{sorted(set(_BUILT['quoted_fields']) - quoted_shape)}"
     )
+    assert _BUILT["presence_fields"] <= quoted_shape
 
 
 def test_extraction_reviewer_accepts_ellipsis_split_quote() -> None:
-    reviewer = review_cla_extraction(DOC_TEXT)
+    reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
         valuation_cap={
             "value": 5000000,

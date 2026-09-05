@@ -36,7 +36,12 @@ data room ──1 classify──2 extract CLAs──3 assess──4 aggregate─
    forecast/scenario model, executed CLA vs term sheet, share register,
    articles, ESOP/PSOP plan, tax ruling, …). Runs in parallel chunks of 8
    documents (a Gemini structured-output limit).
-2. **Extract CLA terms** per document against a SECA-derived schema:
+2. **Extract CLA terms** per document against a SECA-derived term list
+   that is itself a **team-editable checklist**
+   (`config/captable/cla_terms.md` — the dd_checks pattern: schema,
+   per-term guidance, quote verification, and missing-terms handling all
+   follow the checklist; adding or refining terms needs no code change,
+   and code-consumed fields are guarded at load time). The terms:
    lenders (multi-lender agreements supported, per-lender amounts
    apportioned from the total when unstated — disclosed), principal,
    interest (mode, rate, day-count, compounding, and the safe-harbor rate
