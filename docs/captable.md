@@ -162,12 +162,12 @@ measurably worse — never use the override for real due-diligence output.
 
 ## Known limitations / follow-ups
 
-- The 33.33% discount reclassification threshold and the
-  newly-issued-vs-treasury-shares point are **unverified with tax
-  counsel** (both live in config/prompts, not code).
-- Anti-dilution provisions are extracted but not yet modelled; exit
-  waterfalls (incl. phantom-share liabilities) are stored but not
-  computed.
+- The 33.33% discount reclassification threshold is **unverified with
+  tax counsel** (it lives in `assessment_rules.json`, not code); the
+  newly-issued-vs-treasury-shares tax question is likewise recorded as a
+  verify-with-counsel item in [captable-design.md](captable-design.md).
+- Anti-dilution provisions, phantom-share liabilities, and exit
+  waterfalls are not yet extracted or modelled.
 - Syndicate members are not resolved (the 10/20 outputs say so rather
   than reporting a false pass).
 - Conversion notices are classified but not yet read to flip a CLA's

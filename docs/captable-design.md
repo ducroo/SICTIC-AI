@@ -113,7 +113,9 @@ feeds cross-document consistency.
   "non-classic" (discount portion income-taxable, withholding
   complications). **Threshold unverified with tax counsel** — it lives
   in `config/captable/assessment_rules.json`, not code, so it can be
-  corrected without a release.
+  corrected without a release. A second **verify-with-counsel** item:
+  the claimed tax requirement that conversion shares be newly issued
+  rather than treasury shares — recorded here, not enforced anywhere.
 - **1% issuance stamp duty (Emissionsabgabe)** above the one-time
   CHF 1M exemption: CLA conversions count as contributions and often
   push a startup over the threshold together with the priced round. The
@@ -122,23 +124,28 @@ feeds cross-document consistency.
 - **Conditional capital — with a SECA correction**: startup CLAs are
   *usually not* funded via conditional/authorized capital (the
   conversion-share class is unknown in advance) — hence the Annex 2
-  consent mechanism. Both paths are checked: capital references compare
-  headroom; consent-based structures verify consent coverage. Post-2023
-  articles may use a **Kapitalband** (art. 653s ff. CO) instead — a
-  band-based authorization counts as headroom, and its absence is a
-  diligence question (it materially changes conversion friction).
+  consent mechanism. The extraction records which mechanisms a CLA
+  relies on (`consents` / `conditional_capital` / `kapitalband`, the
+  latter being the post-2023 capital band of art. 653s ff. CO) and the
+  assessment flags a CLA with no enforceable path to conversion shares;
+  comparing conversion volume against the articles' actual capital
+  headroom is a documented follow-up, not yet computed.
 - **Phantom shares are three constructs, not one**: (a) legal share
   counts (register — phantom excluded), (b) economic dilution view
   (phantom included for proceeds %), (c) exit-waterfall cash liability.
-  v1 computes (a) and (b) and stores (c) as data; waterfall computation
-  is deferred. Phantom rights are excluded from conversion-price
-  denominators unless the CLA's own fully-diluted definition says
-  otherwise — never let phantom inflate the pre-money share count.
+  v1 records pool lines (incl. PSOP) as the sources state them; the
+  three-construct separation is the modelling target and phantom-aware
+  economic views and waterfalls are deferred. The standing rule either
+  way: phantom rights are excluded from conversion-price denominators
+  unless the CLA's own fully-diluted definition says otherwise — never
+  let phantom inflate the pre-money share count.
 - **Cantonal ESOP/PSOP tax ruling** ("the Swiss 409A"): employee equity
   without a binding ruling exposes employees to unpredictable income tax
-  at exit → checklist item whenever a pool exists.
-- **Lender domicile** feeds the withholding assessment (domestic vs
-  foreign treatment differs).
+  at exit. Tax rulings are classified when present in the data room; the
+  automatic pool-without-ruling diligence question is a follow-up.
+- **Lender domicile** is extracted per lender (domestic vs foreign
+  withholding treatment differs) as input for the tax follow-up; the
+  computed 10/20 outputs do not yet use it.
 
 ## Conversion mathematics (why `lib/captable/model.py` exists)
 
@@ -198,11 +205,13 @@ is ours, validated against published worked examples.
   status changes require evidence; an old CLA in a recent data room may
   well have converted. A lender of an "executed" CLA who already appears
   as a shareholder triggers a neutral lifecycle question.
-- **Syndicates v1**: detect presence and assess whether the rules around
-  it are followed (agreement in data room, voting arrangement, SHA
-  accession, members-level drag-along); resolving individual membership
-  is out of scope — outputs say so rather than reporting a false 10/20
-  pass.
+- **Syndicates v1**: detect presence (a syndicate/nominee lender) and
+  make its consequences explicit — sub-participants count toward the
+  10/20 limits, so the outputs say "composition undisclosed — verify"
+  and emit a diligence question rather than reporting a false pass.
+  Resolving individual membership, and assessing the syndicate's own
+  rules (agreement in data room, voting arrangement, members-level
+  drag-along), are follow-ups.
 - **Classification is a mandatory stage**: real corpora contain forecast
   and scenario models masquerading as cap tables ("Forecast Cap Table
   Series A", "Dilution Calculator") — extracting one as *the* cap table
@@ -212,9 +221,12 @@ is ours, validated against published worked examples.
 
 ## Deliberately out of scope in v1
 
-Anti-dilution provisions (extracted, not modelled), exit waterfalls
-incl. phantom liabilities (stored, not computed), syndicate member
-resolution, conversion-notice reading to flip lifecycle status, register
-transfer-entry mining, disclosure-schedule mining for non-captable facts
-(dd_checks territory), and the accrual value-date nuance — all recorded
-with the known limitations in [captable.md](captable.md).
+Anti-dilution provisions, phantom-share liabilities, and exit waterfalls
+(neither extracted nor modelled yet); the capital-headroom comparison
+against the articles; the pool-without-ruling diligence automation;
+syndicate member resolution and syndicate-rules assessment; using lender
+domicile in the computed tax outputs; conversion-notice reading to flip
+lifecycle status; register transfer-entry mining; disclosure-schedule
+mining for non-captable facts (dd_checks territory); and the accrual
+value-date nuance — all recorded with the known limitations in
+[captable.md](captable.md).
