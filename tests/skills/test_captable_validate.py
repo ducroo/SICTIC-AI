@@ -200,7 +200,7 @@ def test_names_match_handles_middle_names() -> None:
     assert names_match("Anna Beispiel", "Anna Barbara Beispiel")
     assert names_match("Anna Barbara-Beispiel", "Anna Barbara Beispiel")
     assert not names_match("Anna Beispiel", "Timo Beispiel")
-    assert not names_match("Ali", "Anna Beispiel")  # single token too weak
+    assert not names_match("Anna", "Anna Beispiel")  # single token too weak
 
 
 def test_normalize_iso_date_variants() -> None:
