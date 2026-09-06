@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "quoted_string": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "quote"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "quoted_number": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "quote"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "quoted_boolean": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "quote"
+      ],
+      "properties": {
+        "value": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "lenders": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "domicile",
+          "principal_amount",
+          "quote"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "individual",
+              "entity",
+              "syndicate",
+              "nominee",
+              "unstated"
+            ]
+          },
+          "domicile": {
+            "type": "string",
+            "enum": [
+              "CH",
+              "other",
+              "unstated"
+            ]
+          },
+          "principal_amount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "executed",
+        "term_sheet",
+        "converted",
+        "repaid"
+      ]
+    },
+    "status_evidence": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "missing_terms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "term",
+          "sections_scanned"
+        ],
+        "properties": {
+          "term": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sections_scanned": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

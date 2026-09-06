@@ -257,6 +257,42 @@ async def _sha_review(args: List[str]) -> str:
     return _format_result(await sha_review(ns.dataset))
 
 
+async def _captable_build(args: List[str]) -> str:
+    parser = _parser("/captable_build")
+    parser.add_argument("dataset")
+    parser.add_argument("--fresh", action="store_true")
+    ns = parser.parse_args(args)
+    from lib.captable.snapshot import render_markdown
+    from skills.captable_build.captable_build import build
+
+    return render_markdown(await build(ns.dataset, fresh=ns.fresh))
+
+
+async def _captable_analysis(args: List[str]) -> str:
+    parser = _parser("/captable_analysis")
+    parser.add_argument("dataset")
+    parser.add_argument("--as-of", dest="as_of")
+    parser.add_argument("--pre-money", dest="pre_money", type=float)
+    parser.add_argument("--investment", type=float)
+    parser.add_argument("--fx-rate", dest="fx_rates", action="append")
+    parser.add_argument("--currency")
+    ns = parser.parse_args(args)
+    from skills.captable_analysis.captable_analysis import (
+        captable_analysis,
+        parse_fx_rates,
+    )
+
+    result = await captable_analysis(
+        ns.dataset,
+        as_of=ns.as_of,
+        pre_money=ns.pre_money,
+        investment=ns.investment,
+        fx_rates=parse_fx_rates(ns.fx_rates),
+        currency=ns.currency,
+    )
+    return result["narrative"]
+
+
 async def _submission_ready(args: List[str]) -> str:
     parser = _parser("/submission_ready")
     parser.add_argument("startups", nargs="*")
@@ -322,6 +358,8 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
         HarnessCommand("/dd_priorities", "/dd_priorities <startup>", "Prioritize an existing DD checks report.", _dd_priorities),
         HarnessCommand("/sha_review", "/sha_review <dataset>", "Review a startup Shareholders' Agreement.", _sha_review),
+        HarnessCommand("/captable_build", "/captable_build <dataset> [--fresh]", "Build the versioned cap-table/CLA snapshot.", _captable_build),
+        HarnessCommand("/captable_analysis", "/captable_analysis <dataset> [--as-of date] [--pre-money x] [--investment y] [--fx-rate CUR=RATE ...]", "Conversion scenarios, red flags, and narrative over a stored snapshot.", _captable_analysis),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}

@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["as_of_date", "pools", "assumptions"],
+  "properties": {
+    "as_of_date": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "quote"],
+      "properties": {
+        "value": {"type": ["string", "null"]},
+        "quote": {"type": ["string", "null"]}
+      }
+    },
+    "pools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "label", "total", "granted", "unallocated",
+                     "quote"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["esop", "psop", "grantable", "treasury", "other"]
+          },
+          "label": {"type": "string", "minLength": 1},
+          "total": {"type": ["number", "null"]},
+          "granted": {"type": ["number", "null"]},
+          "unallocated": {"type": ["number", "null"]},
+          "quote": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

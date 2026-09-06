@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["as_of_date", "entries", "assumptions"],
+  "properties": {
+    "as_of_date": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "quote"],
+      "properties": {
+        "value": {"type": ["string", "null"]},
+        "quote": {"type": ["string", "null"]}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name", "current_common", "current_preferred",
+          "current_participation_pct", "first_acquisition_date",
+          "last_change_date"
+        ],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "current_common": {"type": ["number", "null"]},
+          "current_preferred": {"type": ["number", "null"]},
+          "current_participation_pct": {"type": ["number", "null"]},
+          "first_acquisition_date": {"type": ["string", "null"]},
+          "last_change_date": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

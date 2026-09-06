@@ -129,6 +129,11 @@ Use the harness for stable user-facing slash commands:
 conda run -n sictic-env python -m skills.harness /startup_profile SpaceX
 conda run -n sictic-env python -m skills.harness /dd_checks SpaceX
 conda run -n sictic-env python -m skills.harness /dataset_chat SpaceX "What are the main risks?"
+
+# Cap table / CLA pipeline (typer CLIs, see docs/captable.md):
+conda run -n sictic-env python -m skills.captable_build build --dataset spacex
+conda run -n sictic-env python -m skills.captable_analysis run --dataset spacex
+conda run -n sictic-env python -m skills.captable_analysis render --dataset spacex
 ```
 
 Start the interactive harness with `--no-capture-output` so Conda keeps stdin

@@ -1,0 +1,65 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["documents"],
+  "properties": {
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "filename",
+          "document_class",
+          "confidence",
+          "as_of_date",
+          "language",
+          "rationale"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Exactly one of the provided dataset filenames."
+          },
+          "document_class": {
+            "type": "string",
+            "enum": [
+              "current_cap_table",
+              "forecast_scenario_model",
+              "share_register",
+              "cla_executed",
+              "cla_term_sheet",
+              "cla_side_doc",
+              "articles_of_association",
+              "commercial_register_extract",
+              "sha_or_priced_term_sheet",
+              "syndicate_agreement",
+              "warrant_agreement",
+              "esop_psop_plan",
+              "tax_ruling",
+              "employment_or_advisor_agreement",
+              "other"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "as_of_date": {
+            "type": ["string", "null"],
+            "description": "YYYY-MM-DD, YYYY-MM, or YYYY; null when unknown."
+          },
+          "language": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
