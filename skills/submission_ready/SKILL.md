@@ -31,6 +31,12 @@ Run the checklist through [batch audit](../standards_and_architecture/SKILL.md#c
 render its table, and generate a schema-validated action allowed for the current
 stage. Missing or ambiguous evidence is Unclear; technical errors are failures.
 
+The response separates **Eligibility concerns** from **Missing or inconsistent
+information**. Confirmed wrong geography is an eligibility concern. Policy
+rejection routes describe the underlying eligibility decision; the proposed-action
+field remains limited to progression or sending concerns for the current stage.
+The skill does not propose an additional rejection action.
+
 Audit reuse follows indexed revisions and configuration. A stage-only change can
 reuse the audit and create a new response; unrelated indexed changes can invalidate
 it. Timestamped output reuse uses exact-model `is_reusable()`, with stage and

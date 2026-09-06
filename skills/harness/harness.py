@@ -337,31 +337,33 @@ def help_text(registry: Dict[str, HarnessCommand] | None = None) -> str:
     return "\n".join(lines)
 
 
-async def dispatch_command(line: str, registry: Dict[str, HarnessCommand] | None = None) -> str:
+async def dispatch_command(line: str | list[str], registry: Dict[str, HarnessCommand] | None = None) -> str:
+    """Dispatch command text or shell-parsed tokens without reparsing tokens."""
     registry = registry or build_registry()
-    stripped = line.strip()
-    if not stripped:
+    if isinstance(line, list):
+        parts = list(line)
+        stripped = parts[0] if len(parts) == 1 else ""
+    else:
+        stripped = line.strip()
+        try:
+            # Only double quotes group text; apostrophes in natural-language
+            # queries (e.g. "What's ...") must not open a quote.
+            lexer = shlex.shlex(stripped, posix=True)
+            lexer.quotes = '"'
+            lexer.whitespace_split = True
+            lexer.commenters = ""
+            parts = list(lexer)
+        except ValueError as e:
+            return f"Parse error: {e}"
+    if not parts:
         return ""
     if stripped in {"/help", "help"}:
         return help_text(registry)
     if stripped in {"/exit", "exit", "quit"}:
         return "__EXIT__"
-    if not stripped.startswith("/"):
+    if not parts[0].startswith("/"):
         return "Use slash commands. Type /help for available commands."
 
-    try:
-        # Only double quotes group tokens; apostrophes in natural-language
-        # queries (e.g. "What's ...") must not open a quote.
-        lexer = shlex.shlex(stripped, posix=True)
-        lexer.quotes = '"'
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        parts = list(lexer)
-    except ValueError as e:
-        return f"Parse error: {e}"
-
-    if not parts:
-        return ""
     command_name, args = parts[0], parts[1:]
     command = registry.get(command_name)
     if not command:

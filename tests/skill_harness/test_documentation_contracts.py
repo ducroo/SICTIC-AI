@@ -102,8 +102,10 @@ def test_documented_skill_commands_parse_without_running_workflows(
 
     if module_name != "skills.harness" or not parsed.get("command"):
         return
-    line = " ".join(parsed["command"])
-    name = shlex.split(line)[0]
+    # Click returns a tuple here; Typer converts the callback's List[str].
+    tokens = list(parsed["command"])
+    line = tokens[0] if len(tokens) == 1 else tokens
+    name = shlex.split(line)[0] if isinstance(line, str) else line[0]
     if name in {"/help", "/exit"}:
         return
     assert name in build_registry(), (document, name)

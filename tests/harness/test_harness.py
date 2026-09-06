@@ -90,6 +90,42 @@ def test_harness_cli_accepts_one_shot_command():
     assert "Available commands" in result.output
 
 
+@pytest.mark.parametrize("whole_command", [False, True])
+def test_harness_cli_preserves_multiword_dataset_and_person(monkeypatch, whole_command):
+    from importlib import import_module
+    from unittest.mock import AsyncMock
+    from typer.testing import CliRunner
+    from skills.harness.__main__ import app
+
+    profile = AsyncMock(return_value=[])
+    monkeypatch.setattr(import_module("skills.person_profile.person_profile"), "person_profile", profile)
+    arguments = (
+        ['/person_profile "Example Startup" "Jane Founder"']
+        if whole_command else ["/person_profile", "Example Startup", "Jane Founder"]
+    )
+    result = CliRunner().invoke(app, arguments)
+
+    assert result.exit_code == 0, result.output
+    profile.assert_awaited_once_with("Example Startup", "Jane Founder")
+
+
+def test_harness_cli_preserves_literal_argument_content(monkeypatch):
+    from importlib import import_module
+    from unittest.mock import AsyncMock
+    from typer.testing import CliRunner
+    from skills.harness.__main__ import app
+
+    advocates = AsyncMock(return_value=[])
+    monkeypatch.setattr(import_module("skills.advocates.advocates"), "advocates", advocates)
+    description = 'What\'s "new"? Café partners; C:\\notes\\panel'
+    result = CliRunner().invoke(
+        app, ["--", "/advocates", "Founders' Forum", "--description", description],
+    )
+
+    assert result.exit_code == 0, result.output
+    advocates.assert_awaited_once_with("Founders' Forum", description)
+
+
 def test_harness_cli_rejects_interactive_mode_without_tty():
     from typer.testing import CliRunner
     from skills.harness.__main__ import app

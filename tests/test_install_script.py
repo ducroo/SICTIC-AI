@@ -5,7 +5,7 @@ from pathlib import Path
 
 def test_install_script_copies_skills_and_sets_env(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
-    source = tmp_path / "source"
+    source = tmp_path / "source repository"
     target = tmp_path / "workspace" / "skills"
     fake_site_packages = tmp_path / "site-packages"
     fake_site_packages.mkdir()
@@ -88,6 +88,13 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
     assert (target / "example_skill" / "__main__.py").is_file()
     assert not (target / "example_skill" / "SKILL.md").is_symlink()
     assert not (target / "example_skill" / "__pycache__").exists()
+    source_doc = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    installed_doc = (target / "example_skill" / "SKILL.md").read_text(encoding="utf-8")
+    assert source_doc == "---\nname: example_skill\n---\n"
+    assert installed_doc.startswith(source_doc)
+    assert f"`{skill_dir / 'SKILL.md'}`" in installed_doc
+    assert f"`{source / 'AGENTS.md'}`" in installed_doc
+    assert not (target / "AGENTS.md").exists()
     assert (fake_site_packages / "sictic-ai-repo.pth").read_text(encoding="utf-8").strip() == str(source)
 
     env_file = (source / ".env").read_text(encoding="utf-8")
