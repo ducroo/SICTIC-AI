@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from lib.captable.classification import (
     DOCUMENT_CLASSES,
     _review_classification,
@@ -273,3 +275,142 @@ def test_extraction_reviewer_accepts_ellipsis_split_quote() -> None:
         }
     )
     assert not reviewer(extraction).problems
+
+
+# --- Work-product freshness (review point 2 on PR #61) ----------------------
+
+
+def _captable_extraction(document: str) -> dict:
+    return {
+        "document": document,
+        "as_of_date": {"value": "2026-06-30", "quote": "as of 30 June 2026"},
+        "share_classes": [
+            {"id": "common", "name": "Common", "nominal_value": 0.10,
+             "votes_per_share": 1},
+        ],
+        "stakeholders": [
+            {"name": "Founder", "kind": "individual", "role": "founder",
+             "holdings": [{"class_id": "common", "count": 900_000}],
+             "diluted_count": 900_000, "invested_amount": 90_000},
+            {"name": "ESOP", "kind": "pool", "role": "employee",
+             "holdings": [], "diluted_count": 100_000},
+        ],
+        "pools": [
+            {"kind": "esop", "label": "ESOP", "total": 100_000,
+             "granted": 0, "unallocated": 100_000},
+        ],
+        "totals": {
+            "by_class": [{"class_id": "common", "issued_total": 900_000}],
+            "diluted_total": 1_000_000,
+            "quote": "total 900,000 / fully diluted 1,000,000",
+        },
+        "fully_diluted_definition": {"value": "full_pools", "quote": "fd"},
+        "assumptions": [],
+    }
+
+
+def _install_dataset(name: str, parsed_text: str) -> None:
+    from lib.datasets.paths import dataset_location_for_domain
+    from lib.storage import get_storage
+
+    storage = get_storage()
+    location = dataset_location_for_domain(name, "startups")
+    for rel in (location.raw_rel, location.parsed_rel, location.insights_rel):
+        storage.mkdir(rel)
+    storage.write_text(f"{location.raw_rel}/captable.md", parsed_text)
+    storage.write_text(f"{location.parsed_rel}/captable.md", parsed_text)
+
+
+def _patched_build(monkeypatch):
+    """The build pipeline with counting fakes at the two LLM boundaries."""
+    import lib.captable.table_extraction as table_extraction_mod
+    import skills.captable_build.captable_build as build_mod
+
+    calls = {"classify": 0, "captable": 0}
+
+    async def fake_classify(dataset_name):
+        calls["classify"] += 1
+        return {
+            "dataset": dataset_name,
+            "documents": [
+                {"filename": "captable.md",
+                 "document_class": "current_cap_table", "confidence": 95,
+                 "as_of_date": "2026-06-30", "language": "en",
+                 "rationale": "fixture"}
+            ],
+        }
+
+    async def fake_extract_captable(_dataset, filename, _text):
+        calls["captable"] += 1
+        return _captable_extraction(filename)
+
+    monkeypatch.setattr(build_mod, "classify_documents", fake_classify)
+    monkeypatch.setattr(
+        table_extraction_mod, "extract_captable", fake_extract_captable
+    )
+    return build_mod, calls
+
+
+def test_build_reuses_work_products_only_while_fresh(mock_env, monkeypatch):
+    import asyncio
+
+    build_mod, calls = _patched_build(monkeypatch)
+    _install_dataset("freshco", "# Cap table\n\nFounder 900,000\n")
+
+    asyncio.run(build_mod.build("freshco"))
+    asyncio.run(build_mod.build("freshco"))
+    assert calls == {"classify": 1, "captable": 1}, "unchanged inputs reuse"
+
+    # A changed source document (e.g. a corrected cap table) invalidates.
+    _install_dataset("freshco", "# Cap table\n\nFounder 850,000\n")
+    asyncio.run(build_mod.build("freshco"))
+    assert calls == {"classify": 2, "captable": 2}
+
+    # A prompt/checklist edit under config/captable/ invalidates.
+    real_config = build_mod.load_repository_config
+
+    def edited_config(key):
+        config = dict(real_config(key))
+        config["classification_prompt"] += "\nEdited instruction."
+        return config
+
+    monkeypatch.setattr(build_mod, "load_repository_config", edited_config)
+    asyncio.run(build_mod.build("freshco"))
+    assert calls == {"classify": 3, "captable": 3}
+    asyncio.run(build_mod.build("freshco"))
+    assert calls == {"classify": 3, "captable": 3}, "stable again"
+
+    # A model override (the --model smoke flag) invalidates, so lite-model
+    # work products can never leak into a real run.
+    monkeypatch.setattr(build_mod, "llm_model", lambda: "gemini/lite-model")
+    asyncio.run(build_mod.build("freshco"))
+    assert calls == {"classify": 4, "captable": 4}
+
+    # --fresh still forces a full re-run.
+    asyncio.run(build_mod.build("freshco", fresh=True))
+    assert calls == {"classify": 5, "captable": 5}
+
+
+def test_stale_work_product_is_ignored_by_standalone_stages(mock_env, monkeypatch):
+    import asyncio
+    import json
+
+    from lib.storage import get_storage
+
+    build_mod, calls = _patched_build(monkeypatch)
+    _install_dataset("stale-co", "# Cap table\n\nFounder 900,000\n")
+    asyncio.run(build_mod.build("stale-co"))
+    rel = build_mod._work_path("stale-co", "classification.json")
+    stored = json.loads(get_storage().read_text(rel))
+    assert set(stored["freshness"]) == {
+        "documents_sha256", "config_sha256", "model", "tool_version"
+    }
+
+    # Simulate a product written before the stamps existed.
+    del stored["freshness"]
+    get_storage().write_text(rel, json.dumps(stored))
+    assert build_mod._load_work("stale-co", "classification.json") is None
+    with pytest.raises(ValueError, match="Missing or stale"):
+        asyncio.run(build_mod.snapshot("stale-co"))
+    asyncio.run(build_mod.table("stale-co"))  # re-classifies on its own
+    assert calls["classify"] == 2

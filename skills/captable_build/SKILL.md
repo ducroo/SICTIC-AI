@@ -24,8 +24,15 @@ python -m skills.captable_build table     --dataset <startup>
 python -m skills.captable_build snapshot  --dataset <startup>
 ```
 
-`build` runs everything, reusing stored intermediate results (`--fresh`
-discards them), and writes `insights/captable/snapshots/<as_of>.json`,
+`build` runs everything, reusing stored intermediate results only while
+they are still fresh: every work product under `insights/captable/work/`
+carries a `freshness` stamp (content hash of the parsed documents, hash
+of the `config/captable/` files incl. the term checklist, model slug,
+tool version) and a product whose stamp no longer matches is re-run
+automatically — a newly added loan agreement, a corrected cap table, a
+prompt edit or a model override never reuse outdated output. `--fresh`
+discards every stored product regardless. `build` writes
+`insights/captable/snapshots/<as_of>.json`,
 `latest.json`, a table-only `captable.md`, and a deterministic visual
 one-pager `captable.html` (re-render or add scenarios via
 `python -m skills.captable_analysis render`). `assess` applies pure-Python

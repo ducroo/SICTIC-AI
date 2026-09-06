@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 
@@ -64,3 +65,22 @@ def load_parsed_documents(dataset_name: str) -> list[ParsedDocument]:
             "run a dataset sync first."
         )
     return documents
+
+
+def documents_fingerprint(documents: list[ParsedDocument]) -> str:
+    """Content hash of a document set: the true input of every LLM stage.
+
+    Order-independent. Used to stamp work products so a changed, added or
+    removed source document invalidates them; the indexed dataset
+    revision is NOT used because it also changes on embedding-model,
+    chunker and sparse-index rebuilds that leave the documents untouched.
+    """
+    digest = hashlib.sha256()
+    for document in sorted(documents, key=lambda d: d.filename):
+        digest.update(document.filename.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(
+            hashlib.sha256(document.text.encode("utf-8")).hexdigest().encode()
+        )
+        digest.update(b"\n")
+    return digest.hexdigest()

@@ -161,7 +161,9 @@ missing-terms recall property), and a planted share-transfer anomaly.
 A full pipeline smoke run against it on
 `--model gemini/gemini-3.5-flash-lite` costs about one cent; a real data
 room on the default model costs roughly CHF 0.5–1.5 once (work products
-are cached; only `--fresh` re-runs the LLM stages). Lite-model output is
+are cached and reused while their freshness stamp — parsed documents,
+captable config, model, tool version — still matches; a change to any of
+them or `--fresh` re-runs the LLM stages). Lite-model output is
 measurably worse — never use the override for real due-diligence output.
 
 ## Known limitations / follow-ups

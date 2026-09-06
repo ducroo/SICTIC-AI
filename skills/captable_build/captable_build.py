@@ -20,9 +20,17 @@ from typing import Any
 
 from lib.captable.classification import CLA_CLASSES, classify_documents
 from lib.captable.cla_extraction import extract_cla
-from lib.captable.documents import load_parsed_documents
+from lib.captable.documents import documents_fingerprint, load_parsed_documents
+from lib.captable.snapshot import TOOL_VERSION
 from lib.datasets.paths import dataset_insights_path
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
 from lib.infrastructure.logging import get_logger
+from lib.insights.manifest import config_hash
+from lib.insights.paths import model_slug
+from lib.model_config import llm_model
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
@@ -30,16 +38,43 @@ logger = get_logger(__name__)
 _WORK_DIR = "captable/work"
 
 
+def _freshness(dataset_name: str) -> dict[str, str]:
+    """What every stored work product depends on.
+
+    Same contract as the repository's InsightFile manifest (config hash +
+    model slug), with the parsed documents' content hash as the data
+    revision. A work product is reused only when all four match; a
+    changed document, prompt/checklist edit, model override, or tool
+    version therefore re-runs the stage instead of silently reusing
+    outdated output.
+    """
+    return {
+        "documents_sha256": documents_fingerprint(
+            load_parsed_documents(dataset_name)
+        ),
+        "config_sha256": config_hash(
+            config_cache_key(load_repository_config("captable"))
+        ),
+        "model": model_slug(llm_model()),
+        "tool_version": TOOL_VERSION,
+    }
+
+
 def _work_path(dataset_name: str, name: str) -> str:
     insights_rel = dataset_insights_path(dataset_name)
     return f"{insights_rel}/{_WORK_DIR}/{name}"
 
 
-def _store_work(dataset_name: str, name: str, payload: Any) -> str:
+def _store_work(
+    dataset_name: str, name: str, payload: Any, *, stamp: bool = True
+) -> str:
+    """Persist a work product, stamped with what it was computed from."""
     storage = get_storage()
     rel = _work_path(dataset_name, name)
     parent = rel.rsplit("/", 1)[0]
     storage.mkdir(parent)
+    if stamp and isinstance(payload, dict):
+        payload["freshness"] = _freshness(dataset_name)
     storage.write_text(rel, json.dumps(payload, ensure_ascii=False, indent=2))
     return rel
 
@@ -58,15 +93,9 @@ async def extract(dataset_name: str) -> dict[str, Any]:
     Runs (or reuses) the classification to find CLA documents, then extracts
     each one. Term sheets are extracted too but kept distinct via ``status``.
     """
-    storage = get_storage()
-    classification_rel = _work_path(dataset_name, "classification.json")
-    if storage.exists(classification_rel):
-        classification = json.loads(storage.read_text(classification_rel))
-        logger.info(
-            "[%s] Reusing stored classification %s",
-            dataset_name,
-            classification_rel,
-        )
+    classification = _load_work(dataset_name, "classification.json")
+    if classification is not None:
+        logger.info("[%s] Reusing stored classification", dataset_name)
     else:
         classification = await classify(dataset_name)
 
@@ -128,11 +157,37 @@ async def extract(dataset_name: str) -> dict[str, Any]:
     return result
 
 
-def _load_work(dataset_name: str, name: str) -> Any | None:
+def _load_work(
+    dataset_name: str, name: str, *, check_freshness: bool = True
+) -> Any | None:
+    """Load a stored work product; a stale one counts as missing.
+
+    Existence alone is not enough to reuse a product: the documents,
+    prompts, model or tool may have changed since it was written. Stale
+    products are reported and ignored so the stage re-runs.
+    """
     storage = get_storage()
     rel = _work_path(dataset_name, name)
-    if storage.exists(rel):
-        return json.loads(storage.read_text(rel))
+    if not storage.exists(rel):
+        return None
+    payload = json.loads(storage.read_text(rel))
+    if not check_freshness:
+        return payload
+    expected = _freshness(dataset_name)
+    stored = payload.get("freshness") if isinstance(payload, dict) else None
+    if stored == expected:
+        return payload
+    changed = (
+        sorted(k for k in expected if (stored or {}).get(k) != expected[k])
+        if isinstance(stored, dict)
+        else ["unstamped"]
+    )
+    logger.warning(
+        "[%s] Stored %s is stale (%s changed); the stage will re-run.",
+        dataset_name,
+        name,
+        ", ".join(changed),
+    )
     return None
 
 
@@ -175,11 +230,8 @@ async def table(dataset_name: str) -> dict[str, Any]:
         extract_register,
     )
 
-    storage = get_storage()
-    classification_rel = _work_path(dataset_name, "classification.json")
-    if storage.exists(classification_rel):
-        classification = json.loads(storage.read_text(classification_rel))
-    else:
+    classification = _load_work(dataset_name, "classification.json")
+    if classification is None:
         classification = await classify(dataset_name)
 
     def latest_of(document_class: str) -> str | None:
@@ -304,8 +356,8 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
     ]
     if missing:
         raise ValueError(
-            f"Missing work products {missing}; run the earlier stages "
-            "(or `build`) first."
+            f"Missing or stale work products {missing}; run the earlier "
+            "stages (or `build`) first."
         )
 
     captable = tables.get("captable")
@@ -443,9 +495,12 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
 
 
 async def build(dataset_name: str, *, fresh: bool = False) -> dict[str, Any]:
-    """Run the full pipeline (stages 1-7), reusing stored work products.
+    """Run the full pipeline (stages 1-7), reusing FRESH work products.
 
-    With ``fresh=True`` all stored work products are discarded first.
+    A stored product is reused only when its freshness stamp (parsed
+    documents, captable config, model, tool version) still matches; see
+    ``_freshness``. With ``fresh=True`` every stored product is discarded
+    first regardless.
     """
     storage = get_storage()
     if fresh:
@@ -480,7 +535,10 @@ async def aggregate(dataset_name: str) -> dict[str, Any]:
     extraction = await _extraction_or_run(dataset_name)
     storage = get_storage()
     raw_rel = dataset_raw_path(dataset_name)
-    cache = _load_work(dataset_name, "esign_markers.json") or {}
+    cache = (
+        _load_work(dataset_name, "esign_markers.json", check_freshness=False)
+        or {}
+    )
     markers: dict[str, dict] = {}
     cache_dirty = False
     for cla in extraction["clas"]:
@@ -502,7 +560,7 @@ async def aggregate(dataset_name: str) -> dict[str, Any]:
         }
         cache_dirty = True
     if cache_dirty:
-        _store_work(dataset_name, "esign_markers.json", cache)
+        _store_work(dataset_name, "esign_markers.json", cache, stamp=False)
     from lib.infrastructure.configuration import load_repository_config
 
     rules = load_repository_config("captable")["assessment_rules"]
