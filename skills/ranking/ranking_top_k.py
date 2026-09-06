@@ -157,7 +157,7 @@ def _ranking_batch_prompt(profiles: Dict[str, str]) -> str:
 async def ranking_top_k(
     objective: str,
     all_profiles: Dict[str, str],
-    top_k: int = 8,
+    top_k: int = 16,
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Find top profiles using a bucketed Swiss tournament."""

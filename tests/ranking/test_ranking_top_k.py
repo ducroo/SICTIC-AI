@@ -6,6 +6,21 @@ import skills.ranking.ranking_top_k as ranking_top_k_module
 
 
 @pytest.mark.asyncio
+async def test_ranking_top_k_returns_up_to_16_by_default(monkeypatch):
+    async def rank_in_supplied_order(_objective, profiles):
+        return list(profiles)
+
+    monkeypatch.setattr(ranking_top_k_module, "rank_chunk", rank_in_supplied_order)
+    profiles = {f"startup-{index:03d}": "Profile" for index in range(20)}
+
+    ranked, actual_count = await ranking_top_k_module.ranking_top_k("Find fit", profiles)
+
+    assert actual_count == len(ranked) == 16
+    assert len({item["id"] for item in ranked}) == 16
+    assert [item["rank"] for item in ranked] == list(range(1, 17))
+
+
+@pytest.mark.asyncio
 async def test_ranking_top_k_defaults_to_batches_of_16(monkeypatch):
     chunk_sizes = []
 

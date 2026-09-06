@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 async def expert_search(startup_name: str, target_experts: Optional[List[str]] = None, exclude_experts: Optional[List[str]] = None, top_k: int = 16) -> InsightResult:
     """
-    Provides a ranked list of potential experts for a given startup based on quickselect ranking and LLM refinement.
+    Rank stored investor profiles for a startup's due-diligence expertise needs.
     """
     startup_slug = slugify(startup_name)
     from lib.startups.sources import ensure_startup_dataset
@@ -48,7 +48,9 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
             },
         ),
     )
-    if reusable := insight.find(selection="reusable"): return [reusable]
+    stored = insight.find(selection="any")
+    if stored is not None and stored.model == "manual":
+        return [stored]
     # 1. Fetch Startup Profile
     logger.info(f"[{startup_slug}] Fetching startup profile...")
     try:
@@ -57,6 +59,13 @@ async def expert_search(startup_name: str, target_experts: Optional[List[str]] =
     except Exception as e:
         logger.error(f"[{startup_slug}] Failed to generate/fetch startup profile: {e}")
         raise RuntimeError(f"Failed to generate/fetch startup profile: {e}")
+
+    # Indexed dataset revisions do not track edits to profile insights.
+    insight.config_key = config_cache_key(
+        insight.config_key, {"startup_profile": profile_content}
+    )
+    if reusable := insight.find(selection="reusable"):
+        return [reusable]
 
     objective = objective_template.replace("{{startup_profile}}", profile_content)
 

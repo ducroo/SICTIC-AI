@@ -21,7 +21,7 @@ INTERACTIVE_CONDA_HINT = (
 )
 
 
-async def _dispatch_one_shot(command: str) -> str:
+async def _dispatch_one_shot(command: str | list[str]) -> str:
     try:
         return await dispatch_command(command)
     finally:
@@ -37,7 +37,7 @@ def main(
 ):
     if command:
         output = run_command(
-            lambda: _dispatch_one_shot(" ".join(command)),
+            lambda: _dispatch_one_shot(command[0] if len(command) == 1 else command),
             logger=logger,
             error_prefix="Harness failed",
         )

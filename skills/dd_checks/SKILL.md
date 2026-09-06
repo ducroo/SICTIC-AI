@@ -1,38 +1,58 @@
 ---
 name: dd_checks
-description: Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, industry-aware checklists. It automatically identifies the startup's industry, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
+description: Assess a startup data room against industry-aware due-diligence checklists and produce one complete report. Use for comprehensive checklist review.
 ---
 
-# M&A Due Diligence Checklist
+# DD checks
 
-This skill automates a thorough, background due diligence review of a specified startup's data room and outputs the findings to a single Markdown file. It dynamically evaluates chapters (such as elevator, corporation, team, financials, commercial, risks, and product) based on the startup's industry type.
+Assess the configured due-diligence chapters and combine their findings.
 
-## Trigger
+## Inputs and outputs
 
-Use this skill when asked to perform due diligence, run a DD checklist, or review a data room for a startup. Example: "Run the dd_checks for Avientus".
+The async `dd_checks(startup)` returns one final Markdown report in
+`list[InsightFile]`, named `dd-checks-<startup>-<model>.md`.
+Canonical chapter JSON audits remain internal.
 
-## Workflow
+## Workflow and dependencies
 
-The skill executes a python script in the background that manages the process:
+Prepare the startup through `ensure_startup_dataset` and synchronize before
+assessment. Classify industry with the configured JSON schema; select each
+chapter's matching variant or its general fallback. Product has biology,
+hardware and software variants plus a general fallback.
 
-1. **Profiling (First Step):** Uses `dataset_chat` to identify the startup's industry type. It dynamically extracts the allowed industry types from the checklist keys, injects them into `industry_type_response_schema`, supplies that schema to LiteLLM, repairs the returned JSON, and validates it locally.
-2. **Checklist Selection & Extraction:** 
-   1. The script reads the available checklist keys from `config['dd_checks']['checklists']`. These keys are formatted as `<chapter>_<industry_type>` (e.g., `1_elevator_general`).
-   2. It distills the unique chapters from these keys.
-   3. For each chapter, it selects the key that matches the identified `<industry_type>`. If an industry-specific version doesn't exist for that chapter, it falls back to the `general` version.
-3. **Comprehensive Review:** For each selected structured Markdown checklist,
-   it uses `batch_audit` to process all items against the data room and save a
-   freshness-tracked JSON Insight.
-4. **Resiliency:** If a chapter fails (e.g., LLM timeout, context window limit), the script logs the error inside the Markdown output file for that specific chapter, safely catches the exception, and continues processing the remaining chapters.
-5. **Output:** The JSON audit Insights are rendered through
-   `json_to_markdown_table` and collated into one Markdown report, saved with
-   `lib.insights.InsightFile(dataset=startup_slug, skill="dd_checks",
-   model=llm_model(), config_key=config_cache_key(dd_config, batch_config))`. The Python
-   API returns `[insight]`; the chapter JSON audits remain internal. Do not
-   hardcode `<REPO_PATH>/insights/...` paths.
+Run selected checklists concurrently through
+[the shared audit engine](../standards_and_architecture/SKILL.md#checklist-audits).
+Render validated results with `json_to_markdown_table`; there is no synthesis
+model call. Checklists, classification and statuses belong to
+`config/dd_checks/`.
+
+The registry declares `startup-profile` as a prerequisite. Direct DD neither
+requests nor consumes that profile. Each invocation reruns classification and
+assembles the final table, reusing eligible chapter audits. The final report
+records DD, batch-audit and structured-output configuration, but is not selected
+through a final-output cache lookup or manual-output lookup.
+
+## Side effects and failure behavior
+
+Preparation may import Dealum documents; synchronization and per-check retrieval
+may convert and index data. Model calls and insight saves occur; there is no
+outreach. Missing evidence is an assessment outcome, distinct from technical
+failure.
+
+Wait for all chapter outcomes. Any chapter failure raises before a new final
+Markdown report is saved; successful chapter JSON artifacts can remain saved
+and reusable. A partial final report is not returned.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness /dd_checks "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.harness '/dd_checks "<STARTUP>"'
 ```
+
+The direct CLI uses `--startup`.
+
+## References
+
+- [Implementation](dd_checks.py)
+- [Configuration and checklists](../../config/dd_checks/)
+- [Shared audit contract](../standards_and_architecture/SKILL.md#checklist-audits)

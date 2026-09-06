@@ -129,6 +129,11 @@ and [API quickstart](https://platform.openai.com/docs/quickstart).
 
 ## Contributing
 
+Read [AGENTS.md](AGENTS.md) for working procedures and the
+[standards skill](skills/standards_and_architecture/SKILL.md) for technical
+contracts. Each skill's `SKILL.md` describes its own workflow; prompts and
+assessment criteria live in `config/`.
+
 By establishing shared standards for
 early-stage investing, we aim to structurally strengthen the startup ecosystem
 in Switzerland and Europe.
@@ -245,7 +250,7 @@ Internal building blocks are intentionally omitted.
 | `potential_investors` | ✅ | Finds investors with the strongest fit for a startup. |
 | `advocates` | ✅ | Finds members suited to representing the organization at external events. |
 | `investor_profile` | ✅ | Combines a member's professional profile, investment record, and preferences. |
-| `suggested_startups` | ✅ | For each investor, shortlists matching startups that are actively fundraising. |
+| `suggested_startups` | ✅ | Ranks selected stored startup profiles for each investor; default dataset selection does not verify fundraising status. |
 | **Startup selection and jury** | | |
 | `submission_ready` | 🚧 | Checks whether a Dealum application is complete and meets initial eligibility criteria. |
 | `pitch_ready` | 🚧 | Assesses whether a startup is mature enough and ready to pitch at a SICTIC event. |
@@ -256,10 +261,10 @@ Internal building blocks are intentionally omitted.
 | `person_profile` | ✅ | Creates a comprehensive profile of a founder, member, or other person. |
 | `startup_traction` | ✅ | Summarizes and quantifies commercial traction. |
 | `dd_checks` | ✅ | Runs a broad suite of due-diligence checks. |
-| `dd_priorities` | ✅ | Extracts the 3 to 8 most decision-relevant priorities from `dd_checks`. |
+| `dd_priorities` | ✅ | Synthesizes up to eight decision-relevant priorities from a saved `dd_checks` report. |
 | `startup_website_import` | ✅ | Imports a startup's public website into its due-diligence dataset. |
 | `market_review` | ◻️ | Reviews market size, customer needs, competition, and substitutes. |
-| `sha_review` | 🚧 | Reviews shareholders' agreements, investment terms and conditions, and capitalization tables. |
+| `sha_review` | 🚧 | Reviews a selected Shareholders' Agreement against a reference SHA and legal checklists. |
 | `captable_build` | ✅ | Extracts, assesses, and validates a startup's cap table and convertible loans into a versioned snapshot (see [docs/captable.md](docs/captable.md)). |
 | `captable_analysis` | ✅ | Computes conversion scenarios, stamp duty, and red-flag analysis over a stored cap-table snapshot; renders a visual one-pager. |
 | `companyresearch.ch` | 🚧 | Uses the companyresearch.ch API to collect publicly available information about a startup. |
@@ -275,8 +280,8 @@ Internal building blocks are intentionally omitted.
 
 ## Where is my data?
 
-Application data is rooted at `LOCAL_STORAGE_PATH`; runtime-only data is rooted
-at `LOCAL_DATA_PATH`.
+Application data is rooted at `LOCAL_STORAGE_PATH`; durable parsed documents
+and disposable runtime data are rooted at `LOCAL_DATA_PATH`.
 
 | Path | Description |
 |---|---|
@@ -306,8 +311,8 @@ The `docs/` folder currently contains:
 - [Installation and operations](docs/installation-and-operations.md): detailed
   installer modes, environment and model configuration, background services,
   command interfaces, retrieval, maintenance, and tests.
-- [Codebase assessment](docs/codebase-assessment.md): technical architecture
-  findings, known risks, and recommended follow-up work for contributors.
+- [Codebase assessment](docs/codebase-assessment.md): a historical architecture
+  review; use current standards and skill documents for implementation contracts.
 
 ## Optional Google Drive synchronization
 

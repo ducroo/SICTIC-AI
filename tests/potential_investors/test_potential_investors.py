@@ -7,7 +7,7 @@ from lib.datasets.paths import dataset_location_for_domain
 async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
     """
     Tests that potential_investors correctly integrates the sub-modules,
-    recomputes explicitly requested rankings and writes the output file.
+    writes output and recomputes when indexed source revisions are missing.
     """
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     get_storage().mkdir(
@@ -55,7 +55,7 @@ async def test_potential_investors_generation(mock_env, mocker, monkeypatch):
     expected_file = "storage/startups/teststartup/insights/potential-investors-teststartup-test-model-1b.md"
     assert get_storage().exists(expected_file)
 
-    # Ranking skills deliberately sit outside dataset freshness caching.
+    # These fixtures have no indexed revisions, so reuse cannot be verified.
     output_recomputed = await potential_investors(startup)
     assert len(output_recomputed) == 1
     assert "Investor A" in output_recomputed[0].content()

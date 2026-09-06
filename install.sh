@@ -311,6 +311,18 @@ if [ -n "$TARGET" ]; then
         fi
         copy_skill_dir "$src" "$dst"
 
+        cat >> "$dst/SKILL.md" <<EOF
+
+## Installed repository context
+
+Source repository: \`$REPO_ROOT\`.
+Read the current source skill at \`$src/SKILL.md\` when following repository
+references; resolve its relative links from that source location. For references
+inside supporting documents, use the corresponding source document's location.
+Before modifying repository code, read \`$REPO_ROOT/AGENTS.md\` and the source
+standards skill. These working instructions apply to this repository only.
+EOF
+
         INSTALLED_LIST="$INSTALLED_LIST $name "
         installed_count=$((installed_count + 1))
         echo "       + $name"
@@ -333,7 +345,9 @@ from \`environment.yml\`.
 
 ## Invocation
 
-Each SKILL.md "Usage" section contains a harness slash command.
+Each executable skill's "Usage" section documents its harness or direct CLI.
+Instruction-only skills have no executable command. Each installed SKILL.md
+includes its source location and the repository working-instruction pointer.
 EOF
 
     echo "       Installed $installed_count skill(s)."

@@ -1,63 +1,61 @@
 ---
 name: person_profile
-description: Collate a comprehensive profile on a specific person by searching a given dataset, returning the full synthesized report.
+description: Generate individual profiles from an existing person roster, LinkedIn enrichment and dataset evidence, including founder-trait assessment for active founders. Use for selected people or the complete roster.
 ---
 
-## Skill Prompt: `person_profile`
+# Person profile
 
-**Objective:** Collate a comprehensive profile on a specific person by searching a given dataset, returning the full synthesized report.
+Generate standard individual profiles for use directly or by other skills.
 
-**Inputs:**
-* `name`: A string representing the person's name (e.g., `"John Doe"`).
-* `dataset_name`: The target dataset to search (e.g., `"fabas"`).
+## Inputs and outputs
 
-**Procedure:**
+The async API accepts `dataset_name`, optional `names` (a string or list),
+and keyword-only `include_dataset_context=True`. Omitted names select everyone
+in the roster. `person_profile` returns `list[InsightFile]`; the
+`person_profile_as_person_objects` adapter runs the same workflow and returns
+populated `list[Person]`.
 
-1. **Insight File & Caching:**
-   * Resolve the person to its canonical identifier through the standard person-resolution flow.
-   * Construct the profile insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="person_profile", model=<model>, identifier=<person_identifier>, subdir=True, config_key=<query_and_instructions>)`.
-   * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing profile when available; otherwise generate the profile and persist it with `insight.save(...)`. Do not hardcode `<REPO_PATH>/insights/...` paths.
+Explicit unmatched names currently create sparse `Person` inputs for profiling;
+they do not change the roster. The roster remains required even for these calls.
 
-2. **Data Retrieval & Synthesis:**
-   * Read the existing manual roster and enrich its people through `LinkedInResolver`.
-   * Synchronize the dataset before checking profile freshness.
-   * Load `query`, `llm_instructions`, and `founder_traits_instructions` via
-     `load_repository_config("person_profile")`; both instruction sections always
-     form the standard prompt and freshness key.
-   * On a cache miss, use `build_person_dossier` for dataset evidence when
-     `include_dataset_context` is enabled, add the resolved LinkedIn payload,
-     and synthesize through `generate_markdown`.
+## Workflow and dependencies
 
-3. **Output Generation:**
-   * Save every synthesized profile through `InsightFile`.
-   * `person_profile(...)` returns a flat `list[InsightFile]`.
-   * `person_profile_as_person_objects(...)` runs the same workflow and returns
-     the populated `list[Person]` required by person-oriented composition.
+Read the existing roster, resolve LinkedIn profiles and synchronize the dataset
+before selecting reusable individual profiles. On a cache miss, combine the
+resolved LinkedIn payload with `build_person_dossier` evidence when
+`include_dataset_context` is enabled, then synthesize the profile.
 
-**CLI Interface:**
-* Expose this skill through the shared slash-command harness.
+Biographical and founder-trait instructions always belong to the standard prompt.
+Apply the trait assessment only to explicitly identified active founders; keep
+other people factual. [Shared profile standards](../standards_and_architecture/SKILL.md#standard-person-profiles)
+own identifiers, filenames, manual precedence and compatibility between consumers.
+
+Direct calls never discover people. Run [persons_in_dataset](../persons_in_dataset/SKILL.md)
+first when the roster is missing; bulk refresh declares that dependency.
+
+## Side effects and failure behavior
+
+LinkedIn resolution can fetch profiles and update stored JSON and registry state.
+Resolution and synchronization occur even before a manual or reusable profile
+is selected. Generation settings affect freshness metadata, not filenames.
+
+A missing or invalid roster raises. An empty roster with no explicit names
+returns `[]`. With no dossier, mentions or LinkedIn payload, generation saves a
+profile with a no-information note. Individual generation failures are collected:
+successful files remain, but the API raises instead of returning a partial list.
 
 ## Usage
 
-Both `person_profile(...)` and `person_profile_as_person_objects(...)` use the
-same standard generation workflow: read the authoritative manual roster, resolve
-LinkedIn profiles, gather dataset evidence, and apply the configured biographical
-and founder-trait instructions. Founder traits are assessed for explicitly
-identified active founders; unsupported assessments report insufficient information.
-A missing roster raises an error directing the caller to run `persons_in_dataset`;
-profile generation never discovers people.
-
-Every profile uses `<identifier>-<model>.md`, with the identifier selected by
-`Person.identifier`: LinkedIn ID, otherwise email address, otherwise full name,
-using standard slugification. The retained `include_dataset_context` option affects
-freshness metadata, never filenames. Manual overrides retain their normal precedence.
+The harness requires a person; the direct CLI also supports the complete roster.
 
 ```bash
-conda run -n sictic-env python -m skills.harness /person_profile "<DATASET_NAME>" "<NAME>"
-
-conda run -n sictic-env python -m skills.person_profile \
-  --dataset "<DATASET_NAME>" \
-  --person "<NAME_1>, <NAME_2>"
+conda run -n sictic-env python -m skills.harness /person_profile "<DATASET>" "<NAME>"
+conda run -n sictic-env python -m skills.person_profile --dataset "<DATASET>"
+conda run -n sictic-env python -m skills.person_profile --dataset "<DATASET>" --person "<NAME_1>, <NAME_2>"
 ```
 
-Person discovery is owned by `skills/persons_in_dataset`. This skill uses the library roster reader, then gathers evidence and writes individual profiles. Only an explicit discovery run creates a missing roster.
+## References
+
+- [Implementation and adapter](person_profile.py)
+- [Profile prompts and query](../../config/person_profile/)
+- [LinkedIn resolution contract](../standards_and_architecture/SKILL.md#linkedin-retrieval-and-persistence)

@@ -3,6 +3,7 @@
 **/.DS_Store
 .openclaw/
 AGENTS.md
+!/AGENTS.md
 DEVELOPER_GUIDE.md
 HEARTBEAT.md
 IDENTITY.md

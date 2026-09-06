@@ -1,16 +1,48 @@
 ---
 name: harness
-description: Lightweight slash-command CLI chat harness for manually exercising SICTIC-AI skills during local testing.
+description: Run SICTIC-AI workflows through slash commands in an interactive terminal or one-shot CLI. Use for invoking supported skills and inspecting command help.
 ---
 
+# Harness
+
+Dispatch supported slash commands to their existing Python workflows.
+
+## Operations and effects
+
+`dispatch_command(line)` accepts command text or a list of already-parsed tokens
+and returns formatted output text. The command registry
+in `harness.py` owns exposure and argument parsing; it is separate from the bulk
+registry. Individual skills own business logic and side effects.
+
+Interactive mode needs terminal stdin. One-shot mode runs one command and closes
+model sessions. `/help` lists routes; `/exit` ends interactive use.
+The dispatcher converts ordinary command exceptions into `Error:` text, so
+a one-shot process exit code alone does not prove business success.
+
 ## Usage
+
+Interactive:
 
 ```bash
 conda run -n sictic-env --no-capture-output python -m skills.harness
 ```
 
-One-shot harness commands are also supported:
+One-shot:
 
 ```bash
 conda run -n sictic-env python -m skills.harness /help
+conda run -n sictic-env python -m skills.harness /team_profile "Example Startup"
+conda run -n sictic-env python -m skills.harness -- /advocates "Example Event" --description "Panel on startup financing"
+conda run -n sictic-env python -m skills.harness '/advocates "Example Event" --description "Panel on startup financing"'
 ```
+
+Ordinary shell quoting preserves multiword arguments. Put `--` before the slash
+command when passing skill options separately, so the outer CLI does not consume
+them. A whole quoted command remains supported; retain inner double quotes around
+its multiword values. Interactive command text uses the same inner quoting.
+
+## References
+
+- [Dispatcher and command registry](harness.py)
+- [CLI and interactive handling](__main__.py)
+- [CLI contracts](../standards_and_architecture/SKILL.md#cli-and-harness)

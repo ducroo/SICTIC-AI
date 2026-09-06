@@ -65,6 +65,10 @@ Useful options:
 ```
 
 Re-run the installer after changing `SKILL.md` files if you use copied skills.
+Each installed skill includes the source repository and skill-document locations.
+Follow repository references from the source documents. Before editing repository
+code, read the source repository's `AGENTS.md`; installation does not copy those
+working instructions into the agent's general configuration directory.
 
 ## Environment configuration
 
@@ -148,6 +152,19 @@ conda run -n sictic-env python -m skills.dataset_maintenance diagnose
 ```
 
 Consult each skill's `SKILL.md` for its current arguments and examples.
+Ordinary shell quoting handles multiword values. When passing skill options
+separately, put `--` before the slash command. Whole-command quoting also remains
+supported, for example:
+
+```bash
+conda run -n sictic-env python -m skills.harness /team_profile "Example Startup"
+conda run -n sictic-env python -m skills.harness -- /advocates "Example Event" --description "Startup financing panel"
+conda run -n sictic-env python -m skills.harness '/advocates "Example Event" --description "Startup financing panel"'
+```
+
+The harness reports ordinary workflow failures as error text; its process exit
+code alone is not a business-success guarantee. Use direct skill CLIs when
+automation needs their documented exit behavior.
 
 ## Google Drive synchronization with rclone
 
@@ -220,8 +237,9 @@ dropped, so the requested number of chunks is still returned.
 
 A table that does not fit in one chunk loses its header on the first cut, and
 every chunk after that is a block of cells no model can attribute to a column.
-Chunking is therefore table-aware. A table larger than one chunk is split on row
-boundaries, never mid-row, and every chunk repeats the header. Because each
+Chunking is therefore table-aware. A table larger than one chunk is normally split
+on row boundaries, with its detected header repeated. A single row that exceeds
+the available chunk budget is split into smaller pieces. Because each
 chunk re-spends part of its budget on that header, tables use a larger chunk
 size than prose. This applies wherever tables come from: worksheets, CSV
 exports, and tables embedded in PDFs and Word documents.
@@ -249,17 +267,20 @@ instead of a page number.
 
 ### Upgrading an existing index
 
-Qdrant cannot add sparse vectors to a collection that was created without them,
-so datasets indexed before hybrid search keep working as dense-only search until
-their collection is rebuilt:
+Check the current index with dataset maintenance. The adapter can reconcile
+legacy layouts during initialization, so diagnostics are not guaranteed to be
+free of initialization side effects. A dataset rebuild uses the configured
+embedding model:
 
 ```bash
-python -m skills.dataset_maintenance rebuild-index --dataset avientus
+conda run -n sictic-env python -m skills.dataset_maintenance rebuild-index --dataset avientus
 ```
 
-This drops the Qdrant collection and re-embeds the dataset. Parsed Markdown is
-kept, so documents are never sent through Docling again. Rebuilding is the
-expensive step for a large data room; run it once per dataset when convenient.
+This resets the selected dataset tenant and its indexing checkpoints, then runs
+normal synchronization. The reset preserves parsed Markdown. Synchronization can
+still reparse changed sources, missing output or changed parser configuration.
+Use `--no-sync` to stop after the reset. It does not intentionally delete other
+tenants in the shared collection.
 
 ## Dataset maintenance
 
@@ -271,8 +292,10 @@ python -m skills.dataset_maintenance migrate-startup-dossiers
 python -m skills.dataset_maintenance rebuild-index --dataset avientus
 ```
 
-Pruning is a dry run unless `--apply` is supplied. `rebuild-index` re-embeds a
-dataset without re-parsing it; see [Retrieval](#retrieval).
+Pruning is a dry run unless `--apply` is supplied. Deletion and generated-dataset
+reconciliation have different defaults and scopes; consult the
+[dataset maintenance operations table](../skills/dataset_maintenance/SKILL.md#operations-and-effects)
+before using them. See [Retrieval](#retrieval) for rebuild behavior.
 
 ## Tests
 

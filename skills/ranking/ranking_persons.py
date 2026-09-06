@@ -113,7 +113,7 @@ async def rank_person_rows(
     objective: str = "",
     candidates: Optional[List[str]] = None,
     optout: Optional[List[str]] = None,
-    top_k: int = 8,
+    top_k: int = 16,
     member_dataset: str = "sictic-members",
 ) -> List[dict[str, Any]]:
     """Rank member profiles and return structured rows."""
@@ -222,7 +222,7 @@ async def ranking_persons(
     objective: str = "",
     candidates: Optional[List[str]] = None,
     optout: Optional[List[str]] = None,
-    top_k: int = 8,
+    top_k: int = 16,
     member_dataset: str = "sictic-members",
 ) -> str:
     """Rank member profiles and return a Markdown report."""
