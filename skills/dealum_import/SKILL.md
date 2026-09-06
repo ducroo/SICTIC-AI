@@ -1,66 +1,45 @@
 ---
 name: dealum_import
-description: Import Dealum application data and linked documents for explicitly named startup datasets or Dealum application codes.
+description: Import an explicitly named Dealum application and its attachments into a startup dataset. Use an exact normalized name or application code.
 ---
 
-# Dealum Import
+# Dealum import
 
-Use this skill to import a startup application and linked Dealum documents into
-the normal SICTIC-AI startup dataset folder.
+Import the application's source snapshot through the shared Dealum library.
+
+## Operations and effects
+
+The async `dealum_import(startup)` returns `DealumImportResult`, not
+`list[InsightFile]`. Shared matching accepts exact normalized names or application
+codes. Duplicate names select the latest available application date; unresolved
+ties or missing usable dates require a more specific identifier.
+
+The shared importer requires configured Dealum credentials. It creates the
+startup dossier and normally activates it. It stages application Markdown,
+raw JSON, metadata and downloaded attachments before replacing the
+`datasets/dealum/` snapshot. Removed attachments disappear from the replacement.
+A download failure preserves the prior snapshot. The importer does not perform
+dataset indexing or generate insight reports.
+
+Inspect the result's `application_found`, `changed`, counts and paths.
+The direct CLI continues after individual failures and exits with code 1 if
+any import fails or has no application. Python errors propagate; the harness
+formats its single-startup result. No Dealum stage is changed.
 
 ## Usage
 
-Import one startup:
-
 ```bash
-python -m skills.dealum_import "Avientus"
+conda run -n sictic-env python -m skills.harness '/dealum_import "<EXACT_NAME_OR_CODE>"'
+conda run -n sictic-env python -m skills.dealum_import "Avientus, daav"
 ```
 
-Import several explicit startups by passing a comma-separated list:
+Only the direct CLI splits a comma-separated startup list.
+This skill is not registered for bulk refresh; other workflows may invoke the
+shared, gated `ensure_startup_dataset` preparation separately.
 
-```bash
-python -m skills.dealum_import "Avientus, daav, prevision medicine"
-```
+## References
 
-## Storage
-
-Dealum imports write to:
-
-```text
-$LOCAL_STORAGE_PATH/storage/startups/<startup>/datasets/dealum/
-```
-
-Expected files include:
-
-* `application.md`
-* `application.raw.json`
-* `manifest.json`
-* `documents/*` for linked Dealum files
-
-To list local startup dataset folders:
-
-```bash
-ls "$LOCAL_STORAGE_PATH/storage/startups"
-```
-
-## Matching Rules
-
-Startup names are reconciled using an exact normalized Dealum name or an exact
-Dealum application code. If multiple Dealum applications match the same startup
-name, select the application with the latest available application date.
-If no usable dates are present, or if the latest date is tied, report the
-ambiguity and ask for a more specific application identifier.
-
-If no exact match exists, ask for the startup name as shown in Dealum or the
-application code.
-
-## Reporting
-
-When importing multiple startups, report:
-
-* imported successfully
-* ambiguous Dealum matches
-* no exact Dealum match
-* API or configuration errors
-
-Dealum requires `DEALUM_API_KEY` and `DEALUM_DEALROOM_ID`.
+- [Skill adapter](dealum_import.py), [direct CLI](__main__.py)
+- [Shared importer](../../lib/startups/dealum/importing.py)
+- [Matching](../../lib/startups/dealum/matching.py)
+- [Setup](../../docs/installation-and-operations.md)

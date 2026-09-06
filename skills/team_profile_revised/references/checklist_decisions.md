@@ -1,6 +1,6 @@
 # Revised team checklist decisions
 
-The user clarified that `team_profile_revised` uses `batch_audit`, begins with cached startup and related-person profiles, applies the same workflow to screening and DD, retrieves only from the data room, focuses on founders and produces evidence-referenced category summaries without scores.
+The user clarified that `team_profile_revised` uses `batch_audit`, begins with standard startup and related-person profiles, applies the same workflow to screening and DD, focuses on founders and produces evidence-referenced category summaries without scores. Per-check retrieval uses the dataset; the standard person-profile dependency includes LinkedIn enrichment.
 
 The [original register](original_team_questions.md), [additional questions and amendments](additional_team_questions.md), and [working hierarchy](team_question_hierarchy.md) are preserved as supplied design records. Their scoring instructions and application/DD variants are superseded by those clarifications. They are not loaded into runtime prompts.
 
@@ -8,7 +8,7 @@ The [original register](original_team_questions.md), [additional questions and a
 
 The 72 tracked IDs comprise 67 proposed checklist items and five framework questions. There are now **40 executable checks across four main-category checklists**; 66 original IDs remain represented in check names and descriptions. Overlapping topics share one assessment. Q029 becomes a general evidence rule; the five framework questions remain outside the executable checklist. The mapping below accounts for every ID exactly once.
 
-- N001's narrative trait assessment is generated in the optional person-profile founder section and reused in the team audit. N002 role readiness stays venture-specific. Neither produces numeric scores.
+- N001's narrative trait instructions are always part of standard person profiling; the assessment applies only to explicitly identified active founders and is reused in the team audit. N002 role readiness stays venture-specific. Neither produces numeric scores.
 - Q011 now derives the principal execution risk from the next consequential venture-specific bottleneck and explains uncertainty rather than imposing a universal risk.
 - Q003/Q004 use only explicitly disclosed relationships. Q016/Q027 share one collaboration-history check.
 - Q117 tests concrete authority/accountability problems. Q143 tests material concentration beyond ordinary founder dependence. Q144 assesses control without requiring succession planning.

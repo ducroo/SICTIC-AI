@@ -1,5 +1,11 @@
 # Codebase Assessment
 
+Historical review of an earlier PR. The implementation observations below may
+have been superseded. Use [current standards](../skills/standards_and_architecture/SKILL.md)
+and [the documentation review status](reviews/documentation-closeout-2026-09-06.md)
+for current contracts and outstanding decisions; this review is not an instruction
+to implement its proposed packaging or refactors.
+
 ## Summary
 
 The repository is organized around user-facing `skills/` packages and shared

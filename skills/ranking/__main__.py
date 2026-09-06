@@ -11,7 +11,7 @@ app = typer.Typer(help="Ranking module for SICTIC-AI")
 def main(
     target: str = typer.Option("persons", "--target", "-t", help="What entity to rank"),
     objective: str = typer.Option(..., "--objective", "-o", help="The objective/criteria for ranking"),
-    top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top candidates to return")
+    top_k: int = typer.Option(16, "--top-k", "-k", help="Number of top candidates to return")
 ):
     if target == "persons":
         result = run_command(

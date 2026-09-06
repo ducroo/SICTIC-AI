@@ -1,46 +1,66 @@
 ---
 name: submission_ready
-description: Screens Dealum applications in the Application or Under review stage for completeness and SICTIC initial eligibility, then drafts an internal proposed action for Ops. Use for one or more named startups or an overnight batch of all in-scope submissions.
+description: Screen Dealum applications in Application or Under review for completeness and initial eligibility, and draft an internal proposed action. Use for named submissions or a batch of in-scope applications.
 ---
 
-# Submission Ready
+# Submission ready
 
-Review only the startup's Dealum application and documents submitted through
-Dealum. Do not use separately scraped website or LinkedIn content as evidence.
+Produce an Ops screening report and proposed action for human review.
 
-## Workflow
+## Inputs and outputs
 
-1. Retrieve Dealum applications and keep only `Application` and
-   `Under review`. A named out-of-scope startup produces no artifacts.
-2. With named startups, force a fresh Dealum import. Without names, process
-   all in-scope applications sequentially using the six-hour per-startup gate.
-3. Replace the Dealum snapshot only after all attachments download.
-4. Reuse the freshness-tracked JSON audit when substantive submission content
-   is unchanged. A stage-only change creates a new response without rerunning
-   the audit checks.
-5. Load the policy, structured Markdown checklist, output instructions, and
-   JSON response schema from `config/submission_ready/`. Constrain the proposed
-   actions in the schema to those permitted for the current Dealum stage.
-6. Run every checklist item through `batch_audit` with the `Pass`, `Fail`, and
-   `Unclear` status scale, then render the common Markdown table through
-   `json_to_markdown_table`.
-7. Use `Unclear` whenever the submitted evidence is missing, ambiguous,
-   conflicting, or not retrievable. Never infer a pass or fail.
-8. Save the canonical JSON audit plus a timestamped rendered checklist and
-   internal proposed action through `InsightFile`. Humans decide whether to
-   contact the startup or change its Dealum stage; the skill does neither.
-   Use `config_cache_key()` over the complete submission-ready configuration, stage,
-   and canonical audit when evaluating artifact freshness.
-9. Return a flat `list[InsightFile]` containing checklist then response for
-   each successful startup. The canonical JSON audits remain internal; any
-   generated failure report is appended to the returned list.
+The async `submission_ready(startups=None)` accepts startup names or codes.
+Omission processes in-scope applications. Named out-of-scope startups produce no
+artifacts. On success, return a flat `list[InsightFile]`: checklist then response
+for each startup. Canonical JSON audits remain internal; final Markdown artifacts
+are timestamped.
 
-The result is an Ops screening report, not a jury assessment. Do not evaluate
-business attractiveness, pitch quality, or investment readiness.
+## Workflow and dependencies
+
+Select only Application and Under review. Named requests force a Dealum import;
+automatic batches apply the six-hour per-startup gate and run sequentially.
+Import preserves the prior snapshot until attachments have downloaded.
+Synchronize before the checklist audit. No profile skill is a registry prerequisite.
+
+Use `config/submission_ready/` for policy, questions, statuses and proposed actions.
+The prompt restricts evidence to Dealum submissions; retrieval itself searches
+the whole startup dataset. This is the accepted prompt-based restriction, not a
+source filter. Business attractiveness and jury assessment are outside the task.
+
+Run the checklist through [batch audit](../standards_and_architecture/SKILL.md#checklist-audits),
+render its table, and generate a schema-validated action allowed for the current
+stage. Missing or ambiguous evidence is Unclear; technical errors are failures.
+
+Audit reuse follows indexed revisions and configuration. A stage-only change can
+reuse the audit and create a new response; unrelated indexed changes can invalidate
+it. Timestamped output reuse uses exact-model `is_reusable()`, with stage and
+audit content in its key, rather than manual-first output selection.
+
+## Side effects and failure behavior
+
+Import Dealum data, synchronize, call models and save artifacts. Do not send
+messages or change Dealum stages; humans decide on the proposed action.
+
+Continue after individual startup failures. Successful artifacts and diagnostic
+failure reports can remain saved, but any failure raises after processing;
+failure reports are not appended to a returned partial-success list.
+
+Known limitations: discovery/import/sync have a local three-attempt retry covering
+all exceptions, including permanent failures. Other steps do not share that retry,
+despite the broad failure wording. An “Older usable result” notice identifies
+stored files without proving a complete, fresh prior run.
 
 ## Usage
 
 ```bash
 conda run -n sictic-env python -m skills.harness /submission_ready
-conda run -n sictic-env python -m skills.harness /submission_ready "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.harness '/submission_ready "<STARTUP>"'
 ```
+
+The direct CLI accepts repeated `--startup` options.
+
+## References
+
+- [Implementation](submission_ready.py)
+- [Policy and configuration](../../config/submission_ready/)
+- [Shared audit contract](../standards_and_architecture/SKILL.md#checklist-audits)

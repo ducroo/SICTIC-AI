@@ -59,7 +59,6 @@ async def _run_audits(
             llm_instructions=instructions,
             status_scale=settings["status_scale"],
             missing_evidence_status=settings["missing_evidence_status"],
-            allow_empty_retrieval=True,
         )
         for key in keys
     ))

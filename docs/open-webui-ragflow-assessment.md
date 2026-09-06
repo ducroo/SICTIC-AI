@@ -1,6 +1,6 @@
 # Open WebUI and RAGFlow assessment
 
-Assessment date: 5 September 2026. Baseline: the accepted [RAG backend requirements](/Users/openclaw/SICTIC-AI/docs/rag-backend-requirements.md), Google Chat and existing Python skills, local files synchronized by rclone, and a production Mac mini using a cloud LLM.
+Assessment date: 5 September 2026. Baseline: the accepted [RAG backend requirements](rag-backend-requirements.md), Google Chat and existing Python skills, local files synchronized by rclone, and a production Mac mini using a cloud LLM.
 
 This is a documentation and source-code assessment, not a deployment benchmark or security acceptance test. Release pages currently identify [Open WebUI v0.11.3](https://github.com/open-webui/open-webui/releases/tag/v0.11.3) and [RAGFlow v0.27.1](https://github.com/infiniflow/ragflow/releases/tag/v0.27.1) as the latest releases. Source references below use those tags; live documentation and the separate oikb package can evolve independently.
 
@@ -47,7 +47,7 @@ RAGFlow's dataset document download and its agent-attachment download should not
 
 ### Spreadsheet quality
 
-The current repository's [spreadsheet converter](/Users/openclaw/SICTIC-AI/lib/infrastructure/document_conversion/docling_stack/spreadsheets.py:34) deliberately handles visible sheets, numeric formatting and missing cached formulas. Merely selecting Docling does not establish equivalent behavior.
+The repository's [spreadsheet converter](../lib/infrastructure/document_conversion/docling_stack/spreadsheets.py) deliberately handles visible sheets, numeric formatting and missing cached formulas. Merely selecting Docling does not establish equivalent behavior.
 
 In RAGFlow v0.27.1, the spreadsheet Markdown helper calls `pandas.read_excel` without selecting all sheets, which uses the first sheet. The inspected pipeline's HTML branch takes the first returned table. Other parsing modes can process multiple sheets, so this is a warning about specific modes rather than a general claim that RAGFlow supports only one sheet. These modes do not pass the all-sheets requirement as written. [Spreadsheet helper](https://github.com/infiniflow/ragflow/blob/v0.27.1/deepdoc/parser/excel_parser.py#L254), [pipeline branch](https://github.com/infiniflow/ragflow/blob/v0.27.1/rag/flow/parser/parser.py#L883)
 

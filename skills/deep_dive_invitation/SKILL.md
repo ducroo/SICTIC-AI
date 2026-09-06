@@ -1,60 +1,70 @@
 ---
 name: deep_dive_invitation
-description: Create a review-only Markdown deep-dive invitation for a Dealum startup. Use when Joëlle provides a startup and founder or interested-investor contacts, including unstructured text copied from Dealum's Funding tab. Extract the relevant contacts from that text, invoke the Python workflow, and never send the email.
+description: Create a review-only Markdown deep-dive invitation for Joëlle from a Dealum startup and supplied contacts. Use for invitation preparation; never send the email or create a Gmail draft.
 ---
 
 # Deep-dive invitation
 
-Create a Markdown InsightFile for Joëlle to review. Never send the email and do
-not create a Gmail draft.
+Prepare recipient reconciliation and an invitation for human review.
 
-## Input preparation
+## Inputs and outputs
 
-Ask for the exact Dealum startup name or application code when it is not clear.
-The Python entry point accepts structured, comma-separated contacts:
+The async `deep_dive_invitation(startup, founders=None, investors=None)` takes
+lists of canonical `Person` objects and returns one `InsightFile` in a list,
+named `deep-dive-invitation-<startup>-<model>.md`. `parse_people_csv` adapts
+comma-separated names, emails or `Name <email>` entries.
+
+For pasted Dealum Funding-tab text, extract contacts from Internal and External
+under FUNDING INTERESTS. Preserve names and emails, including name-only
+organizations; ignore round amounts, tags and interface text. Do not invent
+contacts. Ask for the exact startup name/code only when unclear.
+
+## Workflow and dependencies
+
+Import Dealum data, request normal `startup_profile`, read member preferences,
+then request `expert_search`. Existing member rosters and investor profiles are
+required; the invitation does not discover people. It has no bulk registration.
+
+Supplied contacts are authoritative. Investor reconciliation tries exact email,
+then LinkedIn ID, then normalized-name matches, not general fuzzy matching.
+Investor email priority is the supplied address, then the matched member's
+`@investor.sictic.ch`, `@sictic.ch`, then another stored address. Founder emails
+can come from supplied contacts and the Dealum application contact; missing
+addresses produce placeholders. Interested-investor Funding-tab extraction is
+not automated, so the draft always includes a verification notice.
+
+Interested investors with an address remain in Cc even with preference `none`;
+missing addresses create notices and are omitted until completed. Exclude interested
+members and opted-out members from expert search. Configuration currently requests
+16 candidates and selects at most 10 usable experts. Bcc excludes addresses already
+in To/Cc; experts appear only in Bcc, not as named rows in the email body.
+
+Render the configured template mechanically after reconciliation. Cache lookup
+occurs after dependencies; its key includes configuration, supplied people,
+member preferences and expert-report content, with startup/community revisions.
+Resolved member contacts are not independently hashed, so contact edits alone
+may not invalidate the draft.
+
+## Side effects and failure behavior
+
+Dependencies may import, synchronize, generate profiles and rank experts. Save
+only a review artifact: do not send messages, create mail drafts or change stages.
+Missing/ambiguous contacts can become visible review notices; dependency and
+generation failures propagate. Preserve the configured recipient precedence and
+manual output selection.
+
+## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness -- /deep_dive_invitation \
-  --startup "<EXACT_DEALUM_NAME>" \
-  --founders "Jane Founder <jane@example.com>, John Founder <john@example.com>" \
-  --investors "Nina Member <nina@investor.sictic.ch>, FONGIT"
+conda run -n sictic-env python -m skills.harness '/deep_dive_invitation --startup "<EXACT_NAME_OR_CODE>" --founders "Jane Founder <jane@example.com>" --investors "Nina Member <nina@example.com>"'
 ```
 
-Both `--founders` and `--investors` are optional and plural. Each entry may be
-`Full Name <email>`, an email address, or a name. Use natural `First Last`
-names; commas separate people.
+The direct CLI uses the same plural `--founders` and `--investors` options;
+both are optional.
 
-When the user provides unstructured Dealum Funding-tab text, clean it before
-invoking the Python workflow:
+## References
 
-1. Begin at `FUNDING INTERESTS`.
-2. Extract contacts from both `Internal` and `External` sections.
-3. Keep full names and email addresses. Preserve name-only contacts such as an
-   organization, but never invent an email or LinkedIn ID.
-4. Ignore round descriptions, amounts, tags, telephone numbers, dates,
-   documents, discussions, and interface labels.
-5. Convert the result to the structured `--investors` value above.
-
-Joëlle-supplied contacts, including contacts extracted from her pasted text,
-remain authoritative. The workflow augments them from Dealum and
-`persons_in_dataset("sictic-members")` without silently fuzzy-matching them.
-
-## Workflow guarantees
-
-- Dealum reconciliation must be reliable; Dealum import stops on no match or
-  unresolved ambiguity.
-- Founder addresses may come from Joëlle and Dealum. Missing addresses create
-  a visible placeholder and review notice.
-- Investor email priority is Joëlle, then Dealum when available, then a member
-  `@investor.sictic.ch` or `@sictic.ch` address, then another member address.
-- Interested investors remain in Cc even when their invitation preference is
-  `none`.
-- Expert search requests 16 candidates, excludes interested members and
-  members whose `deep_dive_invitation` preference is `none`, and uses at most
-  the first 10 usable experts.
-- Anyone in To or Cc is never included in Bcc.
-- Experts appear only as Bcc recipients, never as named rows in the email body.
-- The draft begins with warnings and reconciliation details, followed by the
-  email. The body template lives in `config/deep_dive_invitation`.
-- Automatic Funding-tab extraction is not configured, so every draft includes
-  a prominent verification notice.
+- [Implementation and recipient precedence](deep_dive_invitation.py)
+- [Template and settings](../../config/deep_dive_invitation/)
+- [Member preferences](../member_preferences/SKILL.md)
+- [Expert search](../expert_search/SKILL.md)

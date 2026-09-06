@@ -159,7 +159,7 @@ async def test_suggested_startups_does_not_save_invalid_response(
         "sictic-members",
         "suggested_startups",
         "ollama/test_model:1b",
-        identifier="Jane Doe",
+        identifier="jane-doe",
         subdir=True,
     ).exists()
 
@@ -209,7 +209,7 @@ async def test_suggested_startups_continues_after_investor_failure(
         "sictic-members",
         "suggested_startups",
         "ollama/test_model:1b",
-        identifier="John Roe",
+        identifier="john-roe",
         subdir=True,
     )
     assert successful.exists()

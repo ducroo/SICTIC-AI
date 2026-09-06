@@ -101,26 +101,12 @@ async def _identify_sha(
             "sha_review.document_path_resolution.min_score must be "
             "between 0 and 100."
         )
-    candidates = [
-        path
-        for path in [
-            result["path"],
-            *result["paths_for_alternative_candidates"],
-        ]
-        if path and path.strip()
-    ]
-    matches = [
-        (*resolve_document_path(dataset_name, candidate), candidate, index)
-        for index, candidate in enumerate(candidates)
-    ]
-    source_path, score, proposed_path, _index = max(
-        matches,
-        key=lambda item: (item[1], -item[3]),
-    )
+    proposed_path = result["path"]
+    source_path, score = resolve_document_path(dataset_name, proposed_path)
     if score < min_score:
         raise ValueError(
-            "Could not resolve the proposed SHA path or any alternative "
-            f"candidate with the required score of {min_score:.1f}; "
+            f"Could not resolve the LLM-selected SHA path {proposed_path!r} "
+            f"with the required score of {min_score:.1f}; "
             f"best match was {source_path!r} at {score:.1f}."
         )
     if score < 100.0:

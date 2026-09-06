@@ -1,47 +1,62 @@
 ---
 name: dataset_chat
-description: Answer questions about a startup or community dataset using the local RAG stack. Use when a user asks for information, evidence, or document-backed analysis from a named dataset; the skill may refresh OCR via Docling and embeddings in Qdrant as needed before answering.
+description: Answer questions from a named startup or community dataset using retrieved evidence. Use for grounded Markdown or structured JSON; retrieval can synchronize and write dataset state.
 ---
 
-# Dataset_Chat Skill
+# Dataset chat
 
-A high-precision, multi-tenant RAG engine designed for deep document inspection and integration with llm_chat.
+Retrieve dataset evidence and pass it to the shared text-generation service.
 
-## Architecture
+## Inputs and outputs
 
-- **Qdrant (Port 6333):** Vector storage with document-level differential sync.
-- **Docling-Serve (Port 5001):** High-fidelity document parsing with VLM support.
-- **Ollama (Port 11434):** Dynamic embedding generation.
-- **Rclone-Mount (Port 5572):** Real-time remote file monitoring via the RC API.
+The async `dataset_chat(dataset_name, queries, prompt, ...)` returns Markdown,
+not an insight artifact. Queries accept a string or list; `max_chunks=25` and
+`strict_insufficient_context=True` are defaults.
 
-## Setup
+`dataset_chat_json(..., schema, reviewer=None, ...)` is the structured adapter,
+returning a dictionary/list or `None`. It uses shared schema validation and
+review. Both accept a `cacheable_prompt_prefix`.
 
-The following environment variables must be present in the repo's `.env` file (`{{REPO_ROOT}}/.env`):
-- `QDRANT_HOST`: e.g., `http://localhost:6333`
-- `DOCLING_HOST`: e.g., `http://localhost:5001`
-- `OLLAMA_HOST`: e.g., `http://localhost:11434`
-- `RCLONE_HOST`: e.g., `http://localhost:5572`
-- `VLM_MODEL`: Used by Docling-Serve/Ollama for image-to-text generation.
-- `EMBEDDING_MODEL`: Model used for vector embeddings.
-- `EMBEDDING_BASE_URL`: Optional endpoint base URL. Use `http://localhost:11434` for local Ollama.
-- `EMBEDDING_API_KEY`: Optional endpoint API key. Leave blank for local Ollama.
+## Workflow and dependencies
 
-Required Python packages are installed into the `sictic-env` Conda environment by `install.sh`: `qdrant-client`, `requests`, `pydantic`, `langchain-text-splitters`, `typer`.
+Search through `lib.datasets.search.dataset_search(..., raise_on_error=True)`,
+render chunks with source/page metadata, limit supplied context to the character
+budget, and call `generate_markdown` or `generate_json`.
+An oversized first chunk can be truncated. Context budgeting currently uses
+`OLLAMA_CONTEXT_LENGTH_MAX`, including for other configured providers.
+
+Use the shared [installation guide](../../docs/installation-and-operations.md)
+for setup. Parsing is in-process Docling; storage is local and generation/embedding
+endpoints are configurable. This skill does not depend on the `llm_chat` CLI.
+
+## Side effects and failure behavior
+
+Search may convert and index documents. The skill saves no report and manages
+no completed-answer cache. Provider and retrieval failures propagate.
+
+Empty queries/prompts or zero hits normally skip generation. Markdown returns
+the configured fallback marker; JSON returns `None`. Disabling strict Markdown
+grounding changes the prompt, not the zero-hit behavior.
+
+The JSON adapter's existing `allow_empty_retrieval=True` permits zero-hit
+generation when a nonempty shared prefix is supplied. Batch audit uses this
+path for every check. Citation truth and grounding are prompt requirements,
+not established by schema validation.
 
 ## Usage
 
-Use the commands through the shared harness.
-
-### Chat with a Dataset
-
 ```bash
-conda run -n sictic-env python -m skills.harness /dataset_chat <DATASET_NAME> "Your question here"
+conda run -n sictic-env python -m skills.harness '/dataset_chat "<DATASET>" "What evidence supports revenue?"'
+conda run -n sictic-env python -m skills.harness '/sync "<DATASET>"'
 ```
 
-### Sync a Dataset
+The direct CLI has `search`, `chat` and `sync` commands. Its retained
+`sync --force` flag does not force reprocessing in the current ingestion API.
+Direct search uses the search API's default error policy; generated answers
+use strict retrieval errors.
 
-```bash
-conda run -n sictic-env python -m skills.harness /sync <DATASET_NAME>
-```
+## References
 
-Dataset deletion is intentionally not exposed through the harness.
+- [Implementation](dataset_chat.py), [direct CLI](__main__.py)
+- [Retrieval and synchronization](../standards_and_architecture/SKILL.md#search-and-evidence)
+- [Generation contracts](../standards_and_architecture/SKILL.md#model-calls)

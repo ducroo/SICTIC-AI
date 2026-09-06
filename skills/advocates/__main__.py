@@ -12,7 +12,7 @@ def main(
     description: str = typer.Option(..., "--description", "-d", help="Detailed description of the event and skills required"),
     include: str = typer.Option(None, "--include", "-i", help="Comma-separated list of member IDs to restrict the search to"),
     exclude: str = typer.Option(None, "--exclude", "-x", help="Comma-separated list of member IDs to exclude"),
-    top_k: int = typer.Option(10, "--top-k", "-k", help="Number of top advocates to return")
+    top_k: int = typer.Option(16, "--top-k", "-k", help="Number of top advocates to return")
 ):
     parsed_includes = [x.strip() for x in include.split(",")] if include else None
     parsed_excludes = [x.strip() for x in exclude.split(",")] if exclude else None

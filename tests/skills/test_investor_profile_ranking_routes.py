@@ -82,6 +82,7 @@ async def test_ranking_skill_uses_investor_profile_insights(
             "ranking_rationale": {
                 "rationale_instructions": "rationale-v1"
             },
+            "structured_output": {"json_response_instructions": "json-v1"},
         },
     )
     ranking = mocker.patch.object(
@@ -98,6 +99,7 @@ async def test_ranking_skill_uses_investor_profile_insights(
     assert ranking.await_args.kwargs["skill"] == "investor_profile"
     assert "ranking-v1" in result[0].config_key
     assert "rationale-v1" in result[0].config_key
+    assert "json-v1" in result[0].config_key
 
 
 @pytest.mark.asyncio

@@ -219,7 +219,7 @@ async def _suggested_startups(args: List[str]) -> str:
     parser = _parser("/suggested_startups")
     parser.add_argument("--startups", "-s")
     parser.add_argument("--investor", "-i")
-    parser.add_argument("--max-startups", "-m", type=int, default=5)
+    parser.add_argument("--max-startups", "-m", type=int, default=16)
     ns = parser.parse_args(args)
     from skills.suggested_startups.suggested_startups import suggested_startups
 

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from lib.datasets.paths import dataset_location_for_domain
+from lib.infrastructure.configuration import load_repository_config
 from lib.insights import InsightFile
 from lib.storage import get_storage
 
@@ -27,6 +28,97 @@ def _create_startup_dataset(name: str) -> None:
     storage.mkdir(location.raw_rel)
     storage.mkdir(location.parsed_rel)
     storage.mkdir(location.insights_rel)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("selected_path", "resolves"),
+    [
+        ("legal/latest-sha.pdf", True),
+        ("legal/latest-sha.pdff", True),
+        ("unresolvable-zzzzzzzzzzzzzzzz.txt", False),
+    ],
+)
+async def test_sha_path_resolution_preserves_llm_selection(
+    mock_env, monkeypatch, selected_path, resolves,
+):
+    module = importlib.import_module("skills.sha_review.sha_review")
+    _create_startup_dataset("acme")
+    location = dataset_location_for_domain("acme", "startups")
+    get_storage().write_text(
+        f"{location.parsed_rel}/legal/latest-sha.pdf.md",
+        "# Latest selected agreement",
+    )
+    get_storage().write_text(
+        f"{location.parsed_rel}/legal/older-sha.pdf.md",
+        "# Older alternative agreement",
+    )
+    identification = {
+        "path": selected_path,
+        "document_match": "Medium",
+        "concerns": ["The selected agreement's execution date is uncertain."],
+        "paths_for_alternative_candidates": ["legal/older-sha.pdf"],
+        "selection_reason": "The selected agreement is substantively preferred.",
+    }
+
+    async def identify(**kwargs):
+        return identification
+
+    monkeypatch.setattr(module, "dataset_chat_json", identify)
+    config = load_repository_config("sha_review")
+    if not resolves:
+        with pytest.raises(ValueError, match="Could not resolve"):
+            await module._identify_sha("acme", config)
+        return
+
+    path, markdown, metadata = await module._identify_sha("acme", config)
+    assert path == "legal/latest-sha.pdf.md"
+    assert markdown == "# Latest selected agreement"
+    assert metadata == identification
+
+
+@pytest.mark.asyncio
+async def test_sha_checks_assess_full_agreement_without_search_hits(
+    mock_env, monkeypatch,
+):
+    module = importlib.import_module("skills.sha_review.sha_review")
+    chat = importlib.import_module("skills.dataset_chat.dataset_chat")
+    _create_startup_dataset("acme")
+    calls = []
+
+    async def no_hits(*args, **kwargs):
+        return []
+
+    async def assess(prompt, schema, reviewer, *, cacheable_prompt_prefix):
+        calls.append(prompt)
+        assert "Clause 8: investors appoint one director." in cacheable_prompt_prefix
+        assert "Reference clause 9: investors appoint one director." in cacheable_prompt_prefix
+        return {
+            "status": "balanced",
+            "rationale": "Clause 8 follows the reference's single investor seat.",
+            "source_documents": ["legal/sha.pdf — clause 8"],
+            "proposed_next_steps_and_questions": [],
+        }
+
+    monkeypatch.setattr(chat, "dataset_search", no_hits)
+    monkeypatch.setattr(chat, "generate_json", assess)
+    config = load_repository_config("sha_review")
+    config["checklists"] = {
+        "board": "# Board\n\n## Appointment\n\n### Investor seat\n\n"
+        "Are the investor board appointment rights balanced?\n",
+    }
+    config["reference_shas"] = {
+        "reference": "Reference clause 9: investors appoint one director.",
+    }
+    audits = await module._run_audits(
+        "acme", "legal/sha.pdf", "Clause 8: investors appoint one director.",
+        "reference", config,
+    )
+    [check] = audits[0][1]["chapters"][0]["checks"]
+    assert len(calls) == 1
+    assert check["status"] == "balanced"
+    assert check["source_documents"] == ["legal/sha.pdf — clause 8"]
+    assert check["error"] is None
 
 
 @pytest.mark.asyncio
