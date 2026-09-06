@@ -3,9 +3,12 @@ import json
 
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 
 from lib.batch_audit import batch_audit
+from lib.batch_audit.checklist import parse_checklist
 from lib.datasets.paths import dataset_location_for_domain
+from lib.infrastructure.configuration import load_repository_config
 from lib.storage import get_storage
 from skills.dd_checks.dd_checks import (
     chapter_by_chapter,
@@ -259,3 +262,34 @@ async def test_find_industry_type_preserves_missing_evidence_fallback(
 
     assert result == "general"
     assert calls == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("industry", ["general", "biology", "hardware", "software"])
+async def test_configured_dd_product_fallback_preserves_specialist_selection(
+    mock_env, monkeypatch, industry,
+):
+    from skills.dd_checks import dd_checks as module
+
+    config = load_repository_config("dd_checks")
+    chapters = sorted({key.rsplit("_", 1)[0] for key in config["checklists"]})
+    selected = []
+
+    async def audit(**kwargs):
+        selected.append(parse_checklist(kwargs["checklist_markdown"]))
+        return SimpleNamespace(content=lambda: "{}")
+
+    monkeypatch.setattr(module, "batch_audit", audit)
+    monkeypatch.setattr(module, "validate_audit_document", lambda value: value)
+    monkeypatch.setattr(module, "audit_errors", lambda audit: [])
+    monkeypatch.setattr(module, "json_to_markdown_table", lambda insight: "table")
+    sections = await chapter_by_chapter(
+        "example-startup", chapters, industry, config, "Audit instructions",
+    )
+
+    assert len(sections) == len(selected) == 7
+    product = selected[-1]
+    expected = parse_checklist(config["checklists"][f"7_product_{industry}"])
+    assert product == expected
+    assert all(check.number.startswith("7.") for chapter in product.chapters for check in chapter.checks)
+    assert "## Chapter: 7_product" in sections[-1]

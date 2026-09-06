@@ -222,4 +222,5 @@ def test_standards_and_architecture_skill_is_instruction_only():
     path = Path("skills/standards_and_architecture/SKILL.md")
 
     assert path.is_file()
-    assert "Data Storage Layout" in path.read_text(encoding="utf-8")
+    assert not (path.parent / "__main__.py").exists()
+    assert not (path.parent / "standards_and_architecture.py").exists()

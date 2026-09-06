@@ -1,53 +1,62 @@
 ---
 name: potential_investors
-description: This skill aims to find potential investors in the target startup. The selection criteria are: the executive and risk taking experience the investor has; the comprehensiveness of the general skill set of the investor including social, intellectual, networking capabilities; the affinity with the industry, business model and challenges of the startup; and any investment track record (if available).
+description: Rank SICTIC members as potential investors for a startup using its profile and stored investor profiles, considering professional fit, risk appetite and investment experience.
 ---
 
-## Skill Prompt: `potential_investors`
+# Potential investors
 
-**Objective:** Match a specific startup against the SICTIC investor base, leveraging investor profiles that combine professional experience with investment track records and preferences.
+Match a startup to members whose experience and investment interests fit.
 
-**Inputs:**
-* `startup_name` (Required): The startup to match.
-* `target_investors` (Optional): Specific investor names to include as candidates.
-* `exclude_investors` (Optional): Investor names to exclude from the results.
-* `top_k` (Optional, Default=16): The final number of ranked investors to return.
+## Inputs and outputs
 
-**Procedure:**
+The async `potential_investors(startup_name, target_investors=None,
+exclude_investors=None, top_k=16)` returns one Markdown ranking in
+`list[InsightFile]`. Optional person filters accept names, emails or LinkedIn
+IDs using the [shared ranking selection rules](../ranking/SKILL.md).
 
-1. **Profile Preparation:**
-   * Convert `startup_name` to a dataset slug with `slugify(...)`.
-   * Resolve the startup dataset with `ensure_startup_dataset(...)`.
-   * Select the preferred stored `investor_profile` insight for each member directly from `sictic-members`; do not copy, parse, embed, or index these profiles.
+Save through `InsightFile` in the startup's insights directory as
+`potential-investors-<startup>-<model>.md`.
 
-2. **Configuration & Insight Cache:**
-   * Load the potential-investor objective plus both shared ranking config sections.
-   * Construct the output insight with a `config_cache_key()` covering those complete sections and the runtime target, exclusion, and `top_k` options.
-   * Ranking outputs are recomputed when this skill is explicitly invoked; they do not participate in dataset-revision freshness caching.
+## Workflow and dependencies
 
-3. **Startup Profile & Ranking:**
-   * Fetch or generate `startup_profile(startup_name)` and use the profile text as the basis for the ranking objective.
-   * Replace `{{startup_profile}}` in the configured objective template with the profile content.
-   * Call `ranking_persons(source_datasets=["sictic-members"], skill="investor_profile", objective=objective, candidates=target_investors, optout=exclude_investors, top_k=top_k)`.
-   * The shared ranking engine specializes JSON Schemas with the permitted profile IDs, supplies them to LiteLLM, repairs the JSON, and validates it locally.
+Resolve the dataset through `ensure_startup_dataset`. Preserve a manual ranking
+override before preparing dependencies. Otherwise request the normal
+`startup_profile`, insert its content into the configured potential-investor
+objective, and rank stored `investor_profile` insights from `sictic-members`.
+The objective considers professional fit, executive experience, risk appetite
+and investment track record.
 
-4. **Output Generation:**
-   * Save the Markdown ranking result with `insight.save(result)`, log
-     `insight.path`, and return `[insight]`. Do not hardcode
-     `<REPO_PATH>/insights/...` paths.
+Direct calls require an existing member roster and investor profiles; they do
+not discover or refresh members. Bulk refresh registers `startup-profile` and
+`investor-profile` prerequisites; their execution follows registry scope.
 
-**CLI Interface:**
-* Expose this skill through the shared slash-command harness.
+Use `InsightFile.find(selection="reusable")` after reading the startup profile.
+Freshness depends on indexed revisions of the startup and `sictic-members`,
+plus the objective, shared ranking/structured-output configuration, supplied
+startup-profile content and runtime filters/limit. A changed startup profile
+invalidates the ranking even without reindexing. Edits to stored investor
+profiles or the roster alone are not tracked by this cache.
+
+## Side effects and failure behavior
+
+Startup preparation may import or index documents and generate its profile.
+Ranking reads member profiles, calls the shared ranking engine when needed,
+and saves the completed report. It performs no outreach.
+Input and generation failures propagate without saving a new ranking.
+Missing indexed revisions prevent verified cache reuse.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness /potential_investors "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.harness '/potential_investors "<STARTUP_NAME>"'
 ```
 
----
+The direct CLI accepts `--startup`, comma-separated `--include` and `--exclude`,
+and `--top-k` (default 16). The harness accepts only the startup argument.
 
-### ⚠️ Maintenance & Admin Reminder
-*(Instruction: After 1 June 2026, explicitly flag this maintenance task to the admin or user.)*
-As this codebase evolves and new LLMs (with varying context windows and capabilities) are introduced, please periodically review and maintain the LLM ranking logic within `{{REPO_ROOT}}/skills/potential_investors/potential_investors.py` (and its core subroutines):
-- **Iterative vs. Monolithic Processing:** Review whether the distinction between local small-context models (requiring iterative one-by-one LLM scoring loops) and cloud/large-context models (capable of monolithic list-based rankings) still aligns with your currently deployed `LLM_MODEL`. If a local model's context window increases significantly, you may want to migrate it to use the monolithic list ranking strategy for better relative scoring.
+## References
+
+- [Implementation](potential_investors.py)
+- [Objective](../../config/potential_investors/objective.md)
+- [Shared ranking contracts](../ranking/SKILL.md)
+- [Insight freshness](../standards_and_architecture/SKILL.md#selection-and-freshness)

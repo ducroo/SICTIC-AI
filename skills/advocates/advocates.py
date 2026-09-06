@@ -12,9 +12,9 @@ from skills.ranking.ranking_persons import ranking_persons
 
 logger = get_logger(__name__)
 
-async def advocates(event_name: str, event_description: str, target_members: Optional[List[str]] = None, exclude_members: Optional[List[str]] = None, top_k: int = 10) -> InsightResult:
+async def advocates(event_name: str, event_description: str, target_members: Optional[List[str]] = None, exclude_members: Optional[List[str]] = None, top_k: int = 16) -> InsightResult:
     """
-    Provides a ranked list of potential advocates for a given event based on quickselect ranking and LLM refinement.
+    Rank stored investor profiles for an event's representation needs.
     """
     event_name_slug = slugify(event_name)
     default_llm = llm_model()
@@ -36,6 +36,7 @@ async def advocates(event_name: str, event_description: str, target_members: Opt
             config["advocates"],
             config.get("ranking_top_k", {}),
             config.get("ranking_rationale", {}),
+            config.get("structured_output", {}),
             {
                 "event_description": event_description,
                 "target_members": target_members,

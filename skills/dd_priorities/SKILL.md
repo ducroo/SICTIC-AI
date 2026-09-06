@@ -1,30 +1,46 @@
 ---
 name: dd_priorities
-description: Synthesizes an existing dd_checks report into up to eight distinct, decision-relevant due-diligence priorities for a buy-side DD team. Use when a startup's comprehensive DD checklist has already been generated and the user wants the most material concerns, missing information, supporting evidence, and follow-up actions.
+description: Synthesize a saved DD checklist report into up to eight decision-relevant priorities. Use after dd_checks when the most material concerns and follow-up actions are needed.
 ---
 
-# DD Priorities
+# DD priorities
 
-Turn a saved `dd_checks` report into a concise, prioritized DD report without
-rerunning the checklist or searching the source dataset.
+Prioritize the concerns and evidence gaps in an existing DD report.
 
-## Workflow
+## Inputs and outputs
 
-1. Resolve the startup's saved `dd_checks` insight.
-2. Stop with a clear instruction to run `dd_checks` when no report exists.
-3. Pass the complete report to one synthesis call using
-   `config/dd_priorities/llm_instructions.md`.
-4. Save the result as a separate `dd_priorities` insight and return it in a
-   one-element `list[InsightFile]`.
-5. Reuse an existing result when both the source dataset and synthesis input are
-   unchanged.
+The async `dd_priorities(startup)` returns one `InsightFile` in a list,
+named `dd-priorities-<startup>-<model>.md`.
 
-The synthesis must return up to eight non-overlapping concerns. Preserve
-supporting checklist IDs and citations already present in `dd_checks`. Do not
-use the ranking library or perform additional semantic searches.
+## Workflow and dependencies
+
+Resolve the canonical startup slug and read the preferred stored `dd_checks`
+report with `find(selection="any")`. Input selection does not establish freshness.
+The registry declares `dd-checks`; direct calls never rerun it.
+
+Read the report before checking manual-first output reuse. The cache covers
+indexed startup revisions, effective synthesis instructions and the actual report
+content. On a miss, send the complete report to `generate_markdown`.
+
+The prompt asks for up to eight distinct concerns with supporting checklist IDs,
+citations and follow-ups. These semantic requirements are not mechanically verified.
+
+## Side effects and failure behavior
+
+Read stored inputs, call a model when needed and save the synthesis. No discovery,
+source import, semantic search or ranking engine is involved. Missing or empty
+DD reports raise with instructions to run DD checks; generation failures propagate.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness /dd_priorities "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.harness '/dd_priorities "<STARTUP>"'
 ```
+
+The direct CLI uses `--startup`.
+
+## References
+
+- [Implementation](dd_priorities.py)
+- [Synthesis instructions](../../config/dd_priorities/llm_instructions.md)
+- [Source workflow](../dd_checks/SKILL.md)

@@ -12,7 +12,7 @@ def main(
     startup: str = typer.Option(..., "--startup", "-s", help="Name of the startup"),
     include: str = typer.Option(None, "--include", "-i", help="Comma-separated list of expert IDs to restrict the search to"),
     exclude: str = typer.Option(None, "--exclude", "-x", help="Comma-separated list of expert IDs to exclude"),
-    top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top experts to return")
+    top_k: int = typer.Option(16, "--top-k", "-k", help="Number of top experts to return")
 ):
     parsed_includes = [x.strip() for x in include.split(",")] if include else None
     parsed_excludes = [x.strip() for x in exclude.split(",")] if exclude else None

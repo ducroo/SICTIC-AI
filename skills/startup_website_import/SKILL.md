@@ -1,36 +1,44 @@
 ---
 name: startup_website_import
-description: Import a startup's public website into the startup dataset website folder as Markdown pages and linked PDFs.
+description: Import a startup website as Markdown pages and linked PDFs into its dataset. Use for an explicit public-website crawl.
 ---
 
-# Startup Website Import
+# Startup website import
 
-Use this skill to import a startup's public website into the normal SICTIC-AI
-startup dataset folder.
+Collect website source material for later dataset ingestion.
 
-The skill creates the startup dossier if needed, without activating the dataset
-for bulk refresh. It stages the crawl locally first, then overwrites:
+## Operations and effects
 
-```text
-storage/startups/<startup>/datasets/website/
-```
+The synchronous `startup_website_import(startup_name, url, ...)` returns
+`WebsiteImportResult` with paths and counts, not insight artifacts.
+It creates the dossier without activating it, then stages the crawl before
+replacing `datasets/website/`.
 
-It crawls the exact domain of the supplied URL only. By default it imports the
-landing page and one internal layer, up to 50 HTML pages. Linked PDFs are
-downloaded by default, up to 20 files and 25 MB each. It respects `robots.txt`
-when available.
+The crawler queues same-host links, excludes configured low-value path segments,
+and defaults to depth 1 and 50 HTML pages. PDFs default to enabled, with 20 files
+and 25 MB per file. Robots rules are used when available; failure to load them
+does not stop the crawl. Requests follow normal HTTP redirects.
 
-Pages are saved as Markdown with source frontmatter. PDFs are saved under
-`website/pdfs/`. A `linkedin-and-resume-links.md` manifest lists LinkedIn
-profile URLs and downloaded PDFs that may be resumes/CVs. A dedicated
-`linkedin-urls.md` file contains only the LinkedIn profile URLs found while
-crawling. Failed internal pages are logged and skipped; if no HTML page can be
-saved, the existing website data is left unchanged.
+Save Markdown pages with source metadata, PDFs under `website/pdfs/`, plus
+`linkedin-urls.md` and `linkedin-and-resume-links.md`. These are discovered
+links and possible-resume hints, not verified person identities.
+
+Failed pages/PDFs are logged and skipped. Zero saved HTML pages raises and leaves
+the existing website snapshot intact. Once a crawl succeeds, replacement removes
+the old directory before copying staged files; this copy is not transactional.
+Other dossier data is retained. There is no indexing, profile generation or
+LinkedIn enrichment, and no harness/bulk registration.
 
 ## Usage
 
 ```bash
-python -m skills.startup_website_import climease https://climease.com
-python -m skills.startup_website_import climease https://climease.com --depth 2
-python -m skills.startup_website_import climease https://climease.com --no-pdfs
+conda run -n sictic-env python -m skills.startup_website_import example https://example.org --depth 1
 ```
+
+The direct CLI exposes `--depth`, `--max-pages`, `--pdfs/--no-pdfs`,
+`--max-pdfs`, `--max-pdf-mb` and `--respect-robots/--ignore-robots`.
+
+## References
+
+- [Implementation](startup_website_import.py), [CLI](__main__.py)
+- [Dataset paths and storage](../standards_and_architecture/SKILL.md#datasets-and-storage)

@@ -1,40 +1,51 @@
 ---
 name: team_profile
-description: Performs deep-dive due diligence on a startup's leadership. Identifies founders, reconciles resumes with LinkedIn, and flags legal/background documents.
+description: Synthesize a startup team assessment from standard person profiles and collective resume/CV evidence. Use for the original team workflow; team_profile_revised provides the checklist-based assessment.
 ---
 
-# Team Profiling Skill
+# Team profile
 
-This skill executes a multi-stage reconnaissance and evaluation pipeline for a given startup.
+Assess leadership and team composition from individual profiles and dataset evidence.
 
-## Workflow
+## Inputs and outputs
 
-1. **Dataset Preparation:**
-   * Convert `startup_name` to a dataset slug with `slugify(...)`.
-   * Resolve and prepare the startup dataset with `ensure_startup_dataset(...)`.
-   * Run `sync_datasets([dataset_slug], raise_on_error=True)` so parsed Markdown and Qdrant are current before analysis.
+The async `team_profile(startup_name)` returns a one-element `list[InsightFile]`
+containing the saved or reusable team assessment.
 
-2. **Configuration & Insight Cache:**
-   * Load `resume_queries`, `team_assessment_prompt`, and optional `linkedin_classification_prompt` from `load_repository_config("team_profile")`.
-   * Build an output insight with `lib.insights.InsightFile(dataset=dataset_slug, skill="team_profile", model=llm_model(), config_key=<resume_queries_and_prompts>)`.
-   * Use `insight.find(selection="reusable")` and `insight.content()` to reuse a fresh existing team profile when available.
+## Workflow and dependencies
 
-3. **Person Discovery & Profile Reuse:**
-   * Call `person_profile(startup_name, names=None)` to discover and synthesize profiles for the startup's associated people.
-   * `person_profile` handles LinkedIn resolution, cached LinkedIn payloads, data-room mentions, personal documents, and generated person-profile insights.
+Prepare the startup through `ensure_startup_dataset`, synchronize it and check
+for a reusable team report. On a cache miss, call
+`person_profile_as_person_objects(startup_name, names=None)` for the existing
+roster. This uses the [standard person-profile workflow](../person_profile/SKILL.md)
+and never discovers people. A missing roster must be created separately.
 
-4. **Team Context Assembly:**
-   * Run `dataset_search(dataset_name=dataset_slug, query=resume_queries)` to collect broader resume/CV/team-document chunks.
-   * Deduplicate all person-profile mentions and resume-query chunks by `chunk_id`.
-   * Build a single context containing aggregated data-room mentions and discovered person profile summaries.
+Retrieve collective resume/CV chunks, deduplicate them and individual mentions
+by `chunk_id`, then synthesize the combined evidence and profile summaries.
+The registry declares `startup-profile` and `person-profile` prerequisites;
+the direct workflow calls person profiling only after its team-cache check.
 
-5. **LLM Assessment & Output:**
-   * Call `generate_markdown(<assembled_context_and_team_profile_instructions>)`.
-   * Save the Markdown report with `insight.save(report_md)`, log
-     `insight.path`, and return `[insight]`.
+## Side effects and failure behavior
+
+Startup preparation may import configured Dealum data; synchronization updates
+derived dataset content. Person profiling may enrich LinkedIn and save profiles.
+An empty roster permits assessment from the remaining dataset evidence.
+
+Profile failures propagate. Collective resume-search failures are logged and
+assessment continues with available context. Generation failures raise.
+The team cache tracks its own prompts and source revisions, but does not hash
+supplied person-profile content; editing a profile alone need not refresh it.
 
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness /team_profile "<STARTUP_NAME>"
+conda run -n sictic-env python -m skills.harness /team_profile "<STARTUP>"
 ```
+
+The direct CLI uses `--startup`.
+
+## References
+
+- [Implementation](team_profile.py) and [prompts/queries](../../config/team_profile/)
+- [Bulk registry](../skill_registry.py)
+- [Checklist workflow](../team_profile_revised/SKILL.md)

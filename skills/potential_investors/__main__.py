@@ -12,7 +12,7 @@ def main(
     startup: str = typer.Option(..., "--startup", "-s", help="The name of the startup to match."),
     include: str = typer.Option(None, "--include", "-i", help="Comma-separated list of investor names to include."),
     exclude: str = typer.Option(None, "--exclude", "-x", help="Comma-separated list of investor names to exclude."),
-    top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top investors to return.")
+    top_k: int = typer.Option(16, "--top-k", "-k", help="Number of top investors to return.")
 ):
     parsed_includes = [name.strip() for name in include.split(",")] if include else None
     parsed_excludes = [name.strip() for name in exclude.split(",")] if exclude else None

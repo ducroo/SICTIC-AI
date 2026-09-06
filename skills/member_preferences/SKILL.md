@@ -1,27 +1,43 @@
 ---
 name: member_preferences
-description: Return the complete SICTIC member roster as Person objects with skill-specific communication preferences. Use this routine when another skill needs member opt-outs or suggestion-frequency preferences. The current implementation is a Google Sheet integration stub and assigns the standard deep-dive-invitation preference to every member.
+description: Read the existing member roster and attach communication preferences to canonical Person objects. Use when a consumer needs member opt-outs; the current source is a default-assignment stub.
 ---
 
 # Member preferences
 
-Call `member_preferences()` to obtain the full roster in the same `Person`
-format as `persons_in_dataset`. Preferences are added lazily under the
-`member_preferences` ad-hoc data namespace and keyed by the consuming skill:
+Supply roster identities with namespaced, skill-specific preferences.
 
-```python
-person.adhoc_data["member_preferences"]["deep_dive_invitation"] = "none"
-```
+## Inputs and outputs
 
-Supported values for that preference are `none`, `fewer`, `standard`, and
-`more`. Consumers decide how each value affects their workflow.
+The synchronous `member_preferences(dataset_name="sictic-members")` returns
+`list[Person]`. `preferences_for(person)` reads the preference dictionary
+without creating it; `render_member_preferences(people)` renders a Markdown table.
 
-The current routine is deliberately a stub: it returns every member with
-`deep_dive_invitation=standard`. Later, replace the default assignment with a
-read from the ai@sictic.ch-owned Google Sheet while retaining this public API.
+## Workflow and dependencies
+
+Read the existing roster through `lib.people.discovery.persons_in_dataset`.
+Under `person.adhoc_data["member_preferences"]`, default an absent
+`deep_dive_invitation` value to `standard`; preserve any existing value.
+
+The current implementation does not read a Google Sheet. The documented
+invitation values are `none`, `fewer`, `standard` and `more`; consumers decide
+their effect. There is no bulk-refresh registration.
+
+## Side effects and failure behavior
+
+Only returned in-memory Person objects are augmented. No discovery, enrichment,
+external request or file write occurs. An empty valid roster returns an empty
+list; missing or malformed rosters raise through the shared reader.
 
 ## Usage
 
 ```bash
 conda run -n sictic-env python -m skills.harness /member_preferences
 ```
+
+Both harness and direct CLI accept `--dataset`.
+
+## References
+
+- [Implementation](member_preferences.py)
+- [Person and roster contracts](../standards_and_architecture/SKILL.md#people-identity-evidence-and-workflows)

@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import json
 
 import pytest
@@ -32,6 +33,60 @@ def _indexed_dataset(name: str = "example-startup") -> None:
     manifest = IngestionManifest(storage, location.parsed_rel)
     manifest.indexed_dataset_revision = "revision-1"
     manifest.save()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shared_evidence", [False, True])
+async def test_batch_audit_assesses_available_context_when_search_has_no_hits(
+    mock_env, monkeypatch, shared_evidence,
+):
+    """Zero hits must not bypass assessment of supplied documentary evidence."""
+    _indexed_dataset()
+    chat = importlib.import_module("skills.dataset_chat.dataset_chat")
+    searches = []
+    generations = []
+
+    async def no_hits(dataset_name, queries, **kwargs):
+        assert kwargs["raise_on_error"] is True
+        searches.append(queries)
+        return []
+
+    async def assess(prompt, schema, reviewer, *, cacheable_prompt_prefix):
+        generations.append(prompt)
+        assert "CURRENT CHECK" in prompt
+        if shared_evidence:
+            assert "Registry.pdf — page 1" in cacheable_prompt_prefix
+        result = {
+            "status": "Fine" if shared_evidence else "Not Found",
+            "rationale": (
+                "The supplied registry extract establishes registration and legal form."
+                if shared_evidence else "No supplied evidence addresses this check."
+            ),
+            "source_documents": ["Registry.pdf — page 1"] if shared_evidence else [],
+            "proposed_next_steps_and_questions": [],
+        }
+        assert not reviewer(result).problems
+        return result
+
+    monkeypatch.setattr(chat, "dataset_search", no_hits)
+    monkeypatch.setattr(chat, "generate_json", assess)
+    insight = await batch_audit(
+        "example-startup",
+        CHECKLIST,
+        llm_instructions=(
+            "Use the supplied registry extract: Registry.pdf — page 1. "
+            "The company is registered as an AG."
+            if shared_evidence else None
+        ),
+    )
+
+    checks = json.loads(insight.content())["chapters"][0]["checks"]
+    assert len(searches) == len(generations) == len(checks) == 2
+    assert all(check["error"] is None for check in checks)
+    assert all(
+        check["status"] == ("Fine" if shared_evidence else "Not Found")
+        for check in checks
+    )
 
 
 @pytest.mark.asyncio

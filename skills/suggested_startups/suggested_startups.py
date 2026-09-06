@@ -47,7 +47,7 @@ def _prepare_outputs(
             dataset=request.dataset,
             skill="suggested_startups",
             model=llm_model(),
-            identifier=person.display_name,
+            identifier=person.identifier,
             subdir=True,
             config_key=request_key,
         )
@@ -59,7 +59,7 @@ async def suggested_startups(
     dataset_name: str = "sictic_members",
     startups: Optional[List[str]] = None,
     investors: Optional[List[str]] = None,
-    max_startups: int = 5,
+    max_startups: int = 16,
 ) -> InsightResult:
     """Rank stored startup profiles for canonical investors in a dataset."""
     config = load_repository_config()

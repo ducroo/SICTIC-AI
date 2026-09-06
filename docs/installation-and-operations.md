@@ -143,6 +143,16 @@ conda run -n sictic-env python -m skills.dataset_maintenance diagnose
 ```
 
 Consult each skill's `SKILL.md` for its current arguments and examples.
+Quote a whole one-shot slash command when it contains options or multiword
+values, for example:
+
+```bash
+conda run -n sictic-env python -m skills.harness '/advocates "Example Event" --description "Startup financing panel"'
+```
+
+The harness reports ordinary workflow failures as error text; its process exit
+code alone is not a business-success guarantee. Use direct skill CLIs when
+automation needs their documented exit behavior.
 
 ## Google Drive synchronization with rclone
 
@@ -244,17 +254,20 @@ instead of a page number.
 
 ### Upgrading an existing index
 
-Qdrant cannot add sparse vectors to a collection that was created without them,
-so datasets indexed before hybrid search keep working as dense-only search until
-their collection is rebuilt:
+Check the current index with dataset maintenance. The adapter can reconcile
+legacy layouts during initialization, so diagnostics are not guaranteed to be
+free of initialization side effects. A dataset rebuild uses the configured
+embedding model:
 
 ```bash
-python -m skills.dataset_maintenance rebuild-index --dataset avientus
+conda run -n sictic-env python -m skills.dataset_maintenance rebuild-index --dataset avientus
 ```
 
-This drops the Qdrant collection and re-embeds the dataset. Parsed Markdown is
-kept, so documents are never sent through Docling again. Rebuilding is the
-expensive step for a large data room; run it once per dataset when convenient.
+This resets the selected dataset tenant and its indexing checkpoints, then runs
+normal synchronization. The reset preserves parsed Markdown. Synchronization can
+still reparse changed sources, missing output or changed parser configuration.
+Use `--no-sync` to stop after the reset. It does not intentionally delete other
+tenants in the shared collection.
 
 ## Dataset maintenance
 
@@ -266,8 +279,10 @@ python -m skills.dataset_maintenance migrate-startup-dossiers
 python -m skills.dataset_maintenance rebuild-index --dataset avientus
 ```
 
-Pruning is a dry run unless `--apply` is supplied. `rebuild-index` re-embeds a
-dataset without re-parsing it; see [Retrieval](#retrieval).
+Pruning is a dry run unless `--apply` is supplied. Deletion and generated-dataset
+reconciliation have different defaults and scopes; consult the
+[dataset maintenance operations table](../skills/dataset_maintenance/SKILL.md#operations-and-effects)
+before using them. See [Retrieval](#retrieval) for rebuild behavior.
 
 ## Tests
 

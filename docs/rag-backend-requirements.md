@@ -1,6 +1,6 @@
 # Requirements for assessing Open WebUI as a RAG backend
 
-Status: assessment criteria accepted by the user on 5 September 2026. See the [Open WebUI and RAGFlow assessment](/Users/openclaw/SICTIC-AI/docs/open-webui-ragflow-assessment.md) for the comparison. Acceptance of these criteria does not establish that either product meets them.
+Status: assessment criteria accepted by the user on 5 September 2026. See the [Open WebUI and RAGFlow assessment](open-webui-ragflow-assessment.md) for the comparison. Acceptance of these criteria does not establish that either product meets them.
 
 ## Purpose and operating baseline
 
