@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import List
 
 from lib.model_config import llm_model
-from lib.infrastructure.configuration import load_repository_config
+from lib.infrastructure.configuration import config_cache_key, load_repository_config
 from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.insights import InsightFile, InsightResult
 from lib.people.linkedin import LinkedInResolver
@@ -52,6 +52,7 @@ def _ensure_profile_metadata_header(person: Person, content: str) -> str:
         return content
     return _profile_metadata_header(person) + content.lstrip()
 
+
 async def _person_profile_result(
     dataset_name: str,
     names: str | list[str] = None,
@@ -61,16 +62,16 @@ async def _person_profile_result(
     """
     Collate a comprehensive profile on a specific person (or list of persons) by searching 
     a given dataset and LinkedIn, returning the full synthesized report.
-    If names is None, discovers all persons in the dataset, pre-fetches profiles, and generates all reports.
+    If names is None, reads all persons from the existing roster and generates their reports.
     Returns populated Person objects and their corresponding insight artifacts.
     """
     dataset_slug = slugify(dataset_name)
     
-    # 1. Global Discovery
-    logger.info(f"[{dataset_slug}] Running global discovery for dataset persons...")
+    # 1. Read the authoritative roster without discovery.
+    logger.info(f"[{dataset_slug}] Reading the dataset persons roster...")
     # discovered_persons is now a List[Person]
     discovered_persons = persons_in_dataset(dataset_slug)
-    
+
     target_persons: List[Person] = []
     
     if not names:
@@ -101,9 +102,8 @@ async def _person_profile_result(
         linkedin_resolver.get_profiles,
         target_persons,
     )
-
     await sync_datasets([dataset_slug], raise_on_error=True)
-    
+
     # De-duplicate the resolved profiles using Person entity resolution
     profiles_to_process: List[Person] = []
     for p in all_profiles_raw:
@@ -204,6 +204,7 @@ async def _generate_single_profile(
         conf = load_repository_config("person_profile")
         query_template = conf['query']
         llm_instructions = conf['llm_instructions']
+        llm_instructions += "\n\n" + conf["founder_traits_instructions"]
         try:
             query = query_template.replace("{{name}}", display_name)
         except KeyError:
@@ -211,13 +212,20 @@ async def _generate_single_profile(
     except KeyError as e:
         raise ValueError(f"Missing configuration for person_profile: {e}")
 
+    # Generation settings affect freshness, never the standard profile filename.
+    effective_config_key = config_cache_key(
+        query + llm_instructions,
+        {
+            "include_dataset_context": include_dataset_context,
+        },
+    )
     insight = InsightFile(
         dataset=dataset_slug,
         skill="person_profile",
         model=default_llm,
         identifier=identifier,
         subdir=True,
-        config_key=query + llm_instructions,
+        config_key=effective_config_key,
     )
     reusable = insight.find(selection="reusable")
     if reusable:

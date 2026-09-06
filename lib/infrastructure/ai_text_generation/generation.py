@@ -31,6 +31,7 @@ from lib.infrastructure.errors import (
     InfrastructureErrorKind,
 )
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.retry import with_rate_limit_retry
 from lib.infrastructure.scheduler import scheduler
 from lib.infrastructure.scheduler_operations import (
     JobProfile,
@@ -46,6 +47,27 @@ MAX_JSON_ATTEMPTS = 2
 _DEFAULT_REQUEST_TIMEOUT = 1200.0
 T = TypeVar("T", str, dict, list)
 Reviewer = Callable[[T], Review[T]]
+
+
+def _is_transient_provider_error(error: BaseException) -> bool:
+    """Rate limits (429) and provider overload/outage (503 and friends):
+    the request never ran — waiting beats failing."""
+    return isinstance(error, InfrastructureError) and error.kind in (
+        InfrastructureErrorKind.RATE_LIMIT,
+        InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+    )
+
+
+async def _request_text_waiting_out_rate_limits(**kwargs: Any) -> str:
+    """One logical attempt: 429s/503s wait for the provider to recover,
+    they don't count as failed generation attempts (the request never
+    ran)."""
+    return await with_rate_limit_retry(
+        lambda: _request_text(**kwargs),
+        is_rate_limit=_is_transient_provider_error,
+        logger=logger,
+        label=f"{kwargs.get('output_type', 'text')} generation",
+    )
 
 
 @dataclass
@@ -70,8 +92,8 @@ async def generate_markdown(
     for attempt in range(1, MAX_MARKDOWN_ATTEMPTS + 1):
         try:
             output = (
-                await _request_text(
-                    prompt + feedback,
+                await _request_text_waiting_out_rate_limits(
+                    prompt=prompt + feedback,
                     output_type="markdown",
                     attempt=attempt,
                     request_id=request_id,
@@ -152,8 +174,8 @@ async def generate_json(
         )
         response_format = json_schema_response_format(attempt_schema)
         try:
-            raw_output = await _request_text(
-                effective_prompt + feedback,
+            raw_output = await _request_text_waiting_out_rate_limits(
+                prompt=effective_prompt + feedback,
                 output_type="json",
                 attempt=attempt,
                 request_id=request_id,

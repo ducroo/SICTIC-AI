@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -9,12 +8,13 @@ from skills.submission_ready.submission_ready import submission_ready
 from skills.expert_search.expert_search import expert_search
 from skills.investor_profile.investor_profile import investor_profile
 from skills.person_profile.person_profile import person_profile
-from lib.people.discovery import persons_in_dataset
+from skills.persons_in_dataset.persons_in_dataset import persons_in_dataset
 from skills.potential_investors.potential_investors import potential_investors
 from skills.startup_profile.startup_profile import startup_profile
 from skills.startup_traction.startup_traction import startup_traction
 from skills.suggested_startups.suggested_startups import suggested_startups
 from skills.team_profile.team_profile import team_profile
+from skills.team_profile_revised.team_profile_revised import team_profile_revised
 
 
 SkillCallable = Callable[[str], Awaitable[object]]
@@ -27,17 +27,13 @@ class SkillSpec:
     depends_on: tuple[str, ...] = ()
 
 
-async def _refresh_persons_in_dataset(dataset_name: str):
-    return await asyncio.to_thread(persons_in_dataset, dataset_name)
-
-
 SKILL_REGISTRY = {
     "startup-profile": SkillSpec(
         func=startup_profile,
         domains=frozenset({"startups"}),
     ),
     "persons-in-dataset": SkillSpec(
-        func=_refresh_persons_in_dataset,
+        func=persons_in_dataset,
         domains=frozenset({"startups", "community"}),
     ),
     "person-profile": SkillSpec(
@@ -47,6 +43,11 @@ SKILL_REGISTRY = {
     ),
     "team-profile": SkillSpec(
         func=team_profile,
+        domains=frozenset({"startups"}),
+        depends_on=("startup-profile", "person-profile"),
+    ),
+    "team-profile-revised": SkillSpec(
+        func=team_profile_revised,
         domains=frozenset({"startups"}),
         depends_on=("startup-profile", "person-profile"),
     ),

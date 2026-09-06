@@ -1,3 +1,5 @@
+import pytest
+from skills.persons_in_dataset.persons_in_dataset import persons_in_dataset_as_person_objects
 from lib.insights import InsightFile
 from lib.people.discovery import persons_in_dataset
 from lib.people.model import Person
@@ -122,7 +124,7 @@ def test_persons_in_dataset_reads_legacy_manual_table_headers(mock_env, mocker):
         )
         + "\n",
     )
-    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
+    adapter_cls = mocker.patch("skills.persons_in_dataset.persons_in_dataset.LinkedInResolver")
     adapter_cls.return_value.get_cached_persons.return_value = [
         Person(full_name="Patrick Schuler", linkedin_id="schulerp", email_addresses=["patrick@example.com"])
     ]
@@ -137,17 +139,18 @@ def test_persons_in_dataset_reads_legacy_manual_table_headers(mock_env, mocker):
     ]
 
 
-def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env, mocker):
+@pytest.mark.asyncio
+async def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env, mocker):
     storage = get_storage()
     manual_path = _manual_path("sictic-members")
 
-    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
+    adapter_cls = mocker.patch("skills.persons_in_dataset.persons_in_dataset.LinkedInResolver")
     adapter_cls.return_value.get_cached_persons.return_value = [
         Person(full_name="Urs Gubser", linkedin_id="urs-gubser", email_addresses=["urs@gubser.ch"]),
         Person(full_name="", linkedin_id="jane-doe"),
     ]
 
-    persons = persons_in_dataset("sictic_members")
+    persons = await persons_in_dataset_as_person_objects("sictic_members")
 
     assert persons == [
         Person(full_name="Urs Gubser", linkedin_id="urs-gubser", email_addresses=["urs@gubser.ch"]),
@@ -169,20 +172,11 @@ def test_persons_in_dataset_writes_discovered_people_to_manual_insight(mock_env,
     )
 
 
-def test_persons_in_dataset_rediscovers_when_manual_insight_is_empty(
-    mock_env,
-    mocker,
-):
+@pytest.mark.asyncio
+async def test_persons_in_dataset_preserves_unsupported_manual_roster(mock_env):
     storage = get_storage()
     manual_path = _manual_path("sictic-members")
     storage.write_text(manual_path, "")
-
-    adapter_cls = mocker.patch("lib.people.discovery.LinkedInResolver")
-    adapter_cls.return_value.get_cached_persons.return_value = [
-        Person(full_name="Urs Gubser", linkedin_id="urs-gubser")
-    ]
-
-    persons = persons_in_dataset("sictic_members")
-
-    assert persons == [Person(full_name="Urs Gubser", linkedin_id="urs-gubser")]
-    assert "| Urs Gubser | urs-gubser |  |" in storage.read_text(manual_path)
+    with pytest.raises(ValueError, match="Unsupported manual"):
+        await persons_in_dataset_as_person_objects("sictic_members")
+    assert storage.read_text(manual_path) == ""

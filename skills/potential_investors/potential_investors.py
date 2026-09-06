@@ -35,6 +35,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
         dataset=startup_slug,
         skill="potential_investors",
         model=default_llm,
+        source_datasets=[startup_slug, "sictic-members"],
         config_key=config_cache_key(
             config["potential_investors"],
             config.get("ranking_top_k", {}),
@@ -47,6 +48,7 @@ async def potential_investors(startup_name: str, target_investors: Optional[List
             },
         ),
     )
+    if reusable := insight.find(selection="reusable"): return [reusable]
     # 1. Fetch Startup Profile
     logger.info(f"[{startup_slug}] Fetching startup profile...")
     try:

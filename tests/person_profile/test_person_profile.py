@@ -10,6 +10,7 @@ from lib.people.model import Person
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location
 from lib.datasets.manifest import IngestionManifest
+from lib.insights import InsightFile
 
 @pytest.mark.asyncio
 async def test_person_profile_generation(mock_env, mocker, monkeypatch):
@@ -40,6 +41,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     mock_config.return_value = {
         "query": "Who is {name}?",
         "llm_instructions": "Be concise.",
+        "founder_traits_instructions": "Assess founder traits from evidence.",
     }
 
     mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInResolver")
@@ -63,6 +65,9 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     manifest = IngestionManifest(storage, location.parsed_rel)
     manifest.indexed_dataset_revision = "test-revision"
     manifest.save()
+    InsightFile("sictic-members", "persons_in_dataset", "manual").save(
+        "| full-name | linkedin-id |\n|---|---|\n| Jane Doe | jane-doe |\n"
+    )
     
     # 2. Execute
     name = "Jane Doe"
@@ -113,6 +118,7 @@ async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mock
         return_value={
             "query": "Who is {{name}}?",
             "llm_instructions": "Be concise.",
+            "founder_traits_instructions": "Assess founder traits from evidence.",
         },
     )
     mock_llm = mocker.patch(
