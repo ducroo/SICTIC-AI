@@ -74,7 +74,8 @@ def _store_work(
     parent = rel.rsplit("/", 1)[0]
     storage.mkdir(parent)
     if stamp and isinstance(payload, dict):
-        payload["freshness"] = _freshness(dataset_name)
+        # stamp a copy: the in-memory result stays free of bookkeeping
+        payload = {**payload, "freshness": _freshness(dataset_name)}
     storage.write_text(rel, json.dumps(payload, ensure_ascii=False, indent=2))
     return rel
 
@@ -343,6 +344,13 @@ async def snapshot(dataset_name: str) -> dict[str, Any]:
     cla_extraction = _load_work(dataset_name, "cla_extraction.json")
     assessment = _load_work(dataset_name, "assessment.json")
     aggregation = _load_work(dataset_name, "aggregation.json")
+    if isinstance(aggregation, dict):
+        # the snapshot is model-independent by design (§2.3); the work
+        # product's freshness stamp (model slug, hashes) must not leak in
+        aggregation = {
+            key: value for key, value in aggregation.items()
+            if key != "freshness"
+        }
     missing = [
         name
         for name, value in (

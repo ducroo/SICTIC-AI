@@ -319,12 +319,20 @@ def build_scenarios(
         )
 
     caps = [note.cap for note in scenario_notes if note.cap]
-    qefr_mins = [
-        _value(cla.get("qefr_min_raise"))
-        for cla in snapshot.get("convertibles", [])
-        if cla.get("status") == "executed"
-        and _value(cla.get("qefr_min_raise"))
-    ]
+    # QEFR minima are money amounts in the loan's currency: express them in
+    # the scenario currency like the notes, and skip the ones without a rate.
+    qefr_mins = []
+    for cla in snapshot.get("convertibles", []):
+        minimum = _value(cla.get("qefr_min_raise"))
+        if cla.get("status") != "executed" or not minimum:
+            continue
+        loan_currency = _normalize_currency(
+            _value(cla.get("principal_currency")) or _value(cla.get("currency"))
+        )
+        if loan_currency in (None, target_currency):
+            qefr_mins.append(float(minimum))
+        elif loan_currency in fx_rates:
+            qefr_mins.append(float(minimum) * fx_rates[loan_currency])
     if pre_money is None:
         if caps:
             pre_money = float(max(caps))
@@ -376,6 +384,11 @@ def build_scenarios(
         maturity_fixed_entries.append(
             {
                 "document": cla.get("document"),
+                # all three figures are in the LOAN's currency, unconverted
+                "currency": _normalize_currency(
+                    _value(cla.get("principal_currency"))
+                    or _value(cla.get("currency"))
+                ),
                 "price_per_share": round(float(fixed_price), 4),
                 "implied_shares_at_balance": round(balance / fixed_price, 2)
                 if balance

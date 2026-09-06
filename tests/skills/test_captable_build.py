@@ -357,9 +357,12 @@ def test_build_reuses_work_products_only_while_fresh(mock_env, monkeypatch):
     build_mod, calls = _patched_build(monkeypatch)
     _install_dataset("freshco", "# Cap table\n\nFounder 900,000\n")
 
-    asyncio.run(build_mod.build("freshco"))
+    snap = asyncio.run(build_mod.build("freshco"))
     asyncio.run(build_mod.build("freshco"))
     assert calls == {"classify": 1, "captable": 1}, "unchanged inputs reuse"
+    # the snapshot stays model-independent: no stamp leaks into it
+    assert "freshness" not in snap
+    assert "freshness" not in snap["aggregation"]
 
     # A changed source document (e.g. a corrected cap table) invalidates.
     _install_dataset("freshco", "# Cap table\n\nFounder 850,000\n")

@@ -126,6 +126,18 @@ def test_unquantified_safe_harbor_uses_ceiling_and_discloses() -> None:
     assert any("OVERSTATES" in a for a in result["assumptions"])
 
 
+def test_fixed_maturity_block_labels_its_currency() -> None:
+    snapshot = _snapshot()
+    snapshot["convertibles"] = [
+        _cla("usd.md", 100_000, "USD",
+             maturity_conversion_price={"value": 2.5}),
+    ]
+    result = build_scenarios(snapshot, valuation_date=date(2026, 1, 1))
+    entry = result["maturity_conversion_at_fixed_price"][0]
+    assert entry["currency"] == "USD"
+    assert entry["price_per_share"] == 2.5
+
+
 def test_fixed_maturity_price_block() -> None:
     """Real-data verification (round 4): a fixed maturity conversion price governs
     the expired-loan scenario and implies the company's own value anchor."""
@@ -180,7 +192,8 @@ def _mixed_snapshot() -> dict:
     snapshot["convertibles"] = [
         _cla("chf.md", 100_000, "CHF"),
         # at 0.5 CHF/USD this is the same loan: 100k CHF under a 4M CHF cap
-        _cla("usd.md", 200_000, "usd", valuation_cap={"value": 8_000_000}),
+        _cla("usd.md", 200_000, "usd", valuation_cap={"value": 8_000_000},
+             qefr_min_raise={"value": 3_000_000}),
     ]
     return snapshot
 
@@ -213,6 +226,9 @@ def test_mixed_currencies_with_rates_convert_everything() -> None:
                    for f in result["scenario_flags"])
     assert result["fx_rates"] == {"USD": 0.5}
     assert any("0.5 CHF per 1 USD" in a for a in result["assumptions"])
+    # the round-size default (smallest QEFR minimum) converts too:
+    # 3M USD -> 1.5M CHF beats the CHF note's 2M
+    assert result["hypothetical_round"]["investment"] == 1_500_000
     # the USD note converts at the rate (balance AND cap): 200k USD under an
     # 8M USD cap -> 100k CHF under a 4M CHF cap, identical to the CHF note,
     # so both receive the same ownership in every method
