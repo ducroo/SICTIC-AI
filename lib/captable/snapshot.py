@@ -8,11 +8,31 @@ date under ``insights/captable/snapshots/``, all kept forever, plus
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from typing import Any
 
 TOOL_VERSION = "captable_build/0.3"
+
+
+def snapshot_fingerprint(snapshot: dict[str, Any]) -> str:
+    """Content hash of a snapshot, ignoring only the generation timestamp.
+
+    Two snapshots with the same as-of date can describe different states
+    (a corrected rebuild); derived artifacts such as the computed scenarios
+    must be matched on this fingerprint, never on the date alone. A
+    bit-identical rebuild keeps the fingerprint (and its scenarios) valid.
+    """
+    content = {
+        key: value for key, value in snapshot.items() if key != "generated_at"
+    }
+    canonical = json.dumps(
+        content, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 _MONTHS = {
     month.lower(): index

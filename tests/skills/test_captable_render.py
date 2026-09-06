@@ -159,17 +159,86 @@ def test_scenarios_only_attached_for_matching_snapshot(mock_env) -> None:
     )
     result = render_captable("renderco")
     assert result["scenarios_included"] is False
-    assert "No computed scenarios stored" in result["html"]
+    assert result["scenarios_status"] == "stale"
+    assert "different snapshot state" in result["html"]
     assert storage.exists(f"{insights_rel}/captable/captable.html")
 
-    fresh = dict(stale, snapshot_as_of="2026-06-30")
+    from lib.captable.snapshot import snapshot_fingerprint
+
+    fresh = dict(
+        stale,
+        snapshot_as_of="2026-06-30",
+        snapshot_fingerprint=snapshot_fingerprint(_snapshot()),
+    )
     storage.write_text(
         f"{insights_rel}/captable/analysis_scenarios.json",
         json.dumps(fresh),
     )
     result = render_captable("renderco")
     assert result["scenarios_included"] is True
+    assert result["scenarios_status"] == "included"
     assert "pre_money" in result["html"]
+
+
+def test_corrected_rebuild_with_same_date_drops_old_scenarios(mock_env) -> None:
+    """Review point 3 (PR #61): matching on the as-of date alone let a
+    corrected rebuild render outdated dilution beside updated ownership."""
+    from lib.captable.snapshot import snapshot_fingerprint
+    from lib.datasets.paths import (
+        dataset_insights_path,
+        dataset_location_for_domain,
+    )
+    from lib.storage import get_storage
+    from skills.captable_analysis.captable_analysis import render_captable
+
+    storage = get_storage()
+    location = dataset_location_for_domain("renderco3", "startups")
+    storage.mkdir(location.raw_rel)
+    storage.mkdir(location.insights_rel)
+    insights_rel = dataset_insights_path("renderco3")
+    storage.mkdir(f"{insights_rel}/captable/snapshots")
+    original = _snapshot()
+    scenarios = {
+        "snapshot_as_of": original["as_of_date"],
+        "snapshot_fingerprint": snapshot_fingerprint(original),
+        "scenarios": [{"method": "pre_money", "price_per_share": 8.0,
+                       "founders_post_round_pct": 55.0, "warnings": []}],
+    }
+    storage.write_text(
+        f"{insights_rel}/captable/analysis_scenarios.json",
+        json.dumps(scenarios),
+    )
+
+    # A rebuild with identical content but a new timestamp keeps them.
+    rebuilt_same = dict(original, generated_at="2026-09-06T08:00:00+00:00")
+    storage.write_text(
+        f"{insights_rel}/captable/latest.json", json.dumps(rebuilt_same)
+    )
+    assert render_captable("renderco3")["scenarios_status"] == "included"
+
+    # A corrected rebuild with the SAME as-of date drops them.
+    corrected = json.loads(json.dumps(original))
+    corrected["stakeholders"][0]["holdings"][0]["count"] = 550_000
+    corrected["stakeholders"][0]["diluted_count"] = 550_000
+    storage.write_text(
+        f"{insights_rel}/captable/latest.json", json.dumps(corrected)
+    )
+    result = render_captable("renderco3")
+    assert result["scenarios_status"] == "stale"
+    assert result["scenarios_included"] is False
+    assert "different snapshot state" in result["html"]
+    assert "pre_money" not in result["html"]
+
+    # Legacy scenarios without a fingerprint are treated as stale too.
+    storage.write_text(
+        f"{insights_rel}/captable/latest.json", json.dumps(original)
+    )
+    storage.write_text(
+        f"{insights_rel}/captable/analysis_scenarios.json",
+        json.dumps({k: v for k, v in scenarios.items()
+                    if k != "snapshot_fingerprint"}),
+    )
+    assert render_captable("renderco3")["scenarios_status"] == "stale"
 
 
 def test_named_as_of_renders_into_snapshots_dir(mock_env) -> None:

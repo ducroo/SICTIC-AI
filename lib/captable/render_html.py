@@ -312,8 +312,12 @@ def _cla_section(snapshot: dict) -> str:
     )
 
 
-def _scenarios_section(analysis: dict | None) -> str:
+def _scenarios_section(
+    analysis: dict | None, note: str | None = None
+) -> str:
     if not analysis or not analysis.get("scenarios"):
+        if note:
+            return f"<p class='muted'>{escape(note)}</p>"
         return (
             "<p class='muted'>No computed scenarios stored — run "
             "<code>captable_analysis</code> and re-render to include "
@@ -430,11 +434,16 @@ details{margin-top:6px}summary{cursor:pointer;color:#475569}
 
 
 def render_html(
-    snapshot: dict[str, Any], analysis: dict[str, Any] | None = None
+    snapshot: dict[str, Any],
+    analysis: dict[str, Any] | None = None,
+    *,
+    scenarios_note: str | None = None,
 ) -> str:
     """Render the snapshot (and optional computed analysis) as one HTML page.
 
     Deterministic: same inputs produce byte-identical output.
+    ``scenarios_note`` replaces the default "no scenarios" text, e.g. to
+    say that stored scenarios were skipped as stale.
     """
     pct = {}
     denominator = _diluted_denominator(snapshot)
@@ -473,7 +482,7 @@ def render_html(
         "<h2>Convertible loans</h2>",
         _cla_section(snapshot),
         "<h2>Conversion scenarios</h2>",
-        _scenarios_section(analysis),
+        _scenarios_section(analysis, scenarios_note),
         "<h2>Validation</h2>",
         _validation_table(snapshot),
         "<h2>Diligence questions</h2>",

@@ -56,8 +56,12 @@ classes, pools, CLA overhang with maturity/e-sign status, validation
 traffic lights), so the visual a reviewer looks at can never drift from
 the stored data. Percentages use the same denominator as
 `rubric.ownership_by_role`. When `analysis_scenarios.json` exists AND was
-computed over the same snapshot state, the conversion-scenario table is
-included; stale scenarios from another as-of are skipped. Written to
+computed over the same snapshot state — same as-of date AND same content
+fingerprint (`snapshot_fingerprint`, a hash of the snapshot minus its
+generation timestamp) — the conversion-scenario table is included.
+Scenarios from another as-of, or from an earlier build of the same as-of
+whose content has since changed, are skipped and the page says so
+(re-run the analysis to refresh them). Written to
 `insights/captable/captable.html` (or `snapshots/<as_of>.html`);
 `captable_build` also writes it automatically on every build.
 

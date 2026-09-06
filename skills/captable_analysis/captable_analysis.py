@@ -14,6 +14,7 @@ from typing import Any
 
 from lib.captable.model import Note, convert_in_round, loan_balance, stamp_duty
 from lib.captable.rubric import apply_rubric, ownership_by_role
+from lib.captable.snapshot import snapshot_fingerprint
 from lib.datasets.paths import dataset_insights_path
 from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.infrastructure.configuration import load_repository_config
@@ -333,6 +334,7 @@ def build_scenarios(
     return {
         "valuation_date": str(valuation_date),
         "snapshot_as_of": snapshot.get("as_of_date"),
+        "snapshot_fingerprint": snapshot_fingerprint(snapshot),
         "hypothetical_round": {
             "pre_money": pre_money,
             "investment": investment,
@@ -399,14 +401,35 @@ def render_captable(
     storage = get_storage()
     insights_rel = dataset_insights_path(dataset_name)
     analysis = None
+    scenarios_status = "none"
     scenarios_rel = f"{insights_rel}/captable/analysis_scenarios.json"
     if storage.exists(scenarios_rel):
         candidate = json.loads(storage.read_text(scenarios_rel))
-        # Only attach scenarios computed over THIS snapshot state; stale
-        # scenarios from another as-of would put two dates on one page.
-        if candidate.get("snapshot_as_of") == snapshot.get("as_of_date"):
+        # Only attach scenarios computed over THIS snapshot state. The
+        # as-of date is not enough: a corrected rebuild keeps the date but
+        # changes the content, and old dilution figures next to corrected
+        # ownership would be wrong on one page. Match the content
+        # fingerprint; scenarios without one predate the check.
+        if (
+            candidate.get("snapshot_as_of") == snapshot.get("as_of_date")
+            and candidate.get("snapshot_fingerprint")
+            == snapshot_fingerprint(snapshot)
+        ):
             analysis = candidate
-    html = render_html(snapshot, analysis)
+            scenarios_status = "included"
+        else:
+            scenarios_status = "stale"
+    html = render_html(
+        snapshot,
+        analysis,
+        scenarios_note=(
+            "Stored scenarios were computed over a different snapshot "
+            "state (as-of date or content changed) and are NOT shown — "
+            "run captable_analysis again and re-render."
+            if scenarios_status == "stale"
+            else None
+        ),
+    )
     rel = (
         f"{insights_rel}/captable/snapshots/{as_of}.html"
         if as_of
@@ -414,7 +437,12 @@ def render_captable(
     )
     storage.write_text(rel, html)
     logger.info("[%s] Rendered cap-table HTML at %s", dataset_name, rel)
-    return {"path": rel, "html": html, "scenarios_included": bool(analysis)}
+    return {
+        "path": rel,
+        "html": html,
+        "scenarios_included": bool(analysis),
+        "scenarios_status": scenarios_status,
+    }
 
 
 async def captable_analysis(
