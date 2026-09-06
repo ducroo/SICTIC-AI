@@ -1,3 +1,8 @@
+---
+name: captable_build
+description: Extract, assess, validate and snapshot a startup's cap table and convertible loan agreements from its data room. Use for structured ownership and CLA facts with verified source quotes.
+---
+
 # captable_build
 
 Builds structured cap-table and convertible-loan facts for one startup
@@ -14,18 +19,21 @@ validation, and the versioned snapshot store.
 ## Usage
 
 ```bash
-# via the command harness (agents):
-python -m skills.harness /captable_build <startup> [--fresh]
+# via the command harness (agents); --fresh discards stored work products:
+python -m skills.harness -- /captable_build synthcap --fresh
 # or the CLI:
-python -m skills.captable_build build    --dataset <startup> [--fresh]
+python -m skills.captable_build build --dataset synthcap --fresh
 # or stage by stage:
-python -m skills.captable_build classify  --dataset <startup>
-python -m skills.captable_build extract   --dataset <startup>
-python -m skills.captable_build assess    --dataset <startup>
-python -m skills.captable_build aggregate --dataset <startup>
-python -m skills.captable_build table     --dataset <startup>
-python -m skills.captable_build snapshot  --dataset <startup>
+python -m skills.captable_build classify --dataset synthcap
+python -m skills.captable_build extract --dataset synthcap
+python -m skills.captable_build assess --dataset synthcap
+python -m skills.captable_build aggregate --dataset synthcap
+python -m skills.captable_build table --dataset synthcap
+python -m skills.captable_build snapshot --dataset synthcap
 ```
+
+`synthcap` is the synthetic fixture dataset (see below); substitute your
+startup's dataset slug.
 
 `build` runs everything, reusing stored intermediate results only while
 they are still fresh: every work product under `insights/captable/work/`

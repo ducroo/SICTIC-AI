@@ -1,3 +1,8 @@
+---
+name: captable_analysis
+description: Compute conversion scenarios, stamp duty and red-flag findings over a stored cap-table snapshot, plus a deterministic HTML one-pager. Use after captable_build.
+---
+
 # captable_analysis
 
 Analyzes a cap-table snapshot stored by `captable_build` (issue #17,
@@ -9,14 +14,18 @@ any figure.
 ## Usage
 
 ```bash
-# via the command harness (agents; returns the narrative):
-python -m skills.harness /captable_analysis <startup> [--as-of DATE] \
-    [--pre-money N] [--investment N] [--fx-rate USD=0.88 ...] [--currency CHF]
+# via the command harness (agents; returns the narrative). All options are
+# optional; round parameters default from the data and are recorded as
+# assumptions:
+python -m skills.harness /captable_analysis synthcap
+python -m skills.harness -- /captable_analysis synthcap --as-of 2026-06-30 --pre-money 8000000 --investment 2000000 --fx-rate USD=0.88 --currency CHF
 # or the CLI (also writes analysis_scenarios.json):
-python -m skills.captable_analysis run --dataset <startup> \
-    [--as-of 2026-03-31] [--pre-money 8000000] [--investment 2000000] \
-    [--fx-rate USD=0.88 ...] [--currency CHF]
+python -m skills.captable_analysis run --dataset synthcap
+python -m skills.captable_analysis run --dataset synthcap --as-of 2026-06-30 --pre-money 8000000 --investment 2000000 --fx-rate USD=0.88 --currency CHF
 ```
+
+`synthcap` is the synthetic fixture dataset; substitute your startup's
+dataset slug.
 
 Reads `insights/captable/latest.json` (or the named snapshot), then:
 
@@ -61,7 +70,8 @@ Reads `insights/captable/latest.json` (or the named snapshot), then:
 ## Rendering (`render`)
 
 ```bash
-python -m skills.captable_analysis render --dataset <startup> [--as-of DATE]
+python -m skills.captable_analysis render --dataset synthcap
+python -m skills.captable_analysis render --dataset synthcap --as-of 2026-06-30
 ```
 
 Renders the snapshot as a self-contained HTML one-pager — **no LLM
