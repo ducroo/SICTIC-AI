@@ -14,6 +14,9 @@ validation, and the versioned snapshot store.
 ## Usage
 
 ```bash
+# via the command harness (agents):
+python -m skills.harness /captable_build <startup> [--fresh]
+# or the CLI:
 python -m skills.captable_build build    --dataset <startup> [--fresh]
 # or stage by stage:
 python -m skills.captable_build classify  --dataset <startup>
@@ -90,6 +93,9 @@ scan evidence for it.
 The dataset must be synced (parsed Markdown present). Uses the configured
 LLM via the services gateway; no Qdrant queries are needed for these two
 stages.
+`CLOUD_TPM_BUDGET` should be set in the local `.env` (see `.env-template`);
+without it nothing paces Gemini traffic and a full build stampedes the
+per-minute quota.
 
 ## Development & testing costs
 

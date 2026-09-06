@@ -142,6 +142,19 @@ deliverable is this deterministic page.
 
 ## Usage
 
+Via the command harness (what an AI agent uses):
+
+```bash
+conda run -n sictic-env python -m skills.harness /captable_build <startup> [--fresh]
+conda run -n sictic-env python -m skills.harness /captable_analysis <startup> \
+    [--as-of DATE] [--pre-money N] [--investment N] [--fx-rate CUR=RATE ...] [--currency CHF]
+```
+
+`/captable_build` returns the table-only snapshot markdown, `/captable_analysis`
+the narrative; both are also registered for `bulk_refresh` (as
+`captable-build` / `captable-analysis`). The stage-by-stage CLI and the HTML
+render:
+
 ```bash
 python -m skills.captable_build build --dataset <startup> [--fresh]
 python -m skills.captable_analysis run --dataset <startup> \
@@ -151,6 +164,18 @@ python -m skills.captable_analysis render --dataset <startup> [--as-of DATE]
 
 Stage-by-stage commands and details: `skills/captable_build/SKILL.md` and
 `skills/captable_analysis/SKILL.md`.
+
+## Requirements
+
+- The startup dataset must be synced (parsed Markdown present); no Qdrant
+  queries are needed by these two skills.
+- The configured cloud LLM (Gemini) with `LLM_API_KEY`, and
+  **`CLOUD_TPM_BUDGET` set in the local `.env`** (see `.env-template`) —
+  without it the scheduler's rolling token budget is disabled and a full
+  build can hit the provider's per-minute limits; transient 429/503s are
+  waited out since PR #60, but pacing still matters for cost and speed.
+- Expect a fresh build of a real data room to take a few minutes and cost
+  roughly CHF 0.5–1.5 (see below).
 
 ## Testing & development cost
 

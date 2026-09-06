@@ -9,6 +9,10 @@ any figure.
 ## Usage
 
 ```bash
+# via the command harness (agents; returns the narrative):
+python -m skills.harness /captable_analysis <startup> [--as-of DATE] \
+    [--pre-money N] [--investment N] [--fx-rate USD=0.88 ...] [--currency CHF]
+# or the CLI (also writes analysis_scenarios.json):
 python -m skills.captable_analysis run --dataset <startup> \
     [--as-of 2026-03-31] [--pre-money 8000000] [--investment 2000000] \
     [--fx-rate USD=0.88 ...] [--currency CHF]
