@@ -354,6 +354,8 @@ def _scenarios_section(
             f"<p>Stamp duty estimate: {_fmt(stamp.get('estimate_chf'))} CHF "
             f"(exemption remaining "
             f"{_fmt(stamp.get('exemption_remaining_chf'))} CHF).</p>"
+            if stamp and stamp.get("estimate_chf") is not None
+            else f"<p class='muted'>Stamp duty: {escape(str(stamp.get('note')))}</p>"
             if stamp
             else ""
         )

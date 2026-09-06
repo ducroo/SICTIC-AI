@@ -10,7 +10,8 @@ any figure.
 
 ```bash
 python -m skills.captable_analysis run --dataset <startup> \
-    [--as-of 2026-03-31] [--pre-money 8000000] [--investment 2000000]
+    [--as-of 2026-03-31] [--pre-money 8000000] [--investment 2000000] \
+    [--fx-rate USD=0.88 ...] [--currency CHF]
 ```
 
 Reads `insights/captable/latest.json` (or the named snapshot), then:
@@ -26,6 +27,14 @@ Reads `insights/captable/latest.json` (or the named snapshot), then:
   the accrued balance, and the company value that price implies over the
   current fully-diluted count — the discount/cap scenario prices apply to
   round conversions only),
+- keeps every loan in its own currency (`note_currencies`) and expresses
+  the scenarios in ONE currency (`currency`: the loans' common currency,
+  else CHF, or `--currency`). A loan in another currency needs
+  `--fx-rate CUR=RATE` (units of the scenario currency per 1 CUR; balance,
+  cap and floor convert at that rate, recorded as an assumption). Without
+  a rate the scenarios and the stamp-duty estimate are **not computed**
+  and a high-severity `mixed_currencies` scenario flag names the loans —
+  a CHF and a USD loan are never summed into one figure,
 - computes conversion scenarios for a hypothetical round under all three
   market methods (`pre_money` / `percentage_ownership` /
   `dollars_invested`), side by side — CLAs are usually silent on the
@@ -36,7 +45,9 @@ Reads `insights/captable/latest.json` (or the named snapshot), then:
   `scenario_flags` entry (`founder_majority_post_round`) when founders fall
   below 50% in every modelled scenario,
 - estimates the 1% issuance stamp duty as a structured `stamp_duty` block
-  (estimate, CHF 1M lifetime exemption, remaining exemption),
+  (estimate, CHF 1M lifetime exemption, remaining exemption) — only when
+  the scenario currency is CHF; otherwise `estimate_chf` is null with a
+  note,
 - applies the red-flag rubric (founder majority, investor dominance, dead
   equity, fully-diluted-definition ambiguity) — explicitly scoped to the
   snapshot date via `rubric_scope_note`, never to the post-round state,

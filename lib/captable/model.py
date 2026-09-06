@@ -152,6 +152,7 @@ class Note:
     cap: float | None = None
     discount_pct: float | None = None
     floor: float | None = None
+    currency: str | None = None  # ISO code of balance/cap/floor; None = unstated
 
 
 @dataclass
@@ -233,6 +234,7 @@ def convert_in_round(
                 cap=note.cap,
                 discount_pct=note.discount_pct,
                 floor=note.floor,
+                currency=note.currency,
             )
         uniquified.append(note)
     notes = uniquified

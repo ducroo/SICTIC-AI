@@ -107,8 +107,12 @@ company's own value anchor); SECA-style conversion pricing
 a hypothetical round converted under **all three market methods side by
 side** — pre-money, percentage-ownership (fixed-point solver for the
 circularity), dollars-invested — because CLAs rarely fix the method and the
-choice can move founder ownership by several points. Adds the CHF 1M
-stamp-duty exemption tracking, per-scenario `founders_post_round_pct`, and
+choice can move founder ownership by several points. Loans keep their own
+currency; scenarios are expressed in one currency and a loan in another
+currency is converted only at a user-supplied `--fx-rate` — without one
+the scenarios are refused with a `mixed_currencies` flag rather than
+summed. Adds the CHF 1M
+stamp-duty exemption tracking (CHF scenarios only), per-scenario `founders_post_round_pct`, and
 the handbook red-flag rubric (scoped to the snapshot date). The LLM writes
 a narrative constrained to the computed JSON.
 
@@ -141,7 +145,7 @@ deliverable is this deterministic page.
 ```bash
 python -m skills.captable_build build --dataset <startup> [--fresh]
 python -m skills.captable_analysis run --dataset <startup> \
-    [--as-of DATE] [--pre-money N] [--investment N]
+    [--as-of DATE] [--pre-money N] [--investment N] [--fx-rate CUR=RATE ...]
 python -m skills.captable_analysis render --dataset <startup> [--as-of DATE]
 ```
 

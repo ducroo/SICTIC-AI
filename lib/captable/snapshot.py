@@ -233,8 +233,24 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "## Aggregation",
         "",
-        f"- Outstanding principal (executed only): "
-        f"{_fmt(aggregation.get('outstanding_principal_total'))}",
+        "- Outstanding principal (executed only): "
+        + (
+            f"{_fmt(aggregation.get('outstanding_principal_total'))}"
+            + (
+                f" {aggregation['outstanding_principal_currency']}"
+                if aggregation.get("outstanding_principal_currency")
+                else ""
+            )
+            if aggregation.get("outstanding_principal_total") is not None
+            else "no consolidated total — mixed currencies: "
+            + ", ".join(
+                f"{code} {_fmt(total)}"
+                for code, total in sorted(
+                    (aggregation.get("outstanding_principal_by_currency")
+                     or {}).items()
+                )
+            )
+        ),
         f"- Lenders on identical terms (max group): "
         f"{ten_twenty.get('max_lenders_on_identical_terms')} "
         f"({ten_twenty.get('ten_rule')} 10-rule); total lenders "

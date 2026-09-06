@@ -246,3 +246,27 @@ def test_qefr_new_money_component_is_reported() -> None:
     findings = assess_cla(_cla(qefr_min_new_money=_q(None)), RULES)
     finding = next(f for f in findings if f["item"] == "qefr_trigger")
     assert "no separate new-investor minimum" in finding["detail"]
+
+
+def test_aggregation_keeps_principal_per_currency() -> None:
+    """Review point 1 on PR #61: CHF and USD loans must not be summed."""
+    chf = _cla(principal_total=_q(100_000), principal_currency=_q("CHF"))
+    usd = _cla(
+        document="usd.md",
+        lenders=[{"name": "Us Fund", "kind": "entity", "domicile": "US",
+                  "principal_amount": 200_000, "quote": "q"}],
+        principal_total=_q(200_000),
+        principal_currency=_q("usd"),
+    )
+    single = aggregate_clas([chf], run_date=date(2026, 1, 1))
+    assert single["outstanding_principal_total"] == 100_000
+    assert single["outstanding_principal_currency"] == "CHF"
+    assert single["outstanding_principal_by_currency"] == {"CHF": 100_000}
+
+    mixed = aggregate_clas([chf, usd], run_date=date(2026, 1, 1))
+    assert mixed["outstanding_principal_total"] is None
+    assert mixed["outstanding_principal_currency"] is None
+    assert mixed["outstanding_principal_by_currency"] == {
+        "CHF": 100_000, "USD": 200_000
+    }
+    assert any("several currencies" in q for q in mixed["diligence_questions"])

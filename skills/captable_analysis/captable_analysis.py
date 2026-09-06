@@ -84,6 +84,79 @@ def _existing_shares(snapshot: dict[str, Any]) -> dict[str, float]:
     return shares
 
 
+def _normalize_currency(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip().upper()
+    return None
+
+
+def parse_fx_rates(entries: list[str] | None) -> dict[str, float]:
+    """Parse ``CUR=RATE`` entries: units of the scenario currency per 1 CUR."""
+    rates: dict[str, float] = {}
+    for entry in entries or []:
+        code, separator, rate = str(entry).partition("=")
+        currency = _normalize_currency(code)
+        if not separator or not currency:
+            raise ValueError(
+                f"FX rate must look like USD=0.88, got {entry!r}."
+            )
+        try:
+            value = float(rate)
+        except ValueError as error:
+            raise ValueError(
+                f"FX rate for {currency} is not a number: {rate!r}."
+            ) from error
+        if value <= 0:
+            raise ValueError(
+                f"FX rate for {currency} must be positive, got {value}."
+            )
+        rates[currency] = value
+    return rates
+
+
+def _notes_in_currency(
+    notes: list[Note], target: str, fx_rates: dict[str, float]
+) -> tuple[list[Note], list[Note], list[str]]:
+    """Express every note in ``target``; notes without a rate are set aside.
+
+    Balances, caps and floors are money amounts in the loan currency, so
+    all three convert at the same rate. Mixing currencies without
+    conversion would misstate dilution, so unconvertible notes are never
+    silently summed with the rest.
+    """
+    converted: list[Note] = []
+    unconverted: list[Note] = []
+    assumptions: list[str] = []
+    for note in notes:
+        if note.currency is None:
+            assumptions.append(
+                f"{note.label}: loan currency unstated; {target} assumed."
+            )
+            converted.append(note)
+        elif note.currency == target:
+            converted.append(note)
+        elif note.currency in fx_rates:
+            rate = fx_rates[note.currency]
+            converted.append(
+                Note(
+                    label=note.label,
+                    balance=note.balance * rate,
+                    cap=note.cap * rate if note.cap else note.cap,
+                    discount_pct=note.discount_pct,
+                    floor=note.floor * rate if note.floor else note.floor,
+                    currency=target,
+                )
+            )
+            assumptions.append(
+                f"{note.label}: {note.currency} balance, cap and floor "
+                f"converted to {target} at the supplied rate "
+                f"{rate} {target} per 1 {note.currency}."
+            )
+        else:
+            unconverted.append(note)
+    return converted, unconverted, assumptions
+
+
 def _notes_from_snapshot(
     snapshot: dict[str, Any], valuation_date: date
 ) -> tuple[list[Note], list[str]]:
@@ -164,6 +237,10 @@ def _notes_from_snapshot(
                 cap=_value(cla.get("valuation_cap")),
                 discount_pct=_value(cla.get("discount_pct")),
                 floor=_value(cla.get("valuation_floor")),
+                currency=_normalize_currency(
+                    _value(cla.get("principal_currency"))
+                    or _value(cla.get("currency"))
+                ),
             )
         )
     return notes, assumptions
@@ -175,8 +252,16 @@ def build_scenarios(
     pre_money: float | None = None,
     investment: float | None = None,
     valuation_date: date | None = None,
+    fx_rates: dict[str, float] | None = None,
+    currency: str | None = None,
 ) -> dict[str, Any]:
-    """Deterministic scenario computation; all defaults become assumptions."""
+    """Deterministic scenario computation; all defaults become assumptions.
+
+    ``fx_rates`` maps a loan currency to units of the scenario currency per
+    1 unit of it (e.g. ``{"USD": 0.88}`` for CHF scenarios). Loans in a
+    currency without a rate are excluded from every total and the
+    scenarios are not computed at all — flagged, never silently summed.
+    """
     valuation_date = valuation_date or date.today()
     assumptions: list[str] = [
         f"Loan balances are accrued to the analysis date "
@@ -186,7 +271,54 @@ def build_scenarios(
     notes, note_assumptions = _notes_from_snapshot(snapshot, valuation_date)
     assumptions += note_assumptions
 
-    caps = [note.cap for note in notes if note.cap]
+    fx_rates = {
+        _normalize_currency(code): float(rate)
+        for code, rate in (fx_rates or {}).items()
+    }
+    stated_currencies = sorted({n.currency for n in notes if n.currency})
+    if currency:
+        target_currency = _normalize_currency(currency)
+    elif len(stated_currencies) == 1:
+        target_currency = stated_currencies[0]
+    else:
+        target_currency = "CHF"
+        if len(stated_currencies) > 1:
+            assumptions.append(
+                "Loans are denominated in "
+                + ", ".join(stated_currencies)
+                + "; scenarios are expressed in CHF (Swiss company). Pass "
+                "--currency to change the scenario currency."
+            )
+        elif notes:
+            assumptions.append(
+                "No loan currency stated; CHF assumed for every figure."
+            )
+    scenario_notes, unconverted, fx_assumptions = _notes_in_currency(
+        notes, target_currency, fx_rates
+    )
+    assumptions += fx_assumptions
+    scenario_flags: list[dict[str, Any]] = []
+    if unconverted:
+        listing = ", ".join(f"{n.label} ({n.currency})" for n in unconverted)
+        scenario_flags.append(
+            {
+                "item": "mixed_currencies",
+                "status": "flag",
+                "severity": "high",
+                "detail": (
+                    f"Loans in a currency other than {target_currency} "
+                    f"have no FX rate: {listing}. Conversion scenarios and "
+                    "the stamp-duty estimate are NOT computed — summing "
+                    "across currencies would misstate dilution. Re-run "
+                    "with --fx-rate CUR=RATE (units of "
+                    f"{target_currency} per 1 CUR) for each listed "
+                    "currency, or --currency to change the scenario "
+                    "currency."
+                ),
+            }
+        )
+
+    caps = [note.cap for note in scenario_notes if note.cap]
     qefr_mins = [
         _value(cla.get("qefr_min_raise"))
         for cla in snapshot.get("convertibles", [])
@@ -275,10 +407,10 @@ def build_scenarios(
             pre_money_valuation=pre_money,
             new_investment=investment,
             existing_shares=existing,
-            notes=notes,
+            notes=scenario_notes,
             nominal_value=min(nominal_values) if nominal_values else None,
         )
-        if existing
+        if existing and not unconverted
         else []
     )
 
@@ -286,11 +418,16 @@ def build_scenarios(
         s.get("invested_amount") or 0.0
         for s in snapshot.get("stakeholders", [])
     )
-    note_balance_total = sum(note.balance for note in notes)
-    duty = stamp_duty(cumulative_paid_in, investment + note_balance_total)
-    if duty:
-        from lib.captable.model import STAMP_DUTY_EXEMPTION_CHF
+    from lib.captable.model import STAMP_DUTY_EXEMPTION_CHF
 
+    note_balance_total = sum(note.balance for note in scenario_notes)
+    stamp_duty_applicable = target_currency == "CHF" and not unconverted
+    duty = (
+        stamp_duty(cumulative_paid_in, investment + note_balance_total)
+        if stamp_duty_applicable
+        else None
+    )
+    if duty:
         remaining = max(0.0, STAMP_DUTY_EXEMPTION_CHF - cumulative_paid_in)
         exemption_note = (
             f"the CHF {STAMP_DUTY_EXEMPTION_CHF:,.0f} lifetime exemption "
@@ -335,16 +472,21 @@ def build_scenarios(
         "valuation_date": str(valuation_date),
         "snapshot_as_of": snapshot.get("as_of_date"),
         "snapshot_fingerprint": snapshot_fingerprint(snapshot),
+        "currency": target_currency,
+        "fx_rates": fx_rates,
         "hypothetical_round": {
             "pre_money": pre_money,
             "investment": investment,
+            "currency": target_currency,
         },
         "note_balances": {
             note.label: round(note.balance, 2) for note in notes
         },
+        "note_currencies": {note.label: note.currency for note in notes},
+        "notes_without_fx_rate": [note.label for note in unconverted],
         "maturity_conversion_at_fixed_price": maturity_fixed_entries,
         "scenarios": [scenario_dict(s) for s in scenarios],
-        "scenario_flags": [
+        "scenario_flags": scenario_flags + ([
             {
                 "item": "founder_majority_post_round",
                 "status": "flag",
@@ -366,7 +508,7 @@ def build_scenarios(
             scenario_dict(s)["founders_post_round_pct"] < 50
             for s in scenarios
         )
-        else [],
+        else []),
         "stamp_duty": {
             "estimate_chf": round(duty, 2),
             "exemption_chf": 1_000_000,
@@ -375,8 +517,21 @@ def build_scenarios(
             ),
             "note": "1% on contributions above the CHF 1M lifetime "
             "exemption; historical paid-in capital counts against it.",
+        }
+        if stamp_duty_applicable
+        else {
+            "estimate_chf": None,
+            "exemption_chf": 1_000_000,
+            "exemption_remaining_chf": None,
+            "note": "Not computed: the Swiss issuance stamp duty is a CHF "
+            "figure and "
+            + (
+                "some loans have no FX rate into CHF."
+                if unconverted
+                else f"the scenario currency is {target_currency}."
+            ),
         },
-        "stamp_duty_estimate_chf": round(duty, 2),
+        "stamp_duty_estimate_chf": round(duty, 2) if duty is not None else None,
         "ownership_by_role_today": {
             k: round(v, 2)
             for k, v in sorted(ownership_by_role(snapshot).items())
@@ -451,11 +606,17 @@ async def captable_analysis(
     as_of: str | None = None,
     pre_money: float | None = None,
     investment: float | None = None,
+    fx_rates: dict[str, float] | None = None,
+    currency: str | None = None,
 ) -> dict[str, Any]:
     """Full analysis: deterministic computation + LLM narrative."""
     snapshot = _load_snapshot(dataset_name, as_of)
     computed = build_scenarios(
-        snapshot, pre_money=pre_money, investment=investment
+        snapshot,
+        pre_money=pre_money,
+        investment=investment,
+        fx_rates=fx_rates,
+        currency=currency,
     )
     computed["rubric_scope_note"] = (
         "Rubric findings describe the company AS OF the snapshot date, "
@@ -471,6 +632,8 @@ async def captable_analysis(
         key: snapshot.get("aggregation", {}).get(key)
         for key in (
             "outstanding_principal_total",
+            "outstanding_principal_currency",
+            "outstanding_principal_by_currency",
             "ten_twenty_rule",
             "executed_count",
             "term_sheet_count",

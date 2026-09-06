@@ -26,13 +26,34 @@ def run_cmd(
     investment: float = typer.Option(
         None, "--investment", help="Hypothetical round size."
     ),
+    fx_rate: list[str] = typer.Option(
+        None,
+        "--fx-rate",
+        help=(
+            "FX rate for a loan currency as CUR=RATE, units of the scenario "
+            "currency per 1 CUR (e.g. USD=0.88). Repeatable. Required for "
+            "every loan currency that differs from the scenario currency."
+        ),
+    ),
+    currency: str = typer.Option(
+        None,
+        "--currency",
+        help=(
+            "Scenario currency (default: the loans' common currency, else "
+            "CHF)."
+        ),
+    ),
 ):
+    from skills.captable_analysis.captable_analysis import parse_fx_rates
+
     result = run_command(
         lambda: captable_analysis(
             dataset_name,
             as_of=as_of,
             pre_money=pre_money,
             investment=investment,
+            fx_rates=parse_fx_rates(fx_rate),
+            currency=currency,
         ),
         logger=logger,
         error_prefix="Analysis failed",

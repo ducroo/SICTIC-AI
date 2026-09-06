@@ -151,3 +151,110 @@ def test_fixed_maturity_price_block() -> None:
 def test_no_fixed_maturity_price_means_empty_block() -> None:
     result = build_scenarios(_snapshot(), valuation_date=date(2026, 1, 1))
     assert result["maturity_conversion_at_fixed_price"] == []
+
+
+# --- Currency handling (review point 1 on PR #61) ---------------------------
+
+
+def _cla(document: str, principal: float, currency: str | None, **extra) -> dict:
+    cla = {
+        "document": document,
+        "status": "executed",
+        "principal_total": {"value": principal},
+        "principal_currency": {"value": currency},
+        "interest_rate_pct": {"value": 0},
+        "interest_day_count": {"value": "act/365"},
+        "interest_compounding": {"value": "simple"},
+        "execution_date": {"value": "2025-01-01"},
+        "valuation_cap": {"value": 4_000_000},
+        "discount_pct": {"value": 20},
+        "valuation_floor": {"value": None},
+        "qefr_min_raise": {"value": 2_000_000},
+    }
+    cla.update(extra)
+    return cla
+
+
+def _mixed_snapshot() -> dict:
+    snapshot = _snapshot()
+    snapshot["convertibles"] = [
+        _cla("chf.md", 100_000, "CHF"),
+        # at 0.5 CHF/USD this is the same loan: 100k CHF under a 4M CHF cap
+        _cla("usd.md", 200_000, "usd", valuation_cap={"value": 8_000_000}),
+    ]
+    return snapshot
+
+
+def test_mixed_currencies_without_rates_refuse_to_sum() -> None:
+    result = build_scenarios(_mixed_snapshot(), valuation_date=date(2026, 1, 1))
+    assert result["currency"] == "CHF"
+    assert result["scenarios"] == []
+    assert result["notes_without_fx_rate"] == ["lenders of usd.md"]
+    flag = next(f for f in result["scenario_flags"]
+                if f["item"] == "mixed_currencies")
+    assert flag["severity"] == "high"
+    assert "usd.md (USD)" in flag["detail"]
+    assert result["stamp_duty"]["estimate_chf"] is None
+    assert result["stamp_duty_estimate_chf"] is None
+    # balances stay reported in their own currency, never mixed
+    assert result["note_currencies"] == {
+        "lenders of chf.md": "CHF", "lenders of usd.md": "USD"
+    }
+
+
+def test_mixed_currencies_with_rates_convert_everything() -> None:
+    result = build_scenarios(
+        _mixed_snapshot(),
+        valuation_date=date(2026, 1, 1),
+        fx_rates={"usd": 0.5},
+    )
+    assert result["scenarios"], "rates supplied -> scenarios computed"
+    assert not any(f["item"] == "mixed_currencies"
+                   for f in result["scenario_flags"])
+    assert result["fx_rates"] == {"USD": 0.5}
+    assert any("0.5 CHF per 1 USD" in a for a in result["assumptions"])
+    # the USD note converts at the rate (balance AND cap): 200k USD under an
+    # 8M USD cap -> 100k CHF under a 4M CHF cap, identical to the CHF note,
+    # so both receive the same ownership in every method
+    for scenario in result["scenarios"]:
+        shares_chf = scenario["ownership_pct"]["lenders of chf.md"]
+        shares_usd = scenario["ownership_pct"]["lenders of usd.md"]
+        assert abs(shares_chf - shares_usd) < 0.01
+    assert result["stamp_duty"]["estimate_chf"] is not None
+
+
+def test_single_foreign_currency_sets_scenario_currency_and_no_stamp_duty() -> None:
+    snapshot = _snapshot()
+    snapshot["convertibles"] = [_cla("eur.md", 100_000, "EUR")]
+    result = build_scenarios(snapshot, valuation_date=date(2026, 1, 1))
+    assert result["currency"] == "EUR"
+    assert result["hypothetical_round"]["currency"] == "EUR"
+    assert result["scenarios"]
+    assert result["stamp_duty"]["estimate_chf"] is None
+    assert "EUR" in result["stamp_duty"]["note"]
+
+
+def test_unstated_currency_is_assumed_and_disclosed() -> None:
+    snapshot = _snapshot()
+    snapshot["convertibles"] = [_cla("nocur.md", 100_000, None)]
+    result = build_scenarios(snapshot, valuation_date=date(2026, 1, 1))
+    assert result["currency"] == "CHF"
+    assert result["scenarios"]
+    assert any("currency unstated" in a for a in result["assumptions"])
+
+
+def test_parse_fx_rates() -> None:
+    import pytest
+
+    from skills.captable_analysis.captable_analysis import parse_fx_rates
+
+    assert parse_fx_rates(None) == {}
+    assert parse_fx_rates(["usd=0.88", "EUR = 0.95"]) == {
+        "USD": 0.88, "EUR": 0.95
+    }
+    with pytest.raises(ValueError):
+        parse_fx_rates(["USD"])
+    with pytest.raises(ValueError):
+        parse_fx_rates(["USD=abc"])
+    with pytest.raises(ValueError):
+        parse_fx_rates(["USD=-1"])

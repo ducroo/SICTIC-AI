@@ -292,15 +292,26 @@ def aggregate_clas(
         )
 
     # --- Outstanding principal + maturity status --------------------------
-    outstanding_total = 0.0
+    # Principal is summed PER CURRENCY; a consolidated total exists only
+    # when every executed loan shares one currency (or none states one).
+    # A CHF loan and a USD loan must never be added into one figure.
+    outstanding_by_currency: dict[str, float] = {}
     unknown_amounts = 0
     maturity_findings = []
     for extraction in executed:
+        raw_currency = _value(extraction.get("principal_currency"))
+        currency = (
+            raw_currency.strip().upper()
+            if isinstance(raw_currency, str) and raw_currency.strip()
+            else "unstated"
+        )
         for _name, amount in _loan_amounts(extraction):
             if amount is None:
                 unknown_amounts += 1
             else:
-                outstanding_total += amount
+                outstanding_by_currency[currency] = (
+                    outstanding_by_currency.get(currency, 0.0) + amount
+                )
         maturity = _parse_date(_value(extraction.get("maturity_date")))
         if maturity is not None:
             deadline = maturity + timedelta(days=conversion_window_days)
@@ -333,6 +344,27 @@ def aggregate_clas(
                         "detail": f"Matures {maturity}.",
                     }
                 )
+    stated_currencies = [
+        code for code in outstanding_by_currency if code != "unstated"
+    ]
+    if len(stated_currencies) <= 1:
+        outstanding_total: float | None = sum(outstanding_by_currency.values())
+        outstanding_currency = (
+            stated_currencies[0] if stated_currencies else None
+        )
+    else:
+        outstanding_total = None
+        outstanding_currency = None
+        diligence_questions.append(
+            "Executed loans are denominated in several currencies ("
+            + ", ".join(
+                f"{code} {total:,.0f}"
+                for code, total in sorted(outstanding_by_currency.items())
+            )
+            + "); no consolidated principal total is computed. Obtain the "
+            "applicable FX rates (or the agreements' conversion currency "
+            "clauses) before relying on any combined figure."
+        )
     if any(
         f["status"] == "expired_check_for_conversion"
         for f in maturity_findings
@@ -410,6 +442,8 @@ def aggregate_clas(
         ],
         "ten_twenty_rule": ten_twenty,
         "outstanding_principal_total": outstanding_total,
+        "outstanding_principal_currency": outstanding_currency,
+        "outstanding_principal_by_currency": outstanding_by_currency,
         "outstanding_unknown_amounts": unknown_amounts,
         "per_lender": sorted(
             per_lender.values(), key=lambda row: -row["total_principal"]
