@@ -9,7 +9,8 @@ Dispatch supported slash commands to their existing Python workflows.
 
 ## Operations and effects
 
-`dispatch_command(line)` returns formatted output text. The command registry
+`dispatch_command(line)` accepts command text or a list of already-parsed tokens
+and returns formatted output text. The command registry
 in `harness.py` owns exposure and argument parsing; it is separate from the bulk
 registry. Individual skills own business logic and side effects.
 
@@ -30,11 +31,15 @@ One-shot:
 
 ```bash
 conda run -n sictic-env python -m skills.harness /help
+conda run -n sictic-env python -m skills.harness /team_profile "Example Startup"
+conda run -n sictic-env python -m skills.harness -- /advocates "Example Event" --description "Panel on startup financing"
 conda run -n sictic-env python -m skills.harness '/advocates "Example Event" --description "Panel on startup financing"'
 ```
 
-Quote the entire slash command and retain inner double quotes around multiword
-arguments. This preserves options and grouping through the outer CLI.
+Ordinary shell quoting preserves multiword arguments. Put `--` before the slash
+command when passing skill options separately, so the outer CLI does not consume
+them. A whole quoted command remains supported; retain inner double quotes around
+its multiword values. Interactive command text uses the same inner quoting.
 
 ## References
 

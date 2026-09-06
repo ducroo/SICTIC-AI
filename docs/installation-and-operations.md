@@ -65,6 +65,10 @@ Useful options:
 ```
 
 Re-run the installer after changing `SKILL.md` files if you use copied skills.
+Each installed skill includes the source repository and skill-document locations.
+Follow repository references from the source documents. Before editing repository
+code, read the source repository's `AGENTS.md`; installation does not copy those
+working instructions into the agent's general configuration directory.
 
 ## Environment configuration
 
@@ -143,10 +147,13 @@ conda run -n sictic-env python -m skills.dataset_maintenance diagnose
 ```
 
 Consult each skill's `SKILL.md` for its current arguments and examples.
-Quote a whole one-shot slash command when it contains options or multiword
-values, for example:
+Ordinary shell quoting handles multiword values. When passing skill options
+separately, put `--` before the slash command. Whole-command quoting also remains
+supported, for example:
 
 ```bash
+conda run -n sictic-env python -m skills.harness /team_profile "Example Startup"
+conda run -n sictic-env python -m skills.harness -- /advocates "Example Event" --description "Startup financing panel"
 conda run -n sictic-env python -m skills.harness '/advocates "Example Event" --description "Startup financing panel"'
 ```
 
@@ -225,8 +232,9 @@ dropped, so the requested number of chunks is still returned.
 
 A table that does not fit in one chunk loses its header on the first cut, and
 every chunk after that is a block of cells no model can attribute to a column.
-Chunking is therefore table-aware. A table larger than one chunk is split on row
-boundaries, never mid-row, and every chunk repeats the header. Because each
+Chunking is therefore table-aware. A table larger than one chunk is normally split
+on row boundaries, with its detected header repeated. A single row that exceeds
+the available chunk budget is split into smaller pieces. Because each
 chunk re-spends part of its budget on that header, tables use a larger chunk
 size than prose. This applies wherever tables come from: worksheets, CSV
 exports, and tables embedded in PDFs and Word documents.
