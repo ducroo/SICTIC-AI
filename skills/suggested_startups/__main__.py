@@ -14,6 +14,7 @@ def main(
     startups: Optional[List[str]] = typer.Option(None, "--startups", "-s", help="Repeat for each startup name. If omitted, use startup datasets, excluding configured community and ignored datasets."),
     investor: Optional[str] = typer.Option(
         None,
+        "--investors",
         "--investor",
         "-i",
         help=(

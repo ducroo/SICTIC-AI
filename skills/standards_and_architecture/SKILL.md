@@ -182,6 +182,13 @@ this one.
 Missing indexed source revisions prevent verified reuse. Saving may
 still write the artifact without new freshness metadata.
 
+Reusable selection logs cache hits and misses at INFO level. Rejected candidates
+include the model, artifact path and all detected mismatch reasons. Dataset revision
+changes name the datasets; configuration, prompt and input changes share one reason
+without exposing their content. Missing files, freshness metadata and indexed
+revisions are distinguished. Revision lookup stops at the first missing revision
+and names that dataset. Logging does not change selection or freshness policy.
+
 Use `has_insufficient_context()` to recognize the exact
 `INSUFFICIENT_CONTEXT` sentinel; this is separate from freshness.
 
@@ -453,6 +460,20 @@ results. Explicit adapters may return domain objects while sharing
 the same underlying workflow.
 
 ### CLI and harness
+
+Name user-facing parameters by subject: `startup` for startup-specific workflows
+and `dataset` for workflows supporting general datasets. Use singular names for
+one input and plural names for selectors accepting multiple inputs, even when
+only one is supplied (`--startup` versus `--startups`, `--person` versus
+`--persons`). Use role prefixes only to distinguish inputs, such as
+`--source-datasets` and `--target-dataset` when both are present.
+
+Use the same names for the same subject and cardinality across skills, direct
+CLIs and the harness. Option names use lowercase hyphen-separated words without
+redundant `-name` suffixes; positional labels follow the same subject/cardinality
+rules. Existing positional syntax and list parsing remain supported. Older option
+spellings remain compatibility aliases; document and prefer canonical names.
+These naming rules do not rename Python APIs or change workflow input behavior.
 
 Keep Typer entry points in `__main__.py`. They parse and validate
 arguments, call the public API and format results; business logic

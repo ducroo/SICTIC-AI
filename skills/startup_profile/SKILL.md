@@ -44,9 +44,10 @@ a successful substantive diagnosis. Consumers can inspect
 conda run -n sictic-env python -m skills.harness '/startup_profile "<STARTUP>"'
 ```
 
-The direct CLI accepts comma-separated `--startup` names and repeated `--files`
+The direct CLI accepts comma-separated `--startups` names and repeated `--files`
 options. It continues after individual startup failures, prints successful
 reports, then exits with code 1 if any failed. The harness handles one startup.
+`--startup` remains a direct CLI alias for `--startups`.
 
 ## References
 

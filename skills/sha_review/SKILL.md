@@ -50,10 +50,10 @@ does not invalidate an existing synthesis. This automated review aids human revi
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness '/sha_review "<DATASET>"'
+conda run -n sictic-env python -m skills.harness '/sha_review "<STARTUP>"'
 ```
 
-The direct CLI uses `--dataset`.
+The direct CLI uses `--startup`; `--dataset` and `-d` remain compatibility aliases.
 
 ## References
 

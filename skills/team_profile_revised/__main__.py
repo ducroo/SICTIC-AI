@@ -10,7 +10,7 @@ app = typer.Typer(help="Assess founder-team checklists and synthesize each categ
 
 @app.command()
 def run_team_profile_revised(
-    dataset_name: str = typer.Option(..., "--dataset", "-d", help="Target startup dataset."),
+    dataset_name: str = typer.Option(..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset."),
 ):
     insights = run_command(
         lambda: team_profile_revised(dataset_name),

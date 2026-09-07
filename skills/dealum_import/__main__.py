@@ -9,7 +9,7 @@ app = typer.Typer(help="Import a startup application and linked documents from D
 
 
 @app.command()
-def main(startup: str):
+def main(startup: str = typer.Argument(..., metavar="STARTUPS", help="Comma-separated startup names or codes.")):
     startups = [name.strip() for name in startup.split(",") if name.strip()]
     if not startups:
         raise typer.BadParameter("Provide at least one startup name.")

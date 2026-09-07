@@ -16,7 +16,7 @@ Operate on dataset indexes and storage through the existing shared abstractions.
 | `delete --dataset D` | Immediately delete D's tenant across shared model collections **and its parsed directory**. Raw sources and insights remain. |
 | `delete --dataset D --embeddings M` | Immediately delete one tenant/model and reset matching index metadata; preserve parsed files. |
 | `delete --embeddings M` | Immediately delete the entire shared model collection and reset affected dataset manifests. |
-| `rebuild-index --dataset D` | Reset that tenant for the configured embedding model, preserving parsing checkpoints; then synchronize by default. `--no-sync` stops after reset. |
+| `rebuild-index --datasets D` | Reset that tenant for the configured embedding model, preserving parsing checkpoints; then synchronize by default. `--no-sync` stops after reset. |
 | `activate` / `archive` | Set/remove refresh eligibility markers; do not delete the dataset. |
 | `create` | Create the standard startup dossier and activate it. |
 | `dataset-from-insight` | Reconcile selected insights into a generated dataset; can remove obsolete target files. Writes by default; `--dry-run` previews. Does not index. |
@@ -37,12 +37,18 @@ it does not establish equivalence with every current skill cache key.
 ```bash
 conda run -n sictic-env python -m skills.dataset_maintenance diagnose
 conda run -n sictic-env python -m skills.dataset_maintenance prune
-conda run -n sictic-env python -m skills.dataset_maintenance rebuild-index --dataset example-startup --no-sync
+conda run -n sictic-env python -m skills.dataset_maintenance rebuild-index --datasets example-startup --no-sync
 conda run -n sictic-env python -m skills.dataset_maintenance dataset-from-insight --target-dataset example-generated --skill person_profile --dry-run
 ```
 
 These operations are not harness or bulk-refresh jobs. Use command `--help`
 for selectors; `delete` has no dry-run flag.
+
+`rebuild-index`, `activate` and `archive` accept comma-separated `--datasets`,
+with `--dataset` retained as a compatibility alias. `delete --dataset` selects
+one dataset. `create STARTUP` accepts one positional startup.
+`dataset-from-insight` uses one `--target-dataset` and comma-separated
+`--source-datasets`; its older `--source-dataset` alias remains supported.
 
 ## References
 

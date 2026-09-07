@@ -55,6 +55,10 @@ The direct CLI has `search`, `chat` and `sync` commands. Its retained
 Direct search uses the search API's default error policy; generated answers
 use strict retrieval errors.
 
+Direct `search` and `chat` take one positional `DATASET`; `chat` takes one
+`QUESTION`. Direct `sync` takes space-separated `DATASETS...`, while harness
+`/sync` takes one positional `dataset`.
+
 ## References
 
 - [Implementation](dataset_chat.py), [direct CLI](__main__.py)

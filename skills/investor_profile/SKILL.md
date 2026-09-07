@@ -42,11 +42,13 @@ not a supported exception to that rule.
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness -- /investor_profile --source-dataset "<DATASET>"
+conda run -n sictic-env python -m skills.harness -- /investor_profile --dataset "<DATASET>"
 ```
 
-The direct CLI also accepts `--person "<NAME_1>, <NAME_2>"`; omission selects all
+The direct CLI also accepts `--persons "<NAME_1>, <NAME_2>"`; omission selects all
 eligible roster members. Both CLIs default to `sictic-members`.
+`--source-dataset` remains an alias for `--dataset`; the direct CLI retains
+`--person` as an alias for `--persons`.
 
 ## References
 

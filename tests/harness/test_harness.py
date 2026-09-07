@@ -73,10 +73,10 @@ def test_harness_help_lists_core_commands():
 
     assert "/dataset_chat <dataset> <question>" in text
     assert "/startup_profile <startup>" in text
-    assert "/submission_ready [startup ...]" in text
+    assert "/submission_ready [startups ...]" in text
     assert "/dd_checks <startup>" in text
     assert "/dd_priorities <startup>" in text
-    assert "/sha_review <dataset>" in text
+    assert "/sha_review <startup>" in text
     assert "/dealum_import <startup>" in text
 
 

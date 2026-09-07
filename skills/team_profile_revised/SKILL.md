@@ -51,7 +51,7 @@ Editing internal audit JSON alone does not invalidate the final synthesis.
 conda run -n sictic-env python -m skills.harness '/team_profile_revised "<STARTUP>"'
 ```
 
-The direct CLI uses `--dataset`.
+The direct CLI uses `--startup`; `--dataset` and `-d` remain compatibility aliases.
 
 ## References
 

@@ -14,7 +14,7 @@ app = typer.Typer(help="Import a startup public website into dataset storage.")
 
 @app.command()
 def main(
-    startup_name: str = typer.Argument(..., help="Startup name for the dataset."),
+    startup_name: str = typer.Argument(..., metavar="STARTUP", help="Startup name for the dataset."),
     url: str = typer.Argument(..., help="Public startup website URL."),
     depth: int = typer.Option(1, "--depth", min=0, help="Internal crawl depth."),
     max_pages: int = typer.Option(

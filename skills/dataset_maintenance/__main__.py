@@ -79,7 +79,7 @@ def delete_command(
 
 @app.command("rebuild-index")
 def rebuild_index_command(
-    dataset: str = typer.Option(..., "--dataset", "-d"),
+    dataset: str = typer.Option(..., "--datasets", "--dataset", "-d", help="Comma-separated datasets."),
     sync: bool = typer.Option(
         True,
         "--sync/--no-sync",
@@ -118,7 +118,7 @@ def rebuild_index_command(
 
 @app.command("activate")
 def activate_command(
-    dataset: str = typer.Option(..., "--dataset", "-d"),
+    dataset: str = typer.Option(..., "--datasets", "--dataset", "-d", help="Comma-separated datasets."),
 ) -> None:
     slugs = run_command(
         lambda: [activate_dataset_marker(item) for item in _parse_datasets(dataset)],
@@ -130,7 +130,7 @@ def activate_command(
 
 @app.command("archive")
 def archive_command(
-    dataset: str = typer.Option(..., "--dataset", "-d"),
+    dataset: str = typer.Option(..., "--datasets", "--dataset", "-d", help="Comma-separated datasets."),
 ) -> None:
     slugs = run_command(
         lambda: [archive_dataset_marker(item) for item in _parse_datasets(dataset)],
@@ -142,7 +142,7 @@ def archive_command(
 
 @app.command("create")
 def create_command(
-    startup_name: str = typer.Argument(..., help="Startup name for the new dossier."),
+    startup_name: str = typer.Argument(..., metavar="STARTUP", help="Startup name for the new dossier."),
 ) -> None:
     slug = run_command(
         lambda: ensure_startup_dossier(startup_name),

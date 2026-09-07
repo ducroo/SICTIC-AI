@@ -51,8 +51,10 @@ The harness requires a person; the direct CLI also supports the complete roster.
 ```bash
 conda run -n sictic-env python -m skills.harness /person_profile "<DATASET>" "<NAME>"
 conda run -n sictic-env python -m skills.person_profile --dataset "<DATASET>"
-conda run -n sictic-env python -m skills.person_profile --dataset "<DATASET>" --person "<NAME_1>, <NAME_2>"
+conda run -n sictic-env python -m skills.person_profile --dataset "<DATASET>" --persons "<NAME_1>, <NAME_2>"
 ```
+
+The direct CLI retains `--person` as an alias for `--persons`.
 
 ## References
 
