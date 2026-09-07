@@ -473,13 +473,22 @@ ask_env() {
         else
             printf '%s: ' "$prompt"
         fi
-        IFS= read -r answer || answer=""
+        eof=0
+        IFS= read -r answer || eof=1
         if [ -z "$answer" ] && [ -n "$shown_default" ]; then
             answer="$shown_default"
         fi
         if [ -n "$answer" ] || [ "$required" -eq 0 ]; then
             env_set "$key" "$answer"
             break
+        fi
+        # No further input can arrive, so re-prompting would loop forever.
+        if [ "$eof" -eq 1 ]; then
+            echo >&2
+            echo "install.sh: $key is required, but stdin reached end of input." >&2
+            echo "Run the installer interactively, or use --non-interactive to keep" >&2
+            echo "the values already present in .env." >&2
+            exit 1
         fi
         echo "  $key is required."
     done
