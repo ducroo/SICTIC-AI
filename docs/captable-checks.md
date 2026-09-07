@@ -1,7 +1,8 @@
 # What the CLA checks look at, and why (plain-language guide)
 
 A non-lawyer's guide to everything the cap-table skills check about a
-startup's Convertible Loan Agreements (CLAs). [captable.md](captable.md)
+startup's Convertible Loan Agreements (CLAs) and about the cap table itself
+— the ownership table, the share register and the option pools. [captable.md](captable.md)
 describes the pipeline; [captable-design.md](captable-design.md) records the
 design rationale and legal sources. This page explains, term by term, what
 each thing *is*, what a contract typically says, and what we want to learn
@@ -268,7 +269,132 @@ reading individual PDFs practically cannot do:
   neutral note, not an accusation, since they may have been a shareholder
   before.
 
-## Part 3 — What the analysis computes (pure Python, no model)
+## Part 3 — What we check about the cap table, the register and the pools
+
+The cap table is the second half of the picture: the CLAs say what debt is
+waiting to become shares; the cap table says who owns what today. Both have
+to be right for any dilution scenario to mean anything.
+
+### Finding the right documents first
+
+**Classification.** Before extracting anything, every parsed document in
+the data room is classified (current cap table, forecast or scenario model,
+share register, executed CLA, term sheet, articles of association, ESOP or
+PSOP plan, tax ruling, and so on). This stage is mandatory because real
+data rooms contain spreadsheets like "Forecast Cap Table Series A" or
+"Dilution Calculator" that look exactly like cap tables but describe an
+imagined future. Extracting one of those as *the* cap table produces
+confident nonsense. Several dated versions of the real cap table are kept
+apart as separate states, not merged.
+
+### What we extract
+
+**Holders.** Every row of the cap table: people, entities, the company's
+own treasury shares, and pools. For each we record the group the table puts
+them in (founders, VC investors, employees, advisors, former employees…),
+the legal kind (individual, entity, treasury, pool, authorized capital),
+the functional role (founder, investor, employee, advisor, departed), the
+holdings per share class, the fully diluted count and the amount invested.
+The group and role are taken from the table's own structure, not invented —
+that is what makes the later red-flag rubric trustworthy.
+
+**Share classes.** Common and preferred classes with nominal value and
+votes per share. The nominal value matters for a legal check below; the
+classes matter because CLAs convert into a specific class.
+
+**Pools.** ESOP and PSOP pools (employee option and phantom-share plans),
+grantable reserves and authorized capital: total size, granted, and
+unallocated. Pools dilute economically without being shareholders, so
+they are tracked separately and labelled as reserved positions in every
+ownership view.
+
+**Totals and the "fully diluted" definition.** The table's own totals per
+class and its fully diluted total — and, crucially, *which* definition of
+"fully diluted" the source uses: all pools counted in full, or only granted
+options, or granted options plus vested phantom shares. Cap tables rarely
+say, and the difference changes the price per share in any valuation
+negotiation. If the source does not state it, the rubric flags it. A
+subtle rule here: the model may not "prove" the definition by quoting the
+totals row — it must find an actual statement, or report it as unstated.
+
+**Row completeness.** An extraction whose holder rows do not add up to the
+table's own class totals (within half a percent) is rejected and redone.
+This catches the classic failure of a model silently dropping rows from a
+long table.
+
+**The share register.** The legal source of truth for who owns issued
+shares. We extract the *current* holdings, anchored on the participation
+column, so that transfers recorded in the register are not double counted
+as new positions.
+
+**Pool overview documents.** Separate ESOP or PSOP overviews with their own
+figures per pool, kept per document so they can be compared with the cap
+table.
+
+### What we validate — in code, never in a prompt
+
+Every check yields pass, warning or fail with a severity, and a violation
+becomes a structured finding, never a silent correction.
+
+**Issued totals per class.** The holder rows of each share class must sum
+to the class total the table states. A mismatch means a row was misread,
+dropped, or the table itself is inconsistent.
+
+**The diluted equation.** Fully diluted shares must equal issued shares
+minus treasury shares plus the option and pool positions. This is the
+arithmetic identity every cap table should satisfy; if it does not, either
+treasury shares were counted as ownership or a pool was counted twice.
+
+**The diluted row sum.** Independently of the equation, the holders' own
+fully diluted counts must add up to the stated fully diluted total. The
+equation can pass while this fails — it did, when a pool appeared once as
+a group and once as its single member and was extracted twice.
+
+**Register reconciliation.** Every holding in the share register is
+compared with the cap-table version *nearest to the register's own date*.
+Comparing a March register with a June cap table would report every
+legitimate transfer in between as an error — so cross-dated comparisons are
+downgraded to warnings and say what the date gap is. Name variants (middle
+names, legal-form suffixes) are matched, and the coverage (how many
+holdings could be compared) is reported.
+
+**Pool consistency.** The cap table's pool figures are compared with the
+pool overview documents, paired by pool identity. Within the family of
+employee pools a single pool may be compared across kinds (a table calling
+it "grantable" and an overview calling it "ESOP"); one-sided coverage is
+tolerated; a date gap is disclosed. A genuine disagreement — the cap table
+saying one pool size and the ESOP overview another — stays a failure,
+because it is exactly what a diligence question is for.
+
+**Nominal-value floor.** Swiss law forbids issuing shares below their
+nominal value (art. 624 CO). If a CLA's cap or discount implies a
+conversion price below the nominal value of the class, that conversion is
+legally impossible without a share split or a nominal reduction first. The
+check derives the implied price and flags it — a finding, never a silent
+clamp.
+
+**Loan lifecycle against the cap table.** Whether a lender of an "executed"
+loan already appears as a shareholder — the neutral question whether the
+loan has in fact converted (see Part 2).
+
+**Cross-snapshot consistency.** Each build is compared with the previous
+dated state of the same company: a share class shrinking or disappearing,
+or a holder's absolute count dropping without a documented transfer,
+becomes a warning ("shrinking holder"). Total shares should only grow
+unless a split or cancellation is evidenced. This gives event-style
+validation without recording every transaction — a founder quietly losing
+shares between two versions is precisely the kind of thing to ask about.
+
+### How results are stored
+
+Every evidenced state of the cap table is kept as its own dated snapshot,
+forever; the "latest" pointer is never overwritten by a rebuild of an older
+state; and every intermediate work product carries a freshness stamp (the
+documents, the configuration including the term checklist, the model) so
+that a changed document or an edited checklist re-runs the affected stage
+automatically instead of silently reusing stale output.
+
+## Part 4 — What the analysis computes (pure Python, no model)
 
 **Accrued balance.** Principal plus interest to the analysis date, under the
 interest mode, the safe-harbor ceiling, the day-count convention and the
