@@ -65,11 +65,12 @@ are also included in that error.
 ## Usage
 
 ```bash
-conda run -n sictic-env python -m skills.harness '/suggested_startups --startups "<startup1>,<startup2>" --investor "<name-or-id1>,<name-or-id2>"'
+conda run -n sictic-env python -m skills.harness '/suggested_startups --startups "<startup1>,<startup2>" --investors "<name-or-id1>,<name-or-id2>"'
 ```
 
 The harness uses comma-separated startup and investor lists. The direct CLI uses
-repeated `--startups` options and a comma-separated `--investor` value.
+repeated `--startups` options and a comma-separated `--investors` value.
+Both retain `--investor` as a compatibility alias for `--investors`.
 Both accept `--max-startups` (default 16); only the Python API exposes
 `dataset_name`.
 

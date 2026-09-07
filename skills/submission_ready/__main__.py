@@ -16,6 +16,7 @@ app = typer.Typer(
 def run_submission_ready(
     startup: Optional[list[str]] = typer.Option(
         None,
+        "--startups",
         "--startup",
         "-s",
         help=(

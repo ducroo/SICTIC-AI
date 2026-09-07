@@ -23,12 +23,16 @@ def config_hash(config_key: str) -> str:
 def dataset_revisions(
     storage,
     source_datasets: list[str],
+    *,
+    missing: list[str] | None = None,
 ) -> dict[str, str] | None:
     revisions = {}
     for name in sorted(set(source_datasets)):
         location = dataset_location(name)
         manifest = IngestionManifest.load(storage, location.parsed_rel)
         if not manifest.indexed_dataset_revision:
+            if missing is not None:
+                missing.append(location.slug)
             return None
         revisions[location.slug] = manifest.indexed_dataset_revision
     return revisions

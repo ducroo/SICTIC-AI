@@ -3,5 +3,5 @@
   "max_experts": 10,
   "expert_search_candidates": 16,
   "preference_key": "deep_dive_invitation",
-  "output_format_version": 5
+  "output_format_version": 6
 }

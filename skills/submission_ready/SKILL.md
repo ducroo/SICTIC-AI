@@ -63,7 +63,8 @@ conda run -n sictic-env python -m skills.harness /submission_ready
 conda run -n sictic-env python -m skills.harness '/submission_ready "<STARTUP>"'
 ```
 
-The direct CLI accepts repeated `--startup` options.
+The direct CLI accepts repeated `--startups` options; `--startup` remains an alias.
+The harness accepts multiple positional `startups` separated by spaces.
 
 ## References
 

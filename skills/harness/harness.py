@@ -150,7 +150,7 @@ async def _team_profile_revised(args: List[str]) -> str:
 
 async def _investor_profile(args: List[str]) -> str:
     parser = _parser("/investor_profile")
-    parser.add_argument("--source-dataset", default="sictic-members")
+    parser.add_argument("--dataset", "--source-dataset", "-d", dest="source_dataset", default="sictic-members")
     ns = parser.parse_args(args)
     from skills.investor_profile.investor_profile import investor_profile
 
@@ -218,7 +218,7 @@ async def _advocates(args: List[str]) -> str:
 async def _suggested_startups(args: List[str]) -> str:
     parser = _parser("/suggested_startups")
     parser.add_argument("--startups", "-s")
-    parser.add_argument("--investor", "-i")
+    parser.add_argument("--investors", "--investor", "-i", dest="investor")
     parser.add_argument("--max-startups", "-m", type=int, default=16)
     ns = parser.parse_args(args)
     from skills.suggested_startups.suggested_startups import suggested_startups
@@ -250,7 +250,7 @@ async def _dd_priorities(args: List[str]) -> str:
 
 async def _sha_review(args: List[str]) -> str:
     parser = _parser("/sha_review")
-    parser.add_argument("dataset")
+    parser.add_argument("dataset", metavar="startup")
     ns = parser.parse_args(args)
     from skills.sha_review.sha_review import sha_review
 
@@ -296,7 +296,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/person_profile", "/person_profile <dataset> <person>", "Generate a person profile.", _person_profile),
         HarnessCommand("/team_profile", "/team_profile <startup>", "Generate a team profile.", _team_profile),
         HarnessCommand("/team_profile_revised", "/team_profile_revised <startup>", "Assess team checklists and synthesize each category.", _team_profile_revised),
-        HarnessCommand("/investor_profile", "/investor_profile [--source-dataset dataset]", "Build investor profiles.", _investor_profile),
+        HarnessCommand("/investor_profile", "/investor_profile [--dataset dataset]", "Build investor profiles.", _investor_profile),
         HarnessCommand("/expert_search", "/expert_search <startup>", "Rank relevant experts.", _expert_search),
         HarnessCommand("/potential_investors", "/potential_investors <startup>", "Rank potential investors.", _potential_investors),
         HarnessCommand(
@@ -312,16 +312,16 @@ def build_registry() -> Dict[str, HarnessCommand]:
             _deep_dive_invitation,
         ),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
-        HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investor x,y", "Suggest startups for investors.", _suggested_startups),
+        HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand(
             "/submission_ready",
-            "/submission_ready [startup ...]",
+            "/submission_ready [startups ...]",
             "Check in-scope application completeness and eligibility.",
             _submission_ready,
         ),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
         HarnessCommand("/dd_priorities", "/dd_priorities <startup>", "Prioritize an existing DD checks report.", _dd_priorities),
-        HarnessCommand("/sha_review", "/sha_review <dataset>", "Review a startup Shareholders' Agreement.", _sha_review),
+        HarnessCommand("/sha_review", "/sha_review <startup>", "Review a startup Shareholders' Agreement.", _sha_review),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}

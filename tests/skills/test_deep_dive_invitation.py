@@ -130,4 +130,4 @@ async def test_deep_dive_invitation_renders_review_only_draft(
     assert "### Industry Experts: FYI" not in email
     assert "To:  \nJane Founder <jane@startup.ch>  \n\nCc:" in email
     assert "Member preference opt-outs excluded from expert search: 1" in content
-    assert "Interested members excluded from expert search: 1" in content
+    assert "Interested investors with an email in Cc: 1" in content

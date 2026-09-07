@@ -11,11 +11,14 @@ app = typer.Typer(add_completion=False, help="Build investor profiles from perso
 def main(
     source_dataset: str = typer.Option(
         "sictic-members",
+        "--dataset",
         "--source-dataset",
+        "-d",
         help="Community dataset containing person profiles and track records.",
     ),
     person: str | None = typer.Option(
         None,
+        "--persons",
         "--person",
         "-p",
         help="Comma-separated person names; omit to build profiles for all members.",

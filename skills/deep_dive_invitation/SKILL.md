@@ -21,7 +21,13 @@ contacts. Ask for the exact startup name/code only when unclear.
 
 ## Workflow and dependencies
 
-Import Dealum data, request normal `startup_profile`, read member preferences,
+Resolve the startup slug through shared startup identity and look for a reusable
+invitation before running dependencies. Manual invitations always win; generated
+invitations require matching indexed revisions for the startup and `sictic-members`,
+plus matching template/settings and supplied contacts. A cache hit returns immediately
+without importing, synchronizing, profiling, reading member preferences or ranking.
+
+On a cache miss, import Dealum data, request normal `startup_profile`, read member preferences,
 then request `expert_search`. Existing member rosters and investor profiles are
 required; the invitation does not discover people. It has no bulk registration.
 
@@ -35,15 +41,23 @@ not automated, so the draft always includes a verification notice.
 
 Interested investors with an address remain in Cc even with preference `none`;
 missing addresses create notices and are omitted until completed. Exclude interested
-members and opted-out members from expert search. Configuration currently requests
+members from Bcc selection after expert search; only preference opt-outs are
+passed as expert-search exclusions. Changing interested investors therefore does
+not change the ranking request. Match Cc recipients by existing member identity
+as well as email, so alternate addresses do not duplicate recipients across Cc
+and Bcc. Apply this filter before the Bcc limit. Configuration currently requests
 16 candidates and selects at most 10 usable experts. Bcc excludes addresses already
 in To/Cc; experts appear only in Bcc, not as named rows in the email body.
 
-Render the configured template mechanically after reconciliation. Cache lookup
-occurs after dependencies; its key includes configuration, supplied people,
-member preferences and expert-report content, with startup/community revisions.
-Resolved member contacts are not independently hashed, so contact edits alone
-may not invalidate the draft.
+Render the configured template mechanically after reconciliation. Cache freshness
+uses recorded indexed revisions, so unindexed source changes and direct edits to
+member preferences, stored contacts or expert reports do not independently invalidate
+the invitation. Dependency outputs are not included in its cache key. Generated
+drafts using the previous key are regenerated once; manual precedence is unchanged.
+
+For an application code that cannot resolve locally to the startup dataset,
+Dealum import must resolve the canonical slug first. Check the resolved dataset
+for a reusable invitation before executing the remaining dependencies.
 
 ## Side effects and failure behavior
 

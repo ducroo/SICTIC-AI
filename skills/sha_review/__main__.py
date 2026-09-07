@@ -14,7 +14,9 @@ app = typer.Typer(
 def run_sha_review(
     dataset_name: str = typer.Option(
         ...,
+        "--startup",
         "--dataset",
+        "-s",
         "-d",
         help="Target startup dataset name.",
     ),
