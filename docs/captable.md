@@ -15,6 +15,9 @@ The reasoning behind the design — the SECA CLA anatomy, the Swiss
 corporate-law and tax rules baked into the checks, the conversion-math
 foundations, and each design decision with its why — is documented in
 [captable-design.md](captable-design.md).
+A plain-language, term-by-term explanation of what every CLA check is
+and why it matters — for non-lawyers — is in
+[captable-checks.md](captable-checks.md).
 
 ## Division of labor (the core design rule)
 

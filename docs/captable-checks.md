@@ -1,0 +1,304 @@
+# What the CLA checks look at, and why (plain-language guide)
+
+A non-lawyer's guide to everything the cap-table skills check about a
+startup's Convertible Loan Agreements (CLAs). [captable.md](captable.md)
+describes the pipeline; [captable-design.md](captable-design.md) records the
+design rationale and legal sources. This page explains, term by term, what
+each thing *is*, what a contract typically says, and what we want to learn
+from it.
+
+**The frame.** A convertible loan is money lent to a startup that is not
+meant to be repaid in cash but *converted* into shares when a defined event
+happens. Investors put money in *before* anyone has to value the company;
+the valuation is deferred to the next financing round, and in exchange the
+lenders get a discount and/or a valuation ceiling. Almost every item below
+serves one of three questions: *How much does the startup owe? When and at
+what price does that debt become ownership? And what can go wrong on the
+way?*
+
+## Part 1 — What we extract from each agreement
+
+These are the terms in the team-editable checklist
+`config/captable/cla_terms.md`. Every extracted value carries a verbatim
+quote that is verified against the document; absent terms are recorded with
+the sections that were searched.
+
+### Parties and lifecycle
+
+**Lenders.** The people or entities providing the money. Swiss CLAs come in
+two shapes: one agreement per lender (ten near-identical PDFs in a data
+room) or one pooled agreement listing every investor, often with an annex
+table of who lends how much. We record each lender with their kind
+(individual, entity, syndicate, nominee), domicile, and own amount. This is
+what lets us count lenders across all agreements (the tax rule in Part 2),
+recognize name variants (the same person with and without a middle name),
+and notice when a single line is really a syndicate with an unknown number
+of members behind it.
+
+**Borrower.** The startup, as named in the party block. Trivial-looking, but
+it is the safeguard that an agreement belongs to this data room and is not a
+template or a subsidiary's contract.
+
+**Status and its evidence.** A document that looks like a CLA can be one of
+four things: a signed, open loan; a term sheet or draft (a negotiation state,
+not binding); a loan that has already converted (the money became shares
+long ago); or a repaid one. Only the first is outstanding debt. We require
+a one-sentence justification for the chosen status, because a two-year-old
+CLA in a current data room has more likely converted than not, and that
+confusion would misstate the debt load entirely.
+
+**Execution date and signature completeness.** When the agreement was
+signed, and whether *every* party signed. Interest accrues from the
+execution date, and an agreement missing a signature is legally an offer,
+not a contract — we demote it to a term sheet. With scanned signature pages
+the model often cannot tell; it must say so rather than guess.
+
+### Principal
+
+**Amount and currency.** The sum actually lent under this agreement (not a
+round's "up to" maximum), and its currency, because Swiss startups do carry
+USD or EUR loans beside CHF ones. We never add across currencies: without a
+user-supplied exchange rate, the analysis refuses to compute rather than
+silently produce a wrong total.
+
+### Interest
+
+**Interest mode.** Three patterns exist: interest-free (lenders are
+compensated only through discount and cap), a fixed rate, or the Swiss
+specialty "the lower of X % and the safe-harbor rate". The **safe-harbor
+rate** is an interest rate the Federal Tax Administration publishes every
+year; up to that rate, interest paid to shareholders is accepted as
+commercially justified without question. Interest above it on shareholder
+loans counts as a hidden profit distribution with tax consequences, which is
+why many agreements tie the rate to it.
+
+**Stated rate and the safe-harbor figure.** In the safe-harbor mode the
+percentage in the contract is only a *ceiling*; the effective rate is the
+(usually much lower) safe-harbor rate, which contracts often mention in
+passing ("currently 1.75 %"). Accruing at the ceiling overstates the debt —
+on a five-million loan by several hundred thousand francs. We extract both
+figures and accrue at the lower one.
+
+**Day-count convention.** How interest days are counted: act/360 (actual
+days divided by 360, which yields slightly more interest), act/365, act/act,
+or 30/360 (every month counts thirty days). Over a year the difference is
+small; over three years on millions it is real. If the contract is silent we
+assume act/365 and say so.
+
+**Compounding.** Whether accrued interest is itself charged interest. The
+SECA standard uses simple interest; some agreements capitalize annually. On
+older loans this changes the balance noticeably. If unstated we assume
+simple interest and disclose it — in the agreements we have seen, this
+omission was the most common entry in the list of unregulated points.
+
+### Maturity and conversion triggers
+
+**Maturity date.** The date by which the loan must be repaid or converted if
+no financing round has happened. Twelve to thirty-six months is typical. A
+loan whose maturity has passed with neither a conversion nor an extension in
+the data room is the sharpest question of all: either documents are missing,
+or the startup is sitting on a due debt. No maturity date at all is an
+investor warning sign — the loan can run forever.
+
+**Conversion at a qualified financing round (QEFR), with its minimums.** The
+normal conversion path: once the startup closes a "qualified" round —
+defined by a minimum size, say CHF 12 million — the loan automatically
+becomes shares at that round's price less the discount. Many definitions
+carry a second condition: part of the money must come from *new* investors
+("of which at least CHF 8 million from new investors"). Without it, the
+existing lenders could stage the round among themselves and force conversion
+on their own terms. "Mandatory or voluntary" records whether conversion
+happens automatically or at the lender's option.
+
+**Conversion at a change of control (CoC), and a repayment multiple.** What
+happens if the startup is sold before a round. Either the loan converts so
+the lender shares in the sale proceeds — or the agreement lets the lender
+demand repayment of a multiple instead (e.g. "2.5× the principal"). The
+latter is a potentially large cash outflow that buyers and founders must
+price into any sale.
+
+**Conversion at maturity, and its fixed price.** If no round came by
+maturity, the loan may or must convert anyway — at a price that *cannot* be
+derived from a round, because there is none. Agreements solve this with a
+fixed price per share. This is treacherous: the "Conversion Price"
+definition often has several lettered paragraphs, one per trigger, and the
+fixed price hides in paragraph (c) or an annex. Miss it and the expired loan
+is priced with the wrong mechanism. Multiplied by the share count, the fixed
+price also reveals the valuation the startup itself works with.
+
+### Pricing
+
+**Valuation cap.** A ceiling on the valuation at which conversion happens.
+Example: cap CHF 8 million; if the round comes at a CHF 20 million
+valuation, the lender still converts as if the company were worth 8 million
+— many more shares per franc than the new investors get. That is the reward
+for early risk; for founders a low cap means heavy dilution.
+
+**Discount and its schedule.** Instead of or in addition to a cap: a rebate
+on the round price, typically 15–25 %. The lender pays, say, 80 % of what
+new investors pay. Some agreements step the discount over time ("15 % in
+the first four months, 25 % after") to push founders towards a quick round.
+When both cap and discount apply, the lender gets whichever price is better
+for them. A discount above one third becomes delicate under Swiss tax
+practice: such a loan is reportedly no longer treated as a "classic"
+convertible, with income-tax consequences for the investor — the exact
+threshold must be confirmed by tax counsel, which is why it lives in
+configuration, not code.
+
+**Valuation floor.** The counterpart of the cap: a minimum valuation below
+which conversion does not go. It protects founders in a down round, is rare
+in seed loans, and appears mainly in bridge loans between rounds.
+
+**Denominator basis.** To turn a cap (a company valuation) into a price per
+share you divide by a share count — but which one? Only the issued shares,
+or the "fully diluted" count including every option and pool? The fully
+diluted number is larger, gives a lower price, and therefore more shares to
+the lender. Agreements state this explicitly and it is negotiated; we never
+silently assume either.
+
+### Protections and mechanics
+
+**Subordination and its scope.** In Switzerland the board must notify the
+court when liabilities exceed assets (over-indebtedness, art. 725b CO) — for
+a loss-making startup with a convertible loan on the balance sheet that
+point comes fast. The way out: the lender subordinates the loan, so it is
+left out of the over-indebtedness calculation. Missing subordination is a
+warning sign. And it must cover the whole amount: if only the principal is
+subordinated but not the accrued interest, the company remains
+arithmetically over-indebted — a serious structural defect, and we rate it
+as one.
+
+**Most-favoured-nation clause (MFN).** A clause that automatically gives this
+lender the better terms of any later loan. If a later investor gets 30 %
+discount instead of 20 %, the earlier one follows. It can make a later round
+unexpectedly expensive and must be known before negotiating.
+
+**Pro-rata rights.** The right to invest additionally in the next round,
+beyond the conversion, to keep one's stake. For the startup it means part of
+the round is reserved and unavailable to new investors.
+
+**Capital source for the conversion shares.** For a loan to become shares,
+new shares must be created — and in Switzerland that takes a shareholder
+resolution. Agreements secure it one of three ways: consent declarations
+from existing shareholders (the SECA default, its Annex 2), conditional
+capital already resolved, or a capital band (possible since 2023: the board
+may raise capital within a pre-approved range on its own). Without any of
+these, conversion can be blocked at the decisive moment.
+
+**Reference to shareholder consents.** Does the agreement name the consent
+declarations concretely (annexed or to be obtained)? Missing consents are an
+execution risk — a shareholder can block the required capital increase.
+
+**Accession to the shareholders' agreement (SHA).** Must the lender join the
+shareholders' agreement before converting? It is customary and sensible: it
+puts them under the same rules as every other shareholder (pre-emption,
+drag-along and so on). Without it, conversion creates a shareholder outside
+the contractual framework.
+
+**Governing law and forum.** Swiss law with a Swiss forum is the norm;
+anything else is at least a question, because the Swiss rules above
+(subordination, tax) may then work differently.
+
+### Evidence
+
+**Missing terms with search evidence.** The most important methodological
+point. Studies of AI contract extraction show that the commonest failure is
+not a misread value but the claim "this clause does not exist" made without
+really looking. We therefore accept an absence only with a statement of
+which sections were searched — and every found value must carry a verbatim
+quote that we locate mechanically in the document. Where the quote does not
+match, the extraction is rejected and redone.
+
+## Part 2 — What we assess per agreement, and check across all agreements
+
+The per-agreement assessments are plain arithmetic over the extracted values
+(no model involved); the thresholds live in
+`config/captable/assessment_rules.json` and can be tuned by the team. Each
+yields *market standard*, *deviating* or *absent*, plus a severity from
+info to severe.
+
+- **Discount:** 5–30 % counts as customary; above that "deviating"; above
+  33.33 % additionally the tax risk (high).
+- **Interest rate:** above the 8 % safe-harbor reference = a note, because
+  the tax consequences above then loom.
+- **QEFR trigger:** absent entirely → unclear how the loan ever becomes
+  shares (high); no minimum size → the loan could convert in a tiny round
+  (medium); no new-money component → the check whether insiders alone could
+  trigger conversion.
+- **Change of control:** absent = note; with a repayment multiple = note on
+  the possible outflow.
+- **Maturity and cap together:** both missing means neither an end date nor
+  a valuation limit — unlimited dilution with no time limit (high).
+- **Denominator basis unstated:** medium, because the price per share is
+  then up for negotiation.
+- **Subordination:** absent = high; principal only = severe.
+- **Capital source:** no enforceable path = high.
+- **MFN, pro-rata, SHA accession:** information findings so they are not
+  forgotten when preparing a negotiation.
+
+The cross-agreement checks need all agreements together — the part a human
+reading individual PDFs practically cannot do:
+
+- **The 10/20 rule.** A Swiss tax rule: whoever borrows from more than 10
+  lenders on identical terms, or from more than 20 on varying terms, no
+  longer has loans for tax purposes but a bond issue — and must withhold
+  35 % tax on the interest. We group every agreement by identical terms
+  (rate, discount, cap, maturity, currency, each normalized) and count
+  lenders per group, the same person counting once. A syndicate's members
+  count too; since we do not know them, we say explicitly "composition
+  undisclosed — verify" rather than a false "within limits".
+- **Outstanding principal.** The sum of signed, open loans only, per
+  currency. Term sheets and converted loans do not count.
+- **Term sheets versus agreements.** If a lender has both a term sheet and a
+  signed agreement, the term sheet counts as superseded. If the amounts
+  differ, that becomes a question — perhaps they invested less than
+  planned.
+- **Expired maturities.** If maturity plus the customary 30-day conversion
+  window has passed and no conversion, extension or repayment document
+  exists, the question follows: is there a conversion demand from the
+  lender majority? Is the balance sitting on the balance sheet as a
+  subordinated debt?
+- **Signature evidence.** For PDFs we search the raw file for traces of
+  electronic signatures (e-signature envelope identifiers) that survive even
+  when a PDF was later flattened. That corroborates "is signed" beyond the
+  extracted signature block. Non-PDF sources are marked not applicable,
+  never as failures.
+- **Lender already a shareholder.** If a lender of a supposedly open loan
+  appears in the share register, the loan may already have converted — a
+  neutral note, not an accusation, since they may have been a shareholder
+  before.
+
+## Part 3 — What the analysis computes (pure Python, no model)
+
+**Accrued balance.** Principal plus interest to the analysis date, under the
+interest mode, the safe-harbor ceiling, the day-count convention and the
+compounding. The analysis date and the date the cap table describes are
+always both stated, because they are rarely the same.
+
+**Conversion scenarios.** We play through a hypothetical round (valuation
+and size derived from the agreement or set by the user) and compute who owns
+how much afterwards. The catch: the market recognizes three methods for how
+loan shares enter the round arithmetic — simplified: do the loans dilute
+everyone equally, only the founders, or are they treated like fresh money?
+Agreements almost never say which applies, and the choice moves the
+founders' stake by several percentage points. So we show all three side by
+side and never silently pick one. The arithmetic is circular (the price
+depends on the share count, which depends on the price); a small iterative
+solver handles that, much as Excel's iterative calculation would.
+
+**Conversion at the fixed maturity price.** For expired loans: balance
+divided by the fixed price gives the shares; fixed price times today's share
+count gives the implied company value — the valuation anchor the company
+itself works with.
+
+**Issuance stamp duty.** The Confederation levies 1 % on equity paid in
+beyond a one-time CHF 1 million exemption. Conversions count as
+contributions; together with the round, startups often cross the line
+exactly then. We compute the duty and show how much of the exemption is
+left.
+
+**Red-flag rubric** (from the Swiss Angel Investor Handbook): founders below
+50 % before Series A ("costly mistakes were made"), investors holding more
+than twice the founders, "dead equity" (departed founders or employees above
+10 %), and a cap table that does not say which definition of "fully diluted"
+it uses — something to settle before any valuation negotiation.
