@@ -403,14 +403,80 @@ always both stated, because they are rarely the same.
 
 **Conversion scenarios.** We play through a hypothetical round (valuation
 and size derived from the agreement or set by the user) and compute who owns
-how much afterwards. The catch: the market recognizes three methods for how
-loan shares enter the round arithmetic — simplified: do the loans dilute
-everyone equally, only the founders, or are they treated like fresh money?
-Agreements almost never say which applies, and the choice moves the
-founders' stake by several percentage points. So we show all three side by
-side and never silently pick one. The arithmetic is circular (the price
-depends on the share count, which depends on the price); a small iterative
-solver handles that, much as Excel's iterative calculation would.
+how much afterwards. The catch is best shown with numbers — the figures
+below come from the model itself (`lib/captable/model.py`), not from a hand
+calculation.
+
+*The setup.* A startup has 1,000,000 shares: founders 700,000 (70 %), a
+seed investor 300,000 (30 %). A convertible loan has an accrued balance of
+CHF 500,000 with a 20 % discount and no cap. Now the round comes:
+pre-money valuation CHF 8 million, new investors put in CHF 2 million.
+
+*The naive expectation.* New investors reckon 2 of 10 million post-money
+= 20 %. The loan converts too, at a discount — so it gets *more* shares
+per franc than the new investors. Those bonus shares must dilute somebody.
+And here is the problem: **the agreement almost never says whom.** The
+market has three established answers, each a legitimate reading of the
+same contract:
+
+| Method | Price/share | Loan converts at | Founders | Seed | Loan | New investors |
+|---|---|---|---|---|---|---|
+| Pre-money | 8.00 | 6.40 | **52.7 %** | 22.6 % | 5.9 % | 18.8 % |
+| Percentage-ownership | 7.375 | 5.90 | **51.6 %** | 22.1 % | 6.2 % | **20.0 %** |
+| Dollars-invested | 8.50 | 6.80 | **53.5 %** | 22.9 % | 5.6 % | 18.0 % |
+
+1. **Pre-money method.** The price is simply valuation divided by today's
+   shares: 8 million / 1 million = CHF 8.00. New investors get 250,000
+   shares for their money; the loan, at the discounted 6.40, about 78,000.
+   Everyone together now holds more shares than planned — and the new
+   investors land at 18.8 % instead of 20 %. **The loan shares dilute
+   everyone, including the new investors.** Founder-friendly.
+2. **Percentage-ownership method** (also called the post-money method).
+   The new investors say: "we negotiated 20 %, we get 20 % — whatever else
+   converts." For that to hold, the price per share must drop, here to
+   7.375, and the loan converts even more cheaply. **The entire dilution
+   from the loan is borne by the existing holders**, founders and seed
+   investor alike. Investor-friendly. This method is mathematically
+   *circular*: the price depends on the total share count after the round,
+   which depends on the loan shares, which depend on the price. The model
+   solves it with a fixed-point iteration — what Excel would do with
+   "iterative calculation" switched on.
+3. **Dollars-invested method.** The loan's CHF 500,000 is treated as round
+   money the company already received and that is part of the pre-money
+   value. Effect: the price per share *rises* to 8.50, because
+   (8 million + 0.5 million) is divided by the same million shares. **The
+   new investors bear the dilution from the loan money itself; the founders
+   bear only the discount bonus.** The best variant for founders.
+
+*What follows.* In this small example the founders' stake ranges from
+51.6 % to 53.5 % depending on the method — almost two percentage points.
+When the loan is large relative to the round, as it often is in practice,
+the spread widens considerably; the Swiss Angel Investor Handbook's worked
+example comes to 55 % versus 64 %. That is exactly the magnitude on which
+a founder majority hinges. Therefore:
+
+- **We never pick a method silently.** All three are shown side by side;
+  the spread *is* the finding. For a negotiation it means: the method
+  belongs in the term sheet, or investors and founders will argue over two
+  percentage points at closing.
+- **What enters the arithmetic:** the *accrued* balance (with interest and
+  the safe-harbor cap), not the nominal amount; with both a cap and a
+  discount, whichever price is better for the lender; a floor where one
+  exists; and a warning if the conversion price would fall below the
+  nominal value (then the conversion is legally impossible).
+- **The round parameters** — valuation and size — the model takes from the
+  agreement (largest cap as pre-money, the QEFR minimum as round size) and
+  states explicitly that these are assumptions, not predictions. With
+  `--pre-money` and `--investment` you set your own, for instance the
+  company's own valuation anchor from the fixed maturity price.
+- **The output per scenario:** price per share, conversion price per loan,
+  ownership of every holder (pools marked as reserved positions), the
+  founders' post-round stake — and a flag if the founders fall below 50 %
+  under *all three* methods.
+
+These scenarios describe conversion *in a round*. If maturity has passed
+and the agreement fixes a price, a different mechanism applies — the
+separate fixed-maturity-price block below.
 
 **Conversion at the fixed maturity price.** For expired loans: balance
 divided by the fixed price gives the shares; fixed price times today's share
