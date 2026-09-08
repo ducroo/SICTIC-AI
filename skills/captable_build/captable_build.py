@@ -3,20 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date
 from typing import Any
 
 from lib.captable.classification import CLA_CLASSES, classify_documents
 from lib.captable.cla_extraction import extract_cla
 from lib.captable.documents import load_parsed_documents
-from lib.captable.data import TOOL_VERSION, assemble_result
-from lib.captable.insights import build_insight, read_build_insight
+from lib.captable.data import assemble_result
+from lib.captable.insights import build_insight, configured_build_insight, read_build_insight
 from lib.captable.assessment import assess_cla, worst_severity
 from lib.captable.aggregation import aggregate_clas
 from lib.captable.esign import scan_esign_markers
 from lib.captable.validate import validate_captable
 from lib.datasets.paths import dataset_raw_path
-from lib.infrastructure.configuration import config_cache_key, load_repository_config
+from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile
 from lib.storage import get_storage
@@ -44,8 +43,7 @@ def _config(*keys: str) -> dict:
 
 
 async def _classification(dataset_name: str, *, fresh: bool = False) -> InsightFile:
-    config = _config("classification_prompt", "classification_response_schema", "classification_settings")
-    insight = build_insight(dataset_name, "classification", config_cache_key(TOOL_VERSION, config))
+    insight = configured_build_insight(dataset_name, "classification")
     if existing := _reusable(insight, fresh):
         read_build_insight(existing)
         return existing
@@ -53,8 +51,7 @@ async def _classification(dataset_name: str, *, fresh: bool = False) -> InsightF
 
 
 async def _loans(dataset_name: str, classification: InsightFile, *, fresh: bool = False) -> InsightFile:
-    config = _config("cla_extraction_prompt", "cla_extraction_base_schema", "cla_terms")
-    insight = build_insight(dataset_name, "loan-extraction", config_cache_key(TOOL_VERSION, config, classification.content()))
+    insight = configured_build_insight(dataset_name, "loan-extraction", classification)
     if existing := _reusable(insight, fresh):
         read_build_insight(existing)
         return existing
@@ -75,8 +72,7 @@ async def _loans(dataset_name: str, classification: InsightFile, *, fresh: bool 
 async def _tables(dataset_name: str, classification_insight: InsightFile, *, fresh: bool = False) -> InsightFile:
     from lib.captable.table_extraction import extract_captable, extract_pools, extract_register
 
-    config = _config("captable_extraction_prompt", "captable_extraction_response_schema", "register_extraction_prompt", "register_extraction_response_schema", "pool_extraction_prompt", "pool_extraction_response_schema")
-    insight = build_insight(dataset_name, "table-extraction", config_cache_key(TOOL_VERSION, config, classification_insight.content()))
+    insight = configured_build_insight(dataset_name, "table-extraction", classification_insight)
     if existing := _reusable(insight, fresh):
         read_build_insight(existing)
         return existing
@@ -304,8 +300,7 @@ async def captable_build(dataset_name: str, *, fresh: bool = False) -> list[Insi
     loans = await _loans(dataset_name, classification, fresh=fresh)
     tables = await _tables(dataset_name, classification, fresh=fresh)
     rules = _config("assessment_rules")["assessment_rules"]
-    insight.config_key = config_cache_key(TOOL_VERSION, rules, str(date.today()),
-        classification.content(), loans.content(), tables.content())
+    insight = configured_build_insight(dataset_name, "consolidated", classification, loans, tables)
     if existing := _reusable(insight, fresh):
         read_build_insight(existing)
         return [existing]

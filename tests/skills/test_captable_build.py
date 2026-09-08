@@ -374,12 +374,12 @@ def test_build_reuses_insights_only_while_fresh(mock_env, monkeypatch):
     asyncio.run(build_mod.build("freshco"))
     assert calls == {"classify": 2, "captable": 2}
 
-    real_config = build_mod.load_repository_config
+    real_config = insight_module.load_repository_config
     def edited_config(key):
         config = dict(real_config(key))
         config["classification_prompt"] += " Edited"
         return config
-    monkeypatch.setattr(build_mod, "load_repository_config", edited_config)
+    monkeypatch.setattr(insight_module, "load_repository_config", edited_config)
     asyncio.run(build_mod.build("freshco"))
     # Unchanged selected classification content does not invalidate extraction.
     assert calls == {"classify": 3, "captable": 2}

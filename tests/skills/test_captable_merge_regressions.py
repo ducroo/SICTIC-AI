@@ -129,7 +129,7 @@ def analysis_env(mock_env, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     snapshot = _snapshot()
     snapshot.update(dataset="analysis-co", as_of_date="2026-06-30", generated_at="2026-09-08", tool_version="test")
-    build_insight("analysis-co", "consolidated").save(json.dumps(snapshot))
+    InsightFile("analysis-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json").save(json.dumps(snapshot))
     generation = AsyncMock(return_value="Narrative")
     monkeypatch.setattr(module, "generate_markdown", generation)
     config = dict(module.load_repository_config("captable"))
@@ -149,7 +149,7 @@ async def test_analysis_reuses_and_invalidates(analysis_env, monkeypatch, change
     options = {}
     if change == "snapshot":
         snapshot["stakeholders"][0]["diluted_count"] += 1
-        build_insight("analysis-co", "consolidated").save(json.dumps(snapshot))
+        InsightFile("analysis-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json").save(json.dumps(snapshot))
     elif change == "prompt": config["narrative_prompt"] += " Edited"
     elif change == "settings": config["settings"]["departed_ownership_max_pct"] = 90
     elif change == "round": options["investment"] = 3_000_000

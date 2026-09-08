@@ -14,8 +14,9 @@ No subfolder, scenario JSON, HTML, dated snapshot or latest pointer is created.
 
 ## Workflow and dependencies
 
-Read the preferred consolidated `captable_build` JSON through shared selection.
-This is read-only selection, not a freshness guarantee: run `captable_build`
+Read reusable consolidated `captable_build` JSON through shared selection,
+checking the same dependency keys as the build. Manual consolidated data wins
+before dependency reads. Missing/stale generated data raises: run `captable_build`
 first to refresh source data. Direct analysis does not implicitly build or sync.
 Bulk registry key `captable` declares `captable-build` as its prerequisite.
 

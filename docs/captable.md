@@ -44,8 +44,9 @@ reconciliation, nominal floors and loan lifecycle questions. Register evidence i
 paired with the cap-table version nearest its source date. Generated output history
 is not used for comparisons.
 
-The report reads the preferred stored consolidated result without building or
-synchronizing. Run build first when current source data is needed; bulk refresh
+The report reads reusable consolidated data, checking the same dependency keys
+as the build, without building or synchronizing. Missing/stale generated inputs
+raise with an instruction to run build first; manual consolidated data wins. Run build first when current source data is needed; bulk refresh
 declares `captable-build` as the prerequisite of `captable`. Both canonical APIs
 return a flat `list[InsightFile]` (the build returns its consolidated insight).
 

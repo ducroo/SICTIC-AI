@@ -155,8 +155,7 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
         "storage/community/sictic-members/datasets/track-record/jane-doe.md",
         "Invested in fixture startups.",
     )
-    from lib.captable.insights import build_insight
-    build_insight(fixtures.startup, "consolidated").save(json.dumps(_captable_snapshot()))
+    InsightFile(fixtures.startup, "captable_build", "manual", identifier="consolidated", subdir=True, extension="json").save(json.dumps(_captable_snapshot()))
 
     yield fixtures
     reset_storage_singleton()
