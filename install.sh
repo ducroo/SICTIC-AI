@@ -473,13 +473,22 @@ ask_env() {
         else
             printf '%s: ' "$prompt"
         fi
-        IFS= read -r answer || answer=""
+        eof=0
+        IFS= read -r answer || eof=1
         if [ -z "$answer" ] && [ -n "$shown_default" ]; then
             answer="$shown_default"
         fi
         if [ -n "$answer" ] || [ "$required" -eq 0 ]; then
             env_set "$key" "$answer"
             break
+        fi
+        # No further input can arrive, so re-prompting would loop forever.
+        if [ "$eof" -eq 1 ]; then
+            echo >&2
+            echo "install.sh: $key is required, but stdin reached end of input." >&2
+            echo "Run the installer interactively, or use --non-interactive to keep" >&2
+            echo "the values already present in .env." >&2
+            exit 1
         fi
         echo "  $key is required."
     done
@@ -539,7 +548,7 @@ if [ "$INTERACTIVE" -eq 1 ]; then
     ask_env "OLLAMA_CONTEXT_LENGTH_MAX" "Ollama maximum context length" "$(env_get OLLAMA_CONTEXT_LENGTH_MAX || true)" 1 0
     ask_env "OLLAMA_NUM_PARALLEL" "Ollama parallel request limit" "$(env_get OLLAMA_NUM_PARALLEL || true)" 1 0
     ask_env "OLLAMA_MAX_LOADED_MODELS" "Ollama max loaded models" "$(env_get OLLAMA_MAX_LOADED_MODELS || true)" 1 0
-    ask_env "CLOUD_TPM_BUDGET" "Cloud rolling token-per-minute budget" "$(env_get CLOUD_TPM_BUDGET || true)" 1000000 0
+    ask_env "CLOUD_TPM_BUDGET" "Cloud rolling token-per-minute budget" "1000000" 1 0
     ask_env "OLLAMA_KV_CACHE_TYPE" "Ollama KV cache type" "$(env_get OLLAMA_KV_CACHE_TYPE || true)" 0 0
     ask_env "OLLAMA_FLASH_ATTENTION" "Ollama flash attention flag" "$(env_get OLLAMA_FLASH_ATTENTION || true)" 0 0
     ask_env "GEMINI_API_KEY" "Gemini API key (blank if unused)" "$(env_get GEMINI_API_KEY || true)" 0 1
