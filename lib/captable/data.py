@@ -205,19 +205,26 @@ def render_data_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "## Convertible loans",
         "",
-        "| Document | Status | Lenders | Currency | Principal | Maturity | Discount |"
+        "| Document | Status | Lenders | Currency | Principal | Coupon (%) | Maturity | Discount |"
         " Cap | Comments |",
-        "|---|---|---|---|---:|---|---:|---:|---|",
+        "|---|---|---|---|---:|---:|---|---:|---:|---|",
     ]
     for cla in snapshot.get("convertibles", []):
         def val(field):
             entry = cla.get(field)
             return entry.get("value") if isinstance(entry, dict) else entry
+        lender_names = []
+        for lender in cla.get("lenders", []):
+            name = lender.get("name")
+            if isinstance(name, dict):
+                name = name.get("value")
+            lender_names.append(_fmt(name))
         lines.append(
             f"| {_fmt(cla.get('document'))} | {_fmt(cla.get('status'))} | "
-            f"{len(cla.get('lenders', []))} | "
+            f"{'; '.join(lender_names)} | "
             f"{_fmt(val('principal_currency') or val('currency'))} | "
             f"{_fmt(val('principal_total'))} | "
+            f"{_fmt(val('interest_rate_pct'))} | "
             f"{_fmt(val('maturity_date') or '')} | "
             f"{_fmt(val('discount_pct'))} | {_fmt(val('valuation_cap'))} | "
             + "<br>".join(_fmt(line) for line in (cla.get("comments") or "").split("\n"))

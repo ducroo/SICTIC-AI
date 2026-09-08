@@ -9,7 +9,7 @@ from lib.captable.model import Note, convert_in_round, loan_balance, stamp_duty
 from lib.captable.rubric import apply_rubric, ownership_by_role, founder_ownership_pct
 from lib.captable.data import data_fingerprint, TOOL_VERSION
 from lib.captable.insights import select_consolidated, read_build_insight
-from lib.captable.render_markdown import render_report
+from lib.captable.render_markdown import REPORT_VERSION, render_report
 from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.infrastructure.configuration import load_repository_config, config_cache_key
 from lib.infrastructure.logging import get_logger
@@ -605,7 +605,7 @@ async def captable(
         )
     }
 
-    insight.config_key = config_cache_key(TOOL_VERSION, config, source.content(), computed)
+    insight.config_key = config_cache_key(TOOL_VERSION, REPORT_VERSION, config, source.content(), computed)
     if reusable := insight.find(selection="reusable"):
         return [reusable]
     narrative = await generate_markdown(

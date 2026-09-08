@@ -128,3 +128,15 @@ def test_markdown_preserves_literal_source_text_and_maturity_findings():
     assert "Name \\| with separator" in output
     assert "expired_check_for_conversion" in output
     assert "not_applicable" in output
+
+
+def test_cla_table_retains_lender_names_and_coupon():
+    data = _snapshot()
+    data["convertibles"][0]["lenders"] = [
+        {"name": "Anna Example"}, {"name": "Example | Holding AG"}]
+    data["convertibles"][0]["interest_rate_pct"] = {"value": 7.25}
+    output = render_report(data, _computed(data), "Notes")
+    assert "| Coupon (%) |" in output
+    row = next(line for line in output.splitlines() if line.startswith("| cla.md | executed |"))
+    assert "Anna Example; Example \\| Holding AG" in row
+    assert "| 250,000 | 7.25 |" in row

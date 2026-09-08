@@ -5,6 +5,8 @@ from html import escape
 
 from lib.captable.data import render_data_markdown
 
+REPORT_VERSION = "2"
+
 
 def _cell(value) -> str:
     if value is None:
