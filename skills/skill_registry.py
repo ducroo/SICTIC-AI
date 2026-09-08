@@ -1,7 +1,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from skills.captable_analysis.captable_analysis import captable_analysis
+from skills.captable.captable import captable
 from skills.captable_build.captable_build import captable_build
 from skills.dd_checks.dd_checks import dd_checks
 from skills.dd_priorities.dd_priorities import dd_priorities
@@ -76,8 +76,8 @@ SKILL_REGISTRY = {
         func=captable_build,
         domains=frozenset({"startups"}),
     ),
-    "captable-analysis": SkillSpec(
-        func=captable_analysis,
+    "captable": SkillSpec(
+        func=captable,
         domains=frozenset({"startups"}),
         depends_on=("captable-build",),
     ),

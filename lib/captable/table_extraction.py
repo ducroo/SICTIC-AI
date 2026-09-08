@@ -129,7 +129,7 @@ async def extract_captable(
     dataset_name: str, filename: str, document_text: str
 ) -> dict[str, Any]:
     """Extract one current-cap-table document."""
-    config = load_repository_config("captable")
+    config = load_repository_config("captable_build")
     prompt = (
         f"{config['captable_extraction_prompt'].strip()}\n\n"
         f"### DOCUMENT: {filename}\n\n{document_text}"
@@ -150,7 +150,7 @@ async def extract_register(
     dataset_name: str, filename: str, document_text: str
 ) -> dict[str, Any]:
     """Extract current holdings from one share-register document."""
-    config = load_repository_config("captable")
+    config = load_repository_config("captable_build")
     prompt = (
         f"{config['register_extraction_prompt'].strip()}\n\n"
         f"### DOCUMENT: {filename}\n\n{document_text}"
@@ -170,7 +170,7 @@ async def extract_pools(
     dataset_name: str, filename: str, document_text: str
 ) -> dict[str, Any]:
     """Extract pool figures from one ESOP/PSOP overview document."""
-    config = load_repository_config("captable")
+    config = load_repository_config("captable_build")
     prompt = (
         f"{config['pool_extraction_prompt'].strip()}\n\n"
         f"### DOCUMENT: {filename}\n\n{document_text}"

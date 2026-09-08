@@ -10,7 +10,6 @@ from skills.captable_build.captable_build import (
     captable_build,
     classify,
     extract,
-    snapshot,
     table,
 )
 
@@ -95,28 +94,13 @@ def table_cmd(
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
-@app.command("snapshot")
-def snapshot_cmd(
-    dataset_name: str = typer.Option(
-        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
-    ),
-):
-    """Validate and store the versioned snapshot (stages 6-7)."""
-    result = run_command(
-        lambda: snapshot(dataset_name),
-        logger=logger,
-        error_prefix="Snapshot failed",
-    )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
-
-
 @app.command("build")
 def build_cmd(
     dataset_name: str = typer.Option(
         ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
     fresh: bool = typer.Option(
-        False, "--fresh", help="Discard stored work products first."
+        False, "--fresh", help="Regenerate generated JSON insights; preserve manual overrides."
     ),
     model: str = typer.Option(
         None,

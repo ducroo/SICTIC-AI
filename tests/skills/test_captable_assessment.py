@@ -18,7 +18,7 @@ RULES = json.loads(
     (
         Path(__file__).resolve().parents[2]
         / "config"
-        / "captable"
+        / "captable_build"
         / "assessment_rules.json"
     ).read_text(encoding="utf-8")
 )

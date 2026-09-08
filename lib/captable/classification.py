@@ -103,7 +103,7 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
     Returns ``{"dataset": ..., "documents": [...]}`` with one entry per
     source document, ordered like the model response.
     """
-    config = load_repository_config("captable")
+    config = load_repository_config("captable_build")
     settings = config["classification_settings"]
     documents = load_parsed_documents(dataset_name)
 

@@ -1,4 +1,4 @@
-"""Deterministic conversion and dilution engine for captable_analysis.
+"""Deterministic conversion and dilution engine for captable.
 
 Pure Python, no LLM. Formulas follow the published references cited in the
 design doc: SECA conversion-price definition (lower of cap-derived and

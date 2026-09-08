@@ -1,198 +1,87 @@
-# Cap table & convertible loan analysis (issue #17)
+# Cap table and convertible loan analysis
 
-Two skills give reviewers a structured first-pass on a startup's ownership
-and outstanding Convertible Loan Agreements (CLAs):
+`captable_build` extracts and validates source facts; `captable` computes
+conversion scenarios and produces a Markdown report. The model extracts quoted
+facts and writes commentary. Python performs calculations and renders numeric
+tables. Quote verification supports review; it cannot prove semantic correctness.
 
-- **`captable_build`** extracts and validates the facts from a startup's
-  data room and stores a versioned snapshot.
-- **`captable_analysis`** computes conversion scenarios, applies a red-flag
-  rubric, and writes a short narrative over the computed numbers.
+## Artifacts and reuse
 
-The goal is not to replace legal or financial diligence: outputs highlight
-what is present, what is missing, and what needs expert follow-up.
+A complete generated run has five logical artifacts per model:
 
-The reasoning behind the design — the SECA CLA anatomy, the Swiss
-corporate-law and tax rules baked into the checks, the conversion-math
-foundations, and each design decision with its why — is documented in
-[captable-design.md](captable-design.md).
-A plain-language, term-by-term explanation of what every CLA and cap-table check is
-and why it matters — for non-lawyers — is in
-[captable-checks.md](captable-checks.md).
+| Skill | Artifact | Format | Directory |
+|---|---|---|---|
+| `captable_build` | classification | JSON | `insights/captable-build/` |
+| `captable_build` | loan-extraction | JSON | `insights/captable-build/` |
+| `captable_build` | table-extraction | JSON | `insights/captable-build/` |
+| `captable_build` | consolidated | JSON | `insights/captable-build/` |
+| `captable` | final report | Markdown | `insights/` |
 
-## Division of labor (the core design rule)
+`InsightFile` supplies filenames, model suffixes, manual precedence and freshness
+metadata. Generated reuse requires matching indexed startup revisions and effective
+configuration. Extraction depends on classification content; consolidation depends
+on all selected inputs and its evaluation date. The report depends on consolidated
+content, scenario inputs, analysis date and narrative configuration. Manual outputs
+win; editing a manual intermediate invalidates generated dependents. `--fresh`
+bypasses generated build reuse while preserving manual overrides.
 
-The LLM **finds, classifies, and extracts** values — always with a verbatim
-source quote that is machine-verified against the parsed document text.
-**Every calculation and consistency judgment is plain Python**: validation
-checks, conversion mathematics, dilution, thresholds. No number a reviewer
-relies on is ever LLM-computed.
+There are no dated output snapshots, latest pointers, HTML, scenario JSON or
+separate assessment/aggregation caches. Source dates and extracted cap-table
+versions remain data within JSON. Old stored files are untouched and are not
+selected as inputs. Shared freshness metadata is additional infrastructure, not
+another skill artifact.
 
-## Pipeline (`captable_build`, stages 1–7)
+## Build and report
 
-```
-data room ──1 classify──2 extract CLAs──3 assess──4 aggregate──┐
-              │                                                │
-              └─5 extract cap tables / register / pools──6 validate──7 snapshot
-```
+Build classifies parsed documents, extracts convertible loans and cap-table,
+register and pool evidence, then reconciles and consolidates them. Required
+extraction failures raise without saving partial results. The term checklist and
+assessment settings live in `config/captable_build/`. Assessment, aggregation and
+signature scanning are recomputed when consolidation needs rebuilding.
 
-1. **Classify** every parsed document into 15 classes (current cap table vs
-   forecast/scenario model, executed CLA vs term sheet, share register,
-   articles, ESOP/PSOP plan, tax ruling, …). Runs in parallel chunks of 8
-   documents (a Gemini structured-output limit).
-2. **Extract CLA terms** per document against a SECA-derived term list
-   that is itself a **team-editable checklist**
-   (`config/captable/cla_terms.md` — the dd_checks pattern: schema,
-   per-term guidance, quote verification, and missing-terms handling all
-   follow the checklist; adding or refining terms needs no code change,
-   and code-consumed fields are guarded at load time). The terms:
-   lenders (multi-lender agreements supported, per-lender amounts
-   apportioned from the total when unstated — disclosed), principal,
-   interest (mode, rate, day-count, compounding, and the safe-harbor rate
-   itself when the contract quantifies it), maturity, conversion
-   triggers (QEFR with minimum raise and its new-investor minimum, change
-   of control incl. repayment multiple, maturity incl. a fixed maturity
-   conversion price where the price definition varies by trigger),
-   cap / discount / floor, denominator basis,
-   subordination and its scope, MFN, pro-rata rights, conversion capital
-   sources, consents, SHA accession. Every value carries a verified quote;
-   absent terms land in `missing_terms` with the sections scanned.
-3. **Assess** each CLA deterministically against configurable
-   market-standard bands (`config/captable/assessment_rules.json`):
-   discount inside/outside the 5–30% band, above the 33.33% tax
-   reclassification threshold (verify with counsel — the threshold is
-   config, not code), subordination scope (`principal_only` = severe),
-   missing cap or maturity, conversion-capital enforceability, interest
-   above the safe-harbor reference. Three states per item plus a severity.
-4. **Aggregate** across CLAs: identical-terms grouping (dates/currency
-   normalized) for the 10/20 non-bank withholding-tax rules — a lender
-   counts once (fuzzy name identity: "Anna Beispiel" ≡ "Anna Barbara Beispiel") while
-   each loan counts toward outstanding principal; term sheets are
-   superseded by executed CLAs of the same lender with amount discrepancies
-   emitted as questions; expired maturities are flagged
-   "expired — check for conversion documents", never silently treated as
-   fine; execution claims are corroborated against e-signature markers in
-   the raw PDF streams (non-PDF sources are `not_applicable`, not
-   failures).
-5. **Extract** every cap-table version (group-aware holder rows,
-   treasury/pool semantics, row-completeness enforced against the table's
-   own totals), the share register (current holdings anchored on the
-   participation column), and ESOP/PSOP pool overviews.
-6. **Validate in code**: per-class issued totals; the diluted equation
-   (diluted = issued − treasury + option/pool deltas); a holder-level
-   diluted row-sum; register reconciliation **against the cap-table version
-   nearest the register's own date** (cross-dated comparisons are
-   downgraded and disclosed, since a difference may be a legitimate
-   transfer in between); pool cross-document consistency (paired by pool
-   identity, one-sided coverage tolerated); nominal-value floor
-   (art. 624 CO); CLA-lender-is-shareholder lifecycle checks; and
-   cross-snapshot consistency (shrinking classes/holders without evidenced
-   events).
-7. **Snapshot**: `insights/captable/snapshots/<as_of>.json` (one per
-   evidenced state, all kept), `latest.json` (never overwritten by an
-   older rebuild), a table-only `captable.md`, and a visual one-pager
-   `captable.html` rendered deterministically from the snapshot (see
-   below). As-of dates are normalized to ISO in code; unparseable date
-   strings never win.
+Validation covers issued and diluted totals, holder row sums, register and pool
+reconciliation, nominal floors and loan lifecycle questions. Register evidence is
+paired with the cap-table version nearest its source date. Generated output history
+is not used for comparisons.
 
-## Analysis (`captable_analysis`)
+The report reads reusable consolidated data, checking the same dependency keys
+as the build, without building or synchronizing. Missing/stale generated inputs
+raise with an instruction to run build first; manual consolidated data wins. Run build first when current source data is needed; bulk refresh
+declares `captable-build` as the prerequisite of `captable`. Both canonical APIs
+return a flat `list[InsightFile]` (the build returns its consolidated insight).
 
-Reads a snapshot and computes, in pure Python
-(`lib/captable/model.py`): loan balances accrued under four day-count
-conventions with simple/annual compounding (safe-harbor-capped loans
-accrue at the documented safe-harbor rate, not the stated ceiling — an
-unquantified safe-harbor cap falls back to the ceiling with a loud
-overstatement disclosure); a `maturity_conversion_at_fixed_price` block
-whenever a CLA fixes a per-share price for post-maturity conversion
-(the discount/cap scenario prices apply to round conversions only, and
-the fixed price times the current fully-diluted count reveals the
-company's own value anchor); SECA-style conversion pricing
-(lower of cap-derived and discounted price, floors, nominal warnings); and
-a hypothetical round converted under **all three market methods side by
-side** — pre-money, percentage-ownership (fixed-point solver for the
-circularity), dollars-invested — because CLAs rarely fix the method and the
-choice can move founder ownership by several points. Loans keep their own
-currency; scenarios are expressed in one currency and a loan in another
-currency is converted only at a user-supplied `--fx-rate` — without one
-the scenarios are refused with a `mixed_currencies` flag rather than
-summed. Adds the CHF 1M
-stamp-duty exemption tracking (CHF scenarios only), per-scenario `founders_post_round_pct`, and
-the handbook red-flag rubric (scoped to the snapshot date). The LLM writes
-a narrative constrained to the computed JSON.
-
-## Visual one-pager (`captable_analysis render`)
-
-The division-of-labor rule extends to the last mile: the HTML page a
-reviewer actually looks at is rendered **in pure Python from the stored
-snapshot** — no LLM ever re-types a number into the visual. Every build
-writes `insights/captable/captable.html`; `render` re-renders on demand
-(and includes the conversion-scenario table when the stored analysis was
-computed over the same snapshot state). Ownership percentages use the
-same denominator as the rubric, so chart and analysis can never disagree.
-Ad-hoc visual exploration in a chat client stays fine — but the standard
-deliverable is this deterministic page.
-
-## Semantics contracts worth knowing
-
-- **`missing_terms`**: for presence-type booleans, `false` is an
-  evidence-backed absence claim — it appears in `missing_terms` with the
-  sections scanned. Conclusion and evidence, not a contradiction.
-- **Quotes** are matched against an alphanumeric projection of the parsed
-  text (robust to OCR spacing, markdown table pipes, and model ellipses —
-  each ellipsis-separated fragment must verify).
-- **Snapshots** are versioned by evidence date, not by generating model —
-  a deliberate deviation from the `InsightFile` convention, which the
-  model-dependent analysis narrative does use.
+The report computes accrued balances, fixed maturity conversions, pre-money,
+percentage-ownership and dollars-invested round scenarios, stamp duty and rubric
+findings. Each loan retains its stated denominator basis and currency. Missing FX
+rates block combined scenarios; hypothetical round defaults and unknown inputs
+are disclosed. Interest accrues to the analysis date, separately from source dates.
+Missing ownership counts or founder-role information produces an
+`insufficient_evidence` finding, not a zero founder percentage. Explicitly
+recorded zero founder holdings remain assessable.
+Numeric tables are rendered in Python; `config/captable/narrative_prompt.md` controls
+explanatory commentary.
 
 ## Usage
 
-Via the command harness (what an AI agent uses):
+Start with a synchronized startup dataset, then run:
 
 ```bash
-conda run -n sictic-env python -m skills.harness /captable_build <startup> [--fresh]
-conda run -n sictic-env python -m skills.harness /captable_analysis <startup> \
-    [--as-of DATE] [--pre-money N] [--investment N] [--fx-rate CUR=RATE ...] [--currency CHF]
+conda run -n sictic-env python -m skills.captable_build build --startup example
+conda run -n sictic-env python -m skills.captable run --startup example
 ```
 
-`/captable_build` returns the table-only snapshot markdown, `/captable_analysis`
-the narrative; both are also registered for `bulk_refresh` (as
-`captable-build` / `captable-analysis`). The stage-by-stage CLI and the HTML
-render:
+Harness commands are `/captable_build` and `/captable`. The report accepts
+`--pre-money`, `--investment`, `--fx-rate CUR=RATE` and `--currency`.
+`--dataset` remains a selector alias. The old `captable_analysis run` CLI and
+`/captable_analysis` temporarily forward to `captable`; there is no `render`,
+`snapshot` or `--as-of` command/option.
 
-```bash
-python -m skills.captable_build build --startup <startup> [--fresh]
-python -m skills.captable_analysis run --startup <startup> \
-    [--as-of DATE] [--pre-money N] [--investment N] [--fx-rate CUR=RATE ...]
-python -m skills.captable_analysis render --startup <startup> [--as-of DATE]
-```
-
-Stage-by-stage commands and details: `skills/captable_build/SKILL.md` and
-`skills/captable_analysis/SKILL.md`.
-
-## Requirements
-
-- The startup dataset must be synced (parsed Markdown present); no Qdrant
-  queries are needed by these two skills.
-- The configured cloud LLM (Gemini) with `LLM_API_KEY`, and
-  **`CLOUD_TPM_BUDGET` set in the local `.env`** (see `.env-template`) —
-  without it the scheduler's rolling token budget is disabled and a full
-  build can hit the provider's per-minute limits; transient 429/503s are
-  waited out since PR #60, but pacing still matters for cost and speed.
-- Expect a fresh build of a real data room to take a few minutes and cost
-  roughly CHF 0.5–1.5 (see below).
-
-## Testing & development cost
-
-`tests/fixtures/captable/` is a synthetic data room ("Fixture Robotics
-AG") with a ground-truth answer key, two dated cap-table versions (for the
-cross-snapshot checks), deliberately absent CLA terms (for the
-missing-terms recall property), and a planted share-transfer anomaly.
-A full pipeline smoke run against it on
-`--model gemini/gemini-3.5-flash-lite` costs about one cent; a real data
-room on the default model costs roughly CHF 0.5–1.5 once (work products
-are cached and reused while their freshness stamp — parsed documents,
-captable config, model, tool version — still matches; a change to any of
-them or `--fresh` re-runs the LLM stages). Lite-model output is
-measurably worse — never use the override for real due-diligence output.
+See the [build skill](../skills/captable_build/SKILL.md) for stage adapters and
+[report skill](../skills/captable/SKILL.md) for input and reuse contracts.
+The [design](captable-design.md) and [checks](captable-checks.md) explain the
+financial model. Synthetic source fixtures and ground truth are under
+`tests/fixtures/captable/`; pytest covers the model and artifact lifecycle without
+live model calls.
 
 ## Known limitations / follow-ups
 
@@ -218,19 +107,32 @@ measurably worse — never use the override for real due-diligence output.
   classes have been stable in testing, and an eval suite over the fixture
   answer key is the planned guardrail.
 
-## Merge-review corrections
+## Report settings
 
-Version 0.4 requires complete parsed-document coverage and successful extractions
-before a build can publish a snapshot. Failed work products are retried, and old
-work is invalidated. Table/register/pool extraction verifies row quotes, names and
-numeric values in addition to totals; verification supports review, not a proof
-of the model's semantic interpretation. Rebuild existing snapshots to apply this
-stronger extraction contract.
+`config/captable/settings.json` contains the adjustable report assumptions:
 
-The dollars-invested method now solves pricing at fixed post-money (pre-money +
-new money + converting balances); each note's cap/floor uses its extracted share
-basis. Managed build and analysis entry points follow `list[InsightFile]`, manual
-precedence and shared freshness rules. The dated snapshot store and structured
-stage adapters retain their paths and roles; see the two skill documents for
-cache inputs and adapter contracts. Canonical CLI selectors use `--startup`, with
-`--dataset` retained as an alias.
+| Setting | Default | Meaning |
+|---|---:|---|
+| `founder_majority_min_pct` | 50 | Founder warning threshold, before and after the hypothetical round. |
+| `investor_dominance_ratio` | 2 | Investor ownership relative to founder ownership. |
+| `departed_ownership_max_pct` | 10 | Departed-holder warning threshold. |
+| `fallback_pre_money_invested_multiplier` | 2 | Valuation multiplier when no CLA cap or explicit valuation is available. |
+| `fallback_pre_money_minimum` | 1000000 | Minimum fallback valuation in the scenario currency. |
+| `fallback_investment_pct` | 20 | Round size as a percentage of valuation when no QEFR minimum or explicit amount is available. |
+
+These are required configuration values, without hardcoded fallback copies.
+Explicit round inputs and extracted CLA caps/QEFR minima retain their precedence.
+Settings changes invalidate generated reports through shared freshness checks;
+build extraction artifacts and manual report precedence are unaffected.
+
+## CLA comments
+
+Each extracted CLA has a nullable `comments` string containing verbatim source
+passages for unusual valuation/conversion terms. It is carried unchanged into
+consolidated data and the final CLA table's Comments column. Multiple passages
+retain line breaks; Markdown characters are escaped for display. Missing/null
+comments, including older manual inputs without this field, display as empty.
+These quotations are for human review, have no additional automated evidence
+review, and do not change the calculations. The report explicitly notes that
+quoted provisions may require manual adjustment. The changed extraction
+configuration invalidates generated loan extractions through shared freshness.

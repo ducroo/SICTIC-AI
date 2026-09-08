@@ -1,26 +1,20 @@
-"""Stage 7: assemble and render the versioned cap-table snapshot.
-
-Versioning semantics per design §2.3: one snapshot per evidenced as-of
-date under ``insights/captable/snapshots/``, all kept forever, plus
-``latest.json`` and a table-only ``captable.md`` (narrative belongs to
-``captable_analysis``, not here).
-"""
-
+"""Consolidated capitalization data, source dates and deterministic tables."""
 from __future__ import annotations
 
+from html import escape
 import hashlib
 import json
 import re
 from datetime import datetime, timezone
 from typing import Any
 
-TOOL_VERSION = "captable_build/0.4"
+TOOL_VERSION = "captable_build/0.5"
 
 
-def snapshot_fingerprint(snapshot: dict[str, Any]) -> str:
-    """Content hash of a snapshot, ignoring only the generation timestamp.
+def data_fingerprint(snapshot: dict[str, Any]) -> str:
+    """Content hash of consolidated data, ignoring only the generation timestamp.
 
-    Two snapshots with the same as-of date can describe different states
+    Two results with the same source date can describe different states
     (a corrected rebuild); derived artifacts such as the computed scenarios
     must be matched on this fingerprint, never on the date alone. A
     bit-identical rebuild keeps the fingerprint (and its scenarios) valid.
@@ -111,7 +105,7 @@ def resolve_as_of(
     return today, assumptions
 
 
-def assemble_snapshot(
+def assemble_result(
     dataset: str,
     *,
     classification: dict,
@@ -176,16 +170,16 @@ def _fmt(value: Any) -> str:
         return f"{int(value):,}"
     if isinstance(value, (int, float)):
         return f"{value:,}"
-    return str(value)
+    return escape(str(value)).replace("|", "\\|").replace("\n", " ")
 
 
-def render_markdown(snapshot: dict[str, Any]) -> str:
-    """Table-only human summary; narrative belongs to captable_analysis."""
+def render_data_markdown(snapshot: dict[str, Any]) -> str:
+    """Table-only human summary; narrative belongs to captable."""
     lines = [
-        f"# Cap table snapshot — {snapshot['dataset']}",
+        f"# Cap table — {_fmt(snapshot['dataset'])}",
         "",
-        f"*As of {snapshot['as_of_date']} · generated "
-        f"{snapshot['generated_at'][:10]} · {snapshot['tool_version']}*",
+        f"*As of {_fmt(snapshot['as_of_date'])} · generated "
+        f"{snapshot['generated_at'][:10]} · {_fmt(snapshot['tool_version'])}*",
         "",
         "## Ownership (extracted holders)",
         "",
@@ -195,15 +189,15 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
     for s in snapshot.get("stakeholders", []):
         issued = sum(h.get("count") or 0 for h in s.get("holdings", []))
         lines.append(
-            f"| {s.get('name')} | {s.get('group') or ''} | "
-            f"{s.get('role')} | {_fmt(issued)} | "
+            f"| {_fmt(s.get('name'))} | {_fmt(s.get('group') or '')} | "
+            f"{_fmt(s.get('role'))} | {_fmt(issued)} | "
             f"{_fmt(s.get('diluted_count'))} |"
         )
     totals = snapshot.get("totals") or {}
     lines += ["", "## Totals", "", "| Class | Issued |", "|---|---:|"]
     for t in totals.get("by_class", []):
         lines.append(
-            f"| {t.get('class_id')} | {_fmt(t.get('issued_total'))} |"
+            f"| {_fmt(t.get('class_id'))} | {_fmt(t.get('issued_total'))} |"
         )
     lines.append(f"| fully diluted | {_fmt(totals.get('diluted_total'))} |")
 
@@ -211,21 +205,34 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "",
         "## Convertible loans",
         "",
-        "| Document | Status | Lenders | Principal | Maturity | Discount |"
-        " Cap |",
-        "|---|---|---|---:|---|---:|---:|",
+        "| Document | Status | Lenders | Currency | Principal | Coupon (%) | Maturity | Discount |"
+        " Cap | Comments |",
+        "|---|---|---|---|---:|---:|---|---:|---:|---|",
     ]
     for cla in snapshot.get("convertibles", []):
         def val(field):
             entry = cla.get(field)
             return entry.get("value") if isinstance(entry, dict) else entry
+        lender_names = []
+        for lender in cla.get("lenders", []):
+            name = lender.get("name")
+            if isinstance(name, dict):
+                name = name.get("value")
+            lender_names.append(_fmt(name))
         lines.append(
-            f"| {cla.get('document')} | {cla.get('status')} | "
-            f"{len(cla.get('lenders', []))} | "
+            f"| {_fmt(cla.get('document'))} | {_fmt(cla.get('status'))} | "
+            f"{'; '.join(lender_names)} | "
+            f"{_fmt(val('principal_currency') or val('currency'))} | "
             f"{_fmt(val('principal_total'))} | "
-            f"{val('maturity_date') or ''} | "
-            f"{_fmt(val('discount_pct'))} | {_fmt(val('valuation_cap'))} |"
+            f"{_fmt(val('interest_rate_pct'))} | "
+            f"{_fmt(val('maturity_date') or '')} | "
+            f"{_fmt(val('discount_pct'))} | {_fmt(val('valuation_cap'))} | "
+            + "<br>".join(_fmt(line) for line in (cla.get("comments") or "").split("\n"))
+            + " |"
         )
+
+    lines += ["", "Quoted provisions in Comments are not incorporated into the "
+              "calculations and may require manual adjustment."]
 
     aggregation = snapshot.get("aggregation") or {}
     ten_twenty = aggregation.get("ten_twenty_rule") or {}
@@ -262,22 +269,22 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
               "| Document | Worst severity |", "|---|---|"]
     for a in snapshot.get("assessment", []):
         lines.append(
-            f"| {a.get('document')} | {a.get('worst_severity')} |"
+            f"| {_fmt(a.get('document'))} | {_fmt(a.get('worst_severity'))} |"
         )
 
     lines += ["", "## Validation", "",
               "| Check | Status | Severity | Detail |", "|---|---|---|---|"]
     for v in snapshot.get("validation", []):
         lines.append(
-            f"| {v.get('check')} | {v.get('status')} | {v.get('severity')} "
-            f"| {v.get('detail')} |"
+            f"| {_fmt(v.get('check'))} | {_fmt(v.get('status'))} | {_fmt(v.get('severity'))} "
+            f"| {_fmt(v.get('detail'))} |"
         )
 
     lines += ["", "## Diligence questions", ""]
     for q in snapshot.get("diligence_questions", []):
-        lines.append(f"- {q}")
+        lines.append(f"- {_fmt(q)}")
     lines += ["", "## Assumptions", ""]
     for a in snapshot.get("assumptions", []):
-        lines.append(f"- {a}")
+        lines.append(f"- {_fmt(a)}")
     lines.append("")
     return "\n".join(lines)

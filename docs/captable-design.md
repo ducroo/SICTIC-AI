@@ -36,7 +36,7 @@ Following the repo pattern — what a skill looks for lives in **config**,
 like the `config/dd_checks/checklists/*.md` and
 `config/sha_review/checklists/*.md` files that drive those skills — the
 CLA term list is itself an editable checklist:
-**`config/captable/cla_terms.md`**. Each `### field (type)` entry there
+**`config/captable_build/cla_terms.md`**. Each `### field (type)` entry there
 becomes one field of the extraction schema, its body text becomes the
 model guidance for that term, and every value field carries a
 machine-verified verbatim quote. **Adding a term or refining guidance is
@@ -112,7 +112,7 @@ feeds cross-document consistency.
 - **Discount above 33.33%** reportedly reclassifies the CLA as
   "non-classic" (discount portion income-taxable, withholding
   complications). **Threshold unverified with tax counsel** — it lives
-  in `config/captable/assessment_rules.json`, not code, so it can be
+  in `config/captable_build/assessment_rules.json`, not code, so it can be
   corrected without a release. A second **verify-with-counsel** item:
   the claimed tax requirement that conversion shares be newly issued
   rather than treasury shares — recorded here, not enforced anywhere.
@@ -177,27 +177,21 @@ is ours, validated against published worked examples.
   extracts values — every value with a machine-verified verbatim quote
   (the hallucination guard). All arithmetic and consistency judgment is
   plain Python. No number a reviewer relies on is ever LLM-computed;
-  the HTML renderer extends this to the last mile.
+  the Markdown renderer extends this to the final numeric tables.
 - **Anti-laziness evidence contract** (the CUAD/ContractEval lesson —
   the dominant LLM contract-extraction failure is falsely answering "no
   such clause"): absence claims are only accepted with evidence. A
   presence-boolean `false` states the conclusion; the `missing_terms`
   entry carries the sections scanned as its evidence. The synthetic
   fixture keeps two deliberately absent terms as a recall check.
-- **OCF-inspired snapshot, not full OCF**: event-sourcing
-  (issuances/transfers as event streams) is right for systems of record
-  and too heavy for first-pass DD. The snapshot keeps OCF *vocabulary*
-  (stakeholders, classes, convertibles, triggers) for a later migration
-  path, and the cross-snapshot checks provide event-style validation
-  without event sourcing (share counts only grow unless a
-  split/cancellation is evidenced; shrinking holders need a documented
-  transfer).
-- **Versioning**: document versions (same state, multiple files — latest
-  wins, others superseded) are distinct from cap-table states over time
-  (each its own dated snapshot, all kept forever). Snapshots are
-  versioned by evidence date, not by generating model — a deliberate
-  deviation from the `InsightFile` convention, which the model-dependent
-  analysis narrative does use.
+- **OCF-inspired consolidated data**: retain stakeholders, classes,
+  convertibles and triggers without implementing an event-sourced system.
+  Source versions and dates remain evidence within the extracted JSON.
+- **Artifact lifecycle**: four JSON insights under `insights/captable-build/`
+  and one final Markdown insight directly under `insights/`, all managed by
+  `InsightFile`. Manual overrides win; generated reuse checks indexed source
+  revisions, effective configuration and selected dependency content. No dated
+  output history or latest pointer is maintained.
 - **Term sheets are excluded from outstanding totals** — extracted and
   kept distinct, superseded by executed CLAs of the same lender, with
   amount discrepancies emitted as questions.

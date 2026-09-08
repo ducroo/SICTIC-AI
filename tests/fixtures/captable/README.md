@@ -27,7 +27,7 @@ known answer key (`ground_truth.json`). Three purposes:
    variant ("Anna Barbara Beispiel" vs "Anna Beispiel") for name-matching
    reconciliation.
 
-3. **Versioning and cross-snapshot checks**: two dated cap-table versions
+3. **Source versions and reconciliation**: two dated cap-table versions
    (2026-03-31 and 2026-06-30). The March→June bridge is fully
    reconcilable — Helvetia Growth joins with 100,000 new preferred A,
    Bruno transfers 50,000 common to Emil Weg (deliberately WITHOUT a

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lib.captable.snapshot import render_markdown, resolve_as_of
+from lib.captable.data import render_data_markdown as render_markdown, resolve_as_of
 from lib.captable.table_extraction import _review_captable
 from lib.captable.validate import (
     check_cross_snapshot,
@@ -219,7 +219,7 @@ def test_names_match_handles_middle_names() -> None:
 
 
 def test_normalize_iso_date_variants() -> None:
-    from lib.captable.snapshot import normalize_iso_date
+    from lib.captable.data import normalize_iso_date
 
     assert normalize_iso_date("2026-06-30") == "2026-06-30"
     assert normalize_iso_date("30 June 2026") == "2026-06-30"

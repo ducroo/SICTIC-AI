@@ -105,7 +105,7 @@ def check_diluted_equation(captable: dict) -> list[dict]:
 
 
 def _source_as_of(source: dict | None) -> str | None:
-    from lib.captable.snapshot import normalize_iso_date
+    from lib.captable.data import normalize_iso_date
 
     entry = (source or {}).get("as_of_date")
     value = entry.get("value") if isinstance(entry, dict) else entry

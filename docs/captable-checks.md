@@ -20,7 +20,7 @@ way?*
 ## Part 1 — What we extract from each agreement
 
 These are the terms in the team-editable checklist
-`config/captable/cla_terms.md`. Every extracted value carries a verbatim
+`config/captable_build/cla_terms.md`. Every extracted value carries a verbatim
 quote that is verified against the document; absent terms are recorded with
 the sections that were searched.
 
@@ -214,7 +214,7 @@ match, the extraction is rejected and redone.
 
 The per-agreement assessments are plain arithmetic over the extracted values
 (no model involved); the thresholds live in
-`config/captable/assessment_rules.json` and can be tuned by the team. Each
+`config/captable_build/assessment_rules.json` and can be tuned by the team. Each
 yields *market standard*, *deviating* or *absent*, plus a severity from
 info to severe.
 
@@ -377,22 +377,19 @@ clamp.
 loan already appears as a shareholder — the neutral question whether the
 loan has in fact converted (see Part 2).
 
-**Cross-snapshot consistency.** Each build is compared with the previous
-dated state of the same company: a share class shrinking or disappearing,
-or a holder's absolute count dropping without a documented transfer,
-becomes a warning ("shrinking holder"). Total shares should only grow
-unless a split or cancellation is evidenced. This gives event-style
-validation without recording every transaction — a founder quietly losing
-shares between two versions is precisely the kind of thing to ask about.
+**Source versions.** Extracted cap-table versions retain their source dates.
+Register reconciliation uses the version nearest the register date. The build
+no longer compares against previously generated output snapshots; movement
+checks across source versions remain a separate follow-up.
 
 ### How results are stored
 
-Every evidenced state of the cap table is kept as its own dated snapshot,
-forever; the "latest" pointer is never overwritten by a rebuild of an older
-state; and every intermediate work product carries a freshness stamp (the
-documents, the configuration including the term checklist, the model) so
-that a changed document or an edited checklist re-runs the affected stage
-automatically instead of silently reusing stale output.
+Four JSON `InsightFile` artifacts live under `insights/captable-build/`:
+classification, loan-extraction, table-extraction and consolidated. The final
+`captable` Markdown report lives directly under `insights/`. Shared selection
+prefers manual overrides and checks indexed source revisions, effective
+configuration and selected input content for generated reuse. There are no
+dated output snapshots or latest pointers.
 
 ## Part 4 — What the analysis computes (pure Python, no model)
 

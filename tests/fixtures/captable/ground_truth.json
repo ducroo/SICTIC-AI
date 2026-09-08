@@ -91,7 +91,7 @@
       "shrinking_holder": "Bruno Muster 300000 -> 250000 without documented transfer (deliberate anomaly, must WARN)",
       "shrinking_share_class": "must NOT fire (common unchanged, preferred grew)"
     },
-    "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both snapshots must exist afterwards.",
+    "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both source versions must remain in the table-extraction JSON. expected_cross_snapshot describes the comparison primitive, not a persisted-output-history check.",
     "cumulative_invested_chf": 1450000,
     "note_investments": "Alpina 1,000,000 + Helvetia 450,000; deliberately != issued share count 1,400,000 (stamp-duty de-spoofing)"
   },
