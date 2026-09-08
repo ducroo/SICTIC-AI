@@ -255,7 +255,22 @@ The governing law and forum, as stated.
 
 ### missing_terms (structural)
 
-For every term reported as null/unstated — and every presence boolean
+For every value/quote term reported as null/unstated — and every presence boolean
 reported false — add an entry using the exact field name as `term` and
 list in `sections_scanned` the concrete sections/headings/pages checked
 before concluding the term is absent.
+
+## Unusual valuation and conversion provisions
+
+### comments (structural)
+
+Copy verbatim passages about unusual valuation or conversion terms that the
+standard amount, interest, maturity, cap, floor and discount fields cannot
+adequately represent. Examples include a fixed post-money ownership entitlement
+or a special dilution basis. Preserve the source wording and language; do not
+paraphrase, interpret, translate or add your own explanation. Separate multiple
+passages with line breaks. Return null when no such provision is found.
+This is one nullable string, not a value/quote object. It is copied into the
+report's Comments column for human review, is not used in calculations and
+requires neither a separate quote nor a missing_terms entry. No automated
+source-evidence review is applied to this field.

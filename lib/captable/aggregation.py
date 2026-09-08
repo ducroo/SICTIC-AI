@@ -132,7 +132,7 @@ def _loan_amounts(extraction: dict[str, Any]) -> list[tuple[str, float | None]]:
 def _parse_date(value: Any) -> date | None:
     if not isinstance(value, str):
         return None
-    from lib.captable.snapshot import normalize_iso_date
+    from lib.captable.data import normalize_iso_date
 
     value = normalize_iso_date(value)
     for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):

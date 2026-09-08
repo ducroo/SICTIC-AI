@@ -51,8 +51,8 @@ def test_partial_lender_amounts_fill_remainder() -> None:
     assert amounts["B"] == pytest.approx(400_000)
 
 
-def test_rubric_zero_founders_flags_not_ok() -> None:
-    """Finding 4: 0% founders is the worst case, not 'ok'."""
+def test_rubric_missing_founder_roles_are_insufficient_evidence() -> None:
+    """Absent founder labels do not establish zero founder ownership."""
     snapshot = {
         "stakeholders": [
             {"name": "VC", "kind": "entity", "role": "investor",
@@ -65,8 +65,8 @@ def test_rubric_zero_founders_flags_not_ok() -> None:
         "fully_diluted_definition": {"value": "full_pools"},
     }
     findings = {f["item"]: f for f in apply_rubric(snapshot)}
-    assert findings["founder_majority"]["status"] == "flag"
-    assert findings["investor_dominance"]["status"] == "flag"
+    assert findings["founder_majority"]["status"] == "insufficient_evidence"
+    assert "investor_dominance" not in findings
 
 
 def test_lifecycle_compares_parsed_dates_across_formats() -> None:
@@ -235,7 +235,7 @@ def test_canonical_map_is_order_independent() -> None:
 
 def test_resolve_as_of_ignores_unparseable_strings() -> None:
     """Ultra bug_002: 'around Q3 2025' must not beat a real ISO date."""
-    from lib.captable.snapshot import resolve_as_of
+    from lib.captable.data import resolve_as_of
 
     classification = {
         "documents": [
@@ -336,7 +336,7 @@ def test_diluted_rowsum_catches_double_counted_pool() -> None:
 
 
 def test_scenarios_label_pools_and_report_founder_post_round() -> None:
-    from skills.captable_analysis.captable_analysis import build_scenarios
+    from skills.captable.captable import build_scenarios
 
     snapshot = {
         "as_of_date": "2026-06-30",

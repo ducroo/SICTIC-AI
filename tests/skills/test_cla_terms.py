@@ -13,7 +13,7 @@ from lib.captable.cla_terms import (
     parse_cla_terms,
 )
 
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "config" / "captable"
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "config" / "captable_build"
 
 
 def _config() -> dict:
@@ -50,12 +50,12 @@ def _minimal_md() -> str:
 def test_real_checklist_builds_the_expected_schema() -> None:
     built = build_cla_schema(_config())
     schema = built["schema"]
-    assert len(schema["properties"]) == 38
+    assert len(schema["properties"]) == 39
     assert set(schema["required"]) == set(schema["properties"])
     assert schema["additionalProperties"] is False
     # structural shapes come from the base file, verbatim
     base = _config()["cla_extraction_base_schema"]
-    for name in ("lenders", "status", "status_evidence", "missing_terms"):
+    for name in ("lenders", "status", "status_evidence", "missing_terms", "comments"):
         assert schema["properties"][name] == base["properties"][name]
     # every non-structural field is quote-reviewed; presence set is exact
     assert len(built["quoted_fields"]) == 34

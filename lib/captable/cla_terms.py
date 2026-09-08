@@ -1,6 +1,6 @@
 """Team-editable CLA term checklist → extraction schema + prompt block.
 
-``config/captable/cla_terms.md`` is the single source of truth for WHAT
+``config/captable_build/cla_terms.md`` is the single source of truth for WHAT
 the CLA extraction looks for — the same pattern as
 ``config/dd_checks/checklists/`` driving dd_checks: the team adds terms
 or refines guidance by editing config, no code change. Each

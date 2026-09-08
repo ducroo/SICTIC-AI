@@ -11,7 +11,7 @@ DESIGN_DOC = Path("docs/captable-design.md").read_text(encoding="utf-8")
 
 def test_every_code_consumed_field_is_documented() -> None:
     """The full term list is team-editable config
-    (config/captable/cla_terms.md — the checklist itself); the design
+    (config/captable_build/cla_terms.md — the checklist itself); the design
     doc documents the code-consumed core, which must stay complete."""
     from lib.captable.cla_terms import CODE_CONSUMED_FIELDS
 
@@ -29,7 +29,7 @@ def test_every_code_consumed_field_is_documented() -> None:
 
 def test_every_assessment_rule_key_is_reflected() -> None:
     rules = json.loads(
-        Path("config/captable/assessment_rules.json").read_text(
+        Path("config/captable_build/assessment_rules.json").read_text(
             encoding="utf-8"
         )
     )

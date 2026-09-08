@@ -155,12 +155,8 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
         "storage/community/sictic-members/datasets/track-record/jane-doe.md",
         "Invested in fixture startups.",
     )
-    startup_location = dataset_location_for_domain(fixtures.startup, "startups")
-    get_storage().mkdir(f"{startup_location.insights_rel}/captable/snapshots")
-    get_storage().write_text(
-        f"{startup_location.insights_rel}/captable/latest.json",
-        json.dumps(_captable_snapshot()),
-    )
+    from lib.captable.insights import build_insight
+    build_insight(fixtures.startup, "consolidated").save(json.dumps(_captable_snapshot()))
 
     yield fixtures
     reset_storage_singleton()
@@ -497,7 +493,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "skills.captable_build.captable_build"
     )
     captable_analysis_mod = importlib.import_module(
-        "skills.captable_analysis.captable_analysis"
+        "skills.captable.captable"
     )
     table_extraction_mod = importlib.import_module("lib.captable.table_extraction")
 

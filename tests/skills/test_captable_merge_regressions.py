@@ -14,10 +14,11 @@ from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location
 from lib.datasets.source import parsed_filepath
 from lib.insights import InsightFile
+from lib.captable.insights import build_insight, read_build_insight, select_consolidated
 from lib.storage import get_storage
 from tests.skills.test_captable_analysis import _snapshot
 from tests.skills.test_captable_build import _install_dataset, _patched_build
-from skills.captable_analysis.captable_analysis import build_scenarios
+from skills.captable.captable import build_scenarios
 
 
 @pytest.mark.parametrize("discount,cap", [(0, None), (30, None), (20, 4_000_000)])
@@ -108,18 +109,18 @@ async def test_failed_cla_is_not_published_or_reused(mock_env, monkeypatch):
     monkeypatch.setattr(module, "extract_cla", extract)
     with pytest.raises(ValueError, match="CLA extraction incomplete"):
         await module.build("failed-co")
-    assert module._load_work("failed-co", "cla_extraction.json") is None
+    assert not build_insight("failed-co", "loan-extraction").exists()
     assert not get_storage().exists(f"{dataset_location('failed-co').insights_rel}/captable/latest.json")
     extract.side_effect = None
     extract.return_value = {"document": "captable.md", "status": "term_sheet", "lenders": []}
     await module.extract("failed-co")
     assert extract.await_count == 2
-    assert module._load_work("failed-co", "cla_extraction.json")["failures"] == []
+    assert read_build_insight(build_insight("failed-co", "loan-extraction"))["failures"] == []
 
 
 @pytest.fixture
 def analysis_env(mock_env, monkeypatch):
-    module = import_module("skills.captable_analysis.captable_analysis")
+    module = import_module("skills.captable.captable")
     _install_dataset("analysis-co", "Cap table")
     location = dataset_location("analysis-co")
     manifest = IngestionManifest(get_storage(), location.parsed_rel)
@@ -127,25 +128,30 @@ def analysis_env(mock_env, monkeypatch):
     manifest.save()
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     snapshot = _snapshot()
-    monkeypatch.setattr(module, "_load_snapshot", Mock(return_value=snapshot))
+    snapshot.update(dataset="analysis-co", as_of_date="2026-06-30", generated_at="2026-09-08", tool_version="test")
+    build_insight("analysis-co", "consolidated").save(json.dumps(snapshot))
     generation = AsyncMock(return_value="Narrative")
     monkeypatch.setattr(module, "generate_markdown", generation)
-    config = {"narrative_prompt": "Explain the numbers"}
+    config = dict(module.load_repository_config("captable"))
+    config["narrative_prompt"] = "Explain the numbers"
     monkeypatch.setattr(module, "load_repository_config", lambda *_: config)
     return module, snapshot, generation, config, manifest
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change", ["snapshot", "prompt", "round", "revision", "date"])
+@pytest.mark.parametrize("change", ["snapshot", "prompt", "settings", "round", "revision", "date"])
 async def test_analysis_reuses_and_invalidates(analysis_env, monkeypatch, change):
     module, snapshot, generate, config, manifest = analysis_env
-    [first] = await module.captable_analysis("analysis-co")
-    [second] = await module.captable_analysis("analysis-co")
+    [first] = await module.captable("analysis-co")
+    [second] = await module.captable("analysis-co")
     assert first.path == second.path
     assert generate.await_count == 1
     options = {}
-    if change == "snapshot": snapshot["stakeholders"][0]["diluted_count"] += 1
+    if change == "snapshot":
+        snapshot["stakeholders"][0]["diluted_count"] += 1
+        build_insight("analysis-co", "consolidated").save(json.dumps(snapshot))
     elif change == "prompt": config["narrative_prompt"] += " Edited"
+    elif change == "settings": config["settings"]["departed_ownership_max_pct"] = 90
     elif change == "round": options["investment"] = 3_000_000
     elif change == "revision":
         manifest.indexed_dataset_revision = "two"
@@ -156,17 +162,17 @@ async def test_analysis_reuses_and_invalidates(analysis_env, monkeypatch, change
             def today(cls):
                 return date.fromordinal(date.today().toordinal() + 1)
         monkeypatch.setattr(module, "date", Tomorrow)
-    await module.captable_analysis("analysis-co", **options)
+    await module.captable("analysis-co", **options)
     assert generate.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_manual_analysis_wins_before_snapshot_read(analysis_env):
+async def test_manual_analysis_wins_before_input_read(analysis_env, monkeypatch):
     module, _, generate, _, _ = analysis_env
-    manual = InsightFile("analysis-co", "captable_analysis", "manual")
+    manual = InsightFile("analysis-co", "captable", "manual")
     manual.save("Human analysis")
-    module._load_snapshot.side_effect = AssertionError("manual must win first")
-    [result] = await module.captable_analysis("analysis-co")
+    monkeypatch.setattr(module, "select_consolidated", Mock(side_effect=AssertionError("manual must win first")))
+    [result] = await module.captable("analysis-co")
     assert result.path == manual.path
     generate.assert_not_awaited()
 
@@ -175,10 +181,10 @@ async def test_manual_analysis_wins_before_snapshot_read(analysis_env):
 async def test_manual_build_report_precedes_even_forced_generation(mock_env, monkeypatch):
     module, _ = _patched_build(monkeypatch)
     _install_dataset("manual-co", "Cap table")
-    manual = InsightFile("manual-co", "captable_build", "manual")
-    manual.save("Human cap table report")
+    manual = InsightFile("manual-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json")
+    manual.save(json.dumps({"dataset": "manual-co", "note": "Human cap table data"}))
     build = AsyncMock(side_effect=AssertionError("manual must win first"))
-    monkeypatch.setattr(module, "build", build)
+    monkeypatch.setattr(module, "_classification", build)
     [result] = await module.captable_build("manual-co", fresh=True)
     assert result.path == manual.path
     build.assert_not_awaited()
@@ -192,27 +198,26 @@ async def test_failed_table_is_not_published_or_reused(mock_env, monkeypatch):
     monkeypatch.setattr(table_module, "extract_captable", AsyncMock(side_effect=RuntimeError("outage")))
     with pytest.raises(ValueError, match="Table extraction incomplete"):
         await module.build("table-failure")
-    assert module._load_work("table-failure", "table_extraction.json") is None
+    assert not build_insight("table-failure", "table-extraction").exists()
     assert not get_storage().exists(f"{dataset_location('table-failure').insights_rel}/captable/latest.json")
 
 
-def test_legacy_partial_snapshot_is_rejected(mock_env):
-    module = import_module("skills.captable_analysis.captable_analysis")
+def test_legacy_partial_snapshot_is_not_an_input(mock_env):
     _install_dataset("partial", "Cap table")
     root = f"{dataset_location('partial').insights_rel}/captable"
     get_storage().mkdir(root)
     get_storage().write_text(f"{root}/latest.json", json.dumps({"convertible_failures": [{"document": "loan.pdf", "error": "timeout"}]}))
-    with pytest.raises(ValueError, match="failed CLA"):
-        module._load_snapshot("partial", None)
+    with pytest.raises(ValueError, match="No consolidated"):
+        select_consolidated("partial")
 
 
-@pytest.mark.parametrize("package", ["captable_build", "captable_analysis"])
+@pytest.mark.parametrize("package", ["captable_build", "captable", "captable_analysis"])
 @pytest.mark.parametrize("flag", ["--startup", "--dataset"])
 def test_canonical_and_legacy_cli_selectors(monkeypatch, package, flag):
     module = import_module(f"skills.{package}.__main__")
-    run = AsyncMock(return_value={"computed": {}, "narrative": "ok"} if package == "captable_analysis" else [])
-    target = "analyze" if package == "captable_analysis" else "captable_build"
-    monkeypatch.setattr(module, target, run)
-    result = CliRunner().invoke(module.app, ["run" if package == "captable_analysis" else "build", flag, "example"])
+    run = AsyncMock(return_value=[])
+    target_module = module if package == "captable_build" else import_module("skills.captable.__main__")
+    monkeypatch.setattr(target_module, "captable_build" if package == "captable_build" else "captable", run)
+    result = CliRunner().invoke(module.app, ["build" if package == "captable_build" else "run", flag, "example"])
     assert result.exit_code == 0, result.output
     assert run.call_args.args[0] == "example"

@@ -3,7 +3,7 @@
 Pure Python over the stage-2 extraction: the LLM already extracted every
 value with a verified quote; judging those values against market-standard
 bands is arithmetic and rule application, so no LLM is involved here.
-Bands and thresholds live in ``config/captable/assessment_rules.json``.
+Bands and thresholds live in ``config/captable_build/assessment_rules.json``.
 """
 
 from __future__ import annotations

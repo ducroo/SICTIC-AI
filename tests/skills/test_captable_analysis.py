@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from lib.captable.rubric import apply_rubric, ownership_by_role
-from skills.captable_analysis.captable_analysis import build_scenarios
+from skills.captable.captable import build_scenarios
 
 
 def _snapshot() -> dict:
@@ -262,7 +262,7 @@ def test_unstated_currency_is_assumed_and_disclosed() -> None:
 def test_parse_fx_rates() -> None:
     import pytest
 
-    from skills.captable_analysis.captable_analysis import parse_fx_rates
+    from skills.captable.captable import parse_fx_rates
 
     assert parse_fx_rates(None) == {}
     assert parse_fx_rates(["usd=0.88", "EUR = 0.95"]) == {

@@ -17,7 +17,7 @@ from lib.captable.cla_terms import build_cla_schema
 from lib.captable.documents import normalize_for_matching
 from lib.infrastructure.ai_text_generation.json import validate_schema
 
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "config" / "captable"
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "config" / "captable_build"
 
 
 def _load(name: str) -> dict:
@@ -25,7 +25,7 @@ def _load(name: str) -> dict:
 
 
 # The extraction schema is generated from the team-editable term
-# checklist (config/captable/cla_terms.md) at runtime.
+# checklist (config/captable_build/cla_terms.md) at runtime.
 _BUILT = build_cla_schema(
     {
         "cla_terms": (CONFIG_DIR / "cla_terms.md").read_text(
@@ -319,6 +319,11 @@ def _install_dataset(name: str, parsed_text: str) -> None:
         storage.mkdir(rel)
     storage.write_text(f"{location.raw_rel}/captable.md", parsed_text)
     storage.write_text(f"{location.parsed_rel}/captable.md", parsed_text)
+    from lib.datasets.manifest import IngestionManifest
+    import hashlib
+    manifest = IngestionManifest(storage, location.parsed_rel)
+    manifest.indexed_dataset_revision = hashlib.sha256(parsed_text.encode()).hexdigest()
+    manifest.save()
 
 
 def _patched_build(monkeypatch):
@@ -351,69 +356,55 @@ def _patched_build(monkeypatch):
     return build_mod, calls
 
 
-def test_build_reuses_work_products_only_while_fresh(mock_env, monkeypatch):
+def test_build_reuses_insights_only_while_fresh(mock_env, monkeypatch):
     import asyncio
+    from lib.captable import insights as insight_module
 
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     build_mod, calls = _patched_build(monkeypatch)
-    _install_dataset("freshco", "# Cap table\n\nFounder 900,000\n")
-
-    snap = asyncio.run(build_mod.build("freshco"))
+    _install_dataset("freshco", "Founder 900,000")
+    result = asyncio.run(build_mod.build("freshco"))
     asyncio.run(build_mod.build("freshco"))
-    assert calls == {"classify": 1, "captable": 1}, "unchanged inputs reuse"
-    # the snapshot stays model-independent: no stamp leaks into it
-    assert "freshness" not in snap
-    assert "freshness" not in snap["aggregation"]
+    assert calls == {"classify": 1, "captable": 1}
+    assert "freshness" not in result
+    assert "freshness" not in result["aggregation"]
 
-    # A changed source document (e.g. a corrected cap table) invalidates.
-    _install_dataset("freshco", "# Cap table\n\nFounder 850,000\n")
+    # Simulate a corrected source and its newly indexed revision.
+    _install_dataset("freshco", "Founder 850,000")
     asyncio.run(build_mod.build("freshco"))
     assert calls == {"classify": 2, "captable": 2}
 
-    # A prompt/checklist edit under config/captable/ invalidates.
     real_config = build_mod.load_repository_config
-
     def edited_config(key):
         config = dict(real_config(key))
-        config["classification_prompt"] += "\nEdited instruction."
+        config["classification_prompt"] += " Edited"
         return config
-
     monkeypatch.setattr(build_mod, "load_repository_config", edited_config)
     asyncio.run(build_mod.build("freshco"))
-    assert calls == {"classify": 3, "captable": 3}
+    # Unchanged selected classification content does not invalidate extraction.
+    assert calls == {"classify": 3, "captable": 2}
     asyncio.run(build_mod.build("freshco"))
-    assert calls == {"classify": 3, "captable": 3}, "stable again"
+    assert calls == {"classify": 3, "captable": 2}
 
-    # A model override (the --model smoke flag) invalidates, so lite-model
-    # work products can never leak into a real run.
-    monkeypatch.setattr(build_mod, "llm_model", lambda: "gemini/lite-model")
+    # Model selection follows the shared ranked-model policy.
+    monkeypatch.setenv("RANKED_LLMS", "gemini/lite-model")
+    monkeypatch.setattr(insight_module, "llm_model", lambda: "gemini/lite-model")
     asyncio.run(build_mod.build("freshco"))
-    assert calls == {"classify": 4, "captable": 4}
-
-    # --fresh still forces a full re-run.
+    assert calls == {"classify": 4, "captable": 3}
     asyncio.run(build_mod.build("freshco", fresh=True))
-    assert calls == {"classify": 5, "captable": 5}
+    assert calls == {"classify": 5, "captable": 4}
 
 
-def test_stale_work_product_is_ignored_by_standalone_stages(mock_env, monkeypatch):
+def test_standalone_stages_reject_missing_freshness_metadata(mock_env, monkeypatch):
     import asyncio
-    import json
-
+    from lib.captable.insights import build_insight
     from lib.storage import get_storage
 
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     build_mod, calls = _patched_build(monkeypatch)
-    _install_dataset("stale-co", "# Cap table\n\nFounder 900,000\n")
+    _install_dataset("stale-co", "Founder 900,000")
     asyncio.run(build_mod.build("stale-co"))
-    rel = build_mod._work_path("stale-co", "classification.json")
-    stored = json.loads(get_storage().read_text(rel))
-    assert set(stored["freshness"]) == {
-        "documents_sha256", "config_sha256", "model", "tool_version"
-    }
-
-    # Simulate a product written before the stamps existed.
-    del stored["freshness"]
-    get_storage().write_text(rel, json.dumps(stored))
-    assert build_mod._load_work("stale-co", "classification.json") is None
-    with pytest.raises(ValueError, match="Missing or stale"):
-        asyncio.run(build_mod.snapshot("stale-co"))
-    asyncio.run(build_mod.table("stale-co"))  # re-classifies on its own
-    assert calls["classify"] == 2
+    insight = build_insight("stale-co", "classification")
+    get_storage().remove(insight._manifest_path)
+    asyncio.run(build_mod.table("stale-co"))
+    assert calls == {"classify": 2, "captable": 2}

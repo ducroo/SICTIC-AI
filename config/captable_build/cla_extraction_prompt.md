@@ -10,14 +10,14 @@ in any way — report what THIS document actually says.
 
 Evidence rules (strictly enforced; violations are rejected):
 
-1. Every extracted value MUST carry a `quote`: a short verbatim snippet
+1. Every extracted value in a value/quote field MUST carry a `quote`: a short verbatim snippet
    (roughly 5-30 words) copied from the document text that evidences the
    value. Copy the snippet exactly as it appears in the provided text,
    including OCR noise. Do not paraphrase, translate, or "clean up" quotes.
 2. When a term is genuinely absent or unreadable, set its value to null (or
    the "unstated"/"unclear" enum member where the schema has one) and set the
    quote to null. NEVER guess a value.
-3. For every term you report as null/unstated, add an entry to
+3. For every value/quote term you report as null/unstated, add an entry to
    `missing_terms`. The same applies to every term marked
    `presence boolean` in the term list below when you report it false —
    "no such clause exists" is an absence claim that a quote cannot
@@ -28,6 +28,10 @@ Evidence rules (strictly enforced; violations are rejected):
    term is absent. An empty `sections_scanned` is rejected. Being thorough
    here matters more than being fast: absence claims without scan evidence
    are the number-one failure mode of this task.
+
+The structural `comments` field is a verbatim quotation string for human
+review, not a value/quote pair. Use null when absent; do not add it to
+`missing_terms`. It has no additional automated evidence review.
 
 The terms to extract, with per-term guidance, follow below; the exact
 response shape is enforced by the schema.

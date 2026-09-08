@@ -73,7 +73,7 @@ def review_cla_extraction(
     """Build a reviewer enforcing the evidence rules against ``document_text``.
 
     ``quoted_fields``/``presence_fields`` come from the team-editable
-    ``config/captable/cla_terms.md`` via ``cla_terms.build_cla_schema`` —
+    ``config/captable_build/cla_terms.md`` via ``cla_terms.build_cla_schema`` —
     a term added there is automatically quote-verified here.
     """
     normalized_text = normalize_for_matching(document_text)
@@ -140,7 +140,7 @@ async def extract_cla(
     """Extract the term schema from one CLA/term-sheet document."""
     from lib.captable.cla_terms import build_cla_schema
 
-    config = load_repository_config("captable")
+    config = load_repository_config("captable_build")
     built = build_cla_schema(config)
     prompt = (
         f"{config['cla_extraction_prompt'].strip()}\n\n"

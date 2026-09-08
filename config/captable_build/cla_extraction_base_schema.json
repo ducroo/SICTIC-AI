@@ -156,6 +156,12 @@
           }
         }
       }
+    },
+    "comments": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   }
 }
