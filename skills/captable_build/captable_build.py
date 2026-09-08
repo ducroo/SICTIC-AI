@@ -31,6 +31,7 @@ from lib.infrastructure.logging import get_logger
 from lib.insights.manifest import config_hash
 from lib.insights.paths import model_slug
 from lib.model_config import llm_model
+from lib.insights import InsightFile
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
@@ -154,6 +155,8 @@ async def extract(dataset_name: str) -> dict[str, Any]:
 
     result = {"dataset": dataset_name, "clas": extractions, "failures": failures}
     rel = _store_work(dataset_name, "cla_extraction.json", result)
+    if failures:
+        raise ValueError(f"CLA extraction incomplete: {[f['document'] for f in failures]}. Re-run to retry extraction.")
     logger.info("[%s] Stored CLA extraction at %s", dataset_name, rel)
     return result
 
@@ -172,6 +175,9 @@ def _load_work(
     if not storage.exists(rel):
         return None
     payload = json.loads(storage.read_text(rel))
+    if isinstance(payload, dict) and payload.get("failures"):
+        logger.warning("[%s] %s contains failed extractions; retrying", dataset_name, name)
+        return None
     if not check_freshness:
         return payload
     expected = _freshness(dataset_name)
@@ -328,6 +334,8 @@ async def table(dataset_name: str) -> dict[str, Any]:
         )
 
     rel = _store_work(dataset_name, "table_extraction.json", result)
+    if result["failures"]:
+        raise ValueError(f"Table extraction incomplete: {[f['document'] for f in result['failures']]}. Re-run to retry extraction.")
     logger.info("[%s] Stored table extraction at %s", dataset_name, rel)
     return result
 
@@ -532,6 +540,23 @@ async def build(dataset_name: str, *, fresh: bool = False) -> dict[str, Any]:
     if _load_work(dataset_name, "table_extraction.json") is None:
         await table(dataset_name)
     return await snapshot(dataset_name)
+
+
+async def captable_build(dataset_name: str, *, fresh: bool = False) -> list[InsightFile]:
+    """Managed report entry point; ``build`` retains the snapshot adapter."""
+    from lib.captable.snapshot import render_markdown, snapshot_fingerprint
+
+    insight = InsightFile(dataset_name, "captable_build", llm_model())
+    preferred = insight.find(selection="any")
+    if preferred is not None and preferred.model == "manual":
+        return [preferred]
+    snap = await build(dataset_name, fresh=fresh)
+    insight.config_key = config_cache_key(TOOL_VERSION, snapshot_fingerprint(snap))
+    reusable = insight.find(selection="reusable")
+    if reusable:
+        return [reusable]
+    insight.save(render_markdown(snap))
+    return [insight]
 
 
 async def aggregate(dataset_name: str) -> dict[str, Any]:

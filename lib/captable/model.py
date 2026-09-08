@@ -153,6 +153,7 @@ class Note:
     discount_pct: float | None = None
     floor: float | None = None
     currency: str | None = None  # ISO code of balance/cap/floor; None = unstated
+    denominator_shares: float | None = None  # contract-specific cap/floor basis
 
 
 @dataclass
@@ -191,7 +192,7 @@ def _note_shares(
     for note in notes:
         result = conversion_price(
             round_price_per_share=round_price,
-            denominator_shares=denominator_shares,
+            denominator_shares=(note.denominator_shares if note.denominator_shares is not None else denominator_shares),
             cap=note.cap,
             discount_pct=note.discount_pct,
             floor=note.floor,
@@ -235,6 +236,7 @@ def convert_in_round(
                 discount_pct=note.discount_pct,
                 floor=note.floor,
                 currency=note.currency,
+                denominator_shares=note.denominator_shares,
             )
         uniquified.append(note)
     notes = uniquified
@@ -272,11 +274,16 @@ def convert_in_round(
             )
             investor_shares = new_investment / price
         elif method == "dollars_invested":
-            # Note balances count as newly invested dollars: the effective
-            # pre-money for pricing includes them, so only the discount's
-            # extra shares dilute the founders.
+            # Fix post-money at pre-money + note balances + new money.
+            # Note conversion shares belong in the pricing denominator;
+            # adding balances only to the numerator overvalues the round.
             balances = sum(note.balance for note in notes)
-            price = (pre_money_valuation + balances) / fd_pre
+
+            def iterate(price: float) -> float:
+                note_total, _, _ = _note_shares(notes, price, fd_pre, nominal_value)
+                return (pre_money_valuation + balances) / (fd_pre + note_total)
+
+            price = solve_fixed_point(iterate, pre_money_valuation / fd_pre)
             note_total, note_prices, warnings = _note_shares(
                 notes, price, fd_pre, nominal_value
             )

@@ -13,7 +13,7 @@ known answer key (`ground_truth.json`). Three purposes:
    cp tests/fixtures/captable/synthetic_*.md \
       "$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets/"
    # after a dataset sync:
-   python -m skills.captable_build build --dataset synthcap \
+   python -m skills.captable_build build --startup synthcap \
        --model gemini/gemini-3.5-flash-lite --fresh
    ```
 

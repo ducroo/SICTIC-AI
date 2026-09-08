@@ -45,3 +45,5 @@ Extraction rules:
 
 Completeness matters more than speed: the extraction is rejected if the sum
 of extracted holdings deviates from the table's own totals.
+
+Every extracted row (holders, share classes, register entries and pools) must include a verbatim `quote` containing its source name/label and all stated numeric values. Quote the relevant headers as well when values span columns. Do not invent or calculate missing values; use null when the schema permits. Names and labels must retain the source wording; roles and kinds are classifications.

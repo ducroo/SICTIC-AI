@@ -259,18 +259,17 @@ async def _sha_review(args: List[str]) -> str:
 
 async def _captable_build(args: List[str]) -> str:
     parser = _parser("/captable_build")
-    parser.add_argument("dataset")
+    parser.add_argument("dataset", metavar="startup")
     parser.add_argument("--fresh", action="store_true")
     ns = parser.parse_args(args)
-    from lib.captable.snapshot import render_markdown
-    from skills.captable_build.captable_build import build
+    from skills.captable_build.captable_build import captable_build
 
-    return render_markdown(await build(ns.dataset, fresh=ns.fresh))
+    return _format_result(await captable_build(ns.dataset, fresh=ns.fresh))
 
 
 async def _captable_analysis(args: List[str]) -> str:
     parser = _parser("/captable_analysis")
-    parser.add_argument("dataset")
+    parser.add_argument("dataset", metavar="startup")
     parser.add_argument("--as-of", dest="as_of")
     parser.add_argument("--pre-money", dest="pre_money", type=float)
     parser.add_argument("--investment", type=float)
@@ -290,7 +289,7 @@ async def _captable_analysis(args: List[str]) -> str:
         fx_rates=parse_fx_rates(ns.fx_rates),
         currency=ns.currency,
     )
-    return result["narrative"]
+    return _format_result(result)
 
 
 async def _submission_ready(args: List[str]) -> str:

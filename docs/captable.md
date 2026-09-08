@@ -159,10 +159,10 @@ the narrative; both are also registered for `bulk_refresh` (as
 render:
 
 ```bash
-python -m skills.captable_build build --dataset <startup> [--fresh]
-python -m skills.captable_analysis run --dataset <startup> \
+python -m skills.captable_build build --startup <startup> [--fresh]
+python -m skills.captable_analysis run --startup <startup> \
     [--as-of DATE] [--pre-money N] [--investment N] [--fx-rate CUR=RATE ...]
-python -m skills.captable_analysis render --dataset <startup> [--as-of DATE]
+python -m skills.captable_analysis render --startup <startup> [--as-of DATE]
 ```
 
 Stage-by-stage commands and details: `skills/captable_build/SKILL.md` and
@@ -217,3 +217,20 @@ measurably worse — never use the override for real due-diligence output.
 - Classification confidence varies slightly across runs (LLM-judged);
   classes have been stable in testing, and an eval suite over the fixture
   answer key is the planned guardrail.
+
+## Merge-review corrections
+
+Version 0.4 requires complete parsed-document coverage and successful extractions
+before a build can publish a snapshot. Failed work products are retried, and old
+work is invalidated. Table/register/pool extraction verifies row quotes, names and
+numeric values in addition to totals; verification supports review, not a proof
+of the model's semantic interpretation. Rebuild existing snapshots to apply this
+stronger extraction contract.
+
+The dollars-invested method now solves pricing at fixed post-money (pre-money +
+new money + converting balances); each note's cap/floor uses its extracted share
+basis. Managed build and analysis entry points follow `list[InsightFile]`, manual
+precedence and shared freshness rules. The dated snapshot store and structured
+stage adapters retain their paths and roles; see the two skill documents for
+cache inputs and adapter contracts. Canonical CLI selectors use `--startup`, with
+`--dataset` retained as an alias.

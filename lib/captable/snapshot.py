@@ -14,7 +14,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-TOOL_VERSION = "captable_build/0.3"
+TOOL_VERSION = "captable_build/0.4"
 
 
 def snapshot_fingerprint(snapshot: dict[str, Any]) -> str:

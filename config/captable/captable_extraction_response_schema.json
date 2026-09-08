@@ -2,17 +2,35 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "as_of_date", "share_classes", "stakeholders", "pools", "totals",
-    "fully_diluted_definition", "assumptions"
+    "as_of_date",
+    "share_classes",
+    "stakeholders",
+    "pools",
+    "totals",
+    "fully_diluted_definition",
+    "assumptions"
   ],
   "properties": {
     "as_of_date": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["value", "quote"],
+      "required": [
+        "value",
+        "quote"
+      ],
       "properties": {
-        "value": {"type": ["string", "null"]},
-        "quote": {"type": ["string", "null"]}
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "share_classes": {
@@ -21,12 +39,39 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "name", "nominal_value", "votes_per_share"],
+        "required": [
+          "id",
+          "name",
+          "nominal_value",
+          "votes_per_share",
+          "quote"
+        ],
         "properties": {
-          "id": {"type": "string", "minLength": 1},
-          "name": {"type": "string", "minLength": 1},
-          "nominal_value": {"type": ["number", "null"]},
-          "votes_per_share": {"type": ["number", "null"]}
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nominal_value": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "votes_per_share": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Verbatim source row or passage containing this identity and all stated numeric values. Include column headers where needed."
+          }
         }
       }
     },
@@ -36,42 +81,90 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "name", "group", "kind", "role", "holdings",
-          "diluted_count", "invested_amount"
+          "name",
+          "group",
+          "kind",
+          "role",
+          "holdings",
+          "diluted_count",
+          "invested_amount",
+          "quote"
         ],
         "properties": {
-          "name": {"type": "string", "minLength": 1},
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
           "group": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The group/category row this holder is listed under, verbatim."
           },
           "kind": {
             "type": "string",
-            "enum": ["individual", "entity", "treasury",
-                     "authorized_capital", "pool", "unknown"]
+            "enum": [
+              "individual",
+              "entity",
+              "treasury",
+              "authorized_capital",
+              "pool",
+              "unknown"
+            ]
           },
           "role": {
             "type": "string",
-            "enum": ["founder", "investor", "employee", "advisor", "board",
-                     "departed", "company", "pool", "unknown"]
+            "enum": [
+              "founder",
+              "investor",
+              "employee",
+              "advisor",
+              "board",
+              "departed",
+              "company",
+              "pool",
+              "unknown"
+            ]
           },
           "holdings": {
             "type": "array",
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["class_id", "count"],
+              "required": [
+                "class_id",
+                "count"
+              ],
               "properties": {
-                "class_id": {"type": "string", "minLength": 1},
-                "count": {"type": "number"}
+                "class_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "count": {
+                  "type": "number"
+                }
               }
             }
           },
           "diluted_count": {
-            "type": ["number", "null"],
+            "type": [
+              "number",
+              "null"
+            ],
             "description": "The fully-diluted share count for this holder if the table states one."
           },
-          "invested_amount": {"type": ["number", "null"]}
+          "invested_amount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Verbatim source row or passage containing this identity and all stated numeric values. Include column headers where needed."
+          }
         }
       }
     },
@@ -80,40 +173,96 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "label", "total", "granted", "unallocated"],
+        "required": [
+          "kind",
+          "label",
+          "total",
+          "granted",
+          "unallocated",
+          "quote"
+        ],
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["esop", "psop", "grantable", "authorized_capital",
-                     "treasury", "other"]
+            "enum": [
+              "esop",
+              "psop",
+              "grantable",
+              "authorized_capital",
+              "treasury",
+              "other"
+            ]
           },
-          "label": {"type": "string", "minLength": 1},
-          "total": {"type": ["number", "null"]},
-          "granted": {"type": ["number", "null"]},
-          "unallocated": {"type": ["number", "null"]}
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "total": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "granted": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unallocated": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Verbatim source row or passage containing this identity and all stated numeric values. Include column headers where needed."
+          }
         }
       }
     },
     "totals": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["by_class", "diluted_total", "quote"],
+      "required": [
+        "by_class",
+        "diluted_total",
+        "quote"
+      ],
       "properties": {
         "by_class": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["class_id", "issued_total"],
+            "required": [
+              "class_id",
+              "issued_total"
+            ],
             "properties": {
-              "class_id": {"type": "string", "minLength": 1},
-              "issued_total": {"type": "number"}
+              "class_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "issued_total": {
+                "type": "number"
+              }
             }
           }
         },
-        "diluted_total": {"type": ["number", "null"]},
+        "diluted_total": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
         "quote": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Verbatim snippet of the totals row."
         }
       }
@@ -121,19 +270,34 @@
     "fully_diluted_definition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["value", "quote"],
+      "required": [
+        "value",
+        "quote"
+      ],
       "properties": {
         "value": {
           "type": "string",
-          "enum": ["full_pools", "granted_only", "granted_plus_vested",
-                   "unstated"]
+          "enum": [
+            "full_pools",
+            "granted_only",
+            "granted_plus_vested",
+            "unstated"
+          ]
         },
-        "quote": {"type": ["string", "null"]}
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "assumptions": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1}
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   }
 }

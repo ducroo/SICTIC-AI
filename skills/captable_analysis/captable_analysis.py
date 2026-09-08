@@ -14,10 +14,10 @@ from typing import Any
 
 from lib.captable.model import Note, convert_in_round, loan_balance, stamp_duty
 from lib.captable.rubric import apply_rubric, ownership_by_role
-from lib.captable.snapshot import snapshot_fingerprint
+from lib.captable.snapshot import snapshot_fingerprint, TOOL_VERSION
 from lib.datasets.paths import dataset_insights_path
 from lib.infrastructure.ai_text_generation import generate_markdown
-from lib.infrastructure.configuration import load_repository_config
+from lib.infrastructure.configuration import load_repository_config, config_cache_key
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile
 from lib.model_config import llm_model
@@ -44,7 +44,10 @@ def _load_snapshot(dataset_name: str, as_of: str | None) -> dict[str, Any]:
         raise ValueError(
             f"No cap-table snapshot at {rel!r}; run captable_build first."
         )
-    return json.loads(storage.read_text(rel))
+    result = json.loads(storage.read_text(rel))
+    if result.get("convertible_failures"):
+        raise ValueError("Snapshot contains failed CLA extractions; run captable_build again before analysis or rendering.")
+    return result
 
 
 def _parse_date(value: Any) -> date | None:
@@ -145,6 +148,7 @@ def _notes_in_currency(
                     discount_pct=note.discount_pct,
                     floor=note.floor * rate if note.floor else note.floor,
                     currency=target,
+                    denominator_shares=note.denominator_shares,
                 )
             )
             assumptions.append(
@@ -230,6 +234,23 @@ def _notes_from_snapshot(
             if str(compounding).startswith("compound")
             else "simple",
         )
+        basis = _value(cla.get("denominator_basis"))
+        denominator = None
+        if basis == "issued_and_outstanding":
+            denominator = sum(
+                h.get("count") or 0.0
+                for holder in snapshot.get("stakeholders", [])
+                if holder.get("kind") not in ("treasury", "pool", "authorized_capital")
+                for h in holder.get("holdings", [])
+            )
+            if denominator <= 0:
+                raise ValueError(f"{cla.get('document')}: no issued and outstanding shares for conversion.")
+        elif basis not in (None, "unstated", "fully_diluted"):
+            raise ValueError(f"Unsupported conversion denominator: {basis!r}")
+        elif basis in (None, "unstated") and (
+            _value(cla.get("valuation_cap")) or _value(cla.get("valuation_floor"))
+        ):
+            assumptions.append(f"{cla.get('document')}: cap/floor denominator unstated; pre-round fully diluted shares assumed.")
         notes.append(
             Note(
                 label=f"lenders of {cla.get('document')}",
@@ -237,6 +258,7 @@ def _notes_from_snapshot(
                 cap=_value(cla.get("valuation_cap")),
                 discount_pct=_value(cla.get("discount_pct")),
                 floor=_value(cla.get("valuation_floor")),
+                denominator_shares=denominator,
                 currency=_normalize_currency(
                     _value(cla.get("principal_currency"))
                     or _value(cla.get("currency"))
@@ -613,7 +635,7 @@ def render_captable(
     }
 
 
-async def captable_analysis(
+async def analyze(
     dataset_name: str,
     *,
     as_of: str | None = None,
@@ -623,6 +645,10 @@ async def captable_analysis(
     currency: str | None = None,
 ) -> dict[str, Any]:
     """Full analysis: deterministic computation + LLM narrative."""
+    insight = InsightFile(dataset_name, "captable_analysis", llm_model())
+    preferred = insight.find(selection="any")
+    if preferred is not None and preferred.model == "manual":
+        return {"computed": None, "narrative": preferred.content(), "insight_path": preferred.path, "insight": preferred}
     snapshot = _load_snapshot(dataset_name, as_of)
     computed = build_scenarios(
         snapshot,
@@ -653,10 +679,11 @@ async def captable_analysis(
         )
     }
 
-    prompt_template = load_repository_config("captable_analysis")[
-        "narrative_prompt"
-    ]
-    narrative = await generate_markdown(
+    config = load_repository_config("captable_analysis")
+    prompt_template = config["narrative_prompt"]
+    insight.config_key = config_cache_key(config, computed, TOOL_VERSION)
+    reusable = insight.find(selection="reusable")
+    narrative = reusable.content() if reusable else await generate_markdown(
         f"{prompt_template.strip()}\n\n### COMPUTED JSON\n\n"
         f"```json\n{json.dumps(computed, ensure_ascii=False, indent=2)}\n```"
     )
@@ -672,8 +699,10 @@ async def captable_analysis(
     # InsightFile convention (model-slug filename, manifest, freshness).
     # The snapshot store itself stays as designed (§2.3): versioned by
     # as-of date, not by model — a deliberate deviation.
-    insight = InsightFile(dataset_name, "captable_analysis", llm_model())
-    insight.save(narrative)
+    if reusable:
+        insight = reusable
+    else:
+        insight.save(narrative)
     logger.info(
         "[%s] Stored captable analysis insight at %s",
         dataset_name,
@@ -683,4 +712,15 @@ async def captable_analysis(
         "computed": computed,
         "narrative": narrative,
         "insight_path": insight.path,
+        "insight": insight,
     }
+
+
+async def captable_analysis(dataset_name: str, *, as_of: str | None = None,
+    pre_money: float | None = None, investment: float | None = None,
+    fx_rates: dict[str, float] | None = None, currency: str | None = None,
+) -> list[InsightFile]:
+    """Managed narrative entry point; ``analyze`` also returns computed data."""
+    result = await analyze(dataset_name, as_of=as_of, pre_money=pre_money,
+        investment=investment, fx_rates=fx_rates, currency=currency)
+    return [result["insight"]]

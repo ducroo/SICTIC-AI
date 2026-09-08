@@ -125,8 +125,9 @@ def test_methods_disagree_on_founder_dilution() -> None:
     # pre_money dilutes everyone incl. the new investor; the new investor's
     # slice is protected under percentage_ownership, squeezing founders.
     assert founders["percentage_ownership"] < founders["pre_money"]
-    # dollars_invested treats the note as new money: founders keep most.
-    assert founders["dollars_invested"] > founders["pre_money"]
+    # Cooley's dollars-invested method is the compromise between the two:
+    # the post-money includes loan balances but not the discount premium.
+    assert founders["percentage_ownership"] < founders["dollars_invested"] < founders["pre_money"]
     # every scenario's ownership sums to 100
     for s in by_method.values():
         assert sum(s.ownership_pct.values()) == pytest.approx(100.0)

@@ -20,8 +20,8 @@ any figure.
 python -m skills.harness /captable_analysis synthcap
 python -m skills.harness -- /captable_analysis synthcap --as-of 2026-06-30 --pre-money 8000000 --investment 2000000 --fx-rate USD=0.88 --currency CHF
 # or the CLI (also writes analysis_scenarios.json):
-python -m skills.captable_analysis run --dataset synthcap
-python -m skills.captable_analysis run --dataset synthcap --as-of 2026-06-30 --pre-money 8000000 --investment 2000000 --fx-rate USD=0.88 --currency CHF
+python -m skills.captable_analysis run --startup synthcap
+python -m skills.captable_analysis run --startup synthcap --as-of 2026-06-30 --pre-money 8000000 --investment 2000000 --fx-rate USD=0.88 --currency CHF
 ```
 
 `synthcap` is the synthetic fixture dataset; substitute your startup's
@@ -70,8 +70,8 @@ Reads `insights/captable/latest.json` (or the named snapshot), then:
 ## Rendering (`render`)
 
 ```bash
-python -m skills.captable_analysis render --dataset synthcap
-python -m skills.captable_analysis render --dataset synthcap --as-of 2026-06-30
+python -m skills.captable_analysis render --startup synthcap
+python -m skills.captable_analysis render --startup synthcap --as-of 2026-06-30
 ```
 
 Renders the snapshot as a self-contained HTML one-pager — **no LLM
@@ -99,3 +99,20 @@ whose content has since changed, are skipped and the page says so
   it is model-dependent.
 
 Requires a snapshot: run `python -m skills.captable_build build` first.
+
+## Reuse and contracts
+
+`captable_analysis` returns `list[InsightFile]`. The explicit `analyze` adapter
+also returns computed data, narrative, insight path and the selected insight;
+for a manual narrative its computed data is `None` and no snapshot is read.
+Manual narratives win first. Generated reuse uses the shared insight lifecycle,
+indexed startup revision and a key covering the computed scenarios (including
+snapshot fingerprint, accrual date and round/FX inputs), prompt and tool version.
+A new analysis date therefore invalidates accrued-interest results. The run CLI
+uses the same adapter; `--startup` is canonical and `--dataset`/`-d` remain aliases.
+
+Snapshots containing failed CLA extractions are rejected for analysis/rendering;
+rebuild them first. Conversion prices honor each loan's stated issued/outstanding
+or fully diluted cap/floor denominator. An unstated basis is disclosed as a fully
+diluted assumption. Dollars-invested scenarios fix post-money at pre-money plus
+new investment plus converting balances, including discount dilution in pricing.

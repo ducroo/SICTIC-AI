@@ -12,3 +12,5 @@ Rules:
 4. `as_of_date`: the document's stated date (filenames don't count), else
    null with an `assumptions` note.
 5. Do not guess: ambiguous columns go into `assumptions`.
+
+Every extracted row (holders, share classes, register entries and pools) must include a verbatim `quote` containing its source name/label and all stated numeric values. Quote the relevant headers as well when values span columns. Do not invent or calculate missing values; use null when the schema permits. Names and labels must retain the source wording; roles and kinds are classifications.

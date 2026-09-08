@@ -22,14 +22,14 @@ validation, and the versioned snapshot store.
 # via the command harness (agents); --fresh discards stored work products:
 python -m skills.harness -- /captable_build synthcap --fresh
 # or the CLI:
-python -m skills.captable_build build --dataset synthcap --fresh
+python -m skills.captable_build build --startup synthcap --fresh
 # or stage by stage:
-python -m skills.captable_build classify --dataset synthcap
-python -m skills.captable_build extract --dataset synthcap
-python -m skills.captable_build assess --dataset synthcap
-python -m skills.captable_build aggregate --dataset synthcap
-python -m skills.captable_build table --dataset synthcap
-python -m skills.captable_build snapshot --dataset synthcap
+python -m skills.captable_build classify --startup synthcap
+python -m skills.captable_build extract --startup synthcap
+python -m skills.captable_build assess --startup synthcap
+python -m skills.captable_build aggregate --startup synthcap
+python -m skills.captable_build table --startup synthcap
+python -m skills.captable_build snapshot --startup synthcap
 ```
 
 `synthcap` is the synthetic fixture dataset (see below); substitute your
@@ -118,7 +118,7 @@ mkdir -p "$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets"
 cp tests/fixtures/captable/synthetic_*.md \
    "$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets/"
 # then, after a dataset sync:
-python -m skills.captable_build build --dataset synthcap \
+python -m skills.captable_build build --startup synthcap \
     --model gemini/gemini-3.5-flash-lite --fresh
 ```
 
@@ -136,3 +136,26 @@ snapshot store (`insights/captable/snapshots/<as_of>.json`, `latest.json`,
 versioned by evidence date, not by generating model, and are consumed as
 machine-readable inputs (by `captable_analysis` and, later, `sha_review`)
 rather than as regenerable per-model insights.
+
+## Completeness, managed reports and compatibility
+
+Missing or empty parsed source documents stop the build. CLA or table extraction
+failures are stored for diagnostics, but stop the run before publishing a snapshot;
+failed work products are never reused. The next run retries extraction. Version
+0.4 invalidates earlier work products so the stronger evidence checks apply.
+Each holder, share-class, register and pool row requires a source quote. Reviewers
+check quote presence, row names and numeric values; role/kind classifications and
+the interpretation of source wording still require human review.
+
+The canonical `captable_build` Python entry point, harness and `build` CLI return
+or render managed `InsightFile` reports. A manual report wins before the pipeline
+runs, including with `--fresh`. The explicit `build` Python adapter and individual
+stages retain their structured dictionary outputs. `--startup` is the canonical
+CLI selector; `--dataset` and `-d` remain aliases.
+
+Dated snapshots and intermediate work products remain domain records, separate
+from managed reports. Their existing paths are preserved for snapshot consumers.
+Their content-based stamps include all parsed input documents, captable config,
+model and tool version; the managed report uses shared insight selection and
+indexed revisions plus the snapshot fingerprint. A manual Markdown report does
+not replace the machine-readable snapshot required by analysis.

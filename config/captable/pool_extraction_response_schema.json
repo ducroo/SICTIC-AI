@@ -1,15 +1,32 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["as_of_date", "pools", "assumptions"],
+  "required": [
+    "as_of_date",
+    "pools",
+    "assumptions"
+  ],
   "properties": {
     "as_of_date": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["value", "quote"],
+      "required": [
+        "value",
+        "quote"
+      ],
       "properties": {
-        "value": {"type": ["string", "null"]},
-        "quote": {"type": ["string", "null"]}
+        "value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quote": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     },
     "pools": {
@@ -17,24 +34,61 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "label", "total", "granted", "unallocated",
-                     "quote"],
+        "required": [
+          "kind",
+          "label",
+          "total",
+          "granted",
+          "unallocated",
+          "quote"
+        ],
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["esop", "psop", "grantable", "treasury", "other"]
+            "enum": [
+              "esop",
+              "psop",
+              "grantable",
+              "treasury",
+              "other"
+            ]
           },
-          "label": {"type": "string", "minLength": 1},
-          "total": {"type": ["number", "null"]},
-          "granted": {"type": ["number", "null"]},
-          "unallocated": {"type": ["number", "null"]},
-          "quote": {"type": ["string", "null"]}
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "total": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "granted": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "unallocated": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "quote": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Verbatim source row or passage containing this identity and all stated numeric values. Include column headers where needed."
+          }
         }
       }
     },
     "assumptions": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1}
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   }
 }

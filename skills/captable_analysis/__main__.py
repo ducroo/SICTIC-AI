@@ -4,7 +4,7 @@ import typer
 
 from lib.cli import run_command
 from lib.infrastructure.logging import get_logger
-from skills.captable_analysis.captable_analysis import captable_analysis
+from skills.captable_analysis.captable_analysis import analyze
 
 logger = get_logger(__name__)
 app = typer.Typer(
@@ -15,7 +15,7 @@ app = typer.Typer(
 @app.command("run")
 def run_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
     as_of: str = typer.Option(
         None, "--as-of", help="Analyze a specific snapshot (default: latest)."
@@ -47,7 +47,7 @@ def run_cmd(
     from skills.captable_analysis.captable_analysis import parse_fx_rates
 
     result = run_command(
-        lambda: captable_analysis(
+        lambda: analyze(
             dataset_name,
             as_of=as_of,
             pre_money=pre_money,
@@ -66,7 +66,7 @@ def run_cmd(
 @app.command("render")
 def render_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
     as_of: str = typer.Option(
         None, "--as-of", help="Render a specific snapshot (default: latest)."

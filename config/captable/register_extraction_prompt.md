@@ -23,3 +23,5 @@ Extraction rules:
    never fill it from a filename.
 6. Skip beneficial-owner columns and transfer-history details; this
    extraction exists only to reconcile current holdings.
+
+Every extracted row (holders, share classes, register entries and pools) must include a verbatim `quote` containing its source name/label and all stated numeric values. Quote the relevant headers as well when values span columns. Do not invent or calculate missing values; use null when the schema permits. Names and labels must retain the source wording; roles and kinds are classifications.

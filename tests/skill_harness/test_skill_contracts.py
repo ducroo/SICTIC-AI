@@ -66,6 +66,8 @@ def test_every_skill_has_explicit_harness_coverage_classification():
 def test_insight_skill_apis_declare_uniform_result_contract():
     entrypoints = {
         "advocates": "skills.advocates.advocates",
+        "captable_build": "skills.captable_build.captable_build",
+        "captable_analysis": "skills.captable_analysis.captable_analysis",
         "dd_checks": "skills.dd_checks.dd_checks",
         "dd_priorities": "skills.dd_priorities.dd_priorities",
         "deep_dive_invitation": "skills.deep_dive_invitation.deep_dive_invitation",

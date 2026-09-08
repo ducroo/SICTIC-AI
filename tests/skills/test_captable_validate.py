@@ -156,13 +156,28 @@ def test_cross_snapshot_flags_shrinking_class_and_holder() -> None:
 
 
 def test_captable_reviewer_rejects_dropped_rows() -> None:
-    reviewer = _review_captable("Total | 23070088 | 10000000 | 10570088")
     output = _captable_realistic()
+    quotes = [
+        "Founder A | 8039373 | 8039373 | 0",
+        "Option Holder | 1845607 | 0",
+        "VC One | 10570088 | 10570088 | 17000000",
+        "Employees | 612529 | 1749942 | 0",
+        "Authorized Capital | 865149 | 0",
+        "Treasury | 1348098 | 0",
+    ]
+    for row, quote in zip(output["stakeholders"], quotes):
+        row["quote"] = quote
+    for row, quote in zip(output["share_classes"], ["Common | 0.01 | 1", "Preferred Seed | 0.01 | 1"]):
+        row["quote"] = quote
+        quotes.append(quote)
+    output["pools"][0]["quote"] = "Equity plans grantable | 865149"
+    quotes += [output["pools"][0]["quote"], output["totals"]["quote"], output["fully_diluted_definition"]["quote"]]
+    reviewer = _review_captable("\n".join(quotes))
+    assert not reviewer(output).problems
     output["stakeholders"] = output["stakeholders"][:2]
     assert any(
         "missing or double-counted" in p for p in reviewer(output).problems
     )
-    assert not reviewer(_captable_realistic()).problems
 
 
 def test_resolve_as_of_prefers_stated_then_classified() -> None:

@@ -36,29 +36,31 @@ def normalize_for_matching(text: str) -> str:
 def load_parsed_documents(dataset_name: str) -> list[ParsedDocument]:
     """Return every source document of the dataset with its parsed text.
 
-    Documents whose parsed Markdown does not exist (parse failures or a sync
-    that has not run yet) are skipped with a warning rather than failing the
-    whole run.
+    Missing or empty parsed documents stop the run: incomplete coverage
+    must not produce apparently complete ownership or debt figures.
     """
     storage = get_storage()
     raw_rel = dataset_raw_path(dataset_name)
     parsed_rel = dataset_parsed_path(dataset_name)
     documents: list[ParsedDocument] = []
+    missing: list[str] = []
     for filename, _mtime in list_source_files(storage, raw_rel):
         parsed_path = parsed_filepath(parsed_rel, filename)
         if not storage.exists(parsed_path):
-            logger.warning(
-                "[%s] No parsed text for %r; run a dataset sync first.",
-                dataset_name,
-                filename,
-            )
+            missing.append(filename)
+            continue
+        text = storage.read_text(parsed_path)
+        if not text.strip():
+            missing.append(filename)
             continue
         documents.append(
             ParsedDocument(
                 filename=filename,
-                text=storage.read_text(parsed_path),
+                text=text,
             )
         )
+    if missing:
+        raise ValueError(f"Incomplete parsed documents for {dataset_name!r}: {', '.join(missing)}. Run a successful dataset sync first.")
     if not documents:
         raise ValueError(
             f"Dataset {dataset_name!r} has no parsed documents; "

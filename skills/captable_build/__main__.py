@@ -2,12 +2,12 @@ import json
 
 import typer
 
-from lib.cli import run_command
+from lib.cli import run_command, format_insights
 from lib.infrastructure.logging import get_logger
 from skills.captable_build.captable_build import (
     aggregate,
     assess,
-    build,
+    captable_build,
     classify,
     extract,
     snapshot,
@@ -23,7 +23,7 @@ app = typer.Typer(
 @app.command("classify")
 def classify_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
 ):
     """Classify every document of the dataset (stage 1)."""
@@ -38,7 +38,7 @@ def classify_cmd(
 @app.command("extract")
 def extract_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
 ):
     """Extract terms from every classified CLA document (stage 2)."""
@@ -53,7 +53,7 @@ def extract_cmd(
 @app.command("assess")
 def assess_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
 ):
     """Deterministically assess every extracted CLA (stage 3)."""
@@ -68,7 +68,7 @@ def assess_cmd(
 @app.command("aggregate")
 def aggregate_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
 ):
     """Aggregate all extracted CLAs of the dataset (stage 4)."""
@@ -83,7 +83,7 @@ def aggregate_cmd(
 @app.command("table")
 def table_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
 ):
     """Extract cap table, share register, and pools (stage 5)."""
@@ -98,7 +98,7 @@ def table_cmd(
 @app.command("snapshot")
 def snapshot_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
 ):
     """Validate and store the versioned snapshot (stages 6-7)."""
@@ -113,7 +113,7 @@ def snapshot_cmd(
 @app.command("build")
 def build_cmd(
     dataset_name: str = typer.Option(
-        ..., "--dataset", "-d", help="Target startup dataset name."
+        ..., "--startup", "--dataset", "-s", "-d", help="Target startup dataset name."
     ),
     fresh: bool = typer.Option(
         False, "--fresh", help="Discard stored work products first."
@@ -135,11 +135,11 @@ def build_cmd(
         os.environ["LLM_MODEL"] = model
         logger.warning("LLM override for this run: %s", model)
     result = run_command(
-        lambda: build(dataset_name, fresh=fresh),
+        lambda: captable_build(dataset_name, fresh=fresh),
         logger=logger,
         error_prefix="Build failed",
     )
-    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    typer.echo(format_insights(result))
 
 
 if __name__ == "__main__":

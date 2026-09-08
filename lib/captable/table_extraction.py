@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+import math
+import re
 
 from lib.captable.documents import normalize_for_matching
 from lib.infrastructure.ai_text_generation import Review, generate_json
@@ -16,19 +18,73 @@ logger = get_logger(__name__)
 COMPLETENESS_TOLERANCE = 0.005
 
 
+def _numbers_in_quote(quote: str) -> set[float]:
+    """Recognize plain and commonly grouped/decimal source numerals."""
+    quote = re.sub(r"(?<=\d)[ '\u2019\u00a0\u202f](?=\d{3}(?:\D|$))", "", quote)
+    values = set()
+    for token in re.findall(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*", quote):
+        variants = [token.replace(",", ""), token.replace(".", "").replace(",", ".")]
+        for variant in variants:
+            try:
+                values.add(float(variant))
+            except ValueError:
+                pass
+    return values
+
+
+def _review_evidence(output: dict, document_text: str) -> list[str]:
+    normalized = normalize_for_matching(document_text)
+    problems = []
+
+    def check(label, row, *, identity=None):
+        quote = row.get("quote") or ""
+        if not normalize_for_matching(quote) or normalize_for_matching(quote) not in normalized:
+            problems.append(f"{label}: quote missing or not found verbatim in source.")
+            return
+        if identity and normalize_for_matching(str(identity)) not in normalize_for_matching(quote):
+            problems.append(f"{label}: identity {identity!r} is not evidenced by its quote.")
+        quoted_numbers = _numbers_in_quote(quote)
+
+        def check_numbers(value):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                if not any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
+                    problems.append(f"{label}: numeric value {value} is not evidenced by its quote.")
+            elif isinstance(value, dict):
+                for key, child in value.items():
+                    if key != "quote":
+                        check_numbers(child)
+            elif isinstance(value, list):
+                for child in value:
+                    check_numbers(child)
+        check_numbers(row)
+
+    for collection in ("stakeholders", "share_classes", "entries", "pools"):
+        for index, row in enumerate(output.get(collection, [])):
+            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"))
+    for field in ("as_of_date", "fully_diluted_definition"):
+        entry = output.get(field) or {}
+        if entry.get("value") not in (None, "unstated"):
+            check(field, entry)
+    if output.get("totals"):
+        check("totals", output["totals"])
+    return problems
+
+
+def _review_table_evidence(document_text: str):
+    def reviewer(output):
+        if not isinstance(output, dict):
+            return Review(output, ("Response must be a JSON object.",))
+        return Review(output, tuple(_review_evidence(output, document_text)))
+    return reviewer
+
+
 def _review_captable(document_text: str):
     normalized_text = normalize_for_matching(document_text)
 
     def reviewer(output: Any) -> Review[Any]:
         if not isinstance(output, dict):
             return Review(output, ("Response must be a JSON object.",))
-        problems: list[str] = []
-
-        quote = (output.get("totals") or {}).get("quote")
-        if quote and normalize_for_matching(quote) not in normalized_text:
-            problems.append(
-                f"totals.quote not found verbatim in the document: {quote!r}."
-            )
+        problems: list[str] = _review_evidence(output, document_text)
 
         # A fully-diluted definition must be evidenced by definitional
         # wording, not by a table/totals row (the model's favorite dodge).
@@ -100,7 +156,8 @@ async def extract_register(
         f"### DOCUMENT: {filename}\n\n{document_text}"
     )
     result = await generate_json(
-        prompt, config["register_extraction_response_schema"]
+        prompt, config["register_extraction_response_schema"],
+        reviewer=_review_table_evidence(document_text),
     )
     if not isinstance(result, dict):
         raise ValueError("Register extraction must be a JSON object.")
@@ -119,7 +176,8 @@ async def extract_pools(
         f"### DOCUMENT: {filename}\n\n{document_text}"
     )
     result = await generate_json(
-        prompt, config["pool_extraction_response_schema"]
+        prompt, config["pool_extraction_response_schema"],
+        reviewer=_review_table_evidence(document_text),
     )
     if not isinstance(result, dict):
         raise ValueError("Pool extraction must be a JSON object.")

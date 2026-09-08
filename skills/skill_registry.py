@@ -2,7 +2,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from skills.captable_analysis.captable_analysis import captable_analysis
-from skills.captable_build.captable_build import build as captable_build
+from skills.captable_build.captable_build import captable_build
 from skills.dd_checks.dd_checks import dd_checks
 from skills.dd_priorities.dd_priorities import dd_priorities
 from skills.sha_review.sha_review import sha_review
