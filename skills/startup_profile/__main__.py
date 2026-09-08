@@ -54,6 +54,7 @@ async def _profile_startups(
 def profile_startup(
     startup: str = typer.Option(
         ...,
+        "--startups",
         "--startup",
         "-s",
         help="Comma-separated startup names",

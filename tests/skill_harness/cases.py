@@ -52,7 +52,7 @@ HARNESS_SMOKE_COMMANDS = {
     "/person_profile": "/person_profile sictic-members Jane Doe",
     "/team_profile": "/team_profile example-startup",
     "/team_profile_revised": "/team_profile_revised example-startup",
-    "/investor_profile": "/investor_profile --source-dataset sictic-members",
+    "/investor_profile": "/investor_profile --dataset sictic-members",
     "/expert_search": "/expert_search example-startup",
     "/potential_investors": "/potential_investors example-startup",
     "/member_preferences": "/member_preferences",
@@ -63,7 +63,7 @@ HARNESS_SMOKE_COMMANDS = {
     "/advocates": "/advocates fixture-event --description Fixture event",
     "/suggested_startups": (
         "/suggested_startups --startups example-startup "
-        "--investor Jane Doe --max-startups 1"
+        "--investors Jane Doe --max-startups 1"
     ),
     "/dd_checks": "/dd_checks example-startup",
     "/dd_priorities": "/dd_priorities example-startup",

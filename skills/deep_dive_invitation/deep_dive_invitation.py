@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 from pathlib import PurePosixPath
 import re
 
 from lib.infrastructure.configuration import config_cache_key, load_repository_config
 from lib.infrastructure.logging import get_logger
+from lib.datasets.paths import find_dataset_location
 from lib.insights import InsightFile, InsightResult
 from lib.model_config import llm_model
 from lib.people import Person, markdown_table_to_person_objects
 from lib.slugify import slugify
+from lib.startups.identity import canonical_startup_slug
 from lib.storage import get_storage
 from skills.dealum_import.dealum_import import dealum_import
 from skills.expert_search.expert_search import expert_search
@@ -230,22 +231,14 @@ def _founder_resolutions(
 
 
 def _expert_exclusions(
-    investor_resolutions: list[RecipientResolution],
     members: list[Person],
     preference_key: str,
-) -> tuple[list[str], list[str], list[str]]:
+) -> list[str]:
     preference_exclusions: list[str] = []
     for member in members:
         if preferences_for(member).get(preference_key, "standard") == "none":
             preference_exclusions.append(member.identifier)
-    investor_exclusions: list[str] = []
-    for resolution in investor_resolutions:
-        matches = _exact_member_matches(resolution.person, members)
-        investor_exclusions.extend(match.identifier for match in matches)
-    preference_exclusions = list(dict.fromkeys(preference_exclusions))
-    investor_exclusions = list(dict.fromkeys(investor_exclusions))
-    combined = list(dict.fromkeys(preference_exclusions + investor_exclusions))
-    return combined, preference_exclusions, investor_exclusions
+    return sorted(set(preference_exclusions))
 
 
 def _select_experts(
@@ -266,12 +259,20 @@ def _select_experts(
         for resolution in investor_resolutions
         if resolution.selected_email
     }
+    cc_member_ids = {
+        member.identifier
+        for resolution in investor_resolutions
+        if resolution.selected_email
+        for member in _exact_member_matches(resolution.person, members)
+    }
     selected: list[Person] = []
     for candidate in ranked:
         matches = _exact_member_matches(candidate, members)
         if len(matches) != 1:
             continue
         member = matches[0]
+        if member.identifier in cc_member_ids:
+            continue
         candidate.merge(member)
         if preferences_for(member).get(preference_key, "standard") == "none":
             continue
@@ -375,7 +376,31 @@ async def deep_dive_invitation(
     template = config["email_template"]
     settings = config["settings"]
 
+    startup_slug = canonical_startup_slug(startup)
+    cache_key = config_cache_key(
+        config,
+        [_person_snapshot(person) for person in supplied_founders],
+        [_person_snapshot(person) for person in supplied_investors],
+    )
+    insight = InsightFile(
+        dataset=startup_slug,
+        skill="deep_dive_invitation",
+        model=llm_model(),
+        source_datasets=[startup_slug, "sictic-members"],
+        config_key=cache_key,
+    )
+    if find_dataset_location(startup_slug) is not None:
+        if reusable := insight.find(selection="reusable"):
+            return [reusable]
+
     dealum = await dealum_import(startup)
+    # A Dealum application code can resolve to a different dataset slug.
+    # Check that dataset before running the remaining dependencies.
+    if dealum.dataset_slug != startup_slug:
+        insight.dataset = dealum.dataset_slug
+        insight.source_datasets = [dealum.dataset_slug, "sictic-members"]
+        if reusable := insight.find(selection="reusable"):
+            return [reusable]
     startup_slug = dealum.dataset_slug
     await startup_profile(startup_slug)
 
@@ -394,14 +419,13 @@ async def deep_dive_invitation(
     )
 
     preference_key = settings["preference_key"]
-    exclusions, preference_exclusions, investor_exclusions = _expert_exclusions(
-        investor_resolutions,
+    preference_exclusions = _expert_exclusions(
         members,
         preference_key,
     )
     [expert_insight] = await expert_search(
         startup_slug,
-        exclude_experts=exclusions,
+        exclude_experts=preference_exclusions,
         top_k=settings["expert_search_candidates"],
     )
     experts = _select_experts(
@@ -452,30 +476,6 @@ async def deep_dive_invitation(
     body = body.replace("{{investor_table}}", _investor_table(investor_resolutions))
     body = body.replace("{{dealum_url}}", dealum.dealum_url or "<insert Dealum link here>")
 
-    expert_digest = hashlib.sha256(expert_insight.content().encode()).hexdigest()
-    cache_key = config_cache_key(
-        config,
-        [_person_snapshot(person) for person in supplied_founders],
-        [_person_snapshot(person) for person in supplied_investors],
-        [
-            {
-                "identifier": member.identifier,
-                "preferences": preferences_for(member),
-            }
-            for member in members
-        ],
-        {"expert_insight": expert_insight.path, "content_sha256": expert_digest},
-    )
-    insight = InsightFile(
-        dataset=startup_slug,
-        skill="deep_dive_invitation",
-        model=llm_model(),
-        source_datasets=[startup_slug, "sictic-members"],
-        config_key=cache_key,
-    )
-    if reusable := insight.find(selection="reusable"):
-        return [reusable]
-
     content = "\n".join(
         [
             "# Review notices",
@@ -496,8 +496,7 @@ async def deep_dive_invitation(
             "",
             "- Member preference opt-outs excluded from expert search: "
             f"{len(preference_exclusions)}",
-            "- Interested members excluded from expert search: "
-            f"{len(investor_exclusions)}",
+            f"- Interested investors with an email in Cc: {len(cc_addresses)}",
             f"- Usable experts selected for Bcc: {len(bcc_addresses)}",
             "",
             "# Email draft",

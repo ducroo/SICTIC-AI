@@ -13,6 +13,7 @@ def main(
     dataset: str = typer.Option(..., "--dataset", "-d", help="The target dataset to search."),
     person: Optional[str] = typer.Option(
         None,
+        "--persons",
         "--person",
         "-p",
         help=(

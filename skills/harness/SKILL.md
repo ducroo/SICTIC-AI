@@ -41,6 +41,11 @@ command when passing skill options separately, so the outer CLI does not consume
 them. A whole quoted command remains supported; retain inner double quotes around
 its multiword values. Interactive command text uses the same inner quoting.
 
+Parameter names follow the shared CLI naming rules. `/investor_profile` uses
+`--dataset` (legacy alias `--source-dataset`); `/suggested_startups` uses
+`--investors` (legacy alias `--investor`). Positional selectors remain supported:
+single-startup commands use `startup`, while `/submission_ready` takes `startups`.
+
 ## References
 
 - [Dispatcher and command registry](harness.py)

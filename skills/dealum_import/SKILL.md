@@ -33,7 +33,8 @@ conda run -n sictic-env python -m skills.harness '/dealum_import "<EXACT_NAME_OR
 conda run -n sictic-env python -m skills.dealum_import "Avientus, daav"
 ```
 
-Only the direct CLI splits a comma-separated startup list.
+The direct CLI's positional `STARTUPS` argument accepts a comma-separated list.
+The harness's positional `startup` accepts one name or code.
 This skill is not registered for bulk refresh; other workflows may invoke the
 shared, gated `ensure_startup_dataset` preparation separately.
 

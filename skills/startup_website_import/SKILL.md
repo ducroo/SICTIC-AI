@@ -35,7 +35,8 @@ LinkedIn enrichment, and no harness/bulk registration.
 conda run -n sictic-env python -m skills.startup_website_import example https://example.org --depth 1
 ```
 
-The direct CLI exposes `--depth`, `--max-pages`, `--pdfs/--no-pdfs`,
+The direct CLI takes positional `STARTUP` and `URL` arguments and exposes
+`--depth`, `--max-pages`, `--pdfs/--no-pdfs`,
 `--max-pdfs`, `--max-pdf-mb` and `--respect-robots/--ignore-robots`.
 
 ## References

@@ -13,7 +13,7 @@ app = typer.Typer(help="High-precision Dataset Chat and RAG Engine.")
 
 @app.command("search")
 def search_cmd(
-    dataset_name: str = typer.Argument(..., help="Name of the dataset/collection to search."),
+    dataset_name: str = typer.Argument(..., metavar="DATASET", help="Name of the dataset/collection to search."),
     query: str = typer.Argument("", help="The query/question to search for.")
 ):
     chunks = run_command(
@@ -33,8 +33,8 @@ def search_cmd(
 
 @app.command("chat")
 def chat_cmd(
-    dataset_name: str = typer.Argument(..., help="Name of the dataset/collection to chat with."),
-    questions: str = typer.Argument(..., help="The query/question to ask."),
+    dataset_name: str = typer.Argument(..., metavar="DATASET", help="Name of the dataset/collection to chat with."),
+    questions: str = typer.Argument(..., metavar="QUESTION", help="The query/question to ask."),
     llm_instructions: Optional[str] = typer.Argument(None, help="Optional formatting/anti-hallucination instructions.")
 ):
     response = run_command(
@@ -55,7 +55,7 @@ def chat_cmd(
 
 @app.command("sync")
 def sync_cmd(
-    dataset_names: List[str] = typer.Argument(..., help="Names of the datasets/collections to sync. Can pass multiple separated by spaces."),
+    dataset_names: List[str] = typer.Argument(..., metavar="DATASETS...", help="Names of the datasets/collections to sync. Can pass multiple separated by spaces."),
     force: bool = typer.Option(False, "--force", help="Bypass the short in-process sync cache.")
 ):
     run_command(
