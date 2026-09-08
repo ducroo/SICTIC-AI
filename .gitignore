@@ -43,7 +43,8 @@ venv/
 logs/
 .pids/
 qdrant/
-qdrant_data/
+# no trailing slash: qdrant_data may be a symlink to external storage
+qdrant_data
 .qdrant-initialized
 
 # packaging artifacts
@@ -65,5 +66,12 @@ output/
 outputs/
 storage/
 
+# personal contributor notes & backlog — never push
+docs/contrib-notes/
+docs/code-review-*.md
+
 # Live sync config (per-user folder IDs). Commit only sync.yaml.example.
 config/sync.yaml
+
+# personal MCP scaffolding, not part of the project
+local_mcp/

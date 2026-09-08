@@ -7,6 +7,8 @@ ADMIN_ONLY_HARNESS_COMMANDS = {
 SKILL_COVERAGE = {
     "advocates": "local-smoke",
     "bulk_refresh": "existing-unit",
+    "captable_analysis": "harness-smoke",
+    "captable_build": "harness-smoke",
     "submission_ready": "local-smoke",
     "dataset_chat": "harness-smoke",
     "dataset_maintenance": "utility-smoke",
@@ -67,4 +69,6 @@ HARNESS_SMOKE_COMMANDS = {
     "/dd_priorities": "/dd_priorities example-startup",
     "/submission_ready": "/submission_ready example-startup",
     "/sha_review": "/sha_review example-startup",
+    "/captable_build": "/captable_build example-startup",
+    "/captable_analysis": "/captable_analysis example-startup",
 }

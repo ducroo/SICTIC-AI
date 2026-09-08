@@ -1,0 +1,7 @@
+{
+  "discount_commercial_band_pct": [5, 30],
+  "discount_tax_reclassification_pct": 33.33,
+  "discount_tax_note": "Reported ESTV practice: discounts above one-third of fair market value may reclassify the CLA as non-classic (income tax on the discount, withholding complications). Threshold to be confirmed with tax counsel.",
+  "maturity_conversion_window_days": 30,
+  "interest_safe_harbor_note_rate_pct": 8
+}

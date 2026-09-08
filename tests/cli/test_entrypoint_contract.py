@@ -48,6 +48,8 @@ def test_run_command_reports_errors_consistently(capsys):
     [
         "skills.advocates.__main__",
         "skills.bulk_refresh.__main__",
+        "skills.captable_analysis.__main__",
+        "skills.captable_build.__main__",
         "skills.submission_ready.__main__",
         "skills.dataset_chat.__main__",
         "skills.dataset_maintenance.__main__",

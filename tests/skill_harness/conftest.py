@@ -48,6 +48,75 @@ def _create_dataset(name: str, domain: str) -> None:
     )
 
 
+def _captable_extraction(document: str) -> dict:
+    """A minimal, internally consistent cap-table extraction (stage 5)."""
+    return {
+        "document": document,
+        "dataset": "example-startup",
+        "as_of_date": {"value": "2026-06-30", "quote": "as of 30 June 2026"},
+        "share_classes": [
+            {"id": "common", "name": "Common", "nominal_value": 0.10,
+             "votes_per_share": 1},
+        ],
+        "stakeholders": [
+            {"name": "Jane Doe", "kind": "individual", "role": "founder",
+             "holdings": [{"class_id": "common", "count": 600_000}],
+             "diluted_count": 600_000, "invested_amount": 60_000},
+            {"name": "Fixture Angels", "kind": "entity", "role": "investor",
+             "holdings": [{"class_id": "common", "count": 300_000}],
+             "diluted_count": 300_000, "invested_amount": 300_000},
+            {"name": "Treasury", "kind": "treasury", "role": "company",
+             "holdings": [{"class_id": "common", "count": 50_000}],
+             "diluted_count": None},
+            {"name": "ESOP", "kind": "pool", "role": "employee",
+             "holdings": [], "diluted_count": 100_000},
+        ],
+        "pools": [
+            {"kind": "esop", "label": "ESOP 2025", "total": 100_000,
+             "granted": 40_000, "unallocated": 60_000},
+        ],
+        "totals": {
+            "by_class": [{"class_id": "common", "issued_total": 950_000}],
+            "diluted_total": 1_000_000,
+            "quote": "Total 950,000 / fully diluted 1,000,000",
+        },
+        "fully_diluted_definition": {
+            "value": "full_pools",
+            "quote": "fully diluted including the full ESOP",
+        },
+        "assumptions": [],
+    }
+
+
+def _captable_snapshot() -> dict:
+    """A stored snapshot (stage 7 output) for the analysis smoke."""
+    extraction = _captable_extraction("fixture.md")
+    return {
+        "dataset": "example-startup",
+        "as_of_date": "2026-06-30",
+        "generated_at": "2026-09-06T00:00:00+00:00",
+        "tool_version": "captable_build/test",
+        "sources": [
+            {"doc": "fixture.md", "class": "current_cap_table",
+             "date": "2026-06-30"},
+        ],
+        "share_classes": extraction["share_classes"],
+        "stakeholders": extraction["stakeholders"],
+        "pools": extraction["pools"],
+        "totals": extraction["totals"],
+        "fully_diluted_definition": extraction["fully_diluted_definition"],
+        "register": None,
+        "pool_documents": [],
+        "convertibles": [],
+        "convertible_failures": [],
+        "aggregation": {},
+        "assessment": [],
+        "validation": [],
+        "assumptions": [],
+        "diligence_questions": [],
+    }
+
+
 @pytest.fixture
 def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
     storage_root = tmp_path / "local-storage"
@@ -85,6 +154,12 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
     get_storage().write_text(
         "storage/community/sictic-members/datasets/track-record/jane-doe.md",
         "Invested in fixture startups.",
+    )
+    startup_location = dataset_location_for_domain(fixtures.startup, "startups")
+    get_storage().mkdir(f"{startup_location.insights_rel}/captable/snapshots")
+    get_storage().write_text(
+        f"{startup_location.insights_rel}/captable/latest.json",
+        json.dumps(_captable_snapshot()),
     )
 
     yield fixtures
@@ -417,5 +492,35 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "load_investor_profiles",
         fake_load_investor_profiles,
     )
+
+    captable_build_mod = importlib.import_module(
+        "skills.captable_build.captable_build"
+    )
+    captable_analysis_mod = importlib.import_module(
+        "skills.captable_analysis.captable_analysis"
+    )
+    table_extraction_mod = importlib.import_module("lib.captable.table_extraction")
+
+    async def fake_classify_documents(dataset_name):
+        return {
+            "dataset": dataset_name,
+            "documents": [
+                {
+                    "filename": "fixture.md",
+                    "document_class": "current_cap_table",
+                    "confidence": 95,
+                    "as_of_date": "2026-06-30",
+                    "language": "en",
+                    "rationale": "Fixture cap table.",
+                }
+            ],
+        }
+
+    async def fake_extract_captable(_dataset_name, filename, _document_text):
+        return _captable_extraction(filename)
+
+    monkeypatch.setattr(captable_build_mod, "classify_documents", fake_classify_documents)
+    monkeypatch.setattr(table_extraction_mod, "extract_captable", fake_extract_captable)
+    monkeypatch.setattr(captable_analysis_mod, "generate_markdown", fake_llm_chat)
 
     return fixtures
