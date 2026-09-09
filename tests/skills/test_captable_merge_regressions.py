@@ -97,6 +97,32 @@ REGISTER = (
 )
 
 
+def test_spaced_apostrophe_thousands_are_one_number():
+    """PDF conversion pads the Swiss apostrophe: "145 ' 832" is 145832."""
+    from lib.captable.table_extraction import _numbers_in_quote
+
+    assert 145832.0 in _numbers_in_quote("| 95 ' 832 145 ' 832 | 256'311 |")
+    assert 256311.0 in _numbers_in_quote("| 95 ' 832 145 ' 832 | 256'311 |")
+    assert 1941117.0 in _numbers_in_quote("1 941 117")
+
+
+def test_name_tokens_interleaved_with_numbers_are_accepted():
+    """Converted PDFs put the first name before and the surname after the certificate numbers."""
+    document = "| 26 | Alice 26 | 9'244 | ... | 27 Example 3013 |\n| 27 | Bob Example | 100 |"
+    row = {"name": "Alice Example", "current_common": 9244, "quote": "| 26 | Alice 26 | 9'244 |"}
+    assert not _review_table_evidence(document)({"entries": [row]}).problems
+    row["name"] = "Alice Invented"
+    assert _review_table_evidence(document)({"entries": [row]}).problems
+
+
+def test_numeral_broken_by_a_stray_space_is_accepted():
+    document = "| Carol Example | 12'036 21'66 6 |"
+    row = {"name": "Carol Example", "current_common": 21666, "quote": "| Carol Example | 12'036 21'66 6 |"}
+    assert not _review_table_evidence(document)({"entries": [row]}).problems
+    row["current_common"] = 99999
+    assert _review_table_evidence(document)({"entries": [row]}).problems
+
+
 def test_ellipsis_between_quoted_lines_is_accepted():
     row = {"name": "Alice Example", "current_common": 100, "quote": "| No | Holder | ... | 12 | 100 |"}
     assert not _review_table_evidence(REGISTER)({"entries": [row]}).problems

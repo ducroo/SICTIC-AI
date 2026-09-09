@@ -6,6 +6,7 @@ from typing import Any
 import math
 import re
 
+from lib.captable.aggregation import normalize_lender_name
 from lib.captable.documents import normalize_for_matching
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
@@ -20,7 +21,11 @@ COMPLETENESS_TOLERANCE = 0.005
 
 def _numbers_in_quote(quote: str) -> set[float]:
     """Recognize plain and commonly grouped/decimal source numerals."""
-    quote = re.sub(r"(?<=\d)[ '\u2019\u00a0\u202f](?=\d{3}(?:\D|$))", "", quote)
+    # Thousands separators: apostrophe, typographic apostrophe, narrow or
+    # plain spaces, and PDF conversions that pad the apostrophe with spaces
+    # ("145 ' 832"). Only join when exactly three digits follow.
+    quote = re.sub(r"(?<=\d)[ \u00a0\u202f]*['\u2019][ \u00a0\u202f]*(?=\d{3}(?:\D|$))", "", quote)
+    quote = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:\D|$))", "", quote)
     values = set()
     for token in re.findall(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*", quote):
         variants = [token.replace(",", ""), token.replace(".", "").replace(",", ".")]
@@ -57,8 +62,17 @@ def _subset_sums(numbers: set[float]) -> set[float]:
     return {total / 100 for total in reachable if total and total not in singles}
 
 
+def _identity_in_source(identity: str, normalized_document: str, document_tokens: set[str]) -> bool:
+    """The name appears contiguously, or every token of a multi-token name does."""
+    if normalize_for_matching(identity) in normalized_document:
+        return True
+    tokens = normalize_lender_name(identity).split()
+    return len(tokens) >= 2 and all(token in document_tokens for token in tokens)
+
+
 def _review_evidence(output: dict, document_text: str) -> list[str]:
     normalized = normalize_for_matching(document_text)
+    document_tokens = set(normalize_lender_name(document_text).split())
     problems = []
 
     def check(label, row, *, identity=None):
@@ -77,15 +91,23 @@ def _review_evidence(output: dict, document_text: str) -> list[str]:
             problems.append(f"{label}: quote missing or not found verbatim in source.")
             return
         # Names often sit in a merged cell above the quoted certificate or
-        # holding line; the source as a whole must still contain them.
-        if identity and normalize_for_matching(str(identity)) not in normalized:
+        # holding line, and converted PDFs interleave name tokens with
+        # certificate numbers; the source as a whole must still contain
+        # the name, contiguously or token by token.
+        if identity and not _identity_in_source(str(identity), normalized, document_tokens):
             problems.append(f"{label}: identity {identity!r} is not found in the source.")
         quoted_numbers = _numbers_in_quote(quote)
         quoted_sums = _subset_sums(quoted_numbers)
         zero_marker = _has_implicit_zero_marker(quote)
+        digit_stream = re.sub(r"\D", "", quote)
 
         def evidenced(value: float) -> bool:
             if any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
+                return True
+            # PDF conversion sometimes breaks a numeral with a stray space
+            # ("21'66 6"); a whole number of four or more digits is accepted
+            # when its digits appear consecutively in the quote.
+            if float(value).is_integer() and value >= 1000 and str(int(value)) in digit_stream:
                 return True
             # A dash, "none" or an empty cell in the source is how a zero is
             # written; the row may report it as 0.
