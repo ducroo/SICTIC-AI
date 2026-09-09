@@ -32,22 +32,72 @@ def _numbers_in_quote(quote: str) -> set[float]:
     return values
 
 
+_IMPLICIT_ZERO = re.compile(r"(?<![\w.])(?:-|\u2013|\u2014|n/?a|none|nil|keine|0)(?![\w.])|\|\s*\|", re.IGNORECASE)
+_MAX_SUBSET_SUMS = 20000
+
+
+def _has_implicit_zero_marker(quote: str) -> bool:
+    """A dash, 'none', an empty table cell or a literal 0 stands for zero."""
+    return bool(_IMPLICIT_ZERO.search(quote))
+
+
+def _subset_sums(numbers: set[float]) -> set[float]:
+    """Sums of two or more quoted numbers, for values reported as totals.
+
+    Bounded so a quote full of percentages and dates cannot explode the set.
+    """
+    positive = sorted(n for n in numbers if n > 0)
+    reachable: set[int] = {0}
+    for number in positive:
+        cents = round(number * 100)
+        reachable |= {total + cents for total in reachable}
+        if len(reachable) > _MAX_SUBSET_SUMS:
+            break
+    singles = {round(n * 100) for n in positive}
+    return {total / 100 for total in reachable if total and total not in singles}
+
+
 def _review_evidence(output: dict, document_text: str) -> list[str]:
     normalized = normalize_for_matching(document_text)
     problems = []
 
     def check(label, row, *, identity=None):
         quote = row.get("quote") or ""
-        if not normalize_for_matching(quote) or normalize_for_matching(quote) not in normalized:
+        # A quote is a list of source fragments, not one contiguous block:
+        # the prompt asks for the column header next to a row, a summed
+        # value needs every summed line, and converted PDFs put page
+        # markers and merged cells between lines. Each fragment (split on
+        # line breaks and ellipses) must appear verbatim on its own.
+        fragments = [
+            normalize_for_matching(fragment)
+            for fragment in re.split(r"\r?\n|\.\.\.|\u2026", quote)
+        ]
+        fragments = [fragment for fragment in fragments if fragment]
+        if not fragments or any(fragment not in normalized for fragment in fragments):
             problems.append(f"{label}: quote missing or not found verbatim in source.")
             return
-        if identity and normalize_for_matching(str(identity)) not in normalize_for_matching(quote):
-            problems.append(f"{label}: identity {identity!r} is not evidenced by its quote.")
+        # Names often sit in a merged cell above the quoted certificate or
+        # holding line; the source as a whole must still contain them.
+        if identity and normalize_for_matching(str(identity)) not in normalized:
+            problems.append(f"{label}: identity {identity!r} is not found in the source.")
         quoted_numbers = _numbers_in_quote(quote)
+        quoted_sums = _subset_sums(quoted_numbers)
+        zero_marker = _has_implicit_zero_marker(quote)
+
+        def evidenced(value: float) -> bool:
+            if any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
+                return True
+            # A dash, "none" or an empty cell in the source is how a zero is
+            # written; the row may report it as 0.
+            if value == 0 and zero_marker:
+                return True
+            # A holding split over several source lines is reported as their
+            # sum; accept it when the summed lines are all quoted.
+            return any(math.isclose(value, total, rel_tol=1e-9, abs_tol=0.005) for total in quoted_sums)
 
         def check_numbers(value):
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if not any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
+                if not evidenced(value):
                     problems.append(f"{label}: numeric value {value} is not evidenced by its quote.")
             elif isinstance(value, dict):
                 for key, child in value.items():

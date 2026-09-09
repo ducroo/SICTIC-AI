@@ -35,8 +35,11 @@ another skill artifact.
 
 Build classifies parsed documents, extracts convertible loans and cap-table,
 register and pool evidence, then reconciles and consolidates them. Required
-extraction failures raise without saving partial results. The term checklist and
-assessment settings live in `config/captable_build/`. Assessment, aggregation and
+extraction failures raise without saving partial results. Every extracted table
+row carries a verbatim quote: each quoted line must appear in the source, a
+reported total must equal a sum of quoted lines, a zero may be evidenced by a
+dash or empty cell, and the holder name must appear in the source. The term
+checklist and assessment settings live in `config/captable_build/`. Assessment, aggregation and
 signature scanning are recomputed when consolidation needs rebuilding.
 
 Validation covers issued and diluted totals, holder row sums, register and pool
