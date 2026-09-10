@@ -54,6 +54,6 @@ dependencies:
   # conda-forge across all supported platforms.
   - pip:
       - apify-client
-      - 'llama-cloud>=2.8'
+      - 'llama-cloud>=2.8'  # pragma: allowlist secret
       - 'ocrmac>=1,<2; platform_system == "Darwin"'
       - 'onnxruntime; platform_system != "Darwin"'
