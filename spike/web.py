@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aiohttp import web
 
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from spike.runtime import (
     DemoResult,
     SpikeStatus,
