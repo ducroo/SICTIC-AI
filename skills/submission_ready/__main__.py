@@ -3,7 +3,7 @@ from typing import Optional
 import typer
 
 from lib.cli import format_insights, run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.submission_ready.submission_ready import submission_ready
 
 logger = get_logger(__name__)
@@ -16,6 +16,7 @@ app = typer.Typer(
 def run_submission_ready(
     startup: Optional[list[str]] = typer.Option(
         None,
+        "--startups",
         "--startup",
         "-s",
         help=(

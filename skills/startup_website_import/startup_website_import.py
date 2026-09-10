@@ -14,7 +14,7 @@ from urllib.robotparser import RobotFileParser
 import requests
 
 from lib.datasets.paths import dataset_location_for_domain
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.startups.dossier import ensure_startup_dossier
 from lib.storage import Storage, get_storage

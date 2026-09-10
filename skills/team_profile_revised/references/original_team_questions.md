@@ -1,0 +1,60 @@
+# Original team assessment questions
+
+Canonical register of the original questions supplied for the SICTIC Team assessment. Wording and identifiers are preserved. IDs not present in the supplied list are intentionally omitted.
+
+- **Q001:** Does the deck/application list more than one active, equity-holding founder with a defined role?
+- **Q002:** Does the deck's own narrative voice suggest one person is actually running it alone?
+- **Q003:** Are all named founders exclusively a romantic couple, with no independent team member?
+- **Q004:** Does the team explicitly address the personal-relationship risk?
+- **Q005:** Does at least one core founder have demonstrable domain/technical background?
+- **Q006:** Does at least one core founder show demonstrable business/commercial understanding?
+- **Q007:** Does at least one core founder have concrete evidence of having sold something?
+- **Q008:** Where a skill-coverage gap exists, does the team explicitly name that specific gap?
+- **Q009:** Is the ONLY stated plan for a sales/commercial gap "we will hire a salesperson"?
+- **Q010:** What specifically distinguishes a "credible, substantive plan" from a superficial one?
+- **Q011:** Does at least one active founder have expertise for the startup's principal execution risk?
+- **Q014:** Is the startup pre-revenue while founder salaries are high and funded mostly by the fresh raise?
+- **Q015:** Is this a near-spinoff team raising outside money while the parent stays involved?
+- **Q016:** Do the founders share a long prior work history together at one existing company?
+- **Q017:** Does the parent/existing company stay financially involved in the new startup?
+- **Q018:** Are the founders still formally employed by, or dependent on, the parent company?
+- **Q019:** Do stated roles/titles match across application, deck, LinkedIn, and website?
+- **Q020:** Do stated dates match across sources?
+- **Q021:** Does any active founder have a current job or concurrent venture that could conflict?
+- **Q022:** Are there named board members with recognizable public standing?
+- **Q023:** For each named advisor, is there stated evidence of an ongoing, active relationship?
+- **Q024:** How can the described advisor/board relationship be confirmed as real?
+- **Q025:** Does every founder's prior experience consist entirely of large-corporate roles?
+- **Q026:** Does the founder's public profile show evidence of energy/risk-taking/exploration?
+- **Q027:** Do the founders have a long, pre-existing shared history?
+- **Q028:** Do founders have notable educational pedigree as a credibility marker?
+- **Q029:** Can interpersonal team-dynamics fit be assessed from any available source?
+- **Q030:** Should team-completeness expectations vary by startup stage/type?
+- **Q117:** Does the majority-equity founder also hold the operational decision-making title?
+- **Q118:** Where multiple team members' statements are available, do they agree with each other?
+- **Q119:** Is there a Purchase Option / Good-Bad-Leaver clause in the shareholders' agreement?
+- **Q120:** Is there a signed, written founders' agreement covering equity, roles, governance, exit, IP?
+- **Q121:** Is the founder/CEO personally handling this pre-screen interaction?
+- **Q122:** Does the commercial register show management/board changes LinkedIn doesn't reflect?
+- **Q123:** Have previous investors documented due diligence available to cross-reference?
+- **Q124:** Do any named customers/suppliers/contractors share an owner with the founding team?
+- **Q125:** Has any attempt been made to reach a former (not founder-selected) employee independently?
+- **Q126:** How many references should a volunteer pre-screen require before treating claims as corroborated?
+- **Q127:** When references are reachable, does anyone ask the "why would they have left in 12 months" question?
+- **Q128:** Should the pre-screen include any informal outside-network check on a founder?
+- **Q129:** Does any board member or advisor have direct, verifiable domain expertise in the core technical claim?
+- **Q130:** Has the board actually convened, with attendees/minutes referenceable?
+- **Q131:** Where a team gap is shown, is there any advisor/board presence that could offset it?
+- **Q132:** Does the team slide list more named advisors than referenceable customers?
+- **Q133:** Are there advisors, investors, or customers referenceable independent of the founder?
+- **Q134:** Has the founding team met the reviewer, provided proof of identity, and disclosed an office location?
+- **Q135:** Does the deck or founder transcript surface concrete, checkable evidence of founder ability?
+- **Q136:** Is there any publicly-checkable indication of outstanding enforcement proceedings?
+- **Q137:** Has a basic adverse-media search been performed, covering independent sources?
+- **Q138:** Does any founder hold an undisclosed personal financial interest in a related asset?
+- **Q139:** Can the startup provide Betreibungsregister excerpts and criminal records on request?
+- **Q140:** Did the founder respond substantively to critical feedback rather than deflect?
+- **Q141:** When asked to name a weakness, does the answer show genuine self-assessment?
+- **Q142:** Should the matrix distinguish "gap the venture closes itself" from "gap SICTIC's network could close"?
+- **Q143:** What would break if the primary founder were unreachable for 60-90 days?
+- **Q144:** Does the founder's voting/control structure allow unilateral decisions, and is there a succession plan?

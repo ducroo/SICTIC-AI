@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from lib.adapters.vector_store import VectorStore, get_vector_store
+from lib.infrastructure.qdrant import QdrantAdapter
+from lib.infrastructure.vector_store import get_vector_store, vector_store_backend
 from lib.datasets.chunking import split_markdown
 from lib.datasets.embeddings import EmbeddingService
 from lib.datasets.manifest import (
@@ -18,11 +19,21 @@ from lib.datasets.source import (
     parsed_filepath,
     snapshot_source_files,
 )
-from lib.logger import get_logger
+from lib.datasets.sparse import SPARSE_ENCODER_VERSION, encode_document
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
+
+MAX_CHUNKS_PER_DOCUMENT = 500
+MAX_CHARACTERS_PER_DOCUMENT = 500_000
+
+
+def _dataset_store(dataset_slug: str, **kwargs):
+    if vector_store_backend() != "qdrant":
+        return get_vector_store(dataset_slug, **kwargs)
+    return QdrantAdapter(dataset_slug, **kwargs)
 
 
 async def reconcile_index(
@@ -34,19 +45,31 @@ async def reconcile_index(
     manifest: IngestionManifest | None = None,
     result: IngestionResult | None = None,
 ) -> IngestionResult:
-    """Reconcile successfully parsed documents to the configured vector store."""
+    """Reconcile successfully parsed documents to Qdrant."""
     dataset_slug = slugify(dataset_name)
     storage = get_storage()
     sources = sources or snapshot_source_files(storage, raw_rel)
     manifest = manifest or IngestionManifest.load(storage, parsed_rel)
     result = result or IngestionResult(dataset=dataset_slug)
     embeddings = EmbeddingService()
-    store = get_vector_store(dataset_slug)
-    collection_exists = store.collection_exists()
+    qdrant = _dataset_store(dataset_slug)
+    collection_exists = qdrant.collection_exists()
     db_mtimes = (
-        store.get_document_mtimes(raise_on_error=True)
+        qdrant.get_document_mtimes(raise_on_error=True)
         if collection_exists
         else {}
+    )
+    # Qdrant creates BM25 on new collections. Firestore never stores sparse  # pragma: allowlist secret
+    # vectors, so a first index must not checkpoint a sparse version that
+    # later runs would immediately rebuild.
+    sparse_version = (
+        SPARSE_ENCODER_VERSION
+        if (
+            qdrant.sparse_enabled()
+            if collection_exists
+            else vector_store_backend() == "qdrant"
+        )
+        else ""
     )
 
     indexable_source_names = {
@@ -58,9 +81,9 @@ async def reconcile_index(
         )
     }
     for orphan in sorted(set(db_mtimes) - indexable_source_names):
-        store.delete_document(orphan, raise_on_error=True)
+        qdrant.delete_document(orphan, raise_on_error=True)
         result.removed_qdrant += 1
-        logger.info("[%s] Removed vector-store orphan %s.", dataset_slug, orphan)
+        logger.info("[%s] Removed index orphan %s.", dataset_slug, orphan)
 
     files_to_index: list[tuple[SourceDocument, str, str]] = []
     for source in sources:
@@ -97,6 +120,7 @@ async def reconcile_index(
                     "indexed_parsed_sha256": parsed_sha,
                     "indexed_chunker_version": CHUNKER_VERSION,
                     "indexed_embedding_model": embeddings.model,
+                    "indexed_sparse_version": sparse_version,
                 }
             )
 
@@ -104,6 +128,7 @@ async def reconcile_index(
             state.get("indexed_parsed_sha256") != parsed_sha
             or state.get("indexed_chunker_version") != CHUNKER_VERSION
             or state.get("indexed_embedding_model") != embeddings.model
+            or state.get("indexed_sparse_version", "") != sparse_version
         ):
             files_to_index.append((source, parsed_path, parsed_text))
 
@@ -116,7 +141,7 @@ async def reconcile_index(
 
     non_empty_files = [item for item in files_to_index if item[2].strip()]
     if non_empty_files:
-        store.ensure_collection(embeddings.vector_size())
+        qdrant.ensure_collection(await embeddings.vector_size())
         collection_exists = True
 
     logger.info(
@@ -129,17 +154,72 @@ async def reconcile_index(
         start=1,
     ):
         try:
+            if len(text) > MAX_CHARACTERS_PER_DOCUMENT:
+                _skip_oversized_document(
+                    qdrant=qdrant,
+                    collection_exists=collection_exists,
+                    source=source,
+                    state=manifest.state(source.filename),
+                    embeddings=embeddings,
+                    sparse_version=sparse_version,
+                    parsed_text=text,
+                    reason=(
+                        f"{len(text):,} characters exceeds the "
+                        f"{MAX_CHARACTERS_PER_DOCUMENT:,}-character limit"
+                    ),
+                )
+                result.ignored += 1
+                logger.warning(
+                    "[%s] Skipped indexing %s/%s for %s: document has "
+                    "%s characters (limit %s).",
+                    dataset_slug,
+                    index,
+                    len(files_to_index),
+                    source.filename,
+                    f"{len(text):,}",
+                    f"{MAX_CHARACTERS_PER_DOCUMENT:,}",
+                )
+                manifest.save()
+                continue
             chunks = (
                 split_markdown(text, source.filename, source.mtime)
                 if text.strip()
                 else []
             )
+            if len(chunks) > MAX_CHUNKS_PER_DOCUMENT:
+                _skip_oversized_document(
+                    qdrant=qdrant,
+                    collection_exists=collection_exists,
+                    source=source,
+                    state=manifest.state(source.filename),
+                    embeddings=embeddings,
+                    sparse_version=sparse_version,
+                    parsed_text=text,
+                    reason=(
+                        f"{len(chunks):,} chunks exceeds the "
+                        f"{MAX_CHUNKS_PER_DOCUMENT:,}-chunk limit"
+                    ),
+                )
+                result.ignored += 1
+                logger.warning(
+                    "[%s] Skipped indexing %s/%s for %s: document has "
+                    "%s chunks (limit %s).",
+                    dataset_slug,
+                    index,
+                    len(files_to_index),
+                    source.filename,
+                    f"{len(chunks):,}",
+                    f"{MAX_CHUNKS_PER_DOCUMENT:,}",
+                )
+                manifest.save()
+                continue
             if collection_exists:
                 await replace_document(
-                    store,
+                    qdrant,
                     embeddings,
                     source.filename,
                     chunks,
+                    with_sparse=bool(sparse_version),
                 )
             state = manifest.state(source.filename)
             state.update(
@@ -147,8 +227,10 @@ async def reconcile_index(
                     "indexed_parsed_sha256": content_hash(text),
                     "indexed_chunker_version": CHUNKER_VERSION,
                     "indexed_embedding_model": embeddings.model,
+                    "indexed_sparse_version": sparse_version,
                 }
             )
+            state.pop("index_ignored_reason", None)
             result.indexed += 1
             logger.info(
                 "[%s] Indexed %s/%s: %s (%s chunks)",
@@ -181,28 +263,59 @@ async def reconcile_index(
     return result
 
 
+def _skip_oversized_document(
+    *,
+    qdrant: QdrantAdapter,
+    collection_exists: bool,
+    source: SourceDocument,
+    state: dict,
+    embeddings: EmbeddingService,
+    sparse_version: str,
+    parsed_text: str,
+    reason: str,
+) -> None:
+    """Checkpoint a deliberately omitted document without stale vectors."""
+    if collection_exists:
+        qdrant.delete_document(source.filename, raise_on_error=True)
+    state.update(
+        {
+            "indexed_parsed_sha256": content_hash(parsed_text),
+            "indexed_chunker_version": CHUNKER_VERSION,
+            "indexed_embedding_model": embeddings.model,
+            "indexed_sparse_version": sparse_version,
+            "index_ignored_reason": reason,
+        }
+    )
+
+
 async def replace_document(
-    store: VectorStore,
+    qdrant: QdrantAdapter,
     embeddings: EmbeddingService,
     filename: str,
     chunks,
+    *,
+    with_sparse: bool = False,
 ) -> None:
     """Upsert a complete replacement before removing obsolete chunk IDs."""
-    existing_ids = store.get_document_point_ids(filename)
+    existing_ids = qdrant.get_document_point_ids(filename)
     vectors = await embeddings.embed_many([chunk.text for chunk in chunks])
     points = []
     for chunk, vector in zip(chunks, vectors):
         payload = chunk.model_dump()
         payload.pop("chunk_id", None)
         payload.pop("score", None)
-        points.append(
-            {
-                "id": chunk.chunk_id,
-                "vector": vector,
-                "payload": payload,
-            }
-        )
-    store.upsert_points(points)
-    store.delete_point_ids(
-        existing_ids - {point["id"] for point in points}
+        point = {
+            "id": chunk.chunk_id,
+            "vector": vector,
+            "payload": payload,
+        }
+        if with_sparse:
+            point["sparse"] = encode_document(chunk.text)
+        points.append(point)
+    stored_ids = qdrant.upsert_points(points)
+    if not isinstance(stored_ids, set):
+        # Retain compatibility with lightweight test and third-party adapters.
+        stored_ids = {point["id"] for point in points}
+    qdrant.delete_point_ids(
+        existing_ids - stored_ids
     )

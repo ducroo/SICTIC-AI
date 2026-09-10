@@ -4,13 +4,27 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
+from lib.datasets.manifest import content_hash
 from lib.datasets.paths import dataset_location_for_domain
 from lib.insights.file import InsightFile
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
+
+
+def select_insights(
+    source_datasets: list[str] | None,
+    skill: str,
+) -> list[InsightFile]:
+    """Select the preferred stored file for each logical insight."""
+    skill_slug = slugify(skill)
+    return InsightFile.find_all(
+        skill=skill_slug,
+        datasets=source_datasets,
+        selection="any",
+    )
 
 
 async def dataset_from_insight(
@@ -26,11 +40,7 @@ async def dataset_from_insight(
         raise ValueError("target_dataset must not be empty.")
 
     skill_slug = slugify(skill)
-    selected = InsightFile.find_all(
-        skill=skill_slug,
-        datasets=source_datasets,
-        selection="any",
-    )
+    selected = select_insights(source_datasets, skill_slug)
     target_rel = dataset_location_for_domain(
         target_slug,
         "generated",
@@ -68,13 +78,11 @@ async def dataset_from_insight(
     unchanged = 0
     for relative_target, insight in desired.items():
         destination = f"{target_rel}/{relative_target}"
-        target_mtime = existing.pop(relative_target, None)
-        source_mtime = storage.mtime(insight.path)
-        copy_required = (
-            target_mtime is None
-            or source_mtime is None
-            or source_mtime > target_mtime
-        )
+        target_exists = existing.pop(relative_target, None) is not None
+        source_bytes = storage.read_bytes(insight.path)
+        copy_required = not target_exists or content_hash(
+            source_bytes
+        ) != content_hash(storage.read_bytes(destination))
         if not copy_required:
             unchanged += 1
             logger.debug("Skipped up-to-date file %s.", destination)
@@ -87,7 +95,7 @@ async def dataset_from_insight(
                 destination,
             )
         else:
-            storage.write_bytes(destination, storage.read_bytes(insight.path))
+            storage.write_bytes(destination, source_bytes)
         copied += 1
 
     removed = 0

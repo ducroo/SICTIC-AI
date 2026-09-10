@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.insights.manifest import config_hash
 from lib.insights.paths import model_slug
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -35,21 +35,29 @@ def find(insight, *, selection: InsightSelection):
 
 
 def _find_reusable(insight):
+    context = f"{insight.dataset}/{insight.skill}"
     manual = insight._candidate("manual")
     if manual.exists():
-        logger.info("Using manual insight: %s", manual.path)
+        logger.info("[%s] Reusing manual version: %s", context, manual.path)
         return manual
 
     manifest = insight._load_manifest()
-    expected_revisions = insight._dataset_revisions()
+    missing_revisions: list[str] = []
+    expected_revisions = insight._dataset_revisions(missing=missing_revisions)
     if expected_revisions is None:
+        logger.info(
+            "[%s] Cache miss: indexed revision missing: %s",
+            context, ", ".join(missing_revisions),
+        )
         return None
     expected_config_hash = config_hash(insight.config_key)
 
+    found_candidate = False
     for model, ranked_model_slug in ranked_models():
         candidate = insight._candidate(model)
         if not candidate.exists():
             continue
+        found_candidate = True
         entry = manifest["entries"].get(candidate.path)
         if (
             isinstance(entry, dict)
@@ -57,9 +65,42 @@ def _find_reusable(insight):
             and entry.get("dataset_revisions") == expected_revisions
             and _stored_config_hash(entry) == expected_config_hash
         ):
-            logger.info("Using reusable insight: %s", candidate.path)
+            logger.info(
+                "[%s] Reusing generated version (%s): %s",
+                context, ranked_model_slug, candidate.path,
+            )
             return candidate
+        reasons = _rejection_reasons(entry, ranked_model_slug, expected_revisions, expected_config_hash)
+        logger.info(
+            "[%s] Cache miss (%s): %s [file: %s]",
+            context, ranked_model_slug, "; ".join(reasons), candidate.path,
+        )
+    if not found_candidate:
+        logger.info("[%s] Cache miss: no existing candidate files", context)
     return None
+
+
+def _rejection_reasons(entry, model, revisions, configuration_hash) -> list[str]:
+    """Describe a rejected candidate without logging prompt or contact content."""
+    if not isinstance(entry, dict):
+        return ["freshness metadata missing"]
+    reasons = []
+    stored_revisions = entry.get("dataset_revisions")
+    stored_hash = _stored_config_hash(entry)
+    if not entry.get("model") or not isinstance(stored_revisions, dict) or not stored_hash:
+        reasons.append("freshness metadata missing or invalid")
+    if entry.get("model") and entry["model"] != model:
+        reasons.append("stored model mismatch")
+    if isinstance(stored_revisions, dict):
+        changed = sorted(
+            name for name in set(stored_revisions) | set(revisions)
+            if stored_revisions.get(name) != revisions.get(name)
+        )
+        if changed:
+            reasons.append(f"dataset changed: {', '.join(changed)}")
+    if stored_hash and stored_hash != configuration_hash:
+        reasons.append("prompt/configuration/inputs changed")
+    return reasons
 
 
 def is_reusable(insight) -> bool:

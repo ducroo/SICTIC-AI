@@ -1,7 +1,7 @@
 import typer
 
 from lib.cli import format_insights, run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.startup_traction.startup_traction import startup_traction
 
 logger = get_logger(__name__)

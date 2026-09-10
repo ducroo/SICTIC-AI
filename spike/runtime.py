@@ -5,8 +5,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.adapters.document_parser import document_parser_backend
-from lib.adapters.vector_store import vector_store_backend
+from lib.infrastructure.document_parser import document_parser_backend
+from lib.infrastructure.vector_store import vector_store_backend
 from lib.datasets.search import dataset_search
 from lib.ephemeral_dataset import prepare_ephemeral_dataset
 

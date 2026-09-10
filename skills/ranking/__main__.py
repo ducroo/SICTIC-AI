@@ -1,7 +1,7 @@
 import typer
 
 from lib.cli import run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.ranking.ranking_persons import ranking_persons
 
 logger = get_logger(__name__)
@@ -11,14 +11,12 @@ app = typer.Typer(help="Ranking module for SICTIC-AI")
 def main(
     target: str = typer.Option("persons", "--target", "-t", help="What entity to rank"),
     objective: str = typer.Option(..., "--objective", "-o", help="The objective/criteria for ranking"),
-    query: str = typer.Option("", "--query", "-q", help="Semantic search query to fetch candidates"),
-    top_k: int = typer.Option(8, "--top-k", "-k", help="Number of top candidates to return")
+    top_k: int = typer.Option(16, "--top-k", "-k", help="Number of top candidates to return")
 ):
     if target == "persons":
         result = run_command(
             lambda: ranking_persons(
                 objective=objective,
-                query=query,
                 top_k=top_k
             ),
             logger=logger,

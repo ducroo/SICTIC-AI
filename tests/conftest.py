@@ -2,39 +2,38 @@ import os
 import asyncio
 import inspect
 import pytest
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
-GDRIVE_SYNC_ROOT = REPO_ROOT / "gdrive-sync"
-if str(GDRIVE_SYNC_ROOT) not in sys.path:
-    sys.path.insert(0, str(GDRIVE_SYNC_ROOT))
 
 # Application logs remain available to pytest capture, but must not be written
 # into the operational sictic-ai.log file.
 os.environ["SICTIC_TESTING"] = "1"
 
-# Import once so lib.env loads any local .env before tests force safe values.
-import lib.env  # noqa: E402,F401
+# Import once so configuration loads any local .env before tests force safe values.
+import lib.infrastructure.configuration  # noqa: E402,F401
 
 os.environ["REPO_PATH"] = str(REPO_ROOT)
 os.environ["INSTALLED_SKILLS_PATH"] = str(REPO_ROOT / "skills")
 os.environ["LOCAL_STORAGE_PATH"] = str(REPO_ROOT / ".pytest-storage")
 os.environ["LOCAL_DATA_PATH"] = str(REPO_ROOT / ".pytest-storage")
-os.environ["CLOUD_PROVIDER"] = "google"
-os.environ["CLOUD_STORAGE_PATH"] = "test-drive-root"
 os.environ["LLM_MODEL"] = "ollama/test_model:1b"
 os.environ["LLM_BASE_URL"] = "http://localhost:11434"
 os.environ["LLM_API_KEY"] = ""
 os.environ["EMBEDDING_MODEL"] = "ollama/test-embedding:8b"
 os.environ["EMBEDDING_BASE_URL"] = "http://localhost:11434"
 os.environ["EMBEDDING_API_KEY"] = ""
+os.environ["RERANK_MODEL"] = ""
+os.environ["RERANK_BASE_URL"] = ""
+os.environ["RERANK_API_KEY"] = ""
 os.environ["VLM_MODEL"] = "ollama/test-vlm:1b"
 os.environ["VLM_BASE_URL"] = "http://localhost:11434"
 os.environ["VLM_API_KEY"] = ""
 os.environ["OLLAMA_HOST"] = "http://localhost:11434"
 os.environ["QDRANT_HOST"] = "http://localhost:6333"
+os.environ["DOCUMENT_PARSER"] = "docling"
+os.environ["DOCUMENT_CONVERTER"] = "docling_stack"
+os.environ["VECTOR_STORE"] = "qdrant"
 os.environ["OLLAMA_CONTEXT_LENGTH"] = "4096"
 os.environ["OLLAMA_CONTEXT_LENGTH_MAX"] = "8192"
 os.environ["OLLAMA_NUM_PARALLEL"] = "10"
@@ -89,8 +88,6 @@ def mock_env(monkeypatch, tmp_path):
     # Override environment variables
     monkeypatch.setenv("LOCAL_STORAGE_PATH", str(repository_dir_mock))
     monkeypatch.setenv("LOCAL_DATA_PATH", str(repository_dir_mock))
-    monkeypatch.setenv("CLOUD_PROVIDER", "google")
-    monkeypatch.setenv("CLOUD_STORAGE_PATH", "test-drive-root")
     monkeypatch.setenv("REPO_PATH", str(Path(__file__).resolve().parents[1]))
     monkeypatch.setenv("INSTALLED_SKILLS_PATH", str(workspace_mock))
     monkeypatch.setenv("LLM_MODEL", "ollama/test_model:1b")

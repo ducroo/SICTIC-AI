@@ -1,11 +1,13 @@
+import asyncio
+import importlib
 import json
 
 import pytest
 
+from lib.batch_audit import batch_audit
 from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location_for_domain
 from lib.storage import get_storage
-from skills.batch_audit.structured import batch_audit_json
 
 
 CHECKLIST = """# Legal Due Diligence
@@ -34,6 +36,60 @@ def _indexed_dataset(name: str = "example-startup") -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("shared_evidence", [False, True])
+async def test_batch_audit_assesses_available_context_when_search_has_no_hits(
+    mock_env, monkeypatch, shared_evidence,
+):
+    """Zero hits must not bypass assessment of supplied documentary evidence."""
+    _indexed_dataset()
+    chat = importlib.import_module("skills.dataset_chat.dataset_chat")
+    searches = []
+    generations = []
+
+    async def no_hits(dataset_name, queries, **kwargs):
+        assert kwargs["raise_on_error"] is True
+        searches.append(queries)
+        return []
+
+    async def assess(prompt, schema, reviewer, *, cacheable_prompt_prefix):
+        generations.append(prompt)
+        assert "CURRENT CHECK" in prompt
+        if shared_evidence:
+            assert "Registry.pdf — page 1" in cacheable_prompt_prefix
+        result = {
+            "status": "Fine" if shared_evidence else "Not Found",
+            "rationale": (
+                "The supplied registry extract establishes registration and legal form."
+                if shared_evidence else "No supplied evidence addresses this check."
+            ),
+            "source_documents": ["Registry.pdf — page 1"] if shared_evidence else [],
+            "proposed_next_steps_and_questions": [],
+        }
+        assert not reviewer(result).problems
+        return result
+
+    monkeypatch.setattr(chat, "dataset_search", no_hits)
+    monkeypatch.setattr(chat, "generate_json", assess)
+    insight = await batch_audit(
+        "example-startup",
+        CHECKLIST,
+        llm_instructions=(
+            "Use the supplied registry extract: Registry.pdf — page 1. "
+            "The company is registered as an AG."
+            if shared_evidence else None
+        ),
+    )
+
+    checks = json.loads(insight.content())["chapters"][0]["checks"]
+    assert len(searches) == len(generations) == len(checks) == 2
+    assert all(check["error"] is None for check in checks)
+    assert all(
+        check["status"] == ("Fine" if shared_evidence else "Not Found")
+        for check in checks
+    )
+
+
+@pytest.mark.asyncio
 async def test_structured_batch_audit_saves_json_insight(
     mock_env,
     monkeypatch,
@@ -43,25 +99,23 @@ async def test_structured_batch_audit_saves_json_insight(
 
     async def fake_dataset_chat(**kwargs):
         calls.append(kwargs)
-        return json.dumps(
-            {
-                "status": "Fine",
-                "rationale": "Evidence found.",
-                "source_documents": ["Registry.pdf — page 1"],
-                "proposed_next_steps_and_questions": [],
-            }
-        )
+        return {
+            "status": "Fine",
+            "rationale": "Evidence found.",
+            "source_documents": ["Registry.pdf — page 1"],
+            "proposed_next_steps_and_questions": [],
+        }
 
     monkeypatch.setattr(
-        "skills.batch_audit.structured.dataset_chat",
+        "lib.batch_audit.engine.dataset_chat_json",
         fake_dataset_chat,
     )
     monkeypatch.setattr(
-        "skills.batch_audit.structured.llm_model",
+        "lib.batch_audit.engine.llm_model",
         lambda: "google/gemini-2.5-pro",
     )
 
-    insight = await batch_audit_json(
+    insight = await batch_audit(
         dataset_name="example-startup",
         skill_name="dd_checks",
         checklist_markdown=CHECKLIST,
@@ -90,8 +144,7 @@ async def test_structured_batch_audit_saves_json_insight(
         "Relevant terminology: chamber of commerce, registration number",
     ]
     assert "chamber of commerce" not in calls[0]["prompt"]
-    response_schema = calls[0]["response_format"]["json_schema"]["schema"]
-    assert calls[0]["response_format"]["json_schema"]["strict"] is True
+    response_schema = calls[0]["schema"]
     assert response_schema["properties"]["status"]["enum"] == [
         "Not Found",
         "Critical",
@@ -99,37 +152,105 @@ async def test_structured_batch_audit_saves_json_insight(
         "Sufficient",
         "Fine",
     ]
-    assert '"status"' in calls[0]["prompt"]
+    prefix = calls[0]["cacheable_prompt_prefix"]
+    assert "Use only supplied evidence" in prefix
+    assert "### CURRENT CHECK — START" not in prefix
+    assert calls[0]["prompt"].index("### CURRENT CHECK — START") < (
+        calls[0]["prompt"].index(
+            "Is the company registered in the commercial registry?"
+        )
+    )
 
 
 @pytest.mark.asyncio
-async def test_structured_batch_audit_retries_invalid_responses(
+async def test_structured_batch_audit_submits_checks_concurrently(
+    mock_env,
+    monkeypatch,
+):
+    from lib.batch_audit import engine
+
+    _indexed_dataset()
+    checklist = CHECKLIST + """
+
+### Registered office
+
+Is the registered office documented?
+"""
+    all_started = asyncio.Event()
+    release = asyncio.Event()
+    started = []
+
+    async def fake_run_check(
+        _dataset_name,
+        check,
+        _llm_instructions,
+        _response_schema,
+        _status_scale,
+        _missing_evidence_status,
+    ):
+        started.append(check.number)
+        if len(started) == 3:
+            all_started.set()
+        await release.wait()
+        return {
+            "status": "Pass",
+            "rationale": f"Completed {check.number}.",
+            "source_documents": [],
+            "proposed_next_steps_and_questions": [],
+            "error": None,
+        }
+
+    monkeypatch.setattr(engine, "_run_check", fake_run_check)
+    audit_task = asyncio.create_task(
+        batch_audit(
+            dataset_name="example-startup",
+            skill_name="submission_ready",
+            checklist_markdown=checklist,
+            llm_instructions="Return JSON.",
+            status_scale=["Pass", "Fail", "Unclear"],
+            missing_evidence_status="Unclear",
+        )
+    )
+
+    await all_started.wait()
+    assert started == ["1.1", "1.2", "1.3"]
+
+    release.set()
+    insight = await audit_task
+    checks = json.loads(insight.content())["chapters"][0]["checks"]
+    assert [check["number"] for check in checks] == ["1.1", "1.2", "1.3"]
+
+
+@pytest.mark.asyncio
+async def test_structured_batch_audit_supplies_business_reviewer(
     mock_env,
     monkeypatch,
 ):
     _indexed_dataset()
-    calls = 0
+    calls = []
 
-    async def fake_dataset_chat(**_kwargs):
-        nonlocal calls
-        calls += 1
-        if calls < 3:
-            return '{"status":"Maybe"}'
-        return json.dumps(
-            {
-                "status": "Pass",
-                "rationale": "Evidence found.",
-                "source_documents": [],
-                "proposed_next_steps_and_questions": [],
-            }
-        )
+    async def fake_dataset_chat(**kwargs):
+        calls.append(kwargs)
+        invalid = {
+            "status": "Maybe",
+            "rationale": "Evidence found.",
+            "source_documents": [],
+            "proposed_next_steps_and_questions": [],
+        }
+        assert kwargs["reviewer"](invalid).problems
+        return {
+            "status": "Pass",
+            "rationale": "Evidence found.",
+            "source_documents": [],
+            "proposed_next_steps_and_questions": [],
+        }
 
     monkeypatch.setattr(
-        "skills.batch_audit.structured.dataset_chat",
+        "lib.batch_audit.engine.dataset_chat_json",
         fake_dataset_chat,
     )
 
-    insight = await batch_audit_json(
+    insight = await batch_audit(
         dataset_name="example-startup",
         skill_name="submission_ready",
         checklist_markdown=CHECKLIST.replace(
@@ -142,8 +263,44 @@ async def test_structured_batch_audit_retries_invalid_responses(
     )
 
     check = json.loads(insight.content())["chapters"][0]["checks"][0]
-    assert calls == 3
+    assert len(calls) == 1
     assert check["status"] == "Pass"
+    assert check["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_structured_batch_audit_preserves_missing_evidence_fallback(
+    mock_env,
+    monkeypatch,
+):
+    _indexed_dataset()
+    calls = 0
+
+    async def fake_dataset_chat(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return None
+
+    monkeypatch.setattr(
+        "lib.batch_audit.engine.dataset_chat_json",
+        fake_dataset_chat,
+    )
+
+    insight = await batch_audit(
+        dataset_name="example-startup",
+        skill_name="submission_ready",
+        checklist_markdown=CHECKLIST.replace(
+            "### Legal form\n\nIs the current legal form established?\n",
+            "",
+        ),
+        llm_instructions="Return JSON.",
+        status_scale=["Pass", "Fail", "Unclear"],
+        missing_evidence_status="Unclear",
+    )
+
+    check = json.loads(insight.content())["chapters"][0]["checks"][0]
+    assert calls == 1
+    assert check["status"] == "Unclear"
     assert check["error"] is None
 
 
@@ -155,14 +312,14 @@ async def test_structured_batch_audit_records_exhausted_errors(
     _indexed_dataset()
 
     async def failing_dataset_chat(**_kwargs):
-        raise RuntimeError("provider unavailable")
+        raise RuntimeError("generate_json failed after 3 attempts")
 
     monkeypatch.setattr(
-        "skills.batch_audit.structured.dataset_chat",
+        "lib.batch_audit.engine.dataset_chat_json",
         failing_dataset_chat,
     )
 
-    insight = await batch_audit_json(
+    insight = await batch_audit(
         dataset_name="example-startup",
         skill_name="submission_ready",
         checklist_markdown=CHECKLIST,
@@ -176,21 +333,19 @@ async def test_structured_batch_audit_records_exhausted_errors(
     assert all("failed after 3 attempts" in check["error"] for check in checks)
 
     async def recovered_dataset_chat(**_kwargs):
-        return json.dumps(
-            {
-                "status": "Pass",
-                "rationale": "Provider recovered.",
-                "source_documents": [],
-                "proposed_next_steps_and_questions": [],
-            }
-        )
+        return {
+            "status": "Pass",
+            "rationale": "Provider recovered.",
+            "source_documents": [],
+            "proposed_next_steps_and_questions": [],
+        }
 
     monkeypatch.setenv("RANKED_LLMS", "ollama/test-model:1b")
     monkeypatch.setattr(
-        "skills.batch_audit.structured.dataset_chat",
+        "lib.batch_audit.engine.dataset_chat_json",
         recovered_dataset_chat,
     )
-    recovered = await batch_audit_json(
+    recovered = await batch_audit(
         dataset_name="example-startup",
         skill_name="submission_ready",
         checklist_markdown=CHECKLIST,
@@ -211,20 +366,18 @@ async def test_structured_batch_audit_reuses_fresh_json(
 ):
     _indexed_dataset()
     monkeypatch.setenv("RANKED_LLMS", "ollama/test-model:1b")
-    response = json.dumps(
-        {
-            "status": "Pass",
-            "rationale": "Evidence found.",
-            "source_documents": [],
-            "proposed_next_steps_and_questions": [],
-        }
-    )
+    response = {
+        "status": "Pass",
+        "rationale": "Evidence found.",
+        "source_documents": [],
+        "proposed_next_steps_and_questions": [],
+    }
 
     async def fake_dataset_chat(**_kwargs):
         return response
 
     monkeypatch.setattr(
-        "skills.batch_audit.structured.dataset_chat",
+        "lib.batch_audit.engine.dataset_chat_json",
         fake_dataset_chat,
     )
     kwargs = {
@@ -235,15 +388,15 @@ async def test_structured_batch_audit_reuses_fresh_json(
         "status_scale": ["Pass", "Fail", "Unclear"],
         "missing_evidence_status": "Unclear",
     }
-    generated = await batch_audit_json(**kwargs)
+    generated = await batch_audit(**kwargs)
 
     async def forbidden_dataset_chat(**_kwargs):
         raise AssertionError("A fresh audit must be reused.")
 
     monkeypatch.setattr(
-        "skills.batch_audit.structured.dataset_chat",
+        "lib.batch_audit.engine.dataset_chat_json",
         forbidden_dataset_chat,
     )
-    reused = await batch_audit_json(**kwargs)
+    reused = await batch_audit(**kwargs)
 
     assert reused.path == generated.path

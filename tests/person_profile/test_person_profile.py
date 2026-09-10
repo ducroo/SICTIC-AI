@@ -10,6 +10,7 @@ from lib.people.model import Person
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location
 from lib.datasets.manifest import IngestionManifest
+from lib.insights import InsightFile
 
 @pytest.mark.asyncio
 async def test_person_profile_generation(mock_env, mocker, monkeypatch):
@@ -19,7 +20,9 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     """
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     # 1. Mock external dependencies
-    mock_llm = mocker.patch("skills.person_profile.person_profile.llm_chat")
+    mock_llm = mocker.patch(
+        "skills.person_profile.person_profile.generate_markdown"
+    )
     async def mock_llm_coro(*args, **kwargs):
         return "This is a mocked profile for Jane Doe."
     mock_llm.side_effect = mock_llm_coro
@@ -32,12 +35,13 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
         return [d_chunk], [m_chunk]
     mock_dossier.side_effect = mock_dossier_coro
 
-    mock_config = mocker.patch("skills.person_profile.person_profile.config_load")
+    mock_config = mocker.patch(
+        "skills.person_profile.person_profile.load_repository_config"
+    )
     mock_config.return_value = {
-        "person_profile": {
-            "query": "Who is {name}?",
-            "llm_instructions": "Be concise."
-        }
+        "query": "Who is {name}?",
+        "llm_instructions": "Be concise.",
+        "founder_traits_instructions": "Assess founder traits from evidence.",
     }
 
     mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInResolver")
@@ -61,6 +65,9 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     manifest = IngestionManifest(storage, location.parsed_rel)
     manifest.indexed_dataset_revision = "test-revision"
     manifest.save()
+    InsightFile("sictic-members", "persons_in_dataset", "manual").save(
+        "| full-name | linkedin-id |\n|---|---|\n| Jane Doe | jane-doe |\n"
+    )
     
     # 2. Execute
     name = "Jane Doe"
@@ -85,7 +92,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
     assert storage.exists(expected_file), f"Expected file {expected_file} was not created."
     content = storage.read_text(expected_file)
     assert content == expected_content
-    prompt = mock_llm.call_args.kwargs["prompt"]
+    prompt = mock_llm.call_args.args[0]
     assert "Person metadata:\nFull-name: Jane Doe\nlinkedin-id: jane-doe\nEmail-addresses: jane@example.com" in prompt
     assert "### DOSSIER DOCUMENTS" in prompt
     assert "Jane has 10 years of experience." in prompt
@@ -107,16 +114,15 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
 async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mocker, monkeypatch):
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     mocker.patch(
-        "skills.person_profile.person_profile.config_load",
+        "skills.person_profile.person_profile.load_repository_config",
         return_value={
-            "person_profile": {
-                "query": "Who is {{name}}?",
-                "llm_instructions": "Be concise.",
-            }
+            "query": "Who is {{name}}?",
+            "llm_instructions": "Be concise.",
+            "founder_traits_instructions": "Assess founder traits from evidence.",
         },
     )
     mock_llm = mocker.patch(
-        "skills.person_profile.person_profile.llm_chat",
+        "skills.person_profile.person_profile.generate_markdown",
         return_value="LinkedIn-only profile.",
     )
     mock_dossier = mocker.patch("skills.person_profile.person_profile.build_person_dossier")
@@ -139,7 +145,7 @@ async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mock
     assert insight.exists()
 
     mock_dossier.assert_not_awaited()
-    prompt = mock_llm.call_args.kwargs["prompt"]
+    prompt = mock_llm.call_args.args[0]
     assert "### LINKEDIN PROFILE" in prompt
     assert "### DOSSIER DOCUMENTS" not in prompt
 

@@ -4,9 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from lib.adapters.docling import ConversionStatus
-from lib.adapters.llamaparse.adapter import (
-    LlamaParseAdapter,
+from lib.infrastructure.llamaparse.adapter import (  # pragma: allowlist secret
+    convert_document,
     _markdown_from_parse_result,
 )
 
@@ -28,24 +27,25 @@ def test_markdown_from_parse_result_adds_page_markers():
 
 
 @pytest.mark.asyncio
-async def test_llamaparse_passthrough_markdown(tmp_path):
+async def test_saas_parser_passthrough_markdown(tmp_path):
     path = tmp_path / "notes.md"
     path.write_text("# Hello\n", encoding="utf-8")
-    text = await LlamaParseAdapter()._process_single_file(str(path), path.name)
-    assert text == "# Hello"
+    conversion = await convert_document(path)
+    assert conversion.markdown == "# Hello\n"
 
 
 @pytest.mark.asyncio
-async def test_llamaparse_extract_documents_success(tmp_path, monkeypatch):
-    path = tmp_path / "notes.md"
-    path.write_text("body", encoding="utf-8")
-    adapter = LlamaParseAdapter(concurrency_limit=1)
-    results = [
-        item
-        async for item in adapter.extract_documents(
-            [{"filename": path.name, "local_path": path}]
-        )
-    ]
-    assert len(results) == 1
-    assert results[0].status is ConversionStatus.SUCCESS
-    assert results[0].text == "body"
+async def test_saas_parser_empty_source_warning(tmp_path):
+    path = tmp_path / "empty.pdf"
+    path.write_bytes(b"")
+    conversion = await convert_document(path)
+    assert conversion.markdown == ""
+    assert conversion.warnings == ("The source file is empty",)
+
+
+@pytest.mark.asyncio
+async def test_saas_parser_rejects_unsupported_format(tmp_path):
+    path = tmp_path / "logo.eps"
+    path.write_bytes(b"%!PS-Adobe EPSF")
+    with pytest.raises(ValueError, match="Unsupported document format"):
+        await convert_document(path)

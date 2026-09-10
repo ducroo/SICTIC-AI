@@ -1,7 +1,7 @@
 import typer
 
 from lib.cli import format_insights, run_command
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.dd_checks.dd_checks import dd_checks
 
 logger = get_logger(__name__)

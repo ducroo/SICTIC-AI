@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from lib.adapters.docling import ConversionStatus, DocumentConversionResult
+from lib.infrastructure.document_conversion import DocumentConversion
+from lib.infrastructure.errors import (
+    InfrastructureError,
+    InfrastructureErrorKind,
+)
 from lib.storage import LocalStorage
 from lib.datasets import conversion, indexing, source
 from lib.datasets.manifest import (
@@ -12,10 +16,27 @@ from lib.datasets.manifest import (
     content_hash,
 )
 
+@pytest.mark.asyncio
+async def test_conversion_schedules_smallest_sources_first(tmp_path, mocker):
+    storage = LocalStorage(tmp_path)
+    raw_rel = "datasets/example"
+    parsed_rel = "cache/datasets2md/example"
+    storage.write_bytes(f"{raw_rel}/large.pdf", b"large source")
+    storage.write_bytes(f"{raw_rel}/small.pdf", b"x")
+    storage.write_bytes(f"{raw_rel}/medium.pdf", b"mid")
+    mocker.patch.object(conversion, "get_storage", return_value=storage)
 
-async def _results(items):
-    for item in items:
-        yield item
+    observed = []
+
+    async def convert(path):
+        observed.append(path.name)
+        return DocumentConversion(markdown=path.name)
+
+    mocker.patch.object(conversion, "convert_document", side_effect=convert)
+
+    await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
+
+    assert observed == ["small.pdf", "medium.pdf", "large.pdf"]
 
 
 def test_indexed_dataset_revision_is_stable_and_persisted(tmp_path):
@@ -62,18 +83,16 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
     }
     manifest.save()
     mocker.patch.object(conversion, "get_storage", return_value=storage)
-
-    failed_adapter = mocker.Mock()
-    failed_adapter.extract_documents.return_value = _results(
-        [
-            DocumentConversionResult(
-                filename="report.pdf",
-                status=ConversionStatus.FAILED,
-                error="OCR unavailable",
-            )
-        ]
+    failed_conversion = mocker.patch.object(
+        conversion,
+        "convert_document",
+        side_effect=InfrastructureError(
+            "OCR unavailable",
+            kind=InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+            provider="docling_stack",
+            operation="convert_document",
+        ),
     )
-    mocker.patch.object(conversion, "get_document_parser", return_value=failed_adapter)
 
     first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -82,17 +101,12 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
     failed_state = IngestionManifest.load(storage, parsed_rel).documents["report.pdf"]
     assert failed_state["source_sha256"] == content_hash(b"old source")
 
-    successful_adapter = mocker.Mock()
-    successful_adapter.extract_documents.return_value = _results(
-        [
-            DocumentConversionResult(
-                filename="report.pdf",
-                status=ConversionStatus.SUCCESS,
-                text="new parsed",
-            )
-        ]
+    mocker.stop(failed_conversion)
+    mocker.patch.object(
+        conversion,
+        "convert_document",
+        return_value=DocumentConversion(markdown="new parsed"),
     )
-    mocker.patch.object(conversion, "get_document_parser", return_value=successful_adapter)
 
     second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
 
@@ -127,18 +141,11 @@ async def test_empty_conversion_is_ignored_cleans_stale_state_and_is_not_retried
     }
     manifest.save()
     mocker.patch.object(conversion, "get_storage", return_value=storage)
-
-    adapter = mocker.Mock()
-    adapter.extract_documents.return_value = _results(
-        [
-            DocumentConversionResult(
-                filename="image-only.pdf",
-                status=ConversionStatus.IGNORED_EMPTY,
-                reason="no_extractable_text",
-            )
-        ]
+    converter = mocker.patch.object(
+        conversion,
+        "convert_document",
+        return_value=DocumentConversion(markdown=""),
     )
-    mocker.patch.object(conversion, "get_document_parser", return_value=adapter)
 
     first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
     second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
@@ -146,7 +153,7 @@ async def test_empty_conversion_is_ignored_cleans_stale_state_and_is_not_retried
     assert first.ignored == 1
     assert first.failures == []
     assert second.ignored == 0
-    assert adapter.extract_documents.call_count == 1
+    assert converter.await_count == 1
     assert not storage.exists(f"{parsed_rel}/image-only.pdf.md")
     state = IngestionManifest.load(storage, parsed_rel).documents["image-only.pdf"]
     assert state == {
@@ -178,7 +185,7 @@ async def test_ignored_conversion_removes_existing_qdrant_document(tmp_path, moc
     qdrant = mocker.Mock()
     qdrant.collection_exists.return_value = True
     qdrant.get_document_mtimes.return_value = {"image-only.pdf": source_document.mtime}
-    mocker.patch.object(indexing, "get_vector_store", return_value=qdrant)
+    mocker.patch.object(indexing, "QdrantAdapter", return_value=qdrant)
 
     embeddings = mocker.Mock()
     embeddings.model = "test-model"
@@ -242,11 +249,11 @@ async def test_failed_index_does_not_advance_manifest_checkpoint(tmp_path, mocke
     qdrant.collection_exists.return_value = True
     qdrant.get_document_mtimes.return_value = {"report.md": 0.0}
     qdrant.ensure_collection.return_value = None
-    mocker.patch.object(indexing, "get_vector_store", return_value=qdrant)
+    mocker.patch.object(indexing, "QdrantAdapter", return_value=qdrant)
 
     embeddings = mocker.Mock()
     embeddings.model = "test-model"
-    embeddings.vector_size.return_value = 3
+    embeddings.vector_size = mocker.AsyncMock(return_value=3)
     mocker.patch.object(indexing, "EmbeddingService", return_value=embeddings)
     mocker.patch.object(
         indexing,
@@ -267,3 +274,68 @@ async def test_failed_index_does_not_advance_manifest_checkpoint(tmp_path, mocke
     state = loaded.documents["report.md"]
     assert state["indexed_parsed_sha256"] == "old-index"
     assert loaded.indexed_dataset_revision == old_revision
+
+
+@pytest.mark.asyncio
+async def test_oversized_document_is_skipped_without_embedding(tmp_path, mocker):
+    storage = LocalStorage(tmp_path)
+    raw_rel = "datasets/example"
+    parsed_rel = "cache/datasets2md/example"
+    storage.write_text(f"{raw_rel}/oversized.md", "source")
+    oversized_text = "x" * (indexing.MAX_CHARACTERS_PER_DOCUMENT + 1)
+    storage.write_text(f"{parsed_rel}/oversized.md", oversized_text)
+    source_document = source.snapshot_source_files(storage, raw_rel)[0]
+
+    manifest = IngestionManifest(storage, parsed_rel)
+    manifest.documents["oversized.md"] = {
+        "source_sha256": source_document.sha256,
+        "source_mtime": source_document.mtime,
+        "parsed_sha256": content_hash(oversized_text),
+        "parser_version": PARSER_VERSION,
+    }
+    manifest.save()
+    mocker.patch.object(indexing, "get_storage", return_value=storage)
+
+    qdrant = mocker.Mock()
+    qdrant.collection_exists.return_value = True
+    qdrant.get_document_mtimes.return_value = {"oversized.md": 0.0}
+    mocker.patch.object(indexing, "QdrantAdapter", return_value=qdrant)
+
+    embeddings = mocker.Mock()
+    embeddings.model = "test-model"
+    embeddings.vector_size = mocker.AsyncMock(return_value=3)
+    mocker.patch.object(indexing, "EmbeddingService", return_value=embeddings)
+
+    result = await indexing.reconcile_index(
+        "example",
+        raw_rel,
+        parsed_rel,
+        sources=[source_document],
+        manifest=manifest,
+    )
+
+    assert result.failures == []
+    assert result.ignored == 1
+    embeddings.embed_many.assert_not_called()
+    qdrant.delete_document.assert_called_once_with(
+        "oversized.md",
+        raise_on_error=True,
+    )
+    state = IngestionManifest.load(storage, parsed_rel).documents["oversized.md"]
+    assert state["indexed_parsed_sha256"] == content_hash(oversized_text)
+    assert state["indexed_sparse_version"] == indexing.SPARSE_ENCODER_VERSION
+    assert "500,000-character limit" in state["index_ignored_reason"]
+
+    second_result = await indexing.reconcile_index(
+        "example",
+        raw_rel,
+        parsed_rel,
+        sources=[source_document],
+    )
+
+    assert second_result.failures == []
+    assert second_result.ignored == 0
+    qdrant.delete_document.assert_called_once_with(
+        "oversized.md",
+        raise_on_error=True,
+    )

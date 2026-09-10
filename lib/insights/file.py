@@ -25,7 +25,7 @@ from lib.insights.selection import (
     is_reusable,
     ranked_models,
 )
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.storage import get_storage
 
 logger = get_logger(__name__)
@@ -285,8 +285,8 @@ class InsightFile:
             _path_override=f"{self.directory}/{filename}",
         )
 
-    def _dataset_revisions(self) -> dict[str, str] | None:
-        return dataset_revisions(get_storage(), self.source_datasets)
+    def _dataset_revisions(self, *, missing: list[str] | None = None) -> dict[str, str] | None:
+        return dataset_revisions(get_storage(), self.source_datasets, missing=missing)
 
     def _load_manifest(self) -> dict:
         return load_insight_manifest(get_storage(), self._manifest_path)

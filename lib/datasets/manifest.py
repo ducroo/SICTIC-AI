@@ -9,14 +9,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
 MANIFEST_FILENAME = ".ingestion-manifest.json"
 MANIFEST_VERSION = 1
 PARSER_VERSION = "docling-page-markers-v1"
-CHUNKER_VERSION = "markdown-1000-100-v1"
+CHUNKER_VERSION = "markdown-1000-100-table-aware-v2"
 
 
 def content_hash(content: bytes | str) -> str:
@@ -105,14 +105,19 @@ class IngestionManifest:
             embedding_model = state.get("indexed_embedding_model")
             if not all((parsed_sha, chunker_version, embedding_model)):
                 continue
-            indexed_documents.append(
-                {
-                    "filename": filename,
-                    "parsed_sha256": parsed_sha,
-                    "chunker_version": chunker_version,
-                    "embedding_model": embedding_model,
-                }
-            )
+            document = {
+                "filename": filename,
+                "parsed_sha256": parsed_sha,
+                "chunker_version": chunker_version,
+                "embedding_model": embedding_model,
+            }
+            # Only recorded once sparse vectors exist, so datasets that have
+            # not been rebuilt for hybrid search keep their current revision
+            # and their reusable insights.
+            sparse_version = state.get("indexed_sparse_version")
+            if sparse_version:
+                document["sparse_version"] = sparse_version
+            indexed_documents.append(document)
 
         self.indexed_dataset_revision = content_hash(
             json.dumps(

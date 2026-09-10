@@ -6,77 +6,64 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_llm_chat_uses_gateway_without_live_model(monkeypatch):
-    from skills.llm_chat.llm_chat import llm_chat
-    import skills.llm_chat.llm_chat as llm_chat_mod
-
-    captured = {}
-
-    async def fake_completion(kwargs):
-        captured.update(kwargs)
-        return SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(content="fixture completion")
-                )
-            ]
-        )
-
-    monkeypatch.setattr(llm_chat_mod.gateway, "request_completion", fake_completion)
-
-    result = await llm_chat("Summarize the fixture.")
-
-    assert result == "fixture completion"
-    assert captured["messages"][0]["content"] == "Summarize the fixture."
-    assert captured["num_ctx"] == 4096
-
-
-@pytest.mark.asyncio
 async def test_ranking_rank_chunk_rejects_missing_ids(monkeypatch):
     import skills.ranking.ranking_top_k as ranking_top_k_mod
 
     monkeypatch.setattr(
         ranking_top_k_mod,
-        "config_load",
-        lambda: {
-            "ranking_top_k": {
-                "ranking_instructions": (
-                    "{{objective}}\n{{profiles_text}}\n{{n_profiles}}\n{{IDs_profiles}}"
-                ),
-                "response_schema": {
-                    "type": "object",
-                    "properties": {
-                        "ranked_profiles_ids": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                        }
-                    },
-                    "required": ["ranked_profiles_ids"],
+        "load_repository_config",
+        lambda *sections: {
+            "ranking_instructions": (
+                "Objective:\n{{objective}}\n\nRank every supplied profile."
+            ),
+            "response_schema": {
+                "type": "object",
+                "properties": {
+                    "ranked_profiles_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    }
                 },
-            }
+                "required": ["ranked_profiles_ids"],
+            },
         },
     )
 
-    async def fake_llm_chat(*_args, **_kwargs):
-        schema = _kwargs["response_format"]["json_schema"]["schema"]
+    async def fake_generate_json(
+        prompt,
+        schema,
+        reviewer,
+        *,
+        cacheable_prompt_prefix,
+    ):
+        assert "fixture objective" in cacheable_prompt_prefix
+        assert "Profile A" not in cacheable_prompt_prefix
+        assert "Profile A" in prompt
+        assert "Profile IDs: a, b" in prompt
         assert schema["properties"]["ranked_profiles_ids"]["minItems"] == 2
         assert schema["properties"]["ranked_profiles_ids"]["items"][
             "enum"
         ] == ["a", "b"]
-        return '{"ranked_profiles_ids": ["b"]}'
+        review = reviewer({"ranked_profiles_ids": ["b"]})
+        assert review.problems == ()
+        assert review.output == {"ranked_profiles_ids": ["b", "a"]}
+        return review.output
 
-    monkeypatch.setattr(ranking_top_k_mod, "llm_chat", fake_llm_chat)
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "generate_json",
+        fake_generate_json,
+    )
 
     result = await ranking_top_k_mod.rank_chunk(
         "fixture objective",
         {"a": "Profile A", "b": "Profile B"},
     )
-
-    assert result == ["a", "b"]
+    assert result == ["b", "a"]
 
 
 @pytest.mark.asyncio
-async def test_ranking_rank_chunk_rejects_duplicate_ids(monkeypatch):
+async def test_ranking_rank_chunk_retries_then_repairs_duplicate_ids(monkeypatch):
     import json
     from pathlib import Path
 
@@ -90,22 +77,75 @@ async def test_ranking_rank_chunk_rejects_duplicate_ids(monkeypatch):
     )
     monkeypatch.setattr(
         ranking_top_k_mod,
-        "config_load",
-        lambda: {
-            "ranking_top_k": {
-                "ranking_instructions": "{{response_schema}}",
-                "response_schema": schema,
-            }
+        "load_repository_config",
+        lambda *sections: {
+            "ranking_instructions": "{{objective}}\n\nRank the supplied profiles.",
+            "response_schema": schema,
         },
     )
 
-    async def duplicate_response(*_args, **_kwargs):
-        return '{"ranked_profiles_ids":["b","b"]}'
+    async def duplicate_response(
+        _prompt,
+        _schema,
+        reviewer,
+        *,
+        cacheable_prompt_prefix,
+    ):
+        assert cacheable_prompt_prefix.startswith("fixture objective")
+        return reviewer({"ranked_profiles_ids": ["b", "b"]}).output
 
     monkeypatch.setattr(
         ranking_top_k_mod,
-        "llm_chat",
+        "generate_json",
         duplicate_response,
+    )
+
+    result = await ranking_top_k_mod.rank_chunk(
+        "fixture objective",
+        {"a": "Profile A", "b": "Profile B"},
+    )
+
+    assert result == ["b", "a"]
+
+
+
+@pytest.mark.asyncio
+async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatch):
+    import json
+    from pathlib import Path
+
+    import skills.ranking.ranking_top_k as ranking_top_k_mod
+
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "config/ranking_top_k/response_schema.json"
+        ).read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "load_repository_config",
+        lambda *sections: {
+            "ranking_instructions": "{{objective}}\n\nRank the supplied profiles.",
+            "response_schema": schema,
+        },
+    )
+    async def retry_response(
+        _prompt,
+        _schema,
+        reviewer,
+        *,
+        cacheable_prompt_prefix,
+    ):
+        assert cacheable_prompt_prefix.startswith("fixture objective")
+        invalid = reviewer({"ranked_profiles_ids": ["x", "b"]})
+        assert invalid.problems
+        return {"ranked_profiles_ids": ["a", "b"]}
+
+    monkeypatch.setattr(
+        ranking_top_k_mod,
+        "generate_json",
+        retry_response,
     )
 
     result = await ranking_top_k_mod.rank_chunk(
@@ -155,17 +195,16 @@ def test_linkedin_maintenance_formats_unique_missing_urls():
 def test_dataset_maintenance_filters_orphaned_qdrant_collections(skill_fixture_storage):
     from skills.dataset_maintenance.maintenance import orphaned_qdrant_collections
 
-    class FakeAdmin:
-        def list_collections(self):
+    class FakeAdapter:
+        def list_indexed_datasets(self):
             return [
-                "example-startup-test-embedding-8b",
-                "orphan-test-embedding-8b",
-                "unrelated-other-model",
+                "example-startup",
+                "orphan",
             ]
 
-    result = orphaned_qdrant_collections(admin=FakeAdmin())
+    result = orphaned_qdrant_collections(adapter=FakeAdapter())
 
-    assert result == ["orphan-test-embedding-8b"]
+    assert result == ["orphan"]
 
 
 def test_startup_website_import_validates_limits():
@@ -183,4 +222,5 @@ def test_standards_and_architecture_skill_is_instruction_only():
     path = Path("skills/standards_and_architecture/SKILL.md")
 
     assert path.is_file()
-    assert "Data Storage Layout" in path.read_text(encoding="utf-8")
+    assert not (path.parent / "__main__.py").exists()
+    assert not (path.parent / "standards_and_architecture.py").exists()

@@ -142,21 +142,24 @@ async def test_suggested_startups_does_not_save_invalid_response(
 
     monkeypatch.setattr(module, "generate_report", invalid_response)
 
-    result = await module.suggested_startups(
-        "sictic-members",
-        ["example-startup"],
-        ["Jane Doe"],
-        1,
-    )
+    with pytest.raises(
+        RuntimeError,
+        match="Failed to generate suggestions for 1 investor",
+    ):
+        await module.suggested_startups(
+            "sictic-members",
+            ["example-startup"],
+            ["Jane Doe"],
+            1,
+        )
 
-    assert result == []
     assert "Failed to generate suggested startups for Jane Doe" in caplog.text
-    assert "0 cached, 0 generated, 1 failed" in caplog.text
+    assert "0 generated, 1 failed" in caplog.text
     assert not InsightFile(
         "sictic-members",
         "suggested_startups",
         "ollama/test_model:1b",
-        identifier="Jane Doe",
+        identifier="jane-doe",
         subdir=True,
     ).exists()
 
@@ -191,18 +194,28 @@ async def test_suggested_startups_continues_after_investor_failure(
 
     monkeypatch.setattr(module, "generate_report", generate_report)
 
-    result = await module.suggested_startups(
-        "sictic-members",
-        ["example-startup"],
-        ["Jane Doe", "John Roe"],
-        1,
-    )
+    with pytest.raises(
+        RuntimeError,
+        match="Failed to generate suggestions for 1 investor",
+    ):
+        await module.suggested_startups(
+            "sictic-members",
+            ["example-startup"],
+            ["Jane Doe", "John Roe"],
+            1,
+        )
 
-    assert len(result) == 1
-    assert result[0].identifier == "John Roe"
-    assert "Valid report" in result[0].content()
+    successful = InsightFile(
+        "sictic-members",
+        "suggested_startups",
+        "ollama/test_model:1b",
+        identifier="john-roe",
+        subdir=True,
+    )
+    assert successful.exists()
+    assert "Valid report" in successful.content()
     assert "Failed to generate suggested startups for Jane Doe" in caplog.text
-    assert "0 cached, 1 generated, 1 failed" in caplog.text
+    assert "1 generated, 1 failed" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -227,9 +240,9 @@ async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundarie
 
 @pytest.mark.asyncio
 async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
-    from skills.batch_audit.batch_audit import batch_audit
+    from lib.batch_audit import batch_audit
 
-    result = await batch_audit(
+    insight = await batch_audit(
         "example-startup",
         """# Commercial
 
@@ -240,9 +253,6 @@ async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
 Is there evidence of customer traction?
 """,
     )
-    assert_insight_result(result)
-    [insight] = result
-
     assert insight.exists()
     assert InsightFile(
         "example-startup",

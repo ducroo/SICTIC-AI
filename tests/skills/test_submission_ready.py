@@ -188,16 +188,7 @@ def test_parse_proposed_action_enforces_eight_concern_limit():
     }
 
     with pytest.raises(ValueError, match="more than 8 concerns"):
-        schema = _check_config()["response_schema"]
-        schema["properties"]["proposed_action"]["enum"] = [
-            "Move to Under review",
-            "Send concerns to startup",
-        ]
-        _parse_proposed_action(
-            str(payload).replace("'", '"'),
-            "Application",
-            schema,
-        )
+        _parse_proposed_action(payload, "Application")
 
 
 def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
@@ -222,23 +213,26 @@ def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
 
 @pytest.mark.asyncio
 async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
-    captured = {}
+    calls = []
 
-    async def fake_llm_chat(prompt, response_format):
-        captured["prompt"] = prompt
-        captured["response_format"] = response_format
-        return json.dumps(
+    async def fake_generate_json(prompt, schema, reviewer):
+        calls.append(
             {
-                "proposed_action": "Move to Jury",
-                "rationale": "The submission is complete.",
-                "eligibility_concerns": [],
-                "missing_or_inconsistent_information": [],
+                "prompt": prompt,
+                "schema": schema,
+                "reviewer": reviewer,
             }
         )
+        return {
+            "proposed_action": "Move to Jury",
+            "rationale": "The submission is complete.",
+            "eligibility_concerns": [],
+            "missing_or_inconsistent_information": [],
+        }
 
     monkeypatch.setattr(
-        "skills.submission_ready.submission_ready.llm_chat",
-        fake_llm_chat,
+        "skills.submission_ready.submission_ready.generate_json",
+        fake_generate_json,
     )
 
     report, _prompt = await _generate_proposed_action(
@@ -248,12 +242,13 @@ async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
         response_schema=_check_config()["response_schema"],
     )
 
-    schema = captured["response_format"]["json_schema"]["schema"]
+    schema = calls[-1]["schema"]
     assert schema["properties"]["proposed_action"]["enum"] == [
         "Move to Jury",
         "Send concerns to startup",
     ]
-    assert '"proposed_action"' in captured["prompt"]
+    assert len(calls) == 1
+    assert calls[0]["reviewer"]({"proposed_action": "Move to Jury"}).problems
     assert "Move to Jury" in report
 
 
@@ -281,8 +276,8 @@ async def test_batch_invocation_uses_six_hour_processing_mode(
         lambda: adapter,
     )
     monkeypatch.setattr(
-        "skills.submission_ready.submission_ready.config_load",
-        lambda: {"submission_ready": {}},
+        "skills.submission_ready.submission_ready.load_repository_config",
+        lambda *sections: {},
     )
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._process_candidate",
@@ -315,8 +310,8 @@ async def test_explicit_invocation_forces_fresh_import(monkeypatch):
         lambda: adapter,
     )
     monkeypatch.setattr(
-        "skills.submission_ready.submission_ready.config_load",
-        lambda: {"submission_ready": {}},
+        "skills.submission_ready.submission_ready.load_repository_config",
+        lambda *sections: {},
     )
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._process_candidate",
@@ -346,7 +341,7 @@ async def test_process_candidate_writes_timestamped_pair(
 
     async def fake_batch_audit(**kwargs):
         batch_calls.append(kwargs)
-        return [FakeAuditInsight()]
+        return FakeAuditInsight()
 
     async def fake_response(**kwargs):
         return "# Proposed action\n", "response prompt"
@@ -411,7 +406,7 @@ async def test_stage_change_uses_current_batch_audit_for_new_response(
         return "example"
 
     async def fake_batch_audit(**_kwargs):
-        return [FakeAuditInsight()]
+        return FakeAuditInsight()
 
     async def fake_response(**kwargs):
         assert kwargs["stage"] == "Under review"
@@ -474,7 +469,7 @@ async def test_unchanged_stage_reuses_both_artifacts_without_llm(
         return "example"
 
     async def fake_batch_audit(**_kwargs):
-        return [FakeAuditInsight()]
+        return FakeAuditInsight()
 
     async def forbidden_response(**kwargs):
         raise AssertionError("Response LLM must not run.")
@@ -527,7 +522,7 @@ async def test_process_candidate_rejects_batch_audit_technical_errors(
         return "example"
 
     async def failed_batch_audit(**_kwargs):
-        return [FakeAuditInsight(error="provider unavailable")]
+        return FakeAuditInsight(error="provider unavailable")
 
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._prepare_dataset",
@@ -579,12 +574,17 @@ async def test_discovery_failure_retries_and_writes_failure_report(
         identifier="failures",
         subdir=True,
     )
+    saved_failures = []
     monkeypatch.setattr(
         "skills.submission_ready.submission_ready._save_failure_report",
-        lambda failures, run_id: failure_insight,
+        lambda failures, run_id: saved_failures.extend(failures) or failure_insight,
     )
 
-    result = await submission_ready()
+    with pytest.raises(
+        RuntimeError,
+        match="Submission-ready discovery failed",
+    ):
+        await submission_ready()
 
     assert adapter.calls == 3
-    assert result == [failure_insight]
+    assert len(saved_failures) == 1

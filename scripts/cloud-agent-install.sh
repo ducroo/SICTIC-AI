@@ -113,15 +113,10 @@ seed_cloud_env() {
   fi
 
   # Dealum + LlamaParse/Firestore: copy injected secrets so empty template keys  # pragma: allowlist secret
-  # cannot wipe them. lib/env.py loads .env with override=True.
+  # cannot wipe them. lib.infrastructure.configuration loads .env with override=True.
   # shellcheck disable=SC1091
   source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
   seed_dotenv_secrets "$env_path"
-
-  # GDrive: secrets UI holds JSON; runtime expects paths. Prefer *_JSON.
-  # shellcheck disable=SC1091
-  source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
-  materialize_gdrive_secrets "$env_path"
 
   # Firebase SA JSON stays out of .env; ADC file is rewritten every boot.
   # shellcheck disable=SC1091

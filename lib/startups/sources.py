@@ -5,13 +5,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from lib.adapters.dealum import DealumAdapter
+from lib.infrastructure.dealum import DealumAdapter
 from lib.startups.dealum import import_startup_from_dealum
 from lib.startups.dealum.manifest import (
     LAST_SUCCESSFUL_PULL_AT,
     read_manifest,
 )
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.startups.identity import canonical_startup_slug
 from lib.storage import get_storage
 from lib.datasets.paths import (

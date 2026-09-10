@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copy Cloud Agent secrets from the process environment into .env.
-# lib/env.py loads .env with override=True, so empty template keys wipe
-# live secrets unless the injected values are written first.
+# lib.infrastructure.configuration loads .env with override=True, so empty
+# template keys wipe live secrets unless the injected values are written first.
 #
 # Source this file; call seed_dotenv_secrets <env_file>.
 # Requires env_set KEY VALUE PATH to be defined by the caller.

@@ -5,14 +5,16 @@ from typing import Optional
 import typer
 
 from lib.cli import run_command
+from lib.datasets.ingestion import sync_datasets
 from lib.insights import dataset_from_insight
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from skills.dataset_maintenance.maintenance import (
     activate_dataset_marker,
     archive_dataset_marker,
     delete_dataset_index,
     diagnose_qdrant_collections,
     prune_orphaned_qdrant_collections,
+    rebuild_dataset_index,
 )
 from lib.startups.dossier import ensure_startup_dossier
 from skills.dataset_maintenance.startup_dossiers import migrate_startup_dossiers
@@ -47,7 +49,7 @@ def prune(
     apply: bool = typer.Option(
         False,
         "--apply",
-        help="Delete orphaned collections. Default is dry-run.",
+        help="Delete orphaned dataset tenants. Default is dry-run.",
     ),
 ) -> None:
     collections = run_command(
@@ -75,9 +77,48 @@ def delete_command(
         typer.echo(f"Deleted: {collection}")
 
 
+@app.command("rebuild-index")
+def rebuild_index_command(
+    dataset: str = typer.Option(..., "--datasets", "--dataset", "-d", help="Comma-separated datasets."),
+    sync: bool = typer.Option(
+        True,
+        "--sync/--no-sync",
+        help="Re-index immediately after removing the dataset tenant.",
+    ),
+) -> None:
+    """Recreate a dataset index so it gains BM25 vectors for hybrid search."""
+    rebuilds = run_command(
+        lambda: [
+            rebuild_dataset_index(item)
+            for item in _parse_datasets(dataset)
+        ],
+        logger=logger,
+        error_prefix="Rebuild failed",
+    )
+    for rebuild in rebuilds:
+        typer.echo(
+            f"Reset: {rebuild.dataset} (collection={rebuild.collection}, "
+            f"deleted={rebuild.collection_deleted}, "
+            f"documents={rebuild.documents_reset})"
+        )
+    if not sync:
+        typer.echo("Skipped re-indexing. Run a sync to rebuild the index.")
+        return
+    run_command(
+        lambda: sync_datasets(
+            [rebuild.dataset for rebuild in rebuilds],
+            raise_on_error=True,
+        ),
+        logger=logger,
+        error_prefix="Rebuild sync failed",
+    )
+    for rebuild in rebuilds:
+        typer.echo(f"Rebuilt index: {rebuild.dataset}")
+
+
 @app.command("activate")
 def activate_command(
-    dataset: str = typer.Option(..., "--dataset", "-d"),
+    dataset: str = typer.Option(..., "--datasets", "--dataset", "-d", help="Comma-separated datasets."),
 ) -> None:
     slugs = run_command(
         lambda: [activate_dataset_marker(item) for item in _parse_datasets(dataset)],
@@ -89,7 +130,7 @@ def activate_command(
 
 @app.command("archive")
 def archive_command(
-    dataset: str = typer.Option(..., "--dataset", "-d"),
+    dataset: str = typer.Option(..., "--datasets", "--dataset", "-d", help="Comma-separated datasets."),
 ) -> None:
     slugs = run_command(
         lambda: [archive_dataset_marker(item) for item in _parse_datasets(dataset)],
@@ -101,7 +142,7 @@ def archive_command(
 
 @app.command("create")
 def create_command(
-    startup_name: str = typer.Argument(..., help="Startup name for the new dossier."),
+    startup_name: str = typer.Argument(..., metavar="STARTUP", help="Startup name for the new dossier."),
 ) -> None:
     slug = run_command(
         lambda: ensure_startup_dossier(startup_name),

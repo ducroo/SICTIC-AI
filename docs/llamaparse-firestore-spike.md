@@ -28,13 +28,13 @@ Cloud Agent `start` skips local Qdrant when `VECTOR_STORE=firestore`.  # pragma:
 
 | Concern | Default | Spike |
 |---|---|---|
-| Parse | `DoclingAdapter` (local) | `LlamaParseAdapter` via LlamaCloud | <!-- pragma: allowlist secret -->
+| Parse | `convert_document` via Docling | `convert_document` via LlamaCloud Parse | <!-- pragma: allowlist secret -->
 | Vectors | `QdrantAdapter` (local) | `FirestoreAdapter` (`find_nearest`, cosine) | <!-- pragma: allowlist secret -->
-| Selection | env factories in `lib/adapters/document_parser.py` and `lib/adapters/vector_store.py` | same |
+| Selection | `DOCUMENT_CONVERTER` / `DOCUMENT_PARSER` in `lib/infrastructure/document_parser.py` and `VECTOR_STORE` in `lib/infrastructure/vector_store.py` | same |
 
 Call sites (`conversion`, `indexing`, `search`, ephemeral datasets, maintenance)
 go through the factories. Spreadsheet/RTF/plain-text passthrough still runs
-locally in the LlamaParse adapter to avoid paying for trivial formats. <!-- pragma: allowlist secret -->
+locally in the LlamaParse conversion backend to avoid paying for trivial formats. <!-- pragma: allowlist secret -->
 
 ## Firestore notes  # pragma: allowlist secret
 
@@ -81,7 +81,7 @@ docker run --rm -p 8080:8080 \
   sictic-spike
 ```
 
-Pass secrets as process environment. Do not copy a `.env` into the image. `lib/env.py` loads repo-root `.env` with `override=True`, so empty template keys would wipe those values. Do not put `FIREBASE_SERVICE_ACCOUNT_JSON` in a file that `sed` will rewrite.
+Pass secrets as process environment. Do not copy a `.env` into the image. `lib.infrastructure.configuration` loads repo-root `.env` with `override=True`, so empty template keys would wipe those values. Do not put `FIREBASE_SERVICE_ACCOUNT_JSON` in a file that `sed` will rewrite.
 
 The process binds `0.0.0.0` and reads `PORT` (default 8080). Cloud Run sets `PORT`. `GET /healthz` reports parser, store, and secret presence flags. It does not call LlamaCloud or Firestore. `GET /` is a private demo form that calls `prepare_ephemeral_dataset` and `dataset_search`. There is no auth. Do not publish this port. <!-- pragma: allowlist secret -->
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from lib.adapters.firestore import FirestoreAdapter, FirestoreQueryHit  # pragma: allowlist secret
+from lib.infrastructure.firestore import FirestoreAdapter, FirestoreQueryHit  # pragma: allowlist secret
 
 
 class _FakeSnap:
@@ -82,7 +82,7 @@ def test_firestore_ensure_collection_registers_meta():  # pragma: allowlist secr
 
 def test_index_covers_embedding_matches_dimension():
     from types import SimpleNamespace
-    from lib.adapters.firestore import _index_covers_embedding  # pragma: allowlist secret
+    from lib.infrastructure.firestore import _index_covers_embedding  # pragma: allowlist secret
 
     index = SimpleNamespace(
         fields=[
@@ -102,3 +102,8 @@ def test_ensure_collection_rejects_oversize_vectors():
     adapter._meta = MagicMock()
     with pytest.raises(RuntimeError, match="max dimension"):
         adapter.ensure_collection(3072)
+
+
+def test_sparse_enabled_is_false():
+    adapter = FirestoreAdapter.__new__(FirestoreAdapter)  # pragma: allowlist secret
+    assert adapter.sparse_enabled() is False

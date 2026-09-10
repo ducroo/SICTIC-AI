@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from lib.adapters.dealum import DealumAdapter
+from lib.infrastructure.dealum import DealumAdapter
 from lib.datasets.paths import dataset_location_for_domain
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.startups.dealum.manifest import (
     DEALUM_SUBDIR,
     LAST_SUCCESSFUL_PULL_AT,

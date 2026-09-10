@@ -4,16 +4,16 @@ from dataclasses import dataclass
 from typing import List
 
 from lib.model_config import llm_model
-from skills.config_load.config_load import config_load
-from skills.llm_chat.llm_chat import llm_chat
+from lib.infrastructure.configuration import config_cache_key, load_repository_config
+from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.insights import InsightFile, InsightResult
-from lib.linkedin import LinkedInResolver
-from lib.logger import get_logger
+from lib.people.linkedin import LinkedInResolver
+from lib.infrastructure.logging import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.dossier import build_person_dossier
 from lib.people.model import Person
 from lib.slugify import slugify
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.datasets.ingestion import sync_datasets
 
 logger = get_logger(__name__)
@@ -52,6 +52,7 @@ def _ensure_profile_metadata_header(person: Person, content: str) -> str:
         return content
     return _profile_metadata_header(person) + content.lstrip()
 
+
 async def _person_profile_result(
     dataset_name: str,
     names: str | list[str] = None,
@@ -61,16 +62,16 @@ async def _person_profile_result(
     """
     Collate a comprehensive profile on a specific person (or list of persons) by searching 
     a given dataset and LinkedIn, returning the full synthesized report.
-    If names is None, discovers all persons in the dataset, pre-fetches profiles, and generates all reports.
+    If names is None, reads all persons from the existing roster and generates their reports.
     Returns populated Person objects and their corresponding insight artifacts.
     """
     dataset_slug = slugify(dataset_name)
     
-    # 1. Global Discovery
-    logger.info(f"[{dataset_slug}] Running global discovery for dataset persons...")
+    # 1. Read the authoritative roster without discovery.
+    logger.info(f"[{dataset_slug}] Reading the dataset persons roster...")
     # discovered_persons is now a List[Person]
     discovered_persons = persons_in_dataset(dataset_slug)
-    
+
     target_persons: List[Person] = []
     
     if not names:
@@ -101,9 +102,8 @@ async def _person_profile_result(
         linkedin_resolver.get_profiles,
         target_persons,
     )
-
     await sync_datasets([dataset_slug], raise_on_error=True)
-    
+
     # De-duplicate the resolved profiles using Person entity resolution
     profiles_to_process: List[Person] = []
     for p in all_profiles_raw:
@@ -118,24 +118,42 @@ async def _person_profile_result(
     concurrency = int(get_env_var("OLLAMA_NUM_PARALLEL"))
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def generate_with_logging(person: Person) -> InsightFile | None:
-        try:
-            async with semaphore:
-                return await _generate_single_profile(
-                    dataset_slug,
-                    person,
-                    include_dataset_context=include_dataset_context,
-                )
-        except Exception as e:
-            logger.error(f"[{dataset_slug}] Failed to generate profile for {person.display_name}: {e}")
-            return None
+    async def generate(person: Person) -> InsightFile:
+        async with semaphore:
+            return await _generate_single_profile(
+                dataset_slug,
+                person,
+                include_dataset_context=include_dataset_context,
+            )
 
     generated = await asyncio.gather(
-        *(generate_with_logging(person) for person in profiles_to_process)
+        *(generate(person) for person in profiles_to_process),
+        return_exceptions=True,
     )
+    insights: InsightResult = []
+    failures: list[str] = []
+    for person, result in zip(profiles_to_process, generated):
+        if isinstance(result, BaseException):
+            if not isinstance(result, Exception):
+                raise result
+            logger.error(
+                "[%s] Failed to generate profile for %s",
+                dataset_slug,
+                person.display_name,
+                exc_info=(type(result), result, result.__traceback__),
+            )
+            failures.append(f"{person.display_name}: {result}")
+        else:
+            insights.append(result)
+
+    if failures:
+        raise RuntimeError(
+            f"Failed to generate {len(failures)} person profile(s): "
+            + "; ".join(failures)
+        )
     return _PersonProfileResult(
         persons=profiles_to_process,
-        insights=[insight for insight in generated if insight is not None],
+        insights=insights,
     )
 
 
@@ -183,9 +201,10 @@ async def _generate_single_profile(
     default_llm = llm_model()
 
     try:
-        conf = config_load()
-        query_template = conf['person_profile']['query']
-        llm_instructions = conf['person_profile']['llm_instructions']
+        conf = load_repository_config("person_profile")
+        query_template = conf['query']
+        llm_instructions = conf['llm_instructions']
+        llm_instructions += "\n\n" + conf["founder_traits_instructions"]
         try:
             query = query_template.replace("{{name}}", display_name)
         except KeyError:
@@ -193,13 +212,20 @@ async def _generate_single_profile(
     except KeyError as e:
         raise ValueError(f"Missing configuration for person_profile: {e}")
 
+    # Generation settings affect freshness, never the standard profile filename.
+    effective_config_key = config_cache_key(
+        query + llm_instructions,
+        {
+            "include_dataset_context": include_dataset_context,
+        },
+    )
     insight = InsightFile(
         dataset=dataset_slug,
         skill="person_profile",
         model=default_llm,
         identifier=identifier,
         subdir=True,
-        config_key=query + llm_instructions,
+        config_key=effective_config_key,
     )
     reusable = insight.find(selection="reusable")
     if reusable:
@@ -245,11 +271,8 @@ async def _generate_single_profile(
             f"Context from {dataset_slug}:\n{full_context}\n\n"
             f"Query: {query}\n\nInstructions: {llm_instructions}"
         )
-        profile_output = await llm_chat(prompt=prompt)
+        profile_output = await generate_markdown(prompt)
     
-    if not profile_output or not profile_output.strip():
-        raise ValueError(f"LLM returned empty response for the person profile output of '{display_name}'.")
-
     profile_output = _ensure_profile_metadata_header(person, profile_output)
 
     # Save and update object

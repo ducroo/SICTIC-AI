@@ -3,6 +3,7 @@
 **/.DS_Store
 .openclaw/
 AGENTS.md
+!/AGENTS.md
 DEVELOPER_GUIDE.md
 HEARTBEAT.md
 IDENTITY.md
@@ -24,16 +25,26 @@ __pycache__/
 .storage-mirror/
 .installed-skills/
 .openclaw-skills/
+
+# Retired synchronization state and credentials remain private. The runtime no
+# longer reads them, but existing user files are deliberately left untouched.
 gdrive-mirror/
-gdrive-sync/.state/
-gdrive-sync/logs/
 gdrive_sync_state/
+gdrive-ops-credentials.json
+gdrive-ops-token.json
+
+rclone-sync/config.env
+rclone-sync/filters.txt.md5
+rclone-sync/logs/
+rclone-sync/run.lock/
+rclone-sync/state/
 
 venv/
 logs/
 .pids/
 qdrant/
-qdrant_data/
+# no trailing slash: qdrant_data may be a symlink to external storage
+qdrant_data
 .qdrant-initialized
 
 # packaging artifacts
@@ -48,10 +59,16 @@ condaenv.*.requirements.txt
 
 # personal scratch files
 claude_resume.txt
+.env-old
+.tmp/
+local-storage/
+output/
+outputs/
+storage/
 
-# Google Drive OAuth secrets (also expected under ~/.openclaw/ by default)
-gdrive-ops-credentials.json
-gdrive-ops-token.json
+# personal contributor notes & backlog — never push
+docs/contrib-notes/
+docs/code-review-*.md
 
 # Live sync config (per-user folder IDs). Commit only sync.yaml.example.
 config/sync.yaml
@@ -64,3 +81,6 @@ firebase-debug.log
 functions/node_modules/
 functions/package-lock.json
 hosting/.firebase/
+
+# personal MCP scaffolding, not part of the project
+local_mcp/

@@ -1,9 +1,9 @@
 from lib.datasets.ingestion import sync_datasets
 from lib.insights import InsightFile, InsightResult
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
-from skills.config_load.config_load import config_load
+from lib.infrastructure.configuration import load_repository_config
 from skills.dataset_chat.dataset_chat import dataset_chat
 
 logger = get_logger(__name__)
@@ -19,10 +19,10 @@ async def startup_traction(startup_name: str) -> InsightResult:
     dataset_slug = status.dataset_slug
     await sync_datasets([dataset_slug], raise_on_error=True)
 
-    config = config_load()
+    config = load_repository_config("startup_traction")
     try:
-        query = config["startup_traction"]["query"]
-        llm_instructions = config["startup_traction"]["llm_instructions"]
+        query = config["query"]
+        llm_instructions = config["llm_instructions"]
     except KeyError as error:
         raise ValueError(f"Missing configuration for startup_traction: {error}") from error
 

@@ -5,9 +5,9 @@ import os
 import pytest
 from dotenv import dotenv_values
 
-from lib.adapters.document_parser import document_parser_backend
-from lib.adapters.llamaparse import LlamaParseAdapter  # pragma: allowlist secret
-from lib.adapters.vector_store import vector_store_backend
+from lib.infrastructure.document_parser import document_parser_backend
+from lib.infrastructure.llamaparse.adapter import convert_document  # pragma: allowlist secret
+from lib.infrastructure.vector_store import vector_store_backend
 from lib.datasets.embeddings import EmbeddingService, _vector_size_cache
 from lib.datasets.search import dataset_search
 from lib.ephemeral_dataset import prepare_ephemeral_dataset
@@ -64,7 +64,7 @@ async def test_live_firestore_markdown_search(tmp_path, monkeypatch):  # pragma:
     _restore_cloud_embedding_env(monkeypatch)
     assert document_parser_backend() == "llamaparse"  # pragma: allowlist secret
     assert vector_store_backend() == "firestore"  # pragma: allowlist secret
-    assert EmbeddingService().vector_size() == 1536
+    assert await EmbeddingService().vector_size() == 1536
 
     notes = tmp_path / "cloud-smoke.md"
     notes.write_text(
@@ -94,13 +94,5 @@ async def test_live_llamaparse_pdf(tmp_path, monkeypatch):  # pragma: allowlist 
     _restore_cloud_embedding_env(monkeypatch)
     pdf = tmp_path / "cloud-smoke.pdf"
     pdf.write_bytes(_MINIMAL_PDF)
-    adapter = LlamaParseAdapter(concurrency_limit=1)  # pragma: allowlist secret
-    results = [
-        item
-        async for item in adapter.extract_documents(
-            [{"filename": pdf.name, "local_path": pdf}]
-        )
-    ]
-    assert len(results) == 1
-    assert not results[0].error
-    assert results[0].text.strip()
+    conversion = await convert_document(pdf)
+    assert conversion.markdown.strip()

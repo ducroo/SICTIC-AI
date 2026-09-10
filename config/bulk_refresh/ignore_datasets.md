@@ -1,3 +1,0 @@
-investor_profile
-person_profile
-startup_profile

@@ -5,19 +5,20 @@ from __future__ import annotations
 import asyncio
 from typing import List, Optional
 
-from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import list_dataset_names
 from lib.insights import InsightFile, InsightResult
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.model_config import llm_model
 from lib.people.model import Person
-from skills.config_load.config_load import config_load
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
 from skills.suggested_startups.generation import (
     compile_startup_profiles,
     generate_report,
 )
 from skills.suggested_startups.inputs import (
-    STARTUP_PROFILES_DATASET,
     SuggestedStartupsConfig,
     SuggestedStartupsRequest,
     load_investor_profiles,
@@ -29,44 +30,39 @@ from skills.suggested_startups.inputs import (
 logger = get_logger(__name__)
 
 
-def _partition_cached(
+def _prepare_outputs(
     request: SuggestedStartupsRequest,
     skill_config: SuggestedStartupsConfig,
-) -> tuple[InsightResult, list[tuple[Person, InsightFile]]]:
-    sources = [request.dataset, STARTUP_PROFILES_DATASET]
-    reusable: InsightResult = []
+) -> list[tuple[Person, InsightFile]]:
+    request_key = config_cache_key(
+        skill_config.key,
+        {
+            "startups": request.startups,
+            "max_startups": request.max_startups,
+        },
+    )
     pending: list[tuple[Person, InsightFile]] = []
     for person in request.investors:
         insight = InsightFile(
             dataset=request.dataset,
             skill="suggested_startups",
             model=llm_model(),
-            identifier=person.display_name,
+            identifier=person.identifier,
             subdir=True,
-            source_datasets=sources,
-            config_key=skill_config.key,
+            config_key=request_key,
         )
-        cached = insight.find(selection="reusable")
-        if cached:
-            logger.info(
-                "[%s] Skipping %s: Cache up to date.",
-                request.dataset,
-                person.display_name,
-            )
-            reusable.append(cached)
-        else:
-            pending.append((person, insight))
-    return reusable, pending
+        pending.append((person, insight))
+    return pending
 
 
 async def suggested_startups(
     dataset_name: str = "sictic_members",
     startups: Optional[List[str]] = None,
     investors: Optional[List[str]] = None,
-    max_startups: int = 5,
+    max_startups: int = 16,
 ) -> InsightResult:
     """Rank stored startup profiles for canonical investors in a dataset."""
-    config = config_load()
+    config = load_repository_config()
     skill_config = load_skill_config(config)
     request = resolve_request(
         dataset_name,
@@ -78,78 +74,69 @@ async def suggested_startups(
     )
 
     startup_profiles = await load_startup_profiles(request.startups)
-    await sync_datasets(
-        [request.dataset, STARTUP_PROFILES_DATASET],
-        raise_on_error=True,
-    )
-    insights, pending = _partition_cached(request, skill_config)
-    if not pending:
-        logger.info(
-            "[%s] Suggested-startups summary: %d cached, 0 generated, "
-            "0 failed.",
-            request.dataset,
-            len(insights),
-        )
-        return insights
+    pending = _prepare_outputs(request, skill_config)
 
     pending_people = [person for person, _insight in pending]
     investor_profiles = load_investor_profiles(
         request.dataset,
         pending_people,
     )
-    startup_context = compile_startup_profiles(startup_profiles)
+    compiled_startup_profiles = compile_startup_profiles(startup_profiles)
 
     async def generate(
         person: Person,
         insight: InsightFile,
-    ) -> InsightFile | None:
+    ) -> InsightFile:
         logger.info(
             "[%s] Processing investor: %s",
             request.dataset,
             person.display_name,
         )
-        try:
-            report = await generate_report(
-                person.display_name,
-                investor_profiles[person.linkedin_id],
-                startup_context,
-                skill_config.prompt,
-                skill_config.response_schema,
-                request.startups,
-                request.max_startups,
-            )
-            insight.save(report)
-            logger.info(
-                "[%s] Saved suggestions for %s to %s",
-                request.dataset,
-                person.display_name,
-                insight.path,
-            )
-            return insight
-        except Exception:
-            logger.exception(
+        report = await generate_report(
+            person.display_name,
+            investor_profiles[person.linkedin_id],
+            compiled_startup_profiles,
+            skill_config.prompt,
+            request.max_startups,
+        )
+        insight.save(report)
+        logger.info(
+            "[%s] Saved suggestions for %s to %s",
+            request.dataset,
+            person.display_name,
+            insight.path,
+        )
+        return insight
+
+    generated_results = await asyncio.gather(
+        *(generate(person, insight) for person, insight in pending),
+        return_exceptions=True,
+    )
+    generated: InsightResult = []
+    failures: list[str] = []
+    for (person, _insight), result in zip(pending, generated_results):
+        if isinstance(result, BaseException):
+            if not isinstance(result, Exception):
+                raise result
+            logger.error(
                 "[%s] Failed to generate suggested startups for %s. "
                 "No insight was saved.",
                 request.dataset,
                 person.display_name,
+                exc_info=(type(result), result, result.__traceback__),
             )
-            return None
-
-    generated_results = await asyncio.gather(
-        *(generate(person, insight) for person, insight in pending)
-    )
-    generated = [
-        insight for insight in generated_results if insight is not None
-    ]
-    cached_count = len(insights)
-    failed_count = len(pending) - len(generated)
-    insights.extend(generated)
+            failures.append(f"{person.display_name}: {result}")
+        else:
+            generated.append(result)
     logger.info(
-        "[%s] Suggested-startups summary: %d cached, %d generated, "
-        "%d failed.",
+        "[%s] Suggested-startups summary: %d generated, %d failed.",
         request.dataset,
-        cached_count,
         len(generated),
-        failed_count,
+        len(failures),
     )
-    return insights
+    if failures:
+        raise RuntimeError(
+            f"Failed to generate suggestions for {len(failures)} "
+            "investor(s): " + "; ".join(failures)
+        )
+    return generated

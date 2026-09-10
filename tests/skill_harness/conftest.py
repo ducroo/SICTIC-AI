@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -47,6 +48,75 @@ def _create_dataset(name: str, domain: str) -> None:
     )
 
 
+def _captable_extraction(document: str) -> dict:
+    """A minimal, internally consistent cap-table extraction (stage 5)."""
+    return {
+        "document": document,
+        "dataset": "example-startup",
+        "as_of_date": {"value": "2026-06-30", "quote": "as of 30 June 2026"},
+        "share_classes": [
+            {"id": "common", "name": "Common", "nominal_value": 0.10,
+             "votes_per_share": 1},
+        ],
+        "stakeholders": [
+            {"name": "Jane Doe", "kind": "individual", "role": "founder",
+             "holdings": [{"class_id": "common", "count": 600_000}],
+             "diluted_count": 600_000, "invested_amount": 60_000},
+            {"name": "Fixture Angels", "kind": "entity", "role": "investor",
+             "holdings": [{"class_id": "common", "count": 300_000}],
+             "diluted_count": 300_000, "invested_amount": 300_000},
+            {"name": "Treasury", "kind": "treasury", "role": "company",
+             "holdings": [{"class_id": "common", "count": 50_000}],
+             "diluted_count": None},
+            {"name": "ESOP", "kind": "pool", "role": "employee",
+             "holdings": [], "diluted_count": 100_000},
+        ],
+        "pools": [
+            {"kind": "esop", "label": "ESOP 2025", "total": 100_000,
+             "granted": 40_000, "unallocated": 60_000},
+        ],
+        "totals": {
+            "by_class": [{"class_id": "common", "issued_total": 950_000}],
+            "diluted_total": 1_000_000,
+            "quote": "Total 950,000 / fully diluted 1,000,000",
+        },
+        "fully_diluted_definition": {
+            "value": "full_pools",
+            "quote": "fully diluted including the full ESOP",
+        },
+        "assumptions": [],
+    }
+
+
+def _captable_snapshot() -> dict:
+    """A stored snapshot (stage 7 output) for the analysis smoke."""
+    extraction = _captable_extraction("fixture.md")
+    return {
+        "dataset": "example-startup",
+        "as_of_date": "2026-06-30",
+        "generated_at": "2026-09-06T00:00:00+00:00",
+        "tool_version": "captable_build/test",
+        "sources": [
+            {"doc": "fixture.md", "class": "current_cap_table",
+             "date": "2026-06-30"},
+        ],
+        "share_classes": extraction["share_classes"],
+        "stakeholders": extraction["stakeholders"],
+        "pools": extraction["pools"],
+        "totals": extraction["totals"],
+        "fully_diluted_definition": extraction["fully_diluted_definition"],
+        "register": None,
+        "pool_documents": [],
+        "convertibles": [],
+        "convertible_failures": [],
+        "aggregation": {},
+        "assessment": [],
+        "validation": [],
+        "assumptions": [],
+        "diligence_questions": [],
+    }
+
+
 @pytest.fixture
 def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
     storage_root = tmp_path / "local-storage"
@@ -85,24 +155,10 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
         "storage/community/sictic-members/datasets/track-record/jane-doe.md",
         "Invested in fixture startups.",
     )
+    InsightFile(fixtures.startup, "captable_build", "manual", identifier="consolidated", subdir=True, extension="json").save(json.dumps(_captable_snapshot()))
 
     yield fixtures
     reset_storage_singleton()
-
-
-@pytest.fixture(autouse=True)
-def forbid_cloud_sync(monkeypatch):
-    def blocked(*_args, **_kwargs):
-        raise AssertionError("skill harness tests must not invoke Google Drive sync")
-
-    import gdrive_sync.client as gdrive_client
-    import lib.storage_gdrive as storage_gdrive
-
-    monkeypatch.setattr(gdrive_client.GDriveSync, "push", blocked)
-    monkeypatch.setattr(gdrive_client.GDriveSync, "pull", blocked)
-    monkeypatch.setattr(gdrive_client.GDriveSync, "sync", blocked)
-    monkeypatch.setattr(storage_gdrive.GoogleDriveStorage, "_ensure_service", blocked)
-    monkeypatch.setattr(storage_gdrive.GoogleDriveStorage, "_load_or_authorize", blocked)
 
 
 @pytest.fixture
@@ -113,35 +169,83 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return []
 
     async def fake_dataset_chat(*_args, **_kwargs):
-        response_format = _kwargs.get("response_format") or {}
-        schema = response_format.get("json_schema", {}).get("schema", {})
-        if "industry_type" in schema.get("properties", {}):
-            return (
-                '{"industry_type":"general","confidence":80,'
-                '"evidence":["Fixture company evidence."]}'
-            )
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'
 
+    async def fake_dataset_chat_json(*_args, **kwargs):
+        schema = kwargs["schema"]
+        properties = schema.get("properties", {})
+        if "path" in properties:
+            return {
+                "path": "fixture.md",
+                "document_match": "High",
+                "concerns": [],
+                "paths_for_alternative_candidates": [],
+                "selection_reason": "Fixture substantive SHA.",
+            }
+        if "industry_type" in properties:
+            return {
+                "industry_type": "general",
+                "confidence": 80,
+                "evidence": ["Fixture company evidence."],
+            }
+        if "names" in properties:
+            return {"names": [fixtures.person_name]}
+        raise AssertionError("Unexpected dataset-chat JSON schema")
+
     async def fake_structured_audit_chat(*_args, **kwargs):
+        schema = kwargs["schema"]
+        statuses = schema.get("properties", {}).get("status", {}).get("enum", [])
         status = (
-            "Pass"
-            if "Pass | Fail | Unclear" in kwargs.get("prompt", "")
+            "balanced"
+            if "balanced" in statuses
+            else "Pass"
+            if "Pass" in statuses
+            else "Assessed"
+            if "Assessed" in statuses
             else "Fine"
         )
-        return (
-            f'{{"status":"{status}","rationale":"Fixture evidence",'
-            '"source_documents":["fixture.md"],'
-            '"proposed_next_steps_and_questions":[]}'
-        )
+        return {
+            "status": status,
+            "rationale": "Fixture evidence",
+            "source_documents": ["fixture.md"],
+            "proposed_next_steps_and_questions": [],
+        }
 
     async def fake_llm_chat(*_args, **_kwargs):
         return "Fixture LLM profile."
 
-    async def fake_ranking_persons(*_args, **_kwargs):
-        return "| Rank | Person | Rationale |\n|---|---|---|\n| 1 | Jane Doe | Fixture match |"
+    async def fake_generate_json(_prompt, schema, reviewer=None):
+        properties = schema.get("properties", {})
+        if "rankings" in properties:
+            keys = properties["rankings"]["items"]["properties"][
+                "template_key"
+            ]["enum"]
+            result = {
+                "rankings": [
+                    {
+                        "template_key": key,
+                        "rationale_for_rank": "Fixture ranking rationale.",
+                    }
+                    for key in keys
+                ]
+            }
+        elif "proposed_action" in properties:
+            result = {
+                "proposed_action": properties["proposed_action"]["enum"][0],
+                "rationale": "Complete.",
+                "eligibility_concerns": [],
+                "missing_or_inconsistent_information": [],
+            }
+        else:
+            raise AssertionError("Unexpected generated JSON schema")
+        return reviewer(result).output if reviewer else result
 
-    async def fake_dataset_from_insight(*_args, **_kwargs):
-        return []
+    async def fake_ranking_persons(*_args, **_kwargs):
+        return (
+            "| Rank | Full Name | Email Addresses | LinkedIn ID | Rationale |\n"
+            "|---|---|---|---|---|\n"
+            "| 1 | Jane Doe | jane@example.com | jane-doe | Fixture match |"
+        )
 
     async def fake_startup_profile(startup, *_args, **_kwargs):
         insight = InsightFile(startup, "startup_profile", "manual")
@@ -177,10 +281,10 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return []
 
     def fake_compile_startup_profiles(startup_profiles):
-        return "\n".join(
-            f"STARTUP: {profile.dataset}\n# Fixture startup profile."
+        return {
+            profile.dataset: "# Fixture startup profile."
             for profile in startup_profiles
-        )
+        }
 
     async def fake_startup_profiles_from_insight(*_args, **_kwargs):
         _create_dataset("available-startup-profiles", "generated")
@@ -228,9 +332,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     people_discovery = importlib.import_module("lib.people.discovery")
     startup_sources = importlib.import_module("lib.startups.sources")
     advocates_mod = importlib.import_module("skills.advocates.advocates")
-    structured_batch_audit_mod = importlib.import_module(
-        "skills.batch_audit.structured"
-    )
+    batch_audit_engine_mod = importlib.import_module("lib.batch_audit.engine")
     submission_ready_mod = importlib.import_module(
         "skills.submission_ready.submission_ready"
     )
@@ -239,6 +341,10 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     dd_priorities_mod = importlib.import_module(
         "skills.dd_priorities.dd_priorities"
     )
+    deep_dive_invitation_mod = importlib.import_module(
+        "skills.deep_dive_invitation.deep_dive_invitation"
+    )
+    sha_review_mod = importlib.import_module("skills.sha_review.sha_review")
     expert_search_mod = importlib.import_module("skills.expert_search.expert_search")
     investor_profile_mod = importlib.import_module("skills.investor_profile.investor_profile")
     person_profile_mod = importlib.import_module("skills.person_profile.person_profile")
@@ -254,6 +360,18 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "skills.suggested_startups.inputs"
     )
     team_profile_mod = importlib.import_module("skills.team_profile.team_profile")
+    team_profile_revised_mod = importlib.import_module(
+        "skills.team_profile_revised.team_profile_revised"
+    )
+    monkeypatch.setattr(
+        team_profile_revised_mod, "ensure_startup_dataset", fake_ensure_startup_dataset
+    )
+    monkeypatch.setattr(team_profile_revised_mod, "startup_profile", fake_startup_profile)
+    monkeypatch.setattr(team_profile_revised_mod, "generate_markdown", fake_llm_chat)
+    persons_skill = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
+    monkeypatch.setattr(persons_skill, "dataset_chat_json", fake_dataset_chat_json)
+    monkeypatch.setattr(persons_skill, "LinkedInResolver", FakeLinkedInResolver)
+
 
     monkeypatch.setattr(startup_sources, "ensure_startup_dataset", fake_ensure_startup_dataset)
     monkeypatch.setattr(people_discovery, "persons_in_dataset", fake_persons_in_dataset)
@@ -268,7 +386,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         startup_traction_mod,
         person_profile_mod,
         team_profile_mod,
+        team_profile_revised_mod,
         dd_checks_mod,
+        sha_review_mod,
         submission_ready_mod,
         expert_search_mod,
         potential_investors_mod,
@@ -281,11 +401,26 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(startup_profile_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(startup_traction_mod, "dataset_chat", fake_dataset_chat)
     monkeypatch.setattr(dataset_chat_mod, "dataset_chat", fake_dataset_chat)
-    monkeypatch.setattr(dd_checks_mod, "dataset_chat", fake_dataset_chat)
-    monkeypatch.setattr(dd_priorities_mod, "llm_chat", fake_llm_chat)
     monkeypatch.setattr(
-        structured_batch_audit_mod,
-        "dataset_chat",
+        dd_checks_mod,
+        "dataset_chat_json",
+        fake_dataset_chat_json,
+    )
+    monkeypatch.setattr(
+        sha_review_mod,
+        "dataset_chat_json",
+        fake_dataset_chat_json,
+    )
+    monkeypatch.setattr(
+        dd_priorities_mod,
+        "generate_markdown",
+        fake_llm_chat,
+    )
+    monkeypatch.setattr(sha_review_mod, "generate_json", fake_generate_json)
+    monkeypatch.setattr(sha_review_mod, "generate_markdown", fake_llm_chat)
+    monkeypatch.setattr(
+        batch_audit_engine_mod,
+        "dataset_chat_json",
         fake_structured_audit_chat,
     )
     monkeypatch.setattr(
@@ -303,19 +438,11 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     )
     monkeypatch.setattr(
         submission_ready_mod,
-        "llm_chat",
-        lambda *_args, **_kwargs: asyncio.sleep(
-            0,
-            result=(
-                '{"proposed_action":"Move to Under review",'
-                '"rationale":"Complete.",'
-                '"eligibility_concerns":[],'
-                '"missing_or_inconsistent_information":[]}'
-            ),
-        ),
+        "generate_json",
+        fake_generate_json,
     )
-    monkeypatch.setattr(person_profile_mod, "llm_chat", fake_llm_chat)
-    monkeypatch.setattr(team_profile_mod, "llm_chat", fake_llm_chat)
+    monkeypatch.setattr(person_profile_mod, "generate_markdown", fake_llm_chat)
+    monkeypatch.setattr(team_profile_mod, "generate_markdown", fake_llm_chat)
     monkeypatch.setattr(team_profile_mod, "dataset_search", fake_dataset_search)
     monkeypatch.setattr(person_profile_mod, "LinkedInResolver", FakeLinkedInResolver)
     monkeypatch.setattr(person_profile_mod, "persons_in_dataset", fake_persons_in_dataset)
@@ -323,9 +450,30 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(expert_search_mod, "startup_profile", fake_startup_profile)
     monkeypatch.setattr(potential_investors_mod, "startup_profile", fake_startup_profile)
 
+    async def fake_dealum_import(startup):
+        return SimpleNamespace(
+            dataset_slug="example-startup",
+            dealum_name=startup,
+            dealum_url="https://dealum.example/application/1",
+            application_path=None,
+        )
+
+    async def fake_expert_search(startup, **_kwargs):
+        insight = InsightFile(startup, "expert_search", "manual")
+        insight.save(await fake_ranking_persons())
+        return [insight]
+
+    monkeypatch.setattr(deep_dive_invitation_mod, "dealum_import", fake_dealum_import)
+    monkeypatch.setattr(deep_dive_invitation_mod, "startup_profile", fake_startup_profile)
+    monkeypatch.setattr(deep_dive_invitation_mod, "expert_search", fake_expert_search)
+    monkeypatch.setattr(
+        deep_dive_invitation_mod,
+        "member_preferences",
+        lambda *_args, **_kwargs: [fixtures.person],
+    )
+
     for module in [expert_search_mod, potential_investors_mod, advocates_mod]:
         monkeypatch.setattr(module, "ranking_persons", fake_ranking_persons)
-        monkeypatch.setattr(module, "dataset_from_insight", fake_dataset_from_insight)
 
     monkeypatch.setattr(
         suggested_startups_mod,
@@ -339,5 +487,35 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "load_investor_profiles",
         fake_load_investor_profiles,
     )
+
+    captable_build_mod = importlib.import_module(
+        "skills.captable_build.captable_build"
+    )
+    captable_analysis_mod = importlib.import_module(
+        "skills.captable.captable"
+    )
+    table_extraction_mod = importlib.import_module("lib.captable.table_extraction")
+
+    async def fake_classify_documents(dataset_name):
+        return {
+            "dataset": dataset_name,
+            "documents": [
+                {
+                    "filename": "fixture.md",
+                    "document_class": "current_cap_table",
+                    "confidence": 95,
+                    "as_of_date": "2026-06-30",
+                    "language": "en",
+                    "rationale": "Fixture cap table.",
+                }
+            ],
+        }
+
+    async def fake_extract_captable(_dataset_name, filename, _document_text):
+        return _captable_extraction(filename)
+
+    monkeypatch.setattr(captable_build_mod, "classify_documents", fake_classify_documents)
+    monkeypatch.setattr(table_extraction_mod, "extract_captable", fake_extract_captable)
+    monkeypatch.setattr(captable_analysis_mod, "generate_markdown", fake_llm_chat)
 
     return fixtures

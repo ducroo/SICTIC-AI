@@ -1,0 +1,8 @@
+{
+  "founder_majority_min_pct": 50,
+  "investor_dominance_ratio": 2,
+  "departed_ownership_max_pct": 10,
+  "fallback_pre_money_invested_multiplier": 2,
+  "fallback_pre_money_minimum": 1000000,
+  "fallback_investment_pct": 20
+}

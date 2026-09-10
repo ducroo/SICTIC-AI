@@ -6,7 +6,7 @@ from typing import Awaitable, Callable, Dict, List
 
 from lib.cli import format_insights
 from lib.insights import InsightFile
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -57,9 +57,12 @@ def _parse_csv(value: str | None) -> list[str] | None:
 
 
 async def _config(_: List[str]) -> str:
-    from skills.config_load.config_load import config_load, _local_cache_paths
+    from lib.infrastructure.configuration import (
+        _local_cache_paths,
+        load_repository_config,
+    )
 
-    config = config_load()
+    config = load_repository_config()
     _, cache_file = _local_cache_paths()
     return f"Loaded {len(config)} config sections.\nRESULT_PATH: {cache_file}"
 
@@ -107,23 +110,12 @@ async def _startup_traction(args: List[str]) -> str:
     return _format_result(await startup_traction(ns.startup))
 
 
-async def _batch_audit(args: List[str]) -> str:
-    parser = _parser("/batch_audit")
+async def _persons_in_dataset(args: List[str]) -> str:
+    parser = _parser("/persons_in_dataset")
     parser.add_argument("dataset")
-    parser.add_argument("checklist_file")
-    parser.add_argument("--skill-name", default="batch_audit")
     ns = parser.parse_args(args)
-    from pathlib import Path
-
-    from skills.batch_audit.batch_audit import batch_audit
-
-    checklist = Path(ns.checklist_file).read_text(encoding="utf-8")
-    insights = await batch_audit(
-        ns.dataset,
-        checklist,
-        skill_name=ns.skill_name,
-    )
-    return _format_result(insights)
+    from skills.persons_in_dataset.persons_in_dataset import persons_in_dataset
+    return _format_result(await persons_in_dataset(ns.dataset))
 
 
 async def _person_profile(args: List[str]) -> str:
@@ -147,9 +139,18 @@ async def _team_profile(args: List[str]) -> str:
     return _format_result(await team_profile(ns.startup))
 
 
+async def _team_profile_revised(args: List[str]) -> str:
+    parser = _parser("/team_profile_revised")
+    parser.add_argument("startup")
+    ns = parser.parse_args(args)
+    from skills.team_profile_revised.team_profile_revised import team_profile_revised
+
+    return _format_result(await team_profile_revised(ns.startup))
+
+
 async def _investor_profile(args: List[str]) -> str:
     parser = _parser("/investor_profile")
-    parser.add_argument("--source-dataset", default="sictic-members")
+    parser.add_argument("--dataset", "--source-dataset", "-d", dest="source_dataset", default="sictic-members")
     ns = parser.parse_args(args)
     from skills.investor_profile.investor_profile import investor_profile
 
@@ -174,6 +175,36 @@ async def _potential_investors(args: List[str]) -> str:
     return _format_result(await potential_investors(ns.startup))
 
 
+async def _member_preferences(args: List[str]) -> str:
+    parser = _parser("/member_preferences")
+    parser.add_argument("--dataset", "-d", default="sictic-members")
+    ns = parser.parse_args(args)
+    from skills.member_preferences.member_preferences import (
+        member_preferences,
+        render_member_preferences,
+    )
+
+    return render_member_preferences(member_preferences(ns.dataset))
+
+
+async def _deep_dive_invitation(args: List[str]) -> str:
+    parser = _parser("/deep_dive_invitation")
+    parser.add_argument("--startup", "-s", nargs="+", required=True)
+    parser.add_argument("--founders", nargs="*", default=[])
+    parser.add_argument("--investors", nargs="*", default=[])
+    ns = parser.parse_args(args)
+    from skills.deep_dive_invitation.deep_dive_invitation import (
+        deep_dive_invitation,
+        parse_people_csv,
+    )
+
+    return _format_result(await deep_dive_invitation(
+        " ".join(ns.startup),
+        founders=parse_people_csv(" ".join(ns.founders)),
+        investors=parse_people_csv(" ".join(ns.investors)),
+    ))
+
+
 async def _advocates(args: List[str]) -> str:
     parser = _parser("/advocates")
     parser.add_argument("event")
@@ -187,14 +218,14 @@ async def _advocates(args: List[str]) -> str:
 async def _suggested_startups(args: List[str]) -> str:
     parser = _parser("/suggested_startups")
     parser.add_argument("--startups", "-s")
-    parser.add_argument("--investors", "-i")
-    parser.add_argument("--max-startups", "-m", type=int, default=5)
+    parser.add_argument("--investors", "--investor", "-i", dest="investor")
+    parser.add_argument("--max-startups", "-m", type=int, default=16)
     ns = parser.parse_args(args)
     from skills.suggested_startups.suggested_startups import suggested_startups
 
     return _format_result(await suggested_startups(
         startups=_parse_csv(ns.startups),
-        investors=_parse_csv(ns.investors),
+        investors=_parse_csv(ns.investor),
         max_startups=ns.max_startups,
     ))
 
@@ -215,6 +246,48 @@ async def _dd_priorities(args: List[str]) -> str:
     from skills.dd_priorities.dd_priorities import dd_priorities
 
     return _format_result(await dd_priorities(ns.startup))
+
+
+async def _sha_review(args: List[str]) -> str:
+    parser = _parser("/sha_review")
+    parser.add_argument("dataset", metavar="startup")
+    ns = parser.parse_args(args)
+    from skills.sha_review.sha_review import sha_review
+
+    return _format_result(await sha_review(ns.dataset))
+
+
+async def _captable_build(args: List[str]) -> str:
+    parser = _parser("/captable_build")
+    parser.add_argument("dataset", metavar="startup")
+    parser.add_argument("--fresh", action="store_true")
+    ns = parser.parse_args(args)
+    from skills.captable_build.captable_build import captable_build
+
+    return _format_result(await captable_build(ns.dataset, fresh=ns.fresh))
+
+
+async def _captable(args: List[str]) -> str:
+    parser = _parser("/captable")
+    parser.add_argument("dataset", metavar="startup")
+    parser.add_argument("--pre-money", dest="pre_money", type=float)
+    parser.add_argument("--investment", type=float)
+    parser.add_argument("--fx-rate", dest="fx_rates", action="append")
+    parser.add_argument("--currency")
+    ns = parser.parse_args(args)
+    from skills.captable.captable import (
+        captable,
+        parse_fx_rates,
+    )
+
+    result = await captable(
+        ns.dataset,
+        pre_money=ns.pre_money,
+        investment=ns.investment,
+        fx_rates=parse_fx_rates(ns.fx_rates),
+        currency=ns.currency,
+    )
+    return _format_result(result)
 
 
 async def _submission_ready(args: List[str]) -> str:
@@ -252,22 +325,39 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/dataset_chat", "/dataset_chat <dataset> <question>", "Ask a dataset question.", _dataset_chat),
         HarnessCommand("/startup_profile", "/startup_profile <startup>", "Generate a startup profile.", _startup_profile),
         HarnessCommand("/startup_traction", "/startup_traction <startup>", "Summarize commercial traction.", _startup_traction),
-        HarnessCommand("/batch_audit", "/batch_audit <dataset> <checklist-file>", "Run a checklist against a dataset.", _batch_audit),
+        HarnessCommand("/persons_in_dataset", "/persons_in_dataset <dataset>", "Discover the editable person roster.", _persons_in_dataset),
         HarnessCommand("/person_profile", "/person_profile <dataset> <person>", "Generate a person profile.", _person_profile),
         HarnessCommand("/team_profile", "/team_profile <startup>", "Generate a team profile.", _team_profile),
-        HarnessCommand("/investor_profile", "/investor_profile [--source-dataset dataset]", "Build investor profiles.", _investor_profile),
+        HarnessCommand("/team_profile_revised", "/team_profile_revised <startup>", "Assess team checklists and synthesize each category.", _team_profile_revised),
+        HarnessCommand("/investor_profile", "/investor_profile [--dataset dataset]", "Build investor profiles.", _investor_profile),
         HarnessCommand("/expert_search", "/expert_search <startup>", "Rank relevant experts.", _expert_search),
         HarnessCommand("/potential_investors", "/potential_investors <startup>", "Rank potential investors.", _potential_investors),
+        HarnessCommand(
+            "/member_preferences",
+            "/member_preferences [--dataset sictic-members]",
+            "Return member communication preferences.",
+            _member_preferences,
+        ),
+        HarnessCommand(
+            "/deep_dive_invitation",
+            "/deep_dive_invitation --startup name [--founders contacts] [--investors contacts]",
+            "Create a review-only deep-dive invitation draft.",
+            _deep_dive_invitation,
+        ),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand(
             "/submission_ready",
-            "/submission_ready [startup ...]",
+            "/submission_ready [startups ...]",
             "Check in-scope application completeness and eligibility.",
             _submission_ready,
         ),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
         HarnessCommand("/dd_priorities", "/dd_priorities <startup>", "Prioritize an existing DD checks report.", _dd_priorities),
+        HarnessCommand("/sha_review", "/sha_review <startup>", "Review a startup Shareholders' Agreement.", _sha_review),
+        HarnessCommand("/captable_build", "/captable_build <startup> [--fresh]", "Build consolidated cap-table/CLA JSON.", _captable_build),
+        HarnessCommand("/captable", "/captable <startup> [--pre-money x] [--investment y] [--fx-rate CUR=RATE ...]", "Capitalization data, scenarios and commentary as Markdown.", _captable),
+        HarnessCommand("/captable_analysis", "/captable_analysis <startup>", "Compatibility alias for /captable.", _captable),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}
@@ -283,31 +373,33 @@ def help_text(registry: Dict[str, HarnessCommand] | None = None) -> str:
     return "\n".join(lines)
 
 
-async def dispatch_command(line: str, registry: Dict[str, HarnessCommand] | None = None) -> str:
+async def dispatch_command(line: str | list[str], registry: Dict[str, HarnessCommand] | None = None) -> str:
+    """Dispatch command text or shell-parsed tokens without reparsing tokens."""
     registry = registry or build_registry()
-    stripped = line.strip()
-    if not stripped:
+    if isinstance(line, list):
+        parts = list(line)
+        stripped = parts[0] if len(parts) == 1 else ""
+    else:
+        stripped = line.strip()
+        try:
+            # Only double quotes group text; apostrophes in natural-language
+            # queries (e.g. "What's ...") must not open a quote.
+            lexer = shlex.shlex(stripped, posix=True)
+            lexer.quotes = '"'
+            lexer.whitespace_split = True
+            lexer.commenters = ""
+            parts = list(lexer)
+        except ValueError as e:
+            return f"Parse error: {e}"
+    if not parts:
         return ""
     if stripped in {"/help", "help"}:
         return help_text(registry)
     if stripped in {"/exit", "exit", "quit"}:
         return "__EXIT__"
-    if not stripped.startswith("/"):
+    if not parts[0].startswith("/"):
         return "Use slash commands. Type /help for available commands."
 
-    try:
-        # Only double quotes group tokens; apostrophes in natural-language
-        # queries (e.g. "What's ...") must not open a quote.
-        lexer = shlex.shlex(stripped, posix=True)
-        lexer.quotes = '"'
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        parts = list(lexer)
-    except ValueError as e:
-        return f"Parse error: {e}"
-
-    if not parts:
-        return ""
     command_name, args = parts[0], parts[1:]
     command = registry.get(command_name)
     if not command:

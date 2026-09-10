@@ -1,0 +1,9 @@
+{
+  "status_scale": [
+    "unclear",
+    "too weak",
+    "balanced",
+    "too strong"
+  ],
+  "missing_evidence_status": "unclear"
+}

@@ -1,8 +1,9 @@
 import pytest
 
-from lib.structured_output import (
+from lib.infrastructure.ai_text_generation.json import (
     json_schema_response_format,
     parse_json_response,
+    schema_prompt_block,
 )
 
 
@@ -28,8 +29,19 @@ def test_parse_json_response_reports_validation_path():
 
 
 def test_json_schema_response_format_is_strict():
-    result = json_schema_response_format("test response", SCHEMA)
+    result = json_schema_response_format(SCHEMA, name="test response")
 
     assert result["json_schema"]["name"] == "test_response"
     assert result["json_schema"]["strict"] is True
     assert result["json_schema"]["schema"] is SCHEMA
+
+
+def test_schema_prompt_block_distinguishes_response_from_schema():
+    prompt = schema_prompt_block(SCHEMA)
+
+    assert prompt.startswith("### JSON OUTPUT\n")
+    assert '"value": {' in prompt
+    assert prompt.endswith(
+        "Return the matching JSON object, not the schema."
+    )
+    assert "{{response_schema}}" not in prompt

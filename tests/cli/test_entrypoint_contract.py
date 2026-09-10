@@ -47,12 +47,14 @@ def test_run_command_reports_errors_consistently(capsys):
     "module_name",
     [
         "skills.advocates.__main__",
-        "skills.batch_audit.__main__",
         "skills.bulk_refresh.__main__",
-        "skills.config_load.__main__",
+        "skills.captable_analysis.__main__",
+        "skills.captable.__main__",
+        "skills.captable_build.__main__",
         "skills.submission_ready.__main__",
         "skills.dataset_chat.__main__",
         "skills.dataset_maintenance.__main__",
+        "skills.deep_dive_invitation.__main__",
         "skills.dd_checks.__main__",
         "skills.dd_priorities.__main__",
         "skills.dealum_import.__main__",
@@ -61,14 +63,17 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.investor_profile.__main__",
         "skills.linkedin_maintenance.__main__",
         "skills.llm_chat.__main__",
+        "skills.member_preferences.__main__",
         "skills.person_profile.__main__",
         "skills.potential_investors.__main__",
         "skills.ranking.__main__",
+        "skills.sha_review.__main__",
         "skills.startup_profile.__main__",
         "skills.startup_traction.__main__",
         "skills.startup_website_import.__main__",
         "skills.suggested_startups.__main__",
         "skills.team_profile.__main__",
+        "skills.team_profile_revised.__main__",
     ],
 )
 def test_typer_entrypoint_renders_help(module_name):
@@ -78,3 +83,175 @@ def test_typer_entrypoint_renders_help(module_name):
 
     assert result.exit_code == 0
     assert "Usage:" in result.output
+
+
+def test_person_profile_cli_accepts_comma_separated_people(monkeypatch):
+    module = importlib.import_module("skills.person_profile.__main__")
+    captured = {}
+
+    async def fake_person_profile(*, dataset_name, names):
+        captured["dataset_name"] = dataset_name
+        captured["names"] = names
+        return []
+
+    monkeypatch.setattr(module, "person_profile", fake_person_profile)
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--dataset",
+            "sictic-members",
+            "--person",
+            "Thomas Dübendorfer, , Bolko Hohaus",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "dataset_name": "sictic-members",
+        "names": ["Thomas Dübendorfer", "Bolko Hohaus"],
+    }
+
+
+def test_bulk_refresh_cli_uses_plural_scope_options(monkeypatch):
+    module = importlib.import_module("skills.bulk_refresh.__main__")
+    captured = {}
+
+    async def fake_bulk_refresh(*, datasets, skills):
+        captured["datasets"] = datasets
+        captured["skills"] = skills
+
+    monkeypatch.setattr(module, "bulk_refresh", fake_bulk_refresh)
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--datasets",
+            "avientus,miraex",
+            "--skills",
+            "sha-review,dd-checks",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "datasets": "avientus,miraex",
+        "skills": "sha-review,dd-checks",
+    }
+
+
+def test_suggested_startups_cli_accepts_comma_separated_investors(monkeypatch):
+    module = importlib.import_module("skills.suggested_startups.__main__")
+    captured = {}
+
+    async def fake_suggested_startups(*, startups, investors, max_startups):
+        captured["startups"] = startups
+        captured["investors"] = investors
+        captured["max_startups"] = max_startups
+        return []
+
+    monkeypatch.setattr(
+        module,
+        "suggested_startups",
+        fake_suggested_startups,
+    )
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--investor",
+            "Lucas du Croo de Jongh, , Bolko Hohaus",
+            "--max-startups",
+            "10",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "startups": None,
+        "investors": ["Lucas du Croo de Jongh", "Bolko Hohaus"],
+        "max_startups": 10,
+    }
+
+
+def test_deep_dive_invitation_cli_accepts_plural_contact_options(monkeypatch):
+    module = importlib.import_module("skills.deep_dive_invitation.__main__")
+    captured = {}
+
+    async def fake_deep_dive_invitation(startup, founders, investors):
+        captured["startup"] = startup
+        captured["founders"] = founders
+        captured["investors"] = investors
+        return []
+
+    monkeypatch.setattr(
+        module,
+        "deep_dive_invitation",
+        fake_deep_dive_invitation,
+    )
+
+    result = CliRunner().invoke(
+        module.app,
+        [
+            "--startup",
+            "Example Startup",
+            "--founders",
+            "Jane Founder <jane@example.com>, John Founder",
+            "--investors",
+            "member@example.com, FONGIT",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["startup"] == "Example Startup"
+    assert [person.full_name for person in captured["founders"]] == [
+        "Jane Founder",
+        "John Founder",
+    ]
+    assert captured["founders"][0].email_addresses == ["jane@example.com"]
+    assert [person.display_name for person in captured["investors"]] == [
+        "member@example.com",
+        "FONGIT",
+    ]
+
+
+def test_startup_profile_cli_accepts_comma_separated_startups(monkeypatch):
+    module = importlib.import_module("skills.startup_profile.__main__")
+    captured = []
+
+    async def fake_startup_profile(startup, files):
+        captured.append((startup, files))
+        return []
+
+    monkeypatch.setattr(module, "startup_profile", fake_startup_profile)
+
+    result = CliRunner().invoke(
+        module.app,
+        ["--startup", "Avientus, , DAAV"],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [("Avientus", None), ("DAAV", None)]
+
+
+def test_startup_profile_cli_continues_after_startup_failure(monkeypatch):
+    module = importlib.import_module("skills.startup_profile.__main__")
+    captured = []
+
+    async def fake_startup_profile(startup, files):
+        captured.append((startup, files))
+        if startup == "Scanvio":
+            raise RuntimeError("dataset sync timed out")
+        return []
+
+    monkeypatch.setattr(module, "startup_profile", fake_startup_profile)
+
+    result = CliRunner().invoke(
+        module.app,
+        ["--startup", "Scanvio, Unisers"],
+    )
+
+    assert captured == [("Scanvio", None), ("Unisers", None)]
+    assert result.exit_code == 1
+    assert "Failed startups:" in result.output
+    assert "Scanvio: dataset sync timed out" in result.output

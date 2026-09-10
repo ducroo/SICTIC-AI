@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 from typing import List
 
 from lib.insights import InsightFile, InsightResult, strip_model_tag
-from lib.logger import get_logger
+from lib.infrastructure.logging import get_logger
 from lib.people.model import Person
 from lib.slugify import slugify
 from lib.storage import get_storage
@@ -39,6 +39,7 @@ def _compose_investor_profile(person_profile: str, track_record: str | None) -> 
 
 async def _investor_profile_result(
     source_dataset: str = "sictic-members",
+    names: list[str] | None = None,
 ) -> InvestorProfileResult:
     """Build investor profiles by appending manual track records to person profiles."""
     dataset_slug = slugify(source_dataset)
@@ -47,16 +48,26 @@ async def _investor_profile_result(
     track_record_dir = f"{dataset_raw_path(dataset_slug)}/track-record"
 
     if not storage.exists(person_profile_dir):
-        logger.warning(f"[{dataset_slug}] Person profile directory not found: {person_profile_dir}")
-        return InvestorProfileResult(source_dataset=dataset_slug)
+        raise RuntimeError(
+            f"Person profile directory not found: {person_profile_dir}"
+        )
 
     from lib.people.discovery import persons_in_dataset
 
-    member_ids = {
-        member.linkedin_id
-        for member in persons_in_dataset(dataset_slug)
-        if member.linkedin_id
-    }
+    members = persons_in_dataset(dataset_slug)
+    if names is None:
+        selected_members = members
+    else:
+        selected_members = []
+        for name in names:
+            matched = Person(full_name=name).find_best_match(members)
+            if matched is None:
+                logger.warning(f"[{dataset_slug}] No member found for investor '{name}'.")
+                continue
+            if matched not in selected_members:
+                selected_members.append(matched)
+
+    member_ids = {member.linkedin_id for member in selected_members if member.linkedin_id}
     filenames = [
         filename
         for filename in storage.list(person_profile_dir, suffix=".md")
@@ -67,6 +78,7 @@ async def _investor_profile_result(
     skipped = 0
     missing_track_records = 0
     insights: InsightResult = []
+    failures: list[str] = []
 
     for filename in filenames:
         stem = PurePosixPath(filename).stem
@@ -111,13 +123,23 @@ async def _investor_profile_result(
             written += 1
             insights.append(insight)
         except Exception as error:
-            logger.warning(f"[{dataset_slug}] Skipping {filename}: {error}")
+            logger.exception(
+                "[%s] Failed to build investor profile from %s",
+                dataset_slug,
+                filename,
+            )
             skipped += 1
+            failures.append(f"{filename}: {error}")
 
     logger.info(
         f"[{dataset_slug}] Investor profiles complete: "
         f"{written} written, {unchanged} unchanged, {skipped} skipped."
     )
+    if failures:
+        raise RuntimeError(
+            f"Failed to build {len(failures)} investor profile(s): "
+            + "; ".join(failures)
+        )
     return InvestorProfileResult(
         source_dataset=dataset_slug,
         person_profiles=len(filenames),
@@ -131,9 +153,10 @@ async def _investor_profile_result(
 
 async def investor_profile(
     source_dataset: str = "sictic-members",
+    names: list[str] | None = None,
 ) -> InsightResult:
     """Build investor profiles and return their managed insight artifacts."""
-    result = await _investor_profile_result(source_dataset)
+    result = await _investor_profile_result(source_dataset, names=names)
     return result.insights
 
 

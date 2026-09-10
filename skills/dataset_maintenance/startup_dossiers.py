@@ -1,11 +1,8 @@
 """Reorganize startup raw and parsed datasets into the standard folder layout.
 
 Dry-run is the default. Use --apply only after reviewing the JSON manifest.
-This script changes the local mirror only; sync both migrated trees afterward:
-
-    python -m gdrive_sync sync --conflict-policy local-wins
-
-The stateful standalone sync utility operates on the complete configured storage tree.
+This script changes local application storage only. If external synchronization
+is configured, sync the complete storage tree afterward.
 """
 from __future__ import annotations
 
@@ -15,9 +12,9 @@ import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-import lib.env  # noqa: F401
+import lib.infrastructure.configuration  # noqa: F401
 from lib.datasets.state import ACTIVE_MARKER, ARCHIVED_MARKER, MARKER_TEXT
-from lib.env import get_env_var
+from lib.infrastructure.configuration import get_env_var
 from lib.startups.dossier import STARTUP_DATASET_SUBDIRS
 from lib.startups.identity import canonical_startup_slug
 

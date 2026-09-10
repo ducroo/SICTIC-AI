@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Per-boot Cloud Agent start: materialize GDrive/Firebase/Dealum secrets, bring
+# Per-boot Cloud Agent start: materialize Firebase/Dealum secrets, bring
 # up Qdrant unless VECTOR_STORE=firestore. Docling / LlamaParse are in-process.  # pragma: allowlist secret
 # Skips Ollama; embeddings/LLM use API keys.
 set -euo pipefail
@@ -12,8 +12,6 @@ if ! command -v conda >/dev/null 2>&1 && [ -x "$HOME/miniforge3/bin/conda" ]; th
   eval "$("$HOME/miniforge3/bin/conda" shell.bash hook)"
 fi
 
-# Builds skip install on later boots; secrets are injected per pod, so refresh
-# GDrive credential files, Dealum keys, and .env path pointers on every start.
 env_set() {
   local key="$1"
   local value="$2"
@@ -35,8 +33,6 @@ env_set() {
 }
 
 # shellcheck disable=SC1091
-source "$REPO_ROOT/scripts/cloud-agent-gdrive-secrets.sh"
-# shellcheck disable=SC1091
 source "$REPO_ROOT/scripts/cloud-agent-dotenv-secrets.sh"
 # shellcheck disable=SC1091
 source "$REPO_ROOT/scripts/cloud-agent-firebase-secrets.sh"
@@ -54,11 +50,9 @@ if [ -f "$REPO_ROOT/.env" ]; then
       env_set "FIRESTORE_EMBEDDING_DIMENSIONS" "1536" "$REPO_ROOT/.env"  # pragma: allowlist secret
     fi
   fi
-  materialize_gdrive_secrets "$REPO_ROOT/.env"
   seed_dotenv_secrets "$REPO_ROOT/.env"
   materialize_firebase_secrets "$REPO_ROOT/.env"
 else
-  materialize_gdrive_secrets
   materialize_firebase_secrets
 fi
 

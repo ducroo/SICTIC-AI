@@ -17,15 +17,10 @@ async def test_startup_traction_saves_insufficient_context(mock_env, mocker):
     mocker.patch("skills.startup_traction.startup_traction.sync_datasets")
     save = mocker.patch("skills.startup_traction.startup_traction.InsightFile.save")
     mocker.patch(
-        "skills.startup_traction.startup_traction.config_load",
+        "skills.startup_traction.startup_traction.load_repository_config",
         return_value={
-            "startup_traction": {
-                "query": "Find traction.",
-                "llm_instructions": "Use only context.",
-            },
-            "dataset_chat": {
-                "fallback_trigger": "INSUFFICIENT_CONTEXT",
-            },
+            "query": "Find traction.",
+            "llm_instructions": "Use only context.",
         },
     )
     mocker.patch(

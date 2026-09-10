@@ -5,7 +5,7 @@ from pathlib import Path
 
 def test_install_script_copies_skills_and_sets_env(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
-    source = tmp_path / "source"
+    source = tmp_path / "source repository"
     target = tmp_path / "workspace" / "skills"
     fake_site_packages = tmp_path / "site-packages"
     fake_site_packages.mkdir()
@@ -26,9 +26,7 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
         "REPO_PATH=\n"
         "INSTALLED_SKILLS_PATH=\n"
         "LOCAL_STORAGE_PATH=\n"
-        "LOCAL_DATA_PATH=\n"
-        "CLOUD_PROVIDER=google\n"
-        "CLOUD_STORAGE_PATH=\n",
+        "LOCAL_DATA_PATH=\n",
         encoding="utf-8",
     )
     (source / ".env").write_text(
@@ -90,14 +88,161 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
     assert (target / "example_skill" / "__main__.py").is_file()
     assert not (target / "example_skill" / "SKILL.md").is_symlink()
     assert not (target / "example_skill" / "__pycache__").exists()
+    source_doc = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    installed_doc = (target / "example_skill" / "SKILL.md").read_text(encoding="utf-8")
+    assert source_doc == "---\nname: example_skill\n---\n"
+    assert installed_doc.startswith(source_doc)
+    assert f"`{skill_dir / 'SKILL.md'}`" in installed_doc
+    assert f"`{source / 'AGENTS.md'}`" in installed_doc
+    assert not (target / "AGENTS.md").exists()
     assert (fake_site_packages / "sictic-ai-repo.pth").read_text(encoding="utf-8").strip() == str(source)
 
     env_file = (source / ".env").read_text(encoding="utf-8")
     assert f"REPO_PATH={source}" in env_file
     assert f"INSTALLED_SKILLS_PATH={target}" in env_file
     assert "WORKSPACE_PATH=" not in env_file
-    assert f"LOCAL_STORAGE_PATH={source / '.storage'}" in env_file
+    assert f"LOCAL_STORAGE_PATH={source / 'local_storage'}" in env_file
     assert f"LOCAL_DATA_PATH={source}" in env_file
     assert "STORAGE_PROVIDER=" not in env_file
     assert "DEFAULT_LLM=" not in env_file
     assert "OLLAMA_NUM_CTX=" not in env_file
+    assert "CLOUD_PROVIDER=google" in env_file
+    assert "CLOUD_STORAGE_PATH=" in env_file
+
+
+def test_install_script_supports_repository_only_mode(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    source = tmp_path / "source"
+    fake_site_packages = tmp_path / "site-packages"
+    fake_site_packages.mkdir()
+
+    skill_dir = source / "skills" / "example_skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: example_skill\n---\n", encoding="utf-8")
+    (source / "environment.yml").write_text(
+        "name: sictic-test\n"
+        "dependencies:\n"
+        "  - python=3.12\n",
+        encoding="utf-8",
+    )
+    (source / ".env-template").write_text(
+        "REPO_PATH=\n"
+        "INSTALLED_SKILLS_PATH=\n"
+        "LOCAL_STORAGE_PATH=\n"
+        "LOCAL_DATA_PATH=\n",
+        encoding="utf-8",
+    )
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_python = fake_bin / "python-fake"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"pip\" ]; then exit 0; fi\n"
+        "if [ \"$1\" = \"-c\" ]; then printf '%s\\n' \"$FAKE_SITE_PACKAGES\"; exit 0; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    fake_conda = fake_bin / "conda"
+    fake_conda.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"run\" ]; then printf '%s\\n' \"$FAKE_PYTHON\"; exit 0; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    fake_conda.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["FAKE_PYTHON"] = str(fake_python)
+    env["FAKE_SITE_PACKAGES"] = str(fake_site_packages)
+
+    result = subprocess.run(
+        [
+            str(repo_root / "install.sh"),
+            "--source",
+            str(source),
+            "--skip-env",
+            "--non-interactive",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "repository-only" in result.stdout
+    env_file = (source / ".env").read_text(encoding="utf-8")
+    assert "INSTALLED_SKILLS_PATH=\n" in env_file
+    assert f"LOCAL_STORAGE_PATH={source / 'local_storage'}" in env_file
+    assert f"LOCAL_DATA_PATH={source}" in env_file
+
+
+def test_fresh_interactive_install_does_not_configure_cloud_sync(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    source = tmp_path / "source"
+    fake_site_packages = tmp_path / "site-packages"
+    fake_site_packages.mkdir()
+
+    skill_dir = source / "skills" / "example_skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: example_skill\n---\n", encoding="utf-8")
+    (source / "environment.yml").write_text(
+        "name: sictic-test\n"
+        "dependencies:\n"
+        "  - python=3.12\n",
+        encoding="utf-8",
+    )
+    (source / ".env-template").write_text(
+        (repo_root / ".env-template").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_python = fake_bin / "python-fake"
+    fake_python.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"pip\" ]; then exit 0; fi\n"
+        "if [ \"$1\" = \"-c\" ]; then printf '%s\\n' \"$FAKE_SITE_PACKAGES\"; exit 0; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+    fake_conda = fake_bin / "conda"
+    fake_conda.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"run\" ]; then printf '%s\\n' \"$FAKE_PYTHON\"; exit 0; fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    fake_conda.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{fake_bin}{os.pathsep}{env['PATH']}"
+    env["FAKE_PYTHON"] = str(fake_python)
+    env["FAKE_SITE_PACKAGES"] = str(fake_site_packages)
+
+    result = subprocess.run(
+        [
+            str(repo_root / "install.sh"),
+            "--source",
+            str(source),
+            "--skip-env",
+        ],
+        input="\n" * 40,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Google Drive folder ID" not in result.stdout
+    assert "Google credentials path" not in result.stdout
+    env_file = (source / ".env").read_text(encoding="utf-8")
+    assert "CLOUD_PROVIDER=" not in env_file
+    assert "CLOUD_STORAGE_PATH=" not in env_file
+    assert f"LOCAL_STORAGE_PATH={source / 'local_storage'}" in env_file

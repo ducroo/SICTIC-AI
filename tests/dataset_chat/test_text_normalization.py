@@ -1,6 +1,6 @@
 import pytest
 
-from lib.datasets.text_normalization import (
+from lib.infrastructure.document_conversion.normalization import (
     has_dense_private_use_encoding,
     normalize_extracted_text,
     requires_text_normalization,

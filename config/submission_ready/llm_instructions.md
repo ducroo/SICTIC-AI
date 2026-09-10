@@ -19,13 +19,5 @@ Assessment rules:
 - If sources conflict, cite each conflicting source.
 - Make the proposed next step specific and operational. Use "No action" for a clean Pass. For Unclear, request the exact evidence needed and route to Under Review. For Fail, follow the routing instruction in the checklist item.
 
-Output strict JSON only, without Markdown fences:
-{
-  "status": "Pass | Fail | Unclear",
-  "rationale": "Concise evidence-based assessment.",
-  "source_documents": ["Document — page/section"],
-  "proposed_next_steps_and_questions": ["Specific Ops action or question."]
-}
-
 Use an empty JSON list when there are no source documents or proposed next
 steps and questions.

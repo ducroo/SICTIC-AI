@@ -1,23 +1,29 @@
+import asyncio
+import json
+from functools import partial
 from typing import Any
 
-from lib.model_config import llm_model
-from lib.insights import InsightFile, InsightResult
-from lib.storage import get_storage
-from skills.config_load.config_load import config_key, config_load
-from skills.batch_audit.batch_audit import batch_audit
-from skills.batch_audit.rendering import json_to_markdown_table
-from skills.dataset_chat.dataset_chat import dataset_chat
-from lib.slugify import slugify
-from lib.logger import get_logger
+from lib.batch_audit import batch_audit
+from lib.batch_audit.rendering import json_to_markdown_table
+from lib.batch_audit.schema import audit_errors, validate_audit_document
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_raw_path
-from lib.structured_output import (
+from lib.insights import InsightFile, InsightResult
+from lib.infrastructure.ai_text_generation import Review
+from lib.infrastructure.ai_text_generation.json import (
     copy_schema,
-    json_schema_response_format,
-    parse_json_response,
-    schema_text,
+    repair_json_payload,
+    validate_json_schema,
 )
-from skills.dataset_chat.dataset_chat import _fallback_trigger
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
+from lib.infrastructure.logging import get_logger
+from lib.model_config import llm_model
+from lib.slugify import slugify
+from lib.storage import get_storage
+from skills.dataset_chat.dataset_chat import dataset_chat_json
 
 logger = get_logger(__name__)
 
@@ -47,18 +53,26 @@ def parse_industry_type(
     response_schema: dict[str, Any],
 ) -> str:
     """Repair and validate a structured industry classification."""
-    allowed_by_lower = {
-        item.lower(): item for item in allowed_industry_types
-    }
     effective_schema = _industry_response_schema(
         response_schema,
-        set(allowed_by_lower),
+        allowed_industry_types,
     )
-    result = parse_json_response(
-        response,
+    result = repair_json_payload(response)
+    validate_json_schema(
+        result,
         effective_schema,
         label="DD industry-classification response",
     )
+    return _industry_type_from_result(result, allowed_industry_types)
+
+
+def _industry_type_from_result(
+    result: dict[str, Any],
+    allowed_industry_types: set[str],
+) -> str:
+    allowed_by_lower = {
+        item.lower(): item for item in allowed_industry_types
+    }
     industry_type = result["industry_type"]
     if industry_type is None:
         logger.warning(
@@ -74,7 +88,24 @@ def parse_industry_type(
     return allowed_by_lower[industry_type.lower()]
 
 
-async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_industry_types: set) -> str:
+def _review_industry_type(
+    output: dict | list,
+    allowed_industry_types: set[str],
+) -> Review[dict | list]:
+    if not isinstance(output, dict):
+        return Review(output, ("Industry classification must be an object",))
+    try:
+        _industry_type_from_result(output, allowed_industry_types)
+    except (KeyError, TypeError, ValueError) as error:
+        return Review(output, (str(error),))
+    return Review(output)
+
+
+async def find_industry_type(
+    startup_name_lower: str,
+    dd_config: dict,
+    allowed_industry_types: set,
+) -> str:
     industry_prompt = dd_config['industry_type_query']
     industry_instructions = dd_config['industry_type_llm_instructions']
     base_schema = dd_config["industry_type_response_schema"]
@@ -82,36 +113,28 @@ async def find_industry_type(startup_name_lower: str, dd_config: dict, allowed_i
         base_schema,
         allowed_industry_types,
     )
-    rendered_schema = schema_text(effective_schema)
-    industry_instructions = industry_instructions.replace(
-        "{{response_schema}}",
-        rendered_schema,
-    )
-    industry_response = await dataset_chat(
+    result = await dataset_chat_json(
         dataset_name=startup_name_lower,
         queries=industry_prompt,
         prompt=(
             f"Query: {industry_prompt}\n\n"
             f"Instructions: {industry_instructions}"
         ),
-        response_format=json_schema_response_format(
-            "dd_industry_classification",
-            effective_schema,
+        schema=effective_schema,
+        reviewer=partial(
+            _review_industry_type,
+            allowed_industry_types=allowed_industry_types,
         ),
     )
-    
-    logger.info(f"[{startup_name_lower}] Raw Industry Type LLM Response: {industry_response}")
-    if not industry_response or industry_response.strip() == _fallback_trigger():
+    if result is None:
         logger.warning(
             "[%s] No industry evidence returned; defaulting to general.",
             startup_name_lower,
         )
         return "general"
-    return parse_industry_type(
-        industry_response,
-        allowed_industry_types,
-        base_schema,
-    )
+    if not isinstance(result, dict):
+        raise ValueError("Industry classification must be an object")
+    return _industry_type_from_result(result, allowed_industry_types)
 
 async def chapter_by_chapter(
     startup_name_lower: str,
@@ -121,17 +144,26 @@ async def chapter_by_chapter(
     batch_instructions: str,
 ) -> list[str]:
     checklists = dd_config['checklists']
-    sections = []
+    selected_checklists: list[tuple[str, str]] = []
     for chapter in sorted_chapters:
         target_key = f"{chapter}_{industry_type}"
         fallback_key = f"{chapter}_general"
-        checklist_key = target_key if target_key in checklists else (fallback_key if fallback_key in checklists else None)
+        checklist_key = (
+            target_key
+            if target_key in checklists
+            else fallback_key if fallback_key in checklists else None
+        )
         if not checklist_key:
             continue
-            
-        checklist_string = checklists[checklist_key]
+
+        selected_checklists.append((chapter, checklists[checklist_key]))
+
+    async def audit_chapter(
+        chapter: str,
+        checklist_string: str,
+    ) -> tuple[str | None, str | None]:
         try:
-            audit_results = await batch_audit(
+            audit_insight = await batch_audit(
                 dataset_name=startup_name_lower,
                 checklist_markdown=checklist_string,
                 skill_name="dd_checks",
@@ -145,14 +177,39 @@ async def chapter_by_chapter(
                 ],
                 missing_evidence_status="Not Found",
             )
-            [audit_insight] = audit_results
+            audit = validate_audit_document(json.loads(audit_insight.content()))
+            technical_errors = audit_errors(audit)
+            if technical_errors:
+                details = "; ".join(
+                    f"{item['number']}: {item['error']}"
+                    for item in technical_errors
+                )
+                raise RuntimeError(
+                    f"DD chapter {chapter!r} contains "
+                    f"{len(technical_errors)} technical failure(s): {details}"
+                )
             chapter_output = json_to_markdown_table(audit_insight)
-            sections.append(f"## Chapter: {chapter}\n\n{chapter_output}\n")
-        except Exception as e:
-            sections.append(
-                f"## Chapter: {chapter}\n\n"
-                f"**Error:** Failed to process chapter due to: {e}\n"
+            return f"## Chapter: {chapter}\n\n{chapter_output}\n", None
+        except Exception as error:
+            logger.exception(
+                "[%s] Failed to process DD chapter %s",
+                startup_name_lower,
+                chapter,
             )
+            return None, f"{chapter}: {error}"
+
+    tasks = [
+        asyncio.create_task(audit_chapter(chapter, checklist))
+        for chapter, checklist in selected_checklists
+    ]
+    outcomes = await asyncio.gather(*tasks)
+    sections = [section for section, _error in outcomes if section is not None]
+    failures = [error for _section, error in outcomes if error is not None]
+    if failures:
+        raise RuntimeError(
+            f"Failed to process {len(failures)} DD chapter(s): "
+            + "; ".join(failures)
+        )
     return sections
 
 async def dd_checks(startup: str) -> InsightResult:
@@ -170,7 +227,7 @@ async def dd_checks(startup: str) -> InsightResult:
         raise ValueError(f"Dataset for {startup_slug} not found at {raw_path}.")
     await sync_datasets([startup_slug], raise_on_error=True)
         
-    config = config_load()
+    config = load_repository_config()
     dd_config = config['dd_checks']
     batch_instructions = config["batch_audit"]["llm_instructions"]
     checklists = dd_config['checklists']
@@ -194,9 +251,10 @@ async def dd_checks(startup: str) -> InsightResult:
         dd_config,
         batch_instructions,
     )
-    effective_config_key = config_key(
+    effective_config_key = config_cache_key(
         dd_config,
         config["batch_audit"],
+        config["structured_output"],
     )
     insight = InsightFile(
         dataset=startup_slug,

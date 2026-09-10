@@ -6,16 +6,26 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, TypeVar
 
-from lib.adapters.dealum import DealumAdapter
+from lib.batch_audit import batch_audit
+from lib.batch_audit.checklist import parse_checklist
+from lib.batch_audit.rendering import json_to_markdown_table
+from lib.batch_audit.schema import audit_errors, validate_audit_document
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import (
     dataset_location_for_domain,
     dataset_raw_path,
     find_dataset_location,
 )
+from lib.infrastructure.ai_text_generation import Review, generate_json
+from lib.infrastructure.ai_text_generation.json import copy_schema
+from lib.infrastructure.configuration import (
+    config_cache_key,
+    load_repository_config,
+)
+from lib.infrastructure.dealum import DealumAdapter
+from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile, InsightResult
 from lib.insights.paths import model_slug
-from lib.logger import get_logger
 from lib.model_config import llm_model
 from lib.slugify import slugify
 from lib.startups.dealum import (
@@ -26,18 +36,6 @@ from lib.startups.dealum import (
     reconcile_dealum_startup,
 )
 from lib.storage import get_storage
-from lib.structured_output import (
-    copy_schema,
-    json_schema_response_format,
-    parse_json_response,
-    schema_text,
-)
-from skills.batch_audit.batch_audit import batch_audit
-from skills.batch_audit.checklist import parse_checklist
-from skills.batch_audit.rendering import json_to_markdown_table
-from skills.batch_audit.schema import audit_errors, validate_audit_document
-from skills.config_load.config_load import config_key, config_load
-from skills.llm_chat.llm_chat import llm_chat
 
 logger = get_logger(__name__)
 
@@ -165,16 +163,9 @@ def _normalize_concerns(value: Any, field: str) -> list[str]:
 
 
 def _parse_proposed_action(
-    raw_response: str,
+    result: dict[str, Any],
     stage: str,
-    response_schema: dict[str, Any],
 ) -> dict[str, Any]:
-    result = parse_json_response(
-        raw_response,
-        response_schema,
-        label="Submission-ready proposed action",
-    )
-
     action = str(result.get("proposed_action", "")).strip()
     allowed_actions = {
         "Application": {
@@ -220,6 +211,19 @@ def _parse_proposed_action(
     }
 
 
+def _review_proposed_action(
+    output: dict | list,
+    stage: str,
+) -> Review[dict | list]:
+    if not isinstance(output, dict):
+        return Review(output, ("Proposed action must be a JSON object",))
+    try:
+        _parse_proposed_action(output, stage)
+    except (KeyError, TypeError, ValueError) as error:
+        return Review(output, (str(error),))
+    return Review(output)
+
+
 def _specialize_proposed_action_schema(
     response_schema: dict[str, Any],
     stage: str,
@@ -262,26 +266,16 @@ async def _generate_proposed_action(
         stage=stage,
         checklist_report=checklist_report,
         response_instructions=response_instructions,
-        response_schema=effective_schema,
     )
+    result = await generate_json(
+        prompt,
+        effective_schema,
+        reviewer=lambda output: _review_proposed_action(output, stage),
+    )
+    if not isinstance(result, dict):
+        raise ValueError("Proposed action must be a JSON object")
+    result = _parse_proposed_action(result, stage)
 
-    async def execute() -> dict[str, Any]:
-        raw_response = await llm_chat(
-            prompt,
-            response_format=json_schema_response_format(
-                "submission_ready_proposed_action",
-                effective_schema,
-            ),
-        )
-        if not raw_response:
-            raise ValueError("The proposed-action model returned no content.")
-        return _parse_proposed_action(
-            raw_response,
-            stage,
-            effective_schema,
-        )
-
-    result = await _retry("Proposed-action analysis", execute)
     return _render_proposed_action(stage, result), prompt
 
 
@@ -290,14 +284,12 @@ def _proposed_action_prompt(
     stage: str,
     checklist_report: str,
     response_instructions: str,
-    response_schema: dict[str, Any],
 ) -> str:
     return "\n\n".join(
         [
             response_instructions,
             f"Current Dealum stage: {stage}",
             "Current submission checklist:\n" + checklist_report,
-            "Response JSON Schema:\n" + schema_text(response_schema),
         ]
     )
 
@@ -457,7 +449,7 @@ async def _process_candidate(
         f"{check_config['policy']}\n\n"
         f"{check_config['llm_instructions']}"
     )
-    audit_results = await batch_audit(
+    audit_insight = await batch_audit(
         dataset_name=startup_slug,
         checklist_markdown=check_config["checklist"],
         skill_name="submission_ready",
@@ -465,7 +457,6 @@ async def _process_candidate(
         status_scale=["Pass", "Fail", "Unclear"],
         missing_evidence_status="Unclear",
     )
-    [audit_insight] = audit_results
     audit = validate_audit_document(json.loads(audit_insight.content()))
     failed_checks = audit_errors(audit)
     if failed_checks:
@@ -486,16 +477,18 @@ async def _process_candidate(
         "investment-quality assessment.\n\n"
         f"{table}\n"
     )
-    checklist_config_key = config_key(
+    checklist_config_key = config_cache_key(
         check_config,
+        load_repository_config("structured_output"),
         {
             "artifact": "checklist",
             "audit_path": audit_insight.path,
             "audit": audit,
         },
     )
-    response_config_key = config_key(
+    response_config_key = config_cache_key(
         check_config,
+        load_repository_config("structured_output"),
         {
             "artifact": "response",
             "stage": stage,
@@ -636,7 +629,7 @@ def _latest_existing_artifacts(
             return checklist_path, response_path
     try:
         checklist_title = parse_checklist(
-            config_load()["submission_ready"]["checklist"]
+            load_repository_config("submission_ready", "checklist")
         ).title
         audit_insight = InsightFile(
             dataset=location.slug,
@@ -690,13 +683,16 @@ async def submission_ready(
             status="failed after three attempts",
             error=str(error),
         )
-        return [_save_failure_report([failure], run_id)]
+        _save_failure_report([failure], run_id)
+        raise RuntimeError(
+            f"Submission-ready discovery failed: {error}"
+        ) from error
     candidates, results = _resolve_candidates(
         applications,
         adapter,
         requested_startups,
     )
-    check_config = config_load()["submission_ready"]
+    check_config = load_repository_config("submission_ready")
     failures = [result for result in results if result.error]
     for match, stage in candidates:
         try:
@@ -729,9 +725,15 @@ async def submission_ready(
         results.append(result)
 
     if failures:
-        failure_insight = _save_failure_report(failures, run_id)
-    else:
-        failure_insight = None
+        _save_failure_report(failures, run_id)
+        details = "; ".join(
+            f"{failure.startup}: {failure.error or failure.status}"
+            for failure in failures
+        )
+        raise RuntimeError(
+            f"Submission-ready failed for {len(failures)} startup(s): "
+            + details
+        )
 
     if not results:
         return []
@@ -740,6 +742,4 @@ async def submission_ready(
         for result in results
         for insight in result.insights
     ]
-    if failure_insight is not None:
-        insights.append(failure_insight)
     return insights

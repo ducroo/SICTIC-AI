@@ -49,7 +49,7 @@ class FakeDealumAdapter:
         return self.applications
 
     def extract_file_links(self, application):
-        from lib.adapters.dealum import DealumAdapter
+        from lib.infrastructure.dealum import DealumAdapter
 
         return DealumAdapter(api_key="x", dealroom_id="y").extract_file_links(application)
 
@@ -65,6 +65,23 @@ class FakeDealumAdapter:
     def download_file(self, url):
         self.downloads += 1
         return b"test", self.file_metadata(url)
+
+
+def test_dealum_file_link_keeps_apostrophes_in_filename():
+    application = {
+        "answers": {
+            "pitch_deck": (
+                "https://files.dealum.com/2026-01/token/"
+                "PROUD's%20pitch%20deck.pdf"
+            )
+        }
+    }
+
+    links = FakeDealumAdapter(application=application).extract_file_links(application)
+
+    assert len(links) == 1
+    assert links[0].url.endswith("PROUD's%20pitch%20deck.pdf")
+    assert links[0].filename == "PROUD-s pitch deck.pdf"
 
 
 def test_dealum_import_creates_dataset_and_manifest(mock_env):
