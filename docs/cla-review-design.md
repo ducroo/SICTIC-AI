@@ -1,6 +1,6 @@
 # CLA term sheet review — design
 
-Status: proposal for discussion (Enrico, Lucas and Manfred). Companion to issue #73. This document explains how the existing pieces work together and how the new skill sits on top of them. It is written to give an overview for readers over the whole toolkit. Scope: the term sheet of a convertible loan. A priced-round term sheet is a possible later extension on the same skeleton and is not covered here.
+Status: implementation design; domain rules and thresholds marked provisional below still require review (Enrico, Lucas and Manfred). Companion to issue #73. This document explains how the existing pieces work together and how the new skill sits on top of them. It is written to give an overview for readers over the whole toolkit. Scope: the term sheet of a convertible loan. A priced-round term sheet is a possible later extension on the same skeleton and is not covered here.
 
 ## 1. The problem in one paragraph
 
@@ -53,7 +53,7 @@ flowchart LR
 
 **`sha_review` supplies the review pattern.** Model-selected document, path resolved only for that candidate; two SECA references ranked; `lib.batch_audit` over checklists with the full document and the reference in the cacheable prefix; synthesis. For the new skill this is the lender-perspective judgment layer, with the two SECA CLA term sheets as references.
 
-**Shared foundations.** `InsightFile` owns every artifact: naming, manual precedence, freshness by source revision and configuration key. `generate_json` with a reviewer is the only way the model returns structured data.
+**Shared foundations.** `InsightFile` owns every artifact: naming, manual precedence, freshness by source revision and configuration key. `generate_json` is the shared entry point for structured model output. Follow the current [JSON validation contract](../skills/standards_and_architecture/SKILL.md#model-calls): `repair_json_payload` repairs unambiguous JSON syntax, `validate_json_schema` checks structure without modifying data, and an optional business reviewer checks evidence and domain consistency. Generation owns this sequence and correction retries; callers do not repeat validation of unchanged generated output. Loaded and assembled JSON uses `validate_json_schema` with the canonical response schema composed into its artifact envelope. Audit fields, required values and scoring constraints belong in the caller-supplied response schema; rubric and missing-evidence policy belong in the prompt.
 
 ## 4. The new skill
 
@@ -80,7 +80,7 @@ flowchart TB
 
 **1. Identify.** One term sheet is under review. Default: the model selects the most recent CLA term sheet in the data room with three retrieval queries, the code resolves that path only, and executed loans are excluded as candidates because they are context, not subject. Optional `--document` names the file directly, for the common case where the deal lead knows which draft the members are about to sign. Classification results from `captable_build`, when present, seed the candidates.
 
-**2. Extract.** `extract_cla` as it exists, over `cla_terms.md` extended with the fields a term sheet carries and a loan agreement does not: aggregate investment amount and range, lead investor and accession of further investors, reduction subject to existing shareholders' pre-emption rights, conversion share class, non-qualified-financing voluntary conversion, conditions precedent, representations and covenants (long form), list of binding provisions, documentation counsel. Adding fields is safe by design; the guarded fields stay untouched. Every value carries a verbatim quote, and absence is a recorded claim.
+**2. Extract.** `extract_cla` as it exists, over `cla_terms.md` extended with the fields a term sheet carries and a loan agreement does not: aggregate investment amount and range, lead investor and accession of further investors, reduction subject to existing shareholders' pre-emption rights, conversion share class, non-qualified-financing voluntary conversion, conditions precedent, representations and covenants (long form), list of binding provisions, documentation counsel. Keep the guarded fields unchanged, but treat added fields as a shared contract change: every checklist field becomes required in the generated schema. Generated extracts and their dependents must regenerate under the new configuration. Existing manual artifacts must be updated to satisfy the new schema and must never be silently overwritten. Invalid manual artifacts raise a clear validation error. There is no legacy schema or compatibility layer; regression tests cover generated invalidation and manual validation. Every value carries a verbatim quote, and absence is a recorded claim.
 
 ### Question 1: the terms themselves
 
@@ -100,7 +100,7 @@ flowchart TB
 | Binding provisions | limited to confidentiality, costs, effect, law | economic terms declared binding, or exclusivity |
 | Documentation | SECA CLA short or long form referenced | bespoke or unnamed |
 
-The bands are marked "to verify" until confirmed (Enrico, Luc?), as `assessment_rules.json` does today.
+Separate approved rules from provisional rules and thresholds in configuration. Each enabled rule records its source, review status and effective date, with dated values where applicable. Unapproved rules and thresholds remain inactive: the report may raise an open question but must not issue a judgment based on an unapproved threshold. The proposals below do not constitute domain approval.
 
 Proposed first set of lender-angle bands for `config/cla_review/settings.json`. Every value is a proposal to verify; sources are named where they exist, placeholders are marked as such.
 
@@ -123,13 +123,15 @@ Proposed first set of lender-angle bands for `config/cla_review/settings.json`. 
 | Member count N for the before-and-after | 5 | SICTIC syndicate practice; placeholder | placeholder |
 | Valuation range for the conversion table | 0.5x to 3x the cap | for the cap-versus-discount crossover | placeholder |
 
-Rows marked "rule, no number" are switches rather than bands; they live in the same file so they can be turned off. The non-bank thresholds are the only fixed values. The safe-harbor rate changes every year and belongs in a dated setting, not in code.
+Rows marked "rule, no number" are switches rather than bands; they live in the same file so they can be turned off. The non-bank row describes a proposed sourced rule, not an exemption from domain review: its applicability and counting assumptions must be approved before enabling it. The safe-harbor rate changes every year and belongs in a dated setting, not in code. All rows in the table above, including qualitative switches and rows labelled "fixed", remain inactive until their review status is approved.
 
 **4. Audit against the SECA CLA term sheets.** sha_review pattern: rank the SECA short form and long form and run `lib.batch_audit` over checklists written from the lender's perspective, seeded from the earlier sketch: cap and discount interplay, maturity mechanism and price, conversion via consents versus conditional capital and who can block, QEFR realism, lender-majority definition, information rights, pro-rata and MFN, interest versus safe harbor, subordination scope, change-of-control multiple, stamp-duty position on conversion, syndicate or pooling vehicle, execution evidence. The audits cover what bands cannot: wording, consistency, and what the term sheet promises the definitive agreement will contain.
 
 ### Question 2: the terms in this company
 
-**5. My conversion on this cap table.** From the consolidated `captable_build` insight and `model.py`, for the member's own ticket (an amount given on the command line, default the term sheet's minimum): shares and ownership on conversion at the cap, at the discount and at the floor for a range of next-round pre-money valuations, the price at which cap and discount cross, the effect of interest accrued to an assumed conversion date, ownership after the existing loans convert alongside, and stamp duty on conversion. If no snapshot exists the step yields an insufficient-evidence finding, not a failure.
+**5. My conversion on this cap table.** From the consolidated `captable_build` insight and `model.py`, for the member's own ticket (an amount given on the command line, default an evidenced per-member minimum, subject to the input policy below): shares and ownership on conversion at the cap, at the discount and at the floor for a range of next-round pre-money valuations, the price at which cap and discount cross, the effect of interest accrued to an assumed conversion date, ownership after the existing loans convert alongside, and stamp duty on conversion. Use the canonical read-only `lib.captable.insights.select_consolidated` and `read_build_insight` helpers. An absent or stale generated snapshot yields an explicit insufficient-evidence finding; malformed artifacts and other technical failures remain errors and are not relabelled as missing evidence. Do not run `captable_build` implicitly.
+
+Before calculating, resolve and display the ticket and currency, new round investment, conversion date, denominator basis and shares, participating existing loans, and the aggregate participation of other new lenders. A member ticket alone does not represent the whole proposed loan. Record which inputs are evidenced and which are explicit scenario assumptions, including the round method. Include all effective inputs, dependency content and date-dependent assumptions in freshness keys. If an essential input is unavailable, omit the affected calculation and explain what is missing rather than inventing it. For uncapped loans, use an explicit valuation grid from settings or supplied scenario data, independent of a cap; if unavailable, omit that scenario table. Test missing inputs, uncapped loans and different participation assumptions.
 
 **6. The existing loans.** Every outstanding CLA in the insight is compared with the term sheet: cap, discount, denominator, maturity, interest, subordination side by side; whether an MFN clause in any existing loan pulls the term sheet's terms into it or vice versa; whether the term sheet would join an identical-terms group; and the SICTIC-specific number, the lender count and the largest identical-terms group with and without N members joining on these terms, against the 10 and 20 thresholds of the non-bank rules, reusing the aggregation code. Maturities are listed together so a cluster is visible.
 
@@ -137,9 +139,9 @@ Rows marked "rule, no number" are switches rather than bands; they live in the s
 
 **8. Report.** Deterministic tables (terms with quotes, absent clauses, company-angle and lender-angle assessments, my conversion table, existing-loan comparison, 10/20 before and after, executability checklist) followed by a synthesis in the `sha_review` format: numbered findings with status, supporting checks, why it matters, recommended follow-up, closing with "not legal advice".
 
-**Artifacts.** JSON insights `identification`, `extraction`, `assessment`, `conversion`, `loan-context`, `sha-context`, `audits/<checklist>` under `insights/cla-review/`, and one Markdown report `cla-review-<startup>-<document>-<model>.md` directly under `insights/`, one per reviewed document. Manual files take precedence, `--fresh` discards generated work, failures are never reused.
+**Artifacts.** Use the canonical selected document identity, retaining enough path identity to distinguish equal basenames, through `InsightFile` for every document-specific intermediate and final artifact; do not implement separate filename normalization. JSON insights `identification`, `extraction`, `assessment`, `conversion`, `loan-context`, `sha-context`, `audits/<checklist>` under `insights/cla-review/`, and one Markdown report `cla-review-<startup>-<document>-<model>.md` directly under `insights/`, one per reviewed document. Intermediate identifiers, including audit identifiers, must include the document identity, not only the stage or checklist name. Identification reuse must distinguish explicit document selection from automatic selection. Ticket and scenario inputs belong in configuration keys; a new scenario replaces the generated result for that document rather than creating a new naming convention. Same-document writes follow shared lifecycle behavior; different documents must never share intermediate paths. Manual files take precedence, `--fresh` bypasses generated reuse without deleting files or overriding manual inputs, and failures are never reused. Test two document reviews, including equal basenames in different folders, for isolation and test scenario changes for invalidation.
 
-**Interfaces.** `cla_review(dataset_name, *, document=None, ticket=None, fresh=False) -> list[InsightFile]`; CLI `python -m skills.cla_review --startup <name> [--document <file>] [--ticket <amount>]`; harness `/cla_review <startup> [--document f] [--ticket n]`; registry `cla-review`, domain `startups`, soft dependency on `captable-build`.
+**Interfaces.** `cla_review(dataset_name, *, document=None, ticket=None, fresh=False) -> list[InsightFile]`; CLI `python -m skills.cla_review --startup <name> [--document <file>] [--ticket <amount>]`; harness `/cla_review <startup> [--document f] [--ticket n]`; registry `cla-review`, domain `startups`, no registry prerequisite on `captable-build`; it is an optional existing input.
 
 ## 5. Reference material
 
@@ -149,12 +151,12 @@ Rows marked "rule, no number" are switches rather than bands; they live in the s
 
 ## 6. Decisions that touch existing contracts
 
-1. **Extend `cla_terms.md` rather than fork it.** The term-sheet-only fields are added to the shared checklist; `captable_build` extracts them too and ignores them. Alternative: a second checklist file for term sheets, which would duplicate 40 fields. Recommendation: extend.
+1. **Extend `cla_terms.md` rather than fork it.** The term-sheet-only fields are added to the shared checklist; `captable_build` extracts them too and does not assess them with its existing rules. Regenerate generated extracts and dependents; manual artifacts must satisfy the expanded schema. Retain regression coverage, with no legacy support. Alternative: a second checklist file for term sheets, which would duplicate 40 fields. Recommendation: extend.
 2. **Lender-angle rules next to `assess_cla`.** New module in `lib/captable/` (or `lib/cla_review/`), same finding shape, separate settings file. `assess_cla` is not changed.
 3. **Document-scoped entry point.** `--document` on a dataset-scoped skill is new. Alternative: always auto-identify. Recommendation: both, with `--document` optional. No entry point for a file outside the data room; the draft goes into the startup's `datasets/` folder and is synced, as every skill assumes.
-4. **Ticket amount as an input.** `--ticket` is a user input that shapes the output; it goes into the configuration key so a different ticket produces a different insight. Recommendation: accept it, default to the term sheet's minimum or the aggregate amount divided by the expected member count from settings.
-5. **Audit status scale.** Keep `unclear | too weak | balanced | too strong` from `sha_review`, read from the lender's side in the checklist wording.
-6. **Dependency.** Soft on `captable-build`. Question 1 works without a snapshot; question 2 then reports insufficient evidence.
+4. **Ticket amount as an input.** `--ticket` is a user input that shapes the output; it goes into the configuration key so a different ticket invalidates generated reuse for the same document. Recommendation: accept it, use an evidenced per-member minimum, or an explicitly labelled scenario assumption dividing the aggregate amount by the configured member count. If neither is available, omit ticket-dependent calculations. Never mistake a minimum aggregate raise for a member minimum.
+5. **Audit status scale.** Define `unclear | too weak | balanced | too strong` in the caller-owned response schema, with lender-perspective rubric and missing-evidence instructions in the prompt. Use the current schema-driven `batch_audit` API and shared artifact validation.
+6. **Dependency.** Consume an optional existing `captable-build` insight through its canonical reader, without a registry prerequisite or implicit generation. Question 1 works without a reusable snapshot; snapshot-dependent parts of question 2 report insufficient evidence. Preserve the distinction between absent/stale input and malformed data or technical failures. Tests cover absent, stale, invalid and reusable snapshots. If a bulk run also builds cap-table data, this review uses what is reusable when it reads; there is no new scheduler ordering guarantee.
 
 ## 7. Slices
 
@@ -171,5 +173,5 @@ Rows marked "rule, no number" are switches rather than bands; they live in the s
 - Absent-clause recall is the known failure mode; the presence-boolean and `missing_terms` contract exists for this, and the fixture must plant absences.
 - The SECA term sheets are two-column PDFs; conversion splits clause names across lines. The per-fragment evidence check from PR #71 applies.
 - Question 2 is only as good as the cap-table snapshot; a stale or failed build must surface as such, never as a silent zero.
-- Bands need Enrico's and counsel's input and stay marked "to verify".
+- Rules and bands need domain review and remain inactive until approved; merging this document approves the architecture, not the proposed financial or legal judgments.
 - Nothing here replaces legal review. The report states that.
