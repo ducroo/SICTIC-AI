@@ -8,17 +8,20 @@
     },
     "rationale": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "\\S"
     },
     "eligibility_concerns": {
       "type": "array",
-      "items": {"type": "string"},
-      "maxItems": 8
+      "items": {
+        "type": "string"
+      }
     },
     "missing_or_inconsistent_information": {
       "type": "array",
-      "items": {"type": "string"},
-      "maxItems": 8
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

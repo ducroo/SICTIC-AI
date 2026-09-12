@@ -72,8 +72,6 @@ def _review_evidence(output: dict, document_text: str) -> list[str]:
 
 def _review_table_evidence(document_text: str):
     def reviewer(output):
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         return Review(output, tuple(_review_evidence(output, document_text)))
     return reviewer
 
@@ -82,8 +80,6 @@ def _review_captable(document_text: str):
     normalized_text = normalize_for_matching(document_text)
 
     def reviewer(output: Any) -> Review[Any]:
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         problems: list[str] = _review_evidence(output, document_text)
 
         # A fully-diluted definition must be evidenced by definitional
@@ -139,8 +135,6 @@ async def extract_captable(
         config["captable_extraction_response_schema"],
         reviewer=_review_captable(document_text),
     )
-    if not isinstance(result, dict):
-        raise ValueError("Cap-table extraction must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result
@@ -159,8 +153,6 @@ async def extract_register(
         prompt, config["register_extraction_response_schema"],
         reviewer=_review_table_evidence(document_text),
     )
-    if not isinstance(result, dict):
-        raise ValueError("Register extraction must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result
@@ -179,8 +171,6 @@ async def extract_pools(
         prompt, config["pool_extraction_response_schema"],
         reviewer=_review_table_evidence(document_text),
     )
-    if not isinstance(result, dict):
-        raise ValueError("Pool extraction must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result

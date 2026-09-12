@@ -79,8 +79,6 @@ def review_cla_extraction(
     normalized_text = normalize_for_matching(document_text)
 
     def reviewer(output: Any) -> Review[Any]:
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         problems: list[str] = []
         absence_fields: list[str] = []
 
@@ -156,8 +154,6 @@ async def extract_cla(
             built["presence_fields"],
         ),
     )
-    if not isinstance(result, dict):
-        raise ValueError("CLA extraction response must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result

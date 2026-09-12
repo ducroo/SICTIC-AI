@@ -114,6 +114,39 @@ def schema_prompt_block(schema: dict[str, Any]) -> str:
     return template.replace(placeholder, schema_text(schema))
 
 
+def _provider_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Omit conditional keywords unsupported by strict structured output.
+
+    The original schema remains authoritative in the prompt and local validator.
+    Walk schema positions only: property names and literal values may themselves
+    contain words such as ``if`` and must remain intact.
+    """
+    result = copy_schema(schema)
+
+    def visit(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        for keyword in ("if", "then", "else"):
+            node.pop(keyword, None)
+        for keyword in (
+            "properties", "$defs", "definitions", "patternProperties",
+            "dependentSchemas",
+        ):
+            for child in node.get(keyword, {}).values():
+                visit(child)
+        for keyword in (
+            "items", "additionalProperties", "contains", "not", "propertyNames",
+            "unevaluatedProperties", "unevaluatedItems",
+        ):
+            visit(node.get(keyword))
+        for keyword in ("anyOf", "oneOf", "allOf", "prefixItems"):
+            for child in node.get(keyword, []):
+                visit(child)
+
+    visit(result)
+    return result if result != schema else schema
+
+
 def json_schema_response_format(
     schema: dict[str, Any],
     *,
@@ -128,7 +161,7 @@ def json_schema_response_format(
         "json_schema": {
             "name": normalized_name,
             "strict": True,
-            "schema": schema,
+            "schema": _provider_schema(schema),
         },
     }
 

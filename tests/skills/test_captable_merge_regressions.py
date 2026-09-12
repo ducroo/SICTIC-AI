@@ -17,7 +17,7 @@ from lib.insights import InsightFile
 from lib.captable.insights import build_insight, read_build_insight, select_consolidated
 from lib.storage import get_storage
 from tests.skills.test_captable_analysis import _snapshot
-from tests.skills.test_captable_build import _install_dataset, _patched_build
+from tests.skills.test_captable_build import _install_dataset, _patched_build, _complete_cla, _consolidated_artifact
 from skills.captable.captable import build_scenarios
 
 
@@ -103,7 +103,7 @@ def test_unparsed_documents_stop_build_coverage(mock_env, empty):
 async def test_failed_cla_is_not_published_or_reused(mock_env, monkeypatch):
     module, _ = _patched_build(monkeypatch)
     _install_dataset("failed-co", "CLA and cap table")
-    classification = {"documents": [{"filename": "captable.md", "document_class": "cla_executed"}]}
+    classification = {"dataset": "failed-co", "documents": [{"filename": "captable.md", "document_class": "cla_executed", "confidence": 95, "as_of_date": None, "language": "en", "rationale": "fixture"}]}
     monkeypatch.setattr(module, "classify_documents", AsyncMock(return_value=classification))
     extract = AsyncMock(side_effect=RuntimeError("temporary outage"))
     monkeypatch.setattr(module, "extract_cla", extract)
@@ -112,7 +112,7 @@ async def test_failed_cla_is_not_published_or_reused(mock_env, monkeypatch):
     assert not build_insight("failed-co", "loan-extraction").exists()
     assert not get_storage().exists(f"{dataset_location('failed-co').insights_rel}/captable/latest.json")
     extract.side_effect = None
-    extract.return_value = {"document": "captable.md", "status": "term_sheet", "lenders": []}
+    extract.return_value = _complete_cla("failed-co", document="captable.md", status="term_sheet")
     await module.extract("failed-co")
     assert extract.await_count == 2
     assert read_build_insight(build_insight("failed-co", "loan-extraction"))["failures"] == []
@@ -128,6 +128,13 @@ def analysis_env(mock_env, monkeypatch):
     manifest.save()
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     snapshot = _snapshot()
+    for row in snapshot["share_classes"]:
+        row["quote"] = "Common shares"
+    for row in snapshot["stakeholders"]:
+        row.update(group=None, quote=row["name"])
+    snapshot = {**_consolidated_artifact("analysis-co"), **snapshot}
+    snapshot["aggregation"] = _consolidated_artifact("analysis-co")["aggregation"]
+    snapshot["convertibles"] = [_complete_cla("analysis-co", **loan) for loan in snapshot["convertibles"]]
     snapshot.update(dataset="analysis-co", as_of_date="2026-06-30", generated_at="2026-09-08", tool_version="test")
     InsightFile("analysis-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json").save(json.dumps(snapshot))
     generation = AsyncMock(return_value="Narrative")
@@ -182,7 +189,7 @@ async def test_manual_build_report_precedes_even_forced_generation(mock_env, mon
     module, _ = _patched_build(monkeypatch)
     _install_dataset("manual-co", "Cap table")
     manual = InsightFile("manual-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json")
-    manual.save(json.dumps({"dataset": "manual-co", "note": "Human cap table data"}))
+    manual.save(json.dumps(_consolidated_artifact("manual-co")))
     build = AsyncMock(side_effect=AssertionError("manual must win first"))
     monkeypatch.setattr(module, "_classification", build)
     [result] = await module.captable_build("manual-co", fresh=True)

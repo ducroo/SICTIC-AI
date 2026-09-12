@@ -218,14 +218,27 @@ descriptions and optional terminal `**Keywords:**`. Generated numbers are
 positional. Titles and original IDs remain in audit JSON; descriptions drive
 per-check prompts and retrieval.
 
-Explicit audit instructions replace the common instructions. Successful retrieval
-with no hits still permits assessment from supplied context; missing evidence
+Callers supply explicit instructions and an object response schema with named
+`properties` (including nested schemas when needed). The schema defines
+assessment fields, required values and scoring constraints; the prompt defines
+the rubric and missing-evidence policy. `generate_json` owns generation validation
+and correction retries; the audit engine does not duplicate those checks.
+Successful retrieval with no hits still permits assessment from supplied context; missing evidence
 and technical errors remain distinct. Use shared generation and validation.
 
-The API returns one canonical JSON `InsightFile` per checklist. Use
-`validate_audit_document` and `audit_errors` before final output, and
-`json_to_markdown_table` for common tables. Structural validation does not establish
-expected checklist coverage or citation accuracy. Synthesis belongs to the caller.
+The API returns one canonical JSON `InsightFile` per checklist. Version 2 stores
+the response schema and nests each assessment under `result`, alongside the
+engine-owned check number, name and `error`. Technical failures have a null
+result and a nonempty error; no domain status is synthesized. Old audit formats
+are unsupported and require regeneration or replacement. Use
+`validate_audit_document(..., require_complete=True)` before final output, and
+`json_to_markdown_table` for tables whose columns follow schema properties and
+titles. The full stored audit is checked by the same `validate_json_schema`
+helper used by generation, using the envelope schema in `config/batch_audit/`
+and the embedded assessment schema. Reuse and final output require null errors
+through that schema; there is no separate error-scanning validator. Generated
+results are not revalidated before saving. Structural
+validation does not establish expected checklist coverage or citation accuracy. Synthesis belongs to the caller.
 
 Audit reuse is per checklist; technical-error artifacts are ineligible.
 The engine does not synchronize on a cache hit. Callers that require current
@@ -365,6 +378,32 @@ services. Skills must not call provider APIs directly.
 Use the generation APIs' schema validation and `Review` mechanism;
 reviewers are supported for both Markdown and JSON. Do not recreate
 JSON repair or output-correction loops in skills.
+
+Use `validate_json_schema` from
+`lib.infrastructure.ai_text_generation.json` for structural validation outside
+generation, such as loaded JSON artifacts or outputs assembled in code. Reuse
+the relevant response schema; for a larger artifact, compose an envelope schema
+with the response schema. Express required fields, types, allowed values and
+scoring bounds in the schema instead of handwritten checks.
+
+`generate_json` already validates its output against the supplied schema. Do not
+repeat that validation immediately after generation or before saving the same
+unchanged result. `validate_json_schema` performs local validation only: it
+raises on invalid data without calling a model or retrying. Keep domain checks
+that JSON Schema cannot express, such as reconciliation, cross-record totals
+and evidence support, in domain code or a `Review` reviewer.
+
+The JSON pipeline has three responsibilities: `repair_json_payload` parses and
+repairs unambiguous JSON syntax; `validate_json_schema` checks the contract
+without modifying data; an optional `Review` reviewer checks business rules.
+Reviewers receive schema-valid data, and generation validates their returned
+payload again. The provider response format omits unsupported `if`/`then`/`else`
+keywords; the prompt and local validator retain the full schema, including
+those conditional checks. Put nonblank-text constraints and structural field dependencies
+in schemas. Perform business review once within generation; afterwards only
+convert or render the accepted result. Keep adapter `None` handling for absent
+evidence. Standalone text parsers use the same repair, validation and business
+review sequence explicitly.
 
 Use `cacheable_prompt_prefix` for reusable shared context where
 supported. Prompt caching does not replace insight freshness checks.

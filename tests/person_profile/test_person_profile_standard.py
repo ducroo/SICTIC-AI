@@ -96,10 +96,14 @@ async def test_empty_roster_returns_no_people(local_profiles):
     local_profiles.LinkedInResolver.assert_not_called()
 
 
-@pytest.mark.parametrize("result", [{"names": [""]}, {"names": [None]}, [], {}])
-def test_discovery_reviewer_rejects_invalid_names(result):
+@pytest.mark.parametrize("result", [{"names": [""]}, {"names": ["  "]}, {"names": [None]}, [], {}])
+def test_discovery_schema_rejects_invalid_names(result):
     module = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
-    assert module._review_person_names(result).problems
+    from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+    schema = module.load_repository_config("persons_in_dataset", "discovery")["response_schema"]
+    with pytest.raises(ValueError):
+        validate_json_schema(result, schema)
 
 
 @pytest.mark.asyncio

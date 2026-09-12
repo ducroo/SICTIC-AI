@@ -2,101 +2,42 @@ from __future__ import annotations
 
 from typing import Any
 
-
-AUDIT_SCHEMA_VERSION = 1
-AUDIT_FIELDS = {
-    "number",
-    "check",
-    "status",
-    "rationale",
-    "source_documents",
-    "proposed_next_steps_and_questions",
-    "error",
-}
+from lib.infrastructure.ai_text_generation.json import (
+    copy_schema,
+    validate_json_schema,
+    validate_schema,
+)
+from lib.infrastructure.configuration import load_repository_config
 
 
-def validate_audit_document(audit: Any) -> dict[str, Any]:
-    """Validate the common JSON contract shared by all audit skills."""
-    if not isinstance(audit, dict):
-        raise ValueError("Audit JSON must be an object.")
-    if audit.get("schema_version") != AUDIT_SCHEMA_VERSION:
-        raise ValueError(
-            f"Unsupported audit schema version: {audit.get('schema_version')!r}."
-        )
-    for field in (
-        "skill",
-        "checklist_title",
-        "dataset",
-        "model",
-        "generated_at",
-    ):
-        if not isinstance(audit.get(field), str) or not audit[field].strip():
-            raise ValueError(f"Audit field {field!r} must be a non-empty string.")
+AUDIT_SCHEMA_VERSION = 2
 
-    status_scale = audit.get("status_scale")
-    if (
-        not isinstance(status_scale, list)
-        or not status_scale
-        or not all(isinstance(value, str) and value for value in status_scale)
-    ):
-        raise ValueError("Audit status_scale must be a non-empty string list.")
 
-    chapters = audit.get("chapters")
-    if not isinstance(chapters, list) or not chapters:
-        raise ValueError("Audit chapters must be a non-empty list.")
-    for chapter in chapters:
-        if not isinstance(chapter, dict):
-            raise ValueError("Each audit chapter must be an object.")
-        if not isinstance(chapter.get("number"), str):
-            raise ValueError("Each audit chapter requires a string number.")
-        if not isinstance(chapter.get("title"), str) or not chapter["title"]:
-            raise ValueError("Each audit chapter requires a title.")
-        checks = chapter.get("checks")
-        if not isinstance(checks, list) or not checks:
-            raise ValueError("Each audit chapter requires checks.")
-        for check in checks:
-            _validate_check(check, status_scale)
+def validate_response_schema(schema: Any) -> None:
+    """Require an object schema with named properties for assessment and rendering."""
+    validate_json_schema(schema, {
+        "type": "object",
+        "required": ["type", "properties"],
+        "properties": {"type": {"const": "object"}, "properties": {"type": "object"}},
+    }, label="Audit response schema")
+    validate_schema(schema)
+
+
+def validate_audit_document(
+    audit: Any, *, require_complete: bool = False,
+) -> dict[str, Any]:
+    """Validate stored JSON with the shared validator; optionally require success."""
+    response_schema = audit.get("response_schema") if isinstance(audit, dict) else None
+    validate_response_schema(response_schema)
+    schema = copy_schema(load_repository_config("batch_audit", "audit_schema"))
+    schema["properties"]["schema_version"] = {"const": AUDIT_SCHEMA_VERSION}
+    assessment = copy_schema(response_schema)
+    # Keep caller-local JSON references rooted in the assessment schema when
+    # embedding it in the larger document schema.
+    assessment.setdefault("$id", "urn:sictic:batch-audit:assessment")
+    assessment.setdefault("$schema", "https://json-schema.org/draft/2020-12/schema")
+    schema["$defs"]["assessment"] = assessment
+    if require_complete:
+        schema["$defs"]["check"]["properties"]["error"] = {"type": "null"}
+    validate_json_schema(audit, schema, label="Audit")
     return audit
-
-
-def audit_errors(audit: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return checks that could not be completed technically."""
-    validate_audit_document(audit)
-    return [
-        check
-        for chapter in audit["chapters"]
-        for check in chapter["checks"]
-        if check["error"] is not None
-    ]
-
-
-def _validate_check(check: Any, status_scale: list[str]) -> None:
-    if not isinstance(check, dict):
-        raise ValueError("Each audit check must be an object.")
-    missing = AUDIT_FIELDS - check.keys()
-    if missing:
-        raise ValueError(
-            "Audit check is missing fields: " + ", ".join(sorted(missing))
-        )
-    if not isinstance(check["number"], str) or not check["number"]:
-        raise ValueError("Audit check number must be a non-empty string.")
-    if not isinstance(check["check"], str) or not check["check"]:
-        raise ValueError("Audit check name must be a non-empty string.")
-    error = check["error"]
-    if error is not None and (not isinstance(error, str) or not error):
-        raise ValueError("Audit check error must be null or a non-empty string.")
-    if error is None:
-        if check["status"] not in status_scale:
-            raise ValueError(
-                f"Invalid audit status {check['status']!r}; expected {status_scale}."
-            )
-        if not isinstance(check["rationale"], str):
-            raise ValueError("Audit rationale must be a string.")
-    elif check["status"] is not None:
-        raise ValueError("A failed audit check must have a null status.")
-    for field in ("source_documents", "proposed_next_steps_and_questions"):
-        value = check[field]
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
-            raise ValueError(f"Audit field {field!r} must be a string list.")

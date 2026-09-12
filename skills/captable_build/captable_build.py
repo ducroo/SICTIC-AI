@@ -14,6 +14,7 @@ from lib.captable.assessment import assess_cla, worst_severity
 from lib.captable.aggregation import aggregate_clas
 from lib.captable.esign import scan_esign_markers
 from lib.captable.validate import validate_captable
+from lib.captable.schema import validate_build_artifact
 from lib.datasets.paths import dataset_raw_path
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
@@ -33,6 +34,7 @@ def _reusable(insight: InsightFile, fresh: bool) -> InsightFile | None:
 
 
 def _save(insight: InsightFile, data: dict) -> InsightFile:
+    validate_build_artifact(data, insight.identifier)
     insight.save(json.dumps(data, ensure_ascii=False, indent=2))
     return insight
 

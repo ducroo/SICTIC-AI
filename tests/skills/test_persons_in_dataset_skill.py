@@ -59,7 +59,12 @@ async def test_manual_created_during_search_wins(discovery):
 
 @pytest.mark.asyncio
 async def test_invalid_discovery_does_not_save_a_roster(discovery):
-    discovery.dataset_chat_json.return_value = {"names": [None]}
+    from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+    async def invalid_response(**kwargs):
+        validate_json_schema({"names": [None]}, kwargs["schema"])
+
+    discovery.dataset_chat_json.side_effect = invalid_response
     with pytest.raises(ValueError):
         await discovery.persons_in_dataset("acme")
     with pytest.raises(FileNotFoundError):

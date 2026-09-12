@@ -7,12 +7,11 @@ import pytest
 from jsonschema import validate, ValidationError
 
 from lib.captable.cla_terms import build_cla_schema
-from lib.captable.data import assemble_result
 from lib.captable.insights import build_insight, read_build_insight
 from lib.captable.render_markdown import render_report
 from lib.infrastructure.configuration import load_repository_config
 from skills.captable.captable import build_scenarios
-from tests.skills.test_captable_build import _minimal_extraction, _reviewer, DOC_TEXT, _install_dataset
+from tests.skills.test_captable_build import _minimal_extraction, _reviewer, DOC_TEXT, _install_dataset, _complete_cla, _consolidated_artifact
 from tests.skills.test_captable_render import _snapshot, _computed
 
 QUOTE = 'Tenity shall hold 2.5% post-money.\nThe basis is A | B < C & D.'
@@ -36,10 +35,8 @@ def test_comment_schema_is_nullable_string_without_quote_review():
 
 def test_consolidation_and_insight_storage_preserve_comments(mock_env):
     _install_dataset("comments-co", "Cap table")
-    loan = {"document": "loan.md", "comments": QUOTE}
-    result = assemble_result("comments-co", classification={"documents": []},
-        captable=None, register=None, pool_docs=[],
-        cla_extraction={"clas": [loan]}, assessment={}, aggregation={}, validation=[])
+    loan = _complete_cla("comments-co", document="loan.md", comments=QUOTE)
+    result = _consolidated_artifact("comments-co", loans=[loan])
     insight = build_insight("comments-co", "consolidated")
     insight.save(json.dumps(result))
     assert read_build_insight(insight)["convertibles"][0]["comments"] == QUOTE
