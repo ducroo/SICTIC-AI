@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
-import math
-import re
-
 from lib.captable.documents import normalize_for_matching
+from lib.captable.table_evidence import field_evidenced, numbers, quoted_rows, source_rows
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
@@ -19,48 +17,42 @@ COMPLETENESS_TOLERANCE = 0.005
 
 
 def _numbers_in_quote(quote: str) -> set[float]:
-    """Recognize plain and commonly grouped/decimal source numerals."""
-    quote = re.sub(r"(?<=\d)[ '\u2019\u00a0\u202f](?=\d{3}(?:\D|$))", "", quote)
-    values = set()
-    for token in re.findall(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*", quote):
-        variants = [token.replace(",", ""), token.replace(".", "").replace(",", ".")]
-        for variant in variants:
-            try:
-                values.add(float(variant))
-            except ValueError:
-                pass
-    return values
+    """Recognize source numerals without combining cells."""
+    return {float(value) for cell in quote.split("|") for value in numbers(cell)}
 
 
 def _review_evidence(output: dict, document_text: str) -> list[str]:
-    normalized = normalize_for_matching(document_text)
+    rows = source_rows(document_text)
     problems = []
 
-    def check(label, row, *, identity=None):
-        quote = row.get("quote") or ""
-        if not normalize_for_matching(quote) or normalize_for_matching(quote) not in normalized:
-            problems.append(f"{label}: quote missing or not found verbatim in source.")
+    def check(label, row, *, identity=None, share_class=None):
+        try:
+            evidence = quoted_rows(row.get("quote") or "", rows, identity, share_class)
+        except ValueError as error:
+            problems.append(f"{label}: {error}.")
             return
-        if identity and normalize_for_matching(str(identity)) not in normalize_for_matching(quote):
-            problems.append(f"{label}: identity {identity!r} is not evidenced by its quote.")
-        quoted_numbers = _numbers_in_quote(quote)
 
-        def check_numbers(value):
+        def check_numbers(value, field="", class_id=None):
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if not any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
-                    problems.append(f"{label}: numeric value {value} is not evidenced by its quote.")
+                if not field_evidenced(value, field, class_id, evidence, identity, row.get("kind")):
+                    problems.append(
+                        f"{label}.{field}: numeric value {value} is not evidenced by "
+                        "its holder's quoted column. Quote complete rows and headers; "
+                        "use null and an assumption for ambiguous or unstated values."
+                    )
             elif isinstance(value, dict):
                 for key, child in value.items():
                     if key != "quote":
-                        check_numbers(child)
+                        check_numbers(child, key, value.get("class_id", class_id))
             elif isinstance(value, list):
                 for child in value:
-                    check_numbers(child)
+                    check_numbers(child, field, class_id)
         check_numbers(row)
 
     for collection in ("stakeholders", "share_classes", "entries", "pools"):
         for index, row in enumerate(output.get(collection, [])):
-            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"))
+            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"),
+                  share_class=row.get("id") if collection == "share_classes" else None)
     for field in ("as_of_date", "fully_diluted_definition"):
         entry = output.get(field) or {}
         if entry.get("value") not in (None, "unstated"):

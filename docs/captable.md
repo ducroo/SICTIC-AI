@@ -35,8 +35,18 @@ another skill artifact.
 
 Build classifies parsed documents, extracts convertible loans and cap-table,
 register and pool evidence, then reconciles and consolidates them. Required
-extraction failures raise without saving partial results. The term checklist and
-assessment settings live in `config/captable_build/`. Assessment, aggregation and
+extraction failures raise without saving partial results. Every extracted table
+row carries a source quote with complete rows and column boundaries. Headers
+and rows may be separated, but evidence stays attached to the named holder
+(or its blank-name continuation within that table) and the applicable column.
+Holding totals sum every quoted share cell, retaining repeated amounts; unrelated
+columns and arbitrary subsets cannot support a total. Numeral spacing is repaired
+inside cells only. An explicit dash/none in the selected numeric cell can support
+zero; blank cells and n/a remain unknown. Ambiguous column labels, collapsed cells,
+or names split across unrelated cells require clearer evidence or an unstated
+value, not permissive matching. These domain checks run as the business reviewer
+inside `generate_json`; structural validation remains in `validate_json_schema`. The term
+checklist and assessment settings live in `config/captable_build/`. Assessment, aggregation and
 signature scanning are recomputed when consolidation needs rebuilding.
 
 Validation covers issued and diluted totals, holder row sums, register and pool
