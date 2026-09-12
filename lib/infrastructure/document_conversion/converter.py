@@ -7,7 +7,6 @@ import inspect
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from lib.infrastructure.configuration import get_env_var
 from lib.infrastructure.document_conversion.normalization import (
     normalize_extracted_text,
 )
@@ -32,10 +31,7 @@ async def convert_document(path: str | Path) -> DocumentConversion:
             operation="read_input",
         )
 
-    provider = (
-        get_env_var("DOCUMENT_CONVERTER", required=False)
-        or DEFAULT_DOCUMENT_CONVERTER
-    ).strip().lower()
+    provider = _selected_provider()
     backend = _backend(provider)
     try:
         if inspect.iscoroutinefunction(backend):
@@ -50,7 +46,19 @@ async def convert_document(path: str | Path) -> DocumentConversion:
     return DocumentConversion(markdown=markdown, warnings=result.warnings)
 
 
+def _selected_provider() -> str:
+    from lib.infrastructure.document_parser import document_converter_provider
+
+    return document_converter_provider()
+
+
 def _backend(provider: str) -> Backend:
+    if provider == "llamaparse":  # pragma: allowlist secret
+        from lib.infrastructure.llamaparse.adapter import (  # pragma: allowlist secret
+            convert_document as convert_with_llamaparse,  # pragma: allowlist secret
+        )
+
+        return convert_with_llamaparse  # pragma: allowlist secret
     if provider == "docling_stack":
         from lib.infrastructure.document_conversion.docling_stack import (
             convert_document as convert_with_docling_stack,

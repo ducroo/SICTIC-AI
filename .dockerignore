@@ -1,0 +1,15 @@
+.env
+.env-template
+.git
+.gitignore
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.pytest-storage
+logs
+qdrant
+qdrant_data
+.qdrant-initialized
+.pids
+snapshots

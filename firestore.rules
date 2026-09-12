@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Server SDK / service-account access bypasses these rules.
+    // Deny all client SDK access for the RAG spike.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

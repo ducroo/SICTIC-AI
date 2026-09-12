@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lib.infrastructure.qdrant import QdrantAdapter
+from lib.infrastructure.vector_store import get_vector_store, vector_store_backend
 from lib.datasets.chunking import split_markdown
 from lib.datasets.embeddings import EmbeddingService
 from lib.datasets.manifest import (
@@ -29,6 +30,12 @@ MAX_CHUNKS_PER_DOCUMENT = 500
 MAX_CHARACTERS_PER_DOCUMENT = 500_000
 
 
+def _dataset_store(dataset_slug: str, **kwargs):
+    if vector_store_backend() != "qdrant":
+        return get_vector_store(dataset_slug, **kwargs)
+    return QdrantAdapter(dataset_slug, **kwargs)
+
+
 async def reconcile_index(
     dataset_name: str,
     raw_rel: str,
@@ -45,18 +52,23 @@ async def reconcile_index(
     manifest = manifest or IngestionManifest.load(storage, parsed_rel)
     result = result or IngestionResult(dataset=dataset_slug)
     embeddings = EmbeddingService()
-    qdrant = QdrantAdapter(dataset_slug)
+    qdrant = _dataset_store(dataset_slug)
     collection_exists = qdrant.collection_exists()
     db_mtimes = (
         qdrant.get_document_mtimes(raise_on_error=True)
         if collection_exists
         else {}
     )
-    # A shared collection created by the current adapter always supports BM25.
-    # Retain the fallback for externally created or transitional collections.
+    # Qdrant creates BM25 on new collections. Firestore never stores sparse  # pragma: allowlist secret
+    # vectors, so a first index must not checkpoint a sparse version that
+    # later runs would immediately rebuild.
     sparse_version = (
         SPARSE_ENCODER_VERSION
-        if not collection_exists or qdrant.sparse_enabled()
+        if (
+            qdrant.sparse_enabled()
+            if collection_exists
+            else vector_store_backend() == "qdrant"
+        )
         else ""
     )
 
@@ -71,7 +83,7 @@ async def reconcile_index(
     for orphan in sorted(set(db_mtimes) - indexable_source_names):
         qdrant.delete_document(orphan, raise_on_error=True)
         result.removed_qdrant += 1
-        logger.info("[%s] Removed Qdrant orphan %s.", dataset_slug, orphan)
+        logger.info("[%s] Removed index orphan %s.", dataset_slug, orphan)
 
     files_to_index: list[tuple[SourceDocument, str, str]] = []
     for source in sources:

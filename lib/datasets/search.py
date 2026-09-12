@@ -11,6 +11,7 @@ from lib.datasets.retrieval import (
 )
 from lib.datasets.sparse import encode_query
 from lib.infrastructure.qdrant import QdrantAdapter
+from lib.infrastructure.vector_store import get_vector_store, vector_store_backend
 from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 
@@ -24,8 +25,14 @@ def _normalize_queries(query: str | list[str]) -> list[str]:
     return [item.strip() for item in query if item.strip()]
 
 
+def _dataset_store(dataset_slug: str):
+    if vector_store_backend() != "qdrant":
+        return get_vector_store(dataset_slug)
+    return QdrantAdapter(dataset_slug)
+
+
 def _retrieve(
-    qdrant: QdrantAdapter,
+    store,
     text: str,
     vector: list[float],
     *,
@@ -33,8 +40,8 @@ def _retrieve(
     hybrid: bool,
 ) -> list:
     if hybrid:
-        return qdrant.query_hybrid(vector, encode_query(text), limit=limit)
-    return qdrant.query(vector, limit=limit)
+        return store.query_hybrid(vector, encode_query(text), limit=limit)
+    return store.query(vector, limit=limit)
 
 
 def _merge_result_lists(result_lists: list, limit: int) -> list[Chunk]:
@@ -82,18 +89,18 @@ async def dataset_search(
     try:
         embeddings = EmbeddingService()
         vectors = await embeddings.embed_many(queries)
-        qdrant = QdrantAdapter(dataset_slug)
-        hybrid = qdrant.sparse_enabled()
-        if not hybrid and qdrant.collection_exists():
+        store = _dataset_store(dataset_slug)
+        hybrid = store.sparse_enabled()
+        if not hybrid and store.collection_exists():
             logger.info(
                 "Collection %s has no BM25 vectors; using dense-only search. "
                 "Run 'dataset_maintenance rebuild-index --dataset %s' to "
                 "enable hybrid search.",
-                qdrant.collection_name,
+                store.collection_name,
                 dataset_slug,
             )
         result_lists = [
-            _retrieve(qdrant, text, vector, limit=candidates, hybrid=hybrid)
+            _retrieve(store, text, vector, limit=candidates, hybrid=hybrid)
             for text, vector in zip(queries, vectors)
         ]
     except Exception as exc:
