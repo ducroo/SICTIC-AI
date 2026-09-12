@@ -27,6 +27,10 @@ For `sictic-members`, use only its local LinkedIn cache.
 The library readers are read-only; this skill owns creation. Run it explicitly,
 or through the `persons-in-dataset` bulk dependency before `person-profile`.
 
+Discovery relies on the shared JSON schema validation for required, nonblank
+names. It needs no business reviewer; accepted names are converted and merged
+through the shared person implementation.
+
 ## Side effects and failure behavior
 
 Missing-roster discovery can synchronize the dataset, call the configured LLM

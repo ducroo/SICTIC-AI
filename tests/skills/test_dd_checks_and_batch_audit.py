@@ -16,6 +16,10 @@ from skills.dd_checks.dd_checks import (
     parse_industry_type,
 )
 
+AUDIT_SCHEMA = json.loads(
+    (Path(__file__).resolve().parents[2] / "config/dd_checks/audit_response_schema.json").read_text()
+)
+
 
 INDUSTRY_SCHEMA = json.loads(
     (
@@ -62,12 +66,13 @@ Is there evidence of customer traction?
 """,
         skill_name="dd_checks",
         llm_instructions="Return JSON.",
+        response_schema=AUDIT_SCHEMA,
     )
 
     audit = json.loads(insight.content())
     assert insight.filename == "dd-checks-commercial-gemini-2-5-pro.json"
     assert insight.directory.endswith("/insights/batch-audit")
-    assert audit["chapters"][0]["checks"][0]["status"] == "Fine"
+    assert audit["chapters"][0]["checks"][0]["result"]["status"] == "Fine"
 
 
 def test_parse_industry_type_validates_structured_response():
@@ -200,8 +205,7 @@ async def test_dd_chapters_submit_audits_concurrently_in_output_order(
         return type("Audit", (), {"content": lambda self: checklist})()
 
     monkeypatch.setattr(module, "batch_audit", fake_batch_audit)
-    monkeypatch.setattr(module, "validate_audit_document", lambda _value: {})
-    monkeypatch.setattr(module, "audit_errors", lambda _audit: [])
+    monkeypatch.setattr(module, "validate_audit_document", lambda _value, **_kwargs: {})
     monkeypatch.setattr(
         module,
         "json_to_markdown_table",
@@ -214,6 +218,7 @@ async def test_dd_chapters_submit_audits_concurrently_in_output_order(
             ["commercial", "legal"],
             "software",
             {
+                "audit_response_schema": AUDIT_SCHEMA,
                 "checklists": {
                     "commercial_general": '"commercial checklist"',
                     "legal_software": '"legal checklist"',
@@ -280,8 +285,7 @@ async def test_configured_dd_product_fallback_preserves_specialist_selection(
         return SimpleNamespace(content=lambda: "{}")
 
     monkeypatch.setattr(module, "batch_audit", audit)
-    monkeypatch.setattr(module, "validate_audit_document", lambda value: value)
-    monkeypatch.setattr(module, "audit_errors", lambda audit: [])
+    monkeypatch.setattr(module, "validate_audit_document", lambda value, **_kwargs: value)
     monkeypatch.setattr(module, "json_to_markdown_table", lambda insight: "table")
     sections = await chapter_by_chapter(
         "example-startup", chapters, industry, config, "Audit instructions",
@@ -293,3 +297,58 @@ async def test_configured_dd_product_fallback_preserves_specialist_selection(
     assert product == expected
     assert all(check.number.startswith("7.") for chapter in product.chapters for check in chapter.checks)
     assert "## Chapter: 7_product" in sections[-1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('change', [None, 'revision', 'config', 'manual'])
+async def test_dd_final_report_reuse_precedes_classification(mock_env, monkeypatch, change):
+    from copy import deepcopy
+    from unittest.mock import AsyncMock
+    from lib.datasets.manifest import IngestionManifest
+    from lib.insights import InsightFile
+    from skills.dd_checks import dd_checks as module
+
+    storage = get_storage()
+    location = dataset_location_for_domain('example-startup', 'startups')
+    storage.mkdir(location.raw_rel)
+    manifest = IngestionManifest(storage, location.parsed_rel)
+    manifest.indexed_dataset_revision = 'revision-1'
+    manifest.save()
+    model = 'ollama/test-model:1b'
+    monkeypatch.setenv('RANKED_LLMS', model)
+    monkeypatch.setattr(module, 'llm_model', lambda: model)
+    prepare = AsyncMock(return_value=SimpleNamespace(dataset_slug='example-startup'))
+    monkeypatch.setattr('lib.startups.sources.ensure_startup_dataset', prepare)
+    sync = AsyncMock()
+    monkeypatch.setattr(module, 'sync_datasets', sync)
+    classify = AsyncMock(return_value='general')
+    chapters = AsyncMock(return_value=['## Chapter\nAccepted assessment.'])
+    monkeypatch.setattr(module, 'find_industry_type', classify)
+    monkeypatch.setattr(module, 'chapter_by_chapter', chapters)
+
+    [first] = await module.dd_checks('example-startup')
+    classify.reset_mock()
+    chapters.reset_mock()
+    if change == 'revision':
+        async def update_revision(*args, **kwargs):
+            manifest.indexed_dataset_revision = 'revision-2'
+            manifest.save()
+        sync.side_effect = update_revision
+    elif change == 'config':
+        config = deepcopy(load_repository_config())
+        config['dd_checks']['audit_instructions'] += '\nChanged assessment guidance.'
+        monkeypatch.setattr(module, 'load_repository_config', lambda: config)
+    elif change == 'manual':
+        manual = InsightFile('example-startup', 'dd_checks', 'manual')
+        manual.save('# Reviewed DD report')
+
+    [second] = await module.dd_checks('example-startup')
+    assert sync.await_count == 2
+    if change in {'revision', 'config'}:
+        classify.assert_awaited_once()
+        chapters.assert_awaited_once()
+    else:
+        classify.assert_not_awaited()
+        chapters.assert_not_awaited()
+        assert second.path == (manual.path if change == 'manual' else first.path)
+        assert second.content() == ('# Reviewed DD report' if change == 'manual' else first.content())

@@ -100,7 +100,7 @@ async def test_manual_classification_cannot_silently_lose_missing_source(mock_en
     build, _ = _patched_build(monkeypatch)
     _install_dataset("missing-co", "Founder 900,000")
     manual = InsightFile("missing-co", "captable_build", "manual", identifier="classification", subdir=True, extension="json")
-    manual.save(json.dumps({"documents": [{"filename": "absent.pdf", "document_class": "current_cap_table"}]}))
+    manual.save(json.dumps({"dataset": "missing-co", "documents": [{"filename": "absent.pdf", "document_class": "current_cap_table", "confidence": 95, "language": "en", "as_of_date": None, "rationale": "fixture"}]}))
     with pytest.raises(ValueError, match="absent.pdf"):
         await build.captable_build("missing-co")
     assert not build_insight("missing-co", "consolidated").exists()

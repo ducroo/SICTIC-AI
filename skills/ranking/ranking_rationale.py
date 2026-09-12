@@ -24,37 +24,19 @@ def _specialize_schema(
     return specialized
 
 
-def _rationale_lookup(
-    results: list[dict[str, Any]],
-    expected_ids: list[str],
-) -> dict[str, str]:
-    lookup: dict[str, str] = {}
-    for result in results:
-        profile_id = result["id"]
-        if profile_id in lookup:
-            raise ValueError(f"Duplicate rationale ID {profile_id!r}.")
-        rationale = result["rationale"].strip()
-        if not rationale:
-            raise ValueError(f"Rationale for {profile_id!r} is empty.")
-        lookup[profile_id] = rationale
-    if set(lookup) != set(expected_ids):
-        missing = [item for item in expected_ids if item not in lookup]
-        raise ValueError("Missing rationale IDs: " + ", ".join(missing))
-    return lookup
-
-
 def _review_rationales(
     output: dict | list,
     *,
     expected_ids: list[str],
 ) -> Review[dict | list]:
-    try:
-        if not isinstance(output, dict):
-            raise ValueError("Ranking-rationale response must be an object.")
-        _rationale_lookup(output["results"], expected_ids)
-    except (KeyError, TypeError, ValueError) as error:
-        return Review(output, (str(error),))
-    return Review(output)
+    returned_ids = [result["id"] for result in output["results"]]
+    problems = []
+    if len(set(returned_ids)) != len(returned_ids):
+        problems.append("Duplicate rationale IDs.")
+    missing = [item for item in expected_ids if item not in returned_ids]
+    if missing:
+        problems.append("Missing rationale IDs: " + ", ".join(missing))
+    return Review(output, tuple(problems))
 
 
 async def ranking_rationale(
@@ -86,8 +68,10 @@ async def ranking_rationale(
         response_schema,
         partial(_review_rationales, expected_ids=profile_ids),
     )
-    assert isinstance(response, dict)
-    rationale_lookup = _rationale_lookup(response["results"], profile_ids)
+    rationale_lookup = {
+        result["id"]: result["rationale"].strip()
+        for result in response["results"]
+    }
 
     for item in ranked_items:
         item["rationale"] = rationale_lookup[item["id"]]

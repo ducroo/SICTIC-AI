@@ -222,6 +222,9 @@ async def test_suggested_startups_continues_after_investor_failure(
 async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundaries):
     from skills.dd_checks.dd_checks import dd_checks
 
+    # Exercise generation; other harness cases use the seeded manual DD report.
+    manual = InsightFile("example-startup", "dd_checks", "manual")
+    get_storage().remove(manual.path)
     result = await dd_checks("example-startup")
     assert_insight_result(result)
     [insight] = result
@@ -241,6 +244,7 @@ async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundarie
 @pytest.mark.asyncio
 async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
     from lib.batch_audit import batch_audit
+    from lib.infrastructure.configuration import load_repository_config
 
     insight = await batch_audit(
         "example-startup",
@@ -252,6 +256,8 @@ async def test_batch_audit_writes_checklist_insight(mocked_skill_boundaries):
 
 Is there evidence of customer traction?
 """,
+        response_schema=load_repository_config("dd_checks", "audit_response_schema"),
+        llm_instructions=load_repository_config("dd_checks", "audit_instructions"),
     )
     assert insight.exists()
     assert InsightFile(

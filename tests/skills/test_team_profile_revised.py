@@ -136,7 +136,7 @@ async def test_technical_retrieval_failures_block_synthesis_and_can_resume(revis
             raise RuntimeError("retrieval unavailable")
         return []
     runtime.search.side_effect = search
-    with pytest.raises(RuntimeError, match="technical failures.*retrieval unavailable"):
+    with pytest.raises(ValueError, match="does not match the schema.*retrieval unavailable"):
         await runtime.module.team_profile_revised("acme")
     runtime.synthesis.assert_not_awaited()
     assert not InsightFile("acme", "team_profile_revised", "ollama/test_model:1b").exists()

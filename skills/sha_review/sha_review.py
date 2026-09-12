@@ -6,7 +6,7 @@ from functools import partial
 from typing import Any
 
 from lib.batch_audit import batch_audit
-from lib.batch_audit.schema import audit_errors, validate_audit_document
+from lib.batch_audit.schema import validate_audit_document
 from lib.datasets.documents import resolve_document_path
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, dataset_parsed_path
@@ -36,38 +36,12 @@ def _identification_prompt(instructions: str) -> str:
     return instructions
 
 
-def _parse_identification(
-    result: dict[str, Any],
-) -> dict[str, Any]:
-    if any(not concern.strip() for concern in result["concerns"]):
-        raise ValueError(
-            "SHA document-identification concerns must contain non-blank text."
-        )
-    path = result["path"]
-    document_match = result["document_match"]
-    if (path is None) != (document_match == "None"):
-        raise ValueError(
-            "SHA document-identification response must use a null path if and "
-            "only if document_match is None."
-        )
-    if path is None:
-        raise ValueError(
-            "No plausible Shareholders' Agreement could be identified: "
-            f"{result['selection_reason']}"
-        )
-    return result
-
-
 def _review_identification(output: dict | list) -> Review[dict | list]:
-    if not isinstance(output, dict):
-        return Review(
-            output,
-            ("SHA document-identification response must be an object",),
-        )
-    try:
-        _parse_identification(output)
-    except (KeyError, TypeError, ValueError) as error:
-        return Review(output, (str(error),))
+    if output["path"] is None:
+        return Review(output, (
+            "No plausible Shareholders' Agreement could be identified: "
+            f"{output['selection_reason']}",
+        ))
     return Review(output)
 
 
@@ -90,9 +64,6 @@ async def _identify_sha(
     )
     if result is None:
         raise ValueError("No plausible Shareholders' Agreement was found")
-    if not isinstance(result, dict):
-        raise ValueError("SHA document-identification response must be an object")
-    result = _parse_identification(result)
 
     path_config = sha_config["document_path_resolution"]
     min_score = float(path_config["min_score"])
@@ -170,15 +141,7 @@ def _review_template_ranking(
     output: dict | list,
     template_keys: list[str],
 ) -> Review[dict | list]:
-    if not isinstance(output, dict):
-        return Review(output, ("SHA template ranking must be an object",))
-    ranking = output.get("rankings")
-    if not isinstance(ranking, list):
-        return Review(output, ("SHA template rankings must be an array",))
-    try:
-        returned_keys = [item["template_key"] for item in ranking]
-    except (KeyError, TypeError) as error:
-        return Review(output, (f"Invalid template ranking: {error}",))
+    returned_keys = [item["template_key"] for item in output["rankings"]]
     problems: list[str] = []
     if len(set(returned_keys)) != len(returned_keys):
         problems.append("SHA template ranking contains duplicate template keys")
@@ -221,8 +184,6 @@ async def _rank_templates(
             template_keys=template_keys,
         ),
     )
-    if not isinstance(ranking_result, dict):
-        raise ValueError("SHA template ranking must be an object")
     ranking = ranking_result["rankings"]
     returned_keys = [item["template_key"] for item in ranking]
 
@@ -266,7 +227,6 @@ async def _run_audits(
     sha_config: dict[str, Any],
 ) -> list[tuple[str, dict[str, Any]]]:
     reference_markdown = sha_config["reference_shas"][reference_key]
-    audit_settings = sha_config["audit_settings"]
     instructions = _audit_instructions(
         sha_config["audit_instructions"],
         sha_path=sha_path,
@@ -286,10 +246,7 @@ async def _run_audits(
                 checklist_markdown=checklists[checklist_key],
                 skill_name="sha_review",
                 llm_instructions=instructions,
-                status_scale=audit_settings["status_scale"],
-                missing_evidence_status=audit_settings[
-                    "missing_evidence_status"
-                ],
+                response_schema=sha_config["audit_response_schema"],
             )
         )
         for checklist_key in checklist_keys
@@ -298,16 +255,9 @@ async def _run_audits(
 
     audits: list[tuple[str, dict[str, Any]]] = []
     for checklist_key, audit_insight in zip(checklist_keys, results):
-        audit = validate_audit_document(json.loads(audit_insight.content()))
-        failures = audit_errors(audit)
-        if failures:
-            details = "; ".join(
-                f"{item['number']}: {item['error']}" for item in failures
-            )
-            raise RuntimeError(
-                f"SHA checklist {checklist_key!r} contains "
-                f"{len(failures)} technical failure(s): {details}"
-            )
+        audit = validate_audit_document(
+            json.loads(audit_insight.content()), require_complete=True,
+        )
         audits.append((checklist_key, audit))
     return audits
 
@@ -370,10 +320,8 @@ async def sha_review(dataset_name: str) -> InsightResult:
 
     config = load_repository_config()
     sha_config = config["sha_review"]
-    batch_config = config["batch_audit"]
     effective_config_key = config_cache_key(
         sha_config,
-        batch_config,
         config["structured_output"],
         {"output_schema_version": OUTPUT_SCHEMA_VERSION},
     )

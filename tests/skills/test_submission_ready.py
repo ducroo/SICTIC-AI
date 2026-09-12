@@ -1,3 +1,4 @@
+from pathlib import Path
 import json
 
 import pytest
@@ -9,11 +10,15 @@ from skills.submission_ready.submission_ready import (
     SubmissionReadyResult,
     _canonical_stage,
     _generate_proposed_action,
-    _parse_proposed_action,
+    _review_proposed_action,
     _process_candidate,
     _render_proposed_action,
     _resolve_candidates,
     submission_ready,
+)
+
+AUDIT_SCHEMA = json.loads(
+    (Path(__file__).resolve().parents[2] / "config/submission_ready/audit_response_schema.json").read_text()
 )
 
 
@@ -60,13 +65,13 @@ def _match(name="Example", step="Application", application_id=1):
 
 def _audit_document(*, error: str | None = None):
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "skill": "submission_ready",
         "checklist_title": "Submission Readiness",
         "dataset": "example",
         "model": "ollama/test_model:1b",
         "generated_at": "2026-08-06T10:00:00Z",
-        "status_scale": ["Pass", "Fail", "Unclear"],
+        "response_schema": AUDIT_SCHEMA,
         "chapters": [
             {
                 "number": "1",
@@ -75,12 +80,12 @@ def _audit_document(*, error: str | None = None):
                     {
                         "number": "1.1",
                         "check": "Founder submission",
-                        "status": None if error else "Pass",
-                        "rationale": None if error else "Founder evidence.",
-                        "source_documents": (
-                            [] if error else ["Dealum Application — Contact"]
-                        ),
-                        "proposed_next_steps_and_questions": [],
+                        "result": None if error else {
+                            "status": "Pass",
+                            "rationale": "Founder evidence.",
+                            "source_documents": ["Dealum Application — Contact"],
+                            "proposed_next_steps_and_questions": [],
+                        },
                         "error": error,
                     }
                 ],
@@ -104,6 +109,7 @@ class FakeAuditInsight:
 
 def _check_config():
     return {
+        "audit_response_schema": AUDIT_SCHEMA,
         "policy": "policy",
         "checklist": (
             "# Submission Readiness\n\n## Eligibility\n\n"
@@ -178,17 +184,24 @@ def test_resolve_explicit_out_of_scope_startup_returns_status():
     )
 
 
-def test_parse_proposed_action_enforces_eight_concern_limit():
-    concerns = [f"Concern {index}" for index in range(9)]
+@pytest.mark.parametrize("counts", [(5, 4), (9, 0), (0, 9), (10, 12)])
+def test_proposed_action_accepts_more_than_eight_concerns(counts):
+    from lib.infrastructure.configuration import load_repository_config
+    from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+    eligibility, incomplete = counts
     payload = {
         "proposed_action": "Send concerns to startup",
         "rationale": "Information is missing.",
-        "eligibility_concerns": concerns,
-        "missing_or_inconsistent_information": [],
+        "eligibility_concerns": [f"Eligibility {i}" for i in range(eligibility)],
+        "missing_or_inconsistent_information": [f"Information {i}" for i in range(incomplete)],
     }
 
-    with pytest.raises(ValueError, match="more than 8 concerns"):
-        _parse_proposed_action(payload, "Application")
+    schema = load_repository_config("submission_ready")["response_schema"]
+    validate_json_schema(payload, schema)
+    review = _review_proposed_action(payload)
+    assert not review.problems
+    assert review.output == payload
 
 
 def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
@@ -248,7 +261,10 @@ async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
         "Send concerns to startup",
     ]
     assert len(calls) == 1
-    assert calls[0]["reviewer"]({"proposed_action": "Move to Jury"}).problems
+    from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+    with pytest.raises(ValueError):
+        validate_json_schema({"proposed_action": "Move to Jury"}, schema)
     assert "Move to Jury" in report
 
 
@@ -386,7 +402,7 @@ async def test_process_candidate_writes_timestamped_pair(
     assert storage.exists(result.checklist_path)
     assert storage.exists(result.response_path)
     assert batch_calls[0]["skill_name"] == "submission_ready"
-    assert batch_calls[0]["status_scale"] == ["Pass", "Fail", "Unclear"]
+    assert batch_calls[0]["response_schema"] == AUDIT_SCHEMA
     checklist_report = storage.read_text(result.checklist_path)
     assert "| No | Check | Status | Rationale | Source documents |" in checklist_report
     assert "| 1.1 | Founder submission | Pass | Founder evidence." in checklist_report
@@ -533,7 +549,7 @@ async def test_process_candidate_rejects_batch_audit_technical_errors(
         failed_batch_audit,
     )
 
-    with pytest.raises(RuntimeError, match="1 technical failure"):
+    with pytest.raises(ValueError, match="does not match the schema.*error"):
         await _process_candidate(
             _match(),
             "Application",

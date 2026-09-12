@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from lib.captable.insights import select_consolidated, read_build_insight
-from tests.skills.test_captable_build import _install_dataset, _patched_build, _captable_extraction
+from tests.skills.test_captable_build import _install_dataset, _patched_build, _captable_extraction, _consolidated_artifact
 
 
 def test_report_selects_fresh_lower_ranked_build(mock_env, monkeypatch):
@@ -21,6 +21,7 @@ def test_report_selects_fresh_lower_ranked_build(mock_env, monkeypatch):
     monkeypatch.setattr(helpers, 'llm_model', lambda: 'ollama/low')
     async def corrected(*args):
         result = _captable_extraction('captable.md')
+        result['dataset'] = 'review-co'
         result['stakeholders'][0]['name'] = 'Corrected Founder'
         return result
     monkeypatch.setattr(extraction, 'extract_captable', corrected)
@@ -64,7 +65,8 @@ def test_manual_consolidated_wins_without_dependencies(mock_env, monkeypatch):
     from lib.insights import InsightFile
     _install_dataset('manual-input', 'source')
     manual = InsightFile('manual-input', 'captable_build', 'manual', identifier='consolidated', subdir=True, extension='json')
-    manual.save('{"dataset": "manual-input"}')
+    import json
+    manual.save(json.dumps(_consolidated_artifact('manual-input')))
     helpers = import_module('lib.captable.insights')
     monkeypatch.setattr(helpers, 'configured_build_insight', lambda *args: pytest.fail('manual must win first'))
     assert select_consolidated('manual-input').path == manual.path
