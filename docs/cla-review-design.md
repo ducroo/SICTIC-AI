@@ -1,6 +1,6 @@
 # CLA term sheet review — design
 
-Status: proposal for discussion (Enrico, Lucas and Manfred). Companion to issue #__. This document explains how the existing pieces work together and how the new skill sits on top of them. It is written to give an overview for readers over the whole toolkit. Scope: the term sheet of a convertible loan. A priced-round term sheet is a possible later extension on the same skeleton and is not covered here.
+Status: proposal for discussion (Enrico, Lucas and Manfred). Companion to issue #73. This document explains how the existing pieces work together and how the new skill sits on top of them. It is written to give an overview for readers over the whole toolkit. Scope: the term sheet of a convertible loan. A priced-round term sheet is a possible later extension on the same skeleton and is not covered here.
 
 ## 1. The problem in one paragraph
 
