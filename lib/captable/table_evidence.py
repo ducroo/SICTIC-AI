@@ -16,14 +16,16 @@ searched for a holder's name. Share classes and pools are described across
 the rows of one sheet, so once a quoted row of a table names them the other
 quoted rows of that table count; a class may also be quoted by the header
 that names it. Converter quirks are read locally: page markers inside a
-table, a first data row declared as a header, a numeral split at its
-apostrophe into the next cell, an escaped pipe inside a cell, a quoted list
-spanning a few adjacent lines.
+table (a table that declares its own text header after a page break stays a
+new table; nameless rows that open a page below a running page header still
+belong to the holder named before the break), a first data row declared as a
+header, a numeral split at its apostrophe into the next cell, an escaped pipe
+inside a cell, a quoted list spanning a few adjacent lines.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 import difflib
 import re
@@ -152,7 +154,7 @@ def row_values(cells: tuple[str, ...], percentages: bool = True) -> list[list[De
 class SourceLine:
     index: int
     text: str
-    kind: str                      # "row", "header", "separator", "prose", "blank"
+    kind: str                      # "row", "header", "separator", "prose", "blank", "page"
     cells: tuple[str, ...] = ()
     table: int = -1                # table id, -1 outside tables
     headers: tuple[str, ...] = ()  # column names of the table, () when unknown
@@ -180,8 +182,35 @@ def _is_text_cell(cell: str) -> bool:
     return bool(cell.strip()) and not _is_numeric_cell(cell)
 
 
+def _declared_text_header(raw_lines: list[str], index: int) -> tuple[str, ...] | None:
+    """Normalized cells of an all-text header the table starting at ``index`` declares."""
+    if index + 1 >= len(raw_lines) or not is_separator_row(raw_lines[index + 1]):
+        return None
+    cells = tuple(split_cells(raw_lines[index].strip()))
+    if not any(_is_text_cell(cell) for cell in cells) or any(_is_numeric_cell(cell) for cell in cells):
+        return None
+    return tuple(normalize_for_matching(cell) for cell in cells)
+
+
+def _block_header(kept: list[str]) -> tuple[str, ...] | None:
+    """Normalized declared header of the table block that ends ``kept``."""
+    start = len(kept)
+    while start > 0 and is_table_line(kept[start - 1]):
+        start -= 1
+    block = kept[start:]
+    if len(block) >= 2 and is_separator_row(block[1]):
+        return tuple(normalize_for_matching(cell) for cell in split_cells(block[0].strip()))
+    return None
+
+
 def _drop_page_breaks(raw_lines: list[str]) -> list[str]:
-    """Remove page markers (and the blanks around them) that split a table."""
+    """Remove page markers (and the blanks around them) that split a table.
+
+    A table continued on the next page is one table, unless the next page
+    opens a table declaring an all-text header of its own that differs from
+    the previous header: that is a new table. Markers that do not split a
+    table are kept as page lines.
+    """
     kept: list[str] = []
     index = 0
     while index < len(raw_lines):
@@ -193,10 +222,16 @@ def _drop_page_breaks(raw_lines: list[str]) -> list[str]:
             after = index + 1
             while after < len(raw_lines) and not raw_lines[after].strip():
                 after += 1
-            if before >= 0 and is_table_line(kept[before]) and after < len(raw_lines) and is_table_line(raw_lines[after]):
+            continued = (before >= 0 and is_table_line(kept[before])
+                         and after < len(raw_lines) and is_table_line(raw_lines[after]))
+            if continued:
+                header = _declared_text_header(raw_lines, after)
+                continued = header is None or header == _block_header(kept)
+            if continued:
                 del kept[before + 1:]
                 index = after
                 continue
+            kept.append(line.strip())
             index += 1
             continue
         kept.append(line)
@@ -242,6 +277,10 @@ def source_lines(document: str) -> list[SourceLine]:
         pending.clear()
 
     for raw in _drop_page_breaks(document.splitlines()):
+        if _PAGE_MARKER.match(raw):
+            flush_table()
+            lines.append(SourceLine(len(lines), raw, "page"))
+            continue
         if is_table_line(raw):
             pending.append(raw.strip())
             in_run = False
@@ -263,11 +302,75 @@ class Source:
 
     def __init__(self, document: str):
         self.lines = source_lines(document)
+        self._continues = self._continued_tables()
+        self._inherit_headers()
         self._runs: dict[int, list[SourceLine]] = {}
         for line in self.lines:
             if line.kind == "prose":
                 self._runs.setdefault(line.run, []).append(line)
         self._keys = {line.index: normalize_for_matching(line.text) for line in self.lines}
+
+    def _continued_tables(self) -> dict[int, int]:
+        """Tables that continue the previous table across a page break.
+
+        A converter closes the table at a page break and opens a new one
+        below the running page header; the new table declares no text
+        header of its own and has the previous table's column count, so its
+        nameless rows still belong to the holder named before the break.
+        """
+        continued: dict[int, int] = {}
+        seen: set[int] = set()
+        for line in self.lines:
+            if line.table < 0 or line.table in seen:
+                continue
+            seen.add(line.table)
+            if line.kind == "header":
+                continue
+            previous = self._table_before(line.index)
+            if previous is not None and len(previous.cells) == len(line.cells):
+                continued[line.table] = previous.table
+        return continued
+
+    def root_table(self, table: int) -> int:
+        """The table a continued table ultimately continues (itself otherwise)."""
+        while table in self._continues:
+            table = self._continues[table]
+        return table
+
+    def _table_before(self, index: int) -> SourceLine | None:
+        """The last line of the table that ends above a page break at most
+        CONTEXT_LINES prose lines above ``index``."""
+        prose = 0
+        page = False
+        for previous in reversed(self.lines[:index]):
+            if previous.kind == "blank":
+                continue
+            if previous.kind == "prose" and not page:
+                prose += 1
+                if prose > CONTEXT_LINES:
+                    return None
+                continue
+            if previous.kind == "page":
+                page = True
+                continue
+            if page and previous.table >= 0:
+                return previous
+            return None
+        return None
+
+    def _inherit_headers(self) -> None:
+        headers: dict[int, tuple[str, ...]] = {}
+        for line in self.lines:
+            if line.table >= 0 and line.headers and line.table not in headers:
+                headers[line.table] = line.headers
+        for table in sorted(self._continues):
+            if not headers.get(table):
+                headers[table] = headers.get(self._continues[table], ())
+        self.lines = [
+            replace(line, headers=headers[line.table])
+            if line.table >= 0 and not line.headers and headers.get(line.table) else line
+            for line in self.lines
+        ]
 
     def find_prose(self, key: str) -> list[tuple[SourceLine, str]]:
         """Prose windows of up to PROSE_WINDOW adjacent lines containing key."""
@@ -312,9 +415,18 @@ class Source:
             positions = [i for i, cell in enumerate(line.cells) if not cell.strip()]
             if not positions:
                 return None
+        table = line.table
         for previous in reversed(self.lines[: line.index]):
-            if previous.table != line.table:
-                break
+            if previous.table != table:
+                # Walk on into the table this one continues across a page break.
+                continued = self._continues.get(table)
+                if continued is None:
+                    break
+                if previous.table < 0:
+                    continue
+                if previous.table != continued:
+                    break
+                table = continued
             if previous.kind != "row" or len(previous.cells) != len(line.cells):
                 continue
             if any(i < len(previous.cells) and _is_text_cell(previous.cells[i]) for i in positions):
@@ -356,7 +468,7 @@ class Source:
         key = normalize_for_matching(fragment)
         if not key:
             return None
-        candidates = {self._keys[line.index]: line.text for line in self.lines if line.text}
+        candidates = {self._keys[line.index]: line.text for line in self.lines if line.text and line.kind != "page"}
         matches = difflib.get_close_matches(key, list(candidates), n=1, cutoff=0.6)
         return candidates[matches[0]] if matches else None
 
@@ -574,7 +686,8 @@ class Evidence:
                 if self.identity and _names(self.identity, item.line.cells[column]):
                     singles.extend(values)
                     continue
-                key = (item.line.table, column)
+                # One column of one sheet, also when the sheet continues across a page break.
+                key = (self.source.root_table(item.line.table), column)
                 stating[key] = stating.get(key, 0) + 1
                 previous = sums.get(key, Decimal(0))
                 sums[key] = None if previous is None or len(values) != 1 else previous + values[0]
@@ -583,7 +696,7 @@ class Evidence:
             for column in columns:
                 if self.identity and _names(self.identity, item.line.cells[column]):
                     continue
-                if not strict or stating.get((item.line.table, column), 0) == 1:
+                if not strict or stating.get((self.source.root_table(item.line.table), column), 0) == 1:
                     singles.extend(per_cell[column])
         totals = [
             total for key, total in sums.items()

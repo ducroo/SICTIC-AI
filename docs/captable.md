@@ -55,10 +55,13 @@ share class never evidence a share count. Share classes and pools are described
 across the rows of one sheet: once a quoted row names them, the other quoted
 rows of that sheet count, a class may be quoted by the header that names it
 (evidencing no number), and a pool's third figure may be the arithmetic of the
-two stated ones. Converter quirks are read locally: page markers inside a table,
-the first data row declared as a header, a numeral split at its apostrophe into
-the next cell, an escaped pipe inside a cell, a quoted list spanning up to eight
-adjacent lines. Rejections tell the model which numbers the quoted cells state,
+two stated ones. Converter quirks are read locally: page markers inside a table
+(a table declaring its own text header after a page break stays a new table;
+nameless rows that open a page below a running page header still belong to the
+holder named before the break and inherit that table's header), the first data
+row declared as a header, a numeral split at its apostrophe into the next cell,
+an escaped pipe inside a cell, a quoted list spanning up to eight adjacent
+lines. Rejections tell the model which numbers the quoted cells state,
 which quoted row does not name the holder and was ignored, and the closest
 source line to an unmatched fragment. CLA terms follow the same contract: every
 value carries a quote found verbatim in the document, a paraphrased or assembled

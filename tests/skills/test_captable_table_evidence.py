@@ -288,6 +288,26 @@ def test_page_markers_do_not_split_a_continued_table():
     assert review(document, "| | | 14 | 400 |", 400, name="Bob Example")
 
 
+def test_a_table_declaring_its_own_text_header_after_a_page_break_is_a_new_table():
+    document = ("| Holder | Certificate | Shares |\n| --- | --- | --- |\n| Alice Example | 12 | 100 |\n| | 13 | 250 |\n"
+                "<!-- page:2 -->\n\n| Pool | Granted | Unallocated |\n| --- | --- | --- |\n| ESOP | 10 | 90 |")
+    rows = [line for line in Source(document).lines if line.kind == "row"]
+    assert len({line.table for line in rows}) == 2
+    assert rows[-1].headers == ("Pool", "Granted", "Unallocated")
+    assert not review(document, "| Alice Example | 12 | 100 |\n| | 13 | 250 |", 350, name="Alice Example")
+    assert review(document, "| ESOP | 10 | 90 |", 90, name="Alice Example")   # the new table's row is not hers
+
+
+def test_nameless_rows_below_a_running_page_header_belong_to_the_holder_before_the_break():
+    document = ("| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n| 1 | Alice Example | 12 | 100 |\n\n"
+                "<!-- page:2 -->\n\nShare register, page 2\n\n"
+                "| | | 13 | 250 |\n| --- | --- | --- | --- |\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |")
+    quote = "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n| | | 14 | 400 |"
+    assert not review(document, quote, 750, name="Alice Example")
+    assert review(document, "| | | 13 | 250 |\n| 2 | Bob Example | 15 | - |", 250, name="Bob Example")
+    assert review(document, "| | | 13 | 250 |", 13, name="Alice Example")   # inherited header excludes the certificate column
+
+
 SHEET_WITH_SECTIONS = """## Loan pool (phantom)
 
 | | | |

@@ -374,9 +374,12 @@ holdings could be compared) is reported.
 
 **Pool consistency.** The cap table's pool figures are compared with the
 pool overview documents, paired by pool identity. Within the family of
-employee pools a single pool may be compared across kinds (a table calling
-it "grantable" and an overview calling it "ESOP"); one-sided coverage is
-tolerated; a date gap is disclosed. A genuine disagreement — the cap table
+share-backed employee pools (ESOP, grantable, authorized capital) a single
+pool may be compared across kinds (a table calling it "grantable" and an
+overview calling it "ESOP") when each source lists exactly one such pool
+with a stated total; a phantom plan (PSOP, cash-settled) is only ever
+compared with another phantom plan; one-sided coverage is tolerated; a date
+gap is disclosed. A genuine disagreement — the cap table
 saying one pool size and the ESOP overview another — stays a failure,
 because it is exactly what a diligence question is for.
 

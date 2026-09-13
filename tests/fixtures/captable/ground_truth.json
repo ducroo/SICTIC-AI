@@ -106,7 +106,7 @@
   "register": {
     "document": "synthetic_register.md",
     "as_of_date": "2026-03-31",
-    "layout": "German OCR-style Aktienbuch: one table continued across a <!-- sictic-page:2 --> marker (the evidence check reads it as one table), certificate rows, a stacked history cell, padded apostrophes, a stray-space numeral, an HTML-entity pipe (&#124;) inside a cell, a '#' cell, and dash / blank / 'n/a' cells that mean 0 / null / null.",
+    "layout": "German OCR-style Aktienbuch over three pages: page 2 opens with a running page header and a nameless continuation row that the converter declares as a header (it belongs to the holder named before the break), the page-3 marker sits directly between two rows (one table); certificate rows, a stacked history cell, padded apostrophes, a stray-space numeral, an HTML-entity pipe (&#124;) inside a cell, a '#' cell, and dash / blank / 'n/a' cells that mean 0 / null / null.",
     "issued_for_percentages": 1300000,
     "entries": [
       {
@@ -116,7 +116,7 @@
         "current_participation_pct": 30.77,
         "first_acquisition_date": "2023-05-01",
         "last_change_date": "2025-06-15",
-        "evidence": "sum of two certificate rows: 250'000 on the named row + 150 ' 000 on the nameless continuation row that opens page 2 (both rows must be quoted; 250000 alone is a rejected subset); '-' under Vorzugsaktien evidences 0",
+        "evidence": "sum of two certificate rows: 250'000 on the named row (page 1) + 150 ' 000 on the nameless continuation row that opens page 2 below the running page header (both rows must be quoted; 250000 alone is a rejected subset); '-' under Vorzugsaktien evidences 0",
         "name_variant_test": "must reconcile with cap-table 'Anna Beispiel' (middle name and domicile suffix)"
       },
       {
@@ -194,8 +194,8 @@
     "blank_or_absent_is_null_never_zero": "register: Bruno's blank Vorzugsaktien cell, Alpina's 'n/a' Stammaktien cell",
     "dash_or_literal_zero_evidences_zero": "register: '-' cells of Anna and the treasury; pool overview 'Granted | 0'",
     "sum_of_certificate_rows_never_a_subset": "register: Anna's two certificate rows",
-    "nameless_continuation_rows_belong_to_the_named_row_above": "register: Anna's second row (page 2)",
-    "page_marker_inside_a_table": "register: <!-- sictic-page:2 --> between Bruno's and Alpina's rows",
+    "nameless_continuation_rows_belong_to_the_named_row_above": "register: Anna's second certificate row opens page 2 below a running page header",
+    "page_marker_inside_a_table": "register: <!-- sictic-page:3 --> directly between Alpina's and the treasury's rows (one table)",
     "stacked_history_cell_last_figure_current": "register: Bruno",
     "padded_apostrophes_and_stray_spaces_inside_a_numeral": "register: '150 ' 000', '500 ' 000', '100 000'",
     "digits_never_joined_across_cells": "register: certificate numbers next to share counts (1005 is not a count)",
@@ -219,15 +219,17 @@
     "anti_laziness_missing_terms": "CLA: valuation_floor and pro_rata_rights absent",
     "shrinking_holder_without_transfer_document": "cap table v1 -> v2: Bruno 300000 -> 250000",
     "design_assets_ignored_by_ingestion": "fixture_logo.ai",
-    "borrower_listed_as_a_lender_is_rejected": "CLA: the three-party block tempts the model to list the borrower among the lenders; the CLA reviewer rejects a lender named exactly like borrower_name (seen on gpt-5.6-luna, 2026-09-13)"
+    "borrower_listed_as_a_lender_is_rejected": "CLA: the three-party block tempts the model to list the borrower among the lenders; the CLA reviewer rejects a lender named exactly like borrower_name (seen on gpt-5.6-luna, 2026-09-13)",
+    "running_page_header_between_marker_and_continued_table": "register: page 2 ('Aktienbuch der Fixture Robotics AG – Seite 2'); the continued table inherits the page-1 header, so the Zertifikat column stays excluded",
+    "converter_declares_the_first_data_row_a_header": "register: the continuation row + separator that open page 2 (mostly numeric, demoted to a row)"
   },
   "not_exercised": {
     "projected_year_columns": "period selection across '2025 / 2026 (projected)' columns is an open gap (Lucas's finding 4); not planted because it makes the current column ambiguous",
     "subsidiary_register": "a register of a subsidiary is not distinguished from the parent's (open gap)",
-    "nameless_continuation_rows_split_by_a_running_page_header": "when prose sits between the page marker and the continued table, the continuation rows start a new table and lose their owner (open gap; the real OCR registers had the marker directly between table lines)",
     "phantom_or_cash_settled_pools": "unit test only (SHEET_WITH_SECTIONS in tests/skills/test_captable_table_evidence.py)",
     "dangling_apostrophe_split_into_the_next_cell": "unit test only (OCR_REGISTER); planting it in a reconciling register would make the class column ambiguous",
-    "safe_harbor_interest_cap_qefr_new_money_minimum_maturity_conversion_price": "plain CLA terms; these fields come back null, which is correct"
+    "safe_harbor_interest_cap_qefr_new_money_minimum_maturity_conversion_price": "plain CLA terms; these fields come back null, which is correct",
+    "new_table_after_a_page_break": "a table declaring its own text header right after a page marker stays a separate table; unit test only (tests/skills/test_captable_table_evidence.py)"
   },
   "esignature": {
     "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)"

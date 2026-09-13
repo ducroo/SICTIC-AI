@@ -181,6 +181,7 @@ def test_cla_borrower_in_the_party_block_is_not_a_lender():
     ("synthetic_register.md", "| n/a | 500 ' 000 |"),
     ("synthetic_register.md", "| 100 000 | - |"),
     ("synthetic_register.md", "| # |"),
+    ("synthetic_register.md", "Seite 2\n\n| | | 2 | 150 ' 000 |"),
     ("synthetic_pool_overview.md", "| | | | |\n| --- |"),
     ("synthetic_pool_overview.md", "| Pool size (options) | 25000 | # |"),
     ("synthetic_pool_overview.md", "% of shares issued (1,300,000)"),
@@ -191,12 +192,27 @@ def test_planted_quirks_are_still_in_the_documents(name, needle):
     assert needle in text(name)
 
 
-def test_page_marker_sits_between_two_table_rows():
+def test_page_three_marker_sits_between_two_table_rows():
     lines = text("synthetic_register.md").splitlines()
-    marker = lines.index("<!-- sictic-page:2 -->")
+    marker = lines.index("<!-- sictic-page:3 -->")
     before = next(item for item in reversed(lines[:marker]) if item.strip())
     after = next(item for item in lines[marker + 1:] if item.strip())
-    assert before.startswith("| 2 | Bruno") and after.startswith("| 3 | Alpina")
+    assert before.startswith("| 3 | Alpina") and after.startswith("| 4 | Fixture")
+
+
+def test_page_two_opens_with_a_running_header_and_a_nameless_continuation_row():
+    lines = text("synthetic_register.md").splitlines()
+    marker = lines.index("<!-- sictic-page:2 -->")
+    following = [item for item in lines[marker + 1:] if item.strip()][:3]
+    assert following[0].startswith("Aktienbuch der Fixture Robotics AG")
+    assert following[1].startswith("| | | 2 | 150 ' 000 |") and following[2].startswith("| ---")
+    entries = register_entries()
+    entries[1].update({"current_common": 450000, "quote": ANNA.splitlines()[1] + "\n" + BRUNO})
+    found = problems("synthetic_register.md", {"entries": entries})
+    assert found and "was ignored" in found[0]          # the continuation row is Anna's, not Bruno's
+    entries = register_entries()
+    entries[0].update({"current_common": 2, "quote": ANNA.splitlines()[1]})
+    assert problems("synthetic_register.md", {"entries": entries})   # inherited header: Zertifikat is not a count
 
 
 def test_decoy_design_asset_is_ignored_by_ingestion():
