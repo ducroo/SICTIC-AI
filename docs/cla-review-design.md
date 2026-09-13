@@ -8,7 +8,7 @@ Before SICTIC members lend, they receive the term sheet of a convertible loan: t
 
 ## 2. Two questions, not one
 
-**Question 1 — Are the terms themselves acceptable for a lender?** Judged against the two SECA CLA model term sheets (short form and long form, February 2025, with their drafting notes) and the Swiss Angel Investor Handbook, chapter 8.3 on convertible notes and 8.4 on the 10/20/100 non-bank rules. This question can be answered from the term sheet alone.
+**Question 1  — Are the terms themselves acceptable for a lender?** Judged against the two SECA CLA model term sheets (short form and long form, February 2025, with their drafting notes) and the Swiss Angel Investor Handbook, chapter 8.3 on convertible notes and 8.4 on the 10/20/100 non-bank rules. This question can be answered from the term sheet alone.
 
 **Question 2 — What do these terms do in this company, and to me?** Judged in context: the cap table (what my loan converts into at cap and at discount, and how the existing loans dilute me too), the outstanding CLAs (do my terms match or trail theirs, does an MFN clause exist anywhere, how many lenders does the company have and where do the non-bank rules land once N members join), and the SHA and articles (can the conversion actually be executed: consents, conditional capital or capital band, pre-emption waivers, what accession commits me to).
 
@@ -107,6 +107,11 @@ Proposed first set of lender-angle bands for `config/cla_review/settings.json`. 
 | Parameter | Proposed default | Source | Status |
 |---|---|---|---|
 | Discount, minimum a lender should expect | 15% | Handbook: 15 to 25% most common for angels; SECA band 5 to 30% | to verify |
+<!-- Enrico: If the 10/20 non-bank rules are adhered to, the CLAs will be treated as individual loans rather than a bond for withholding tax purposes, meaning the conversion discount will generally be exempt from withholding tax. Under the previous administrative practice, a CLA with a conversion discount exceeding 20% would no longer have qualified as a classic convertible bond. As a result, the full conversion discount would have been treated as income and thus been subject to withholding tax.
+A significant update, effective on 1 May 2025, now allows a conversion discount of up to 33 1/3% to
+qualify for the classic convertible bond treatment. Companies seeking to structure CLAs in a tax-efficient manner not only enjoy more flexibility owing to this update, but also the continued favourable tax treatment of the classic convertible bond status. When financing with CLAs, it is crucial to avoid triggering withholding tax. Structuring CLAs within the 10/20 non-bank rules remains essential for this purpose, and companies must carefully track the number of non-bank lenders involved.
+An article by Fabienne Limacher discusses the new upper bound of 33% on discount rate, but doesn't provide all the details.
+Reference: https://www.walderwyss.com/assets/content/publications/250522_Newsletter-214_Key-Swiss-Tax-Practice-Update-Welcome-Adjustment-of-Loans.pdf -->
 | Discount, schedule expected when term exceeds | 12 months | SECA note: discount correlates with term, rising schedule advised | placeholder |
 | Valuation cap | required | SECA note: often requested by investors; without it the price is unbounded | rule, no number |
 | Denominator | fully diluted | SECA note: fully diluted is the investor-friendly choice | rule, no number |
