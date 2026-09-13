@@ -20,3 +20,10 @@ as of 30 June 2026
 | Ex-Employees | 50000 | 50000 |  | 0.10 | 0 |
 | Emil Weg | 50000 | 50000 |  | 0.10 | 0 |
 | Total | 1375000 | 800000 | 600000 | 0.10 | 1450000 |
+
+## Share classes
+
+| Share class | Nominal value (CHF) | Votes per share | Issued shares |
+| --- | --- | --- | --- |
+| Common shares | 0.10 | 1 | 800000 |
+| Preferred A shares | 0.10 | 1 | 600000 |

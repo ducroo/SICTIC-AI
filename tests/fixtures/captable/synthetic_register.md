@@ -1,13 +1,19 @@
-# Share Register — Fixture Robotics AG, Zurich
+# Aktienbuch der Fixture Robotics AG, Zürich
 
-as per 31 March 2026
+Stand per 31. März 2026
 
-800,000 registered common shares with a nominal value of CHF 0.10 each and
-500,000 registered preferred A shares with a nominal value of CHF 0.10 each.
+Aktienkapital: CHF 130'000.00, eingeteilt in 800'000 Namenaktien (Stammaktien)
+zu je CHF 0.10 und 500'000 Vorzugsaktien der Serie A zu je CHF 0.10.
 
-| No | Shareholder | Common shares | Preferred A shares | Participation | Acquisition |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Anna Barbara Beispiel, Zurich | 400000 |  | 30.77% | Incorporation, 01.05.2023 |
-| 2 | Bruno Muster, Zug | 300000 |  | 23.08% | Incorporation, 01.05.2023 |
-| 3 | Alpina Ventures AG, Zurich |  | 500000 | 38.46% | Capital increase, 15.06.2025 |
-| 4 | Fixture Robotics AG (treasury), Zurich | 100000 |  | 7.69% | Buy-back, 01.02.2024 |
+<!-- sictic-page:1 -->
+
+| Nr | Aktionär | Zertifikat | Stammaktien | Vorzugsaktien A | Beteiligung | Erwerb | Bemerkung |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Anna Barbara Beispiel, Zürich | 1 | 250'000 | - | 30.77% | Gründung, 01.05.2023 | |
+| | | 2 | 150 ' 000 | | | Kapitalerhöhung, 15.06.2025 | |
+| 2 | Bruno Muster, Zug | 3 | 200'000 300'000 | | 15.38% 23.08% | Gründung, 01.05.2023 | Zukauf 15.06.2025 &#124; Zert. 3 ersetzt |
+
+<!-- sictic-page:2 -->
+
+| 3 | Alpina Ventures AG, Zürich | 4 | n/a | 500 ' 000 | 38.46% | Kapitalerhöhung, 15.06.2025 | Investor Serie A |
+| 4 | Fixture Robotics AG, Zürich (eigene Aktien / treasury) | 5 | 100 000 | - | 7.69% | Rückkauf, 01.02.2024 | # |

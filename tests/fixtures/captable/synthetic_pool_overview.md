@@ -2,6 +2,11 @@
 
 as of 31 March 2026
 
-| Pool | Total | Granted | Unallocated |
+| | | | |
 | --- | --- | --- | --- |
-| ESOP (authorized capital) | 25000 | 0 | 25000 |
+| ESOP (authorized capital) | | | |
+| Pool size (options) | 25000 | # | |
+| Granted | 0 | | |
+| % of shares issued (1,300,000) | 1.92% | | |
+| Vesting | 4 years, 1-year cliff | | |
+| Exercise price (CHF) | 0.10 | | |

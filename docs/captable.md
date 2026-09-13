@@ -104,9 +104,11 @@ Harness commands are `/captable_build` and `/captable`. The report accepts
 See the [build skill](../skills/captable_build/SKILL.md) for stage adapters and
 [report skill](../skills/captable/SKILL.md) for input and reuse contracts.
 The [design](captable-design.md) and [checks](captable-checks.md) explain the
-financial model. Synthetic source fixtures and ground truth are under
-`tests/fixtures/captable/`; pytest covers the model and artifact lifecycle without
-live model calls.
+financial model. The synthetic data room under `tests/fixtures/captable/` plants
+every evidence quirk learned from real rooms with a known answer key; its
+model-free half (`tests/skills/test_captable_fixture_regressions.py`) and a build
+of the `synthcap` dataset are the regression test of this skill. pytest covers the
+model and artifact lifecycle without live model calls.
 
 ## Known limitations / follow-ups
 

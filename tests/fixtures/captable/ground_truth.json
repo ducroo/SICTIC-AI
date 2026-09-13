@@ -1,5 +1,5 @@
 {
-  "_purpose": "Known-answer key for the synthetic captable fixture dataset. Used by recall/accuracy evals and cheap smoke runs. Deliberate absences: valuation_floor and pro_rata_rights do not appear in the CLA and MUST be reported absent, not invented.",
+  "_purpose": "Known-answer key for the synthetic captable fixture dataset (Fixture Robotics AG). Used by the model-free regression suite tests/skills/test_captable_fixture_regressions.py, by live smoke builds and by recall evals. Deliberate absences: valuation_floor and pro_rata_rights do not appear in the CLA and MUST be reported absent, not invented. Never install this file into the data room.",
   "cla": {
     "document": "synthetic_cla.md",
     "status": "executed",
@@ -8,7 +8,17 @@
       {
         "name": "Petra Muster",
         "kind": "individual",
-        "domicile": "CH"
+        "domicile": "CH",
+        "principal_amount": 200000,
+        "shareholder": false
+      },
+      {
+        "name": "Bruno Muster",
+        "kind": "individual",
+        "domicile": "CH",
+        "principal_amount": 50000,
+        "shareholder": true,
+        "note": "Founder co-lender: cla_lender_is_shareholder must report status pass / severity info for him only (register acquisition 2023-05-01 precedes the CLA, so cla_possibly_converted must NOT fire)."
       }
     ],
     "principal_total": 250000,
@@ -56,27 +66,8 @@
     "treasury_common": 100000,
     "option_deltas_plus_pools": 75000,
     "diluted_equation": "800000 + 500000 - 100000 + 75000 = 1275000",
-    "holder_count_min": 6
-  },
-  "register": {
-    "document": "synthetic_register.md",
-    "as_of_date": "2026-03-31",
-    "entries": 4,
-    "name_variant_test": "Anna Barbara Beispiel must reconcile with cap-table 'Anna Beispiel'"
-  },
-  "pool": {
-    "document": "synthetic_pool_overview.md",
-    "total": 25000,
-    "consistent_with_captable": true
-  },
-  "expected_validation": {
-    "issued_total_common": "pass",
-    "issued_total_preferred": "pass",
-    "diluted_equation": "pass",
-    "register_reconciliation": "pass (nearest-dated: March register vs March cap table)",
-    "pool_consistency": "pass (nearest-dated)",
-    "diluted_rowsum": "pass",
-    "shrinking_holder": "warn (planted Bruno anomaly — the ONLY expected cross-version finding)"
+    "holder_count_min": 6,
+    "note": "Unchanged bridge anchor: group rows, an option-only holder, treasury (issued but not diluting), a grantable pool listed as group + single identical member (extract once, merge recorded as an assumption). Share classes are named only by column headers here (a header-only class quote is allowed and evidences no number)."
   },
   "captable_v2": {
     "document": "synthetic_captable_v2.md",
@@ -87,13 +78,141 @@
       "diluted_total": 1375000
     },
     "diluted_equation": "800000 + 600000 - 100000 + 75000 = 1375000",
+    "share_classes": [
+      {"id": "common", "name": "Common shares", "nominal_value": 0.1, "votes_per_share": 1, "issued": 800000},
+      {"id": "preferred_a", "name": "Preferred A shares", "nominal_value": 0.1, "votes_per_share": 1, "issued": 600000}
+    ],
     "expected_cross_snapshot": {
       "shrinking_holder": "Bruno Muster 300000 -> 250000 without documented transfer (deliberate anomaly, must WARN)",
       "shrinking_share_class": "must NOT fire (common unchanged, preferred grew)"
     },
-    "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both source versions must remain in the table-extraction JSON. expected_cross_snapshot describes the comparison primitive, not a persisted-output-history check.",
+    "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both source versions must remain in the table-extraction JSON. The share-class table below the holder table gives share_classes real source rows (issue #70's first victim was a class quoted from nothing).",
     "cumulative_invested_chf": 1450000,
     "note_investments": "Alpina 1,000,000 + Helvetia 450,000; deliberately != issued share count 1,400,000 (stamp-duty de-spoofing)"
+  },
+  "register": {
+    "document": "synthetic_register.md",
+    "as_of_date": "2026-03-31",
+    "layout": "German OCR-style Aktienbuch: one table continued across a <!-- sictic-page:2 --> marker (the evidence check reads it as one table), certificate rows, a stacked history cell, padded apostrophes, a stray-space numeral, an HTML-entity pipe (&#124;) inside a cell, a '#' cell, and dash / blank / 'n/a' cells that mean 0 / null / null.",
+    "issued_for_percentages": 1300000,
+    "entries": [
+      {
+        "name": "Anna Barbara Beispiel",
+        "current_common": 400000,
+        "current_preferred": 0,
+        "current_participation_pct": 30.77,
+        "first_acquisition_date": "2023-05-01",
+        "last_change_date": "2025-06-15",
+        "evidence": "sum of two certificate rows: 250'000 on the named row + 150 ' 000 on the nameless continuation row that opens page 2 (both rows must be quoted; 250000 alone is a rejected subset); '-' under Vorzugsaktien evidences 0",
+        "name_variant_test": "must reconcile with cap-table 'Anna Beispiel' (middle name and domicile suffix)"
+      },
+      {
+        "name": "Bruno Muster",
+        "current_common": 300000,
+        "current_preferred": null,
+        "current_participation_pct": 23.08,
+        "first_acquisition_date": "2023-05-01",
+        "last_change_date": "2025-06-15",
+        "evidence": "stacked history cell '200'000 300'000' with '15.38% 23.08%': the LAST figure is current (the evidence check accepts either stated figure; register_reconciliation catches 200000); blank Vorzugsaktien cell is null, never 0; Bemerkung carries '&#124;' which a quote may write as '|'"
+      },
+      {
+        "name": "Alpina Ventures AG",
+        "current_common": null,
+        "current_preferred": 500000,
+        "current_participation_pct": 38.46,
+        "first_acquisition_date": "2025-06-15",
+        "last_change_date": null,
+        "evidence": "'n/a' under Stammaktien is null, never 0; '500 ' 000' (apostrophe padded by OCR) reads 500000"
+      },
+      {
+        "name": "Fixture Robotics AG (eigene Aktien / treasury)",
+        "current_common": 100000,
+        "current_preferred": 0,
+        "current_participation_pct": 7.69,
+        "first_acquisition_date": "2024-02-01",
+        "last_change_date": null,
+        "evidence": "'100 000' (stray space) reads 100000 and never 1005 or 100; the '#' Bemerkung cell carries nothing; must reconcile with cap-table 'Fixture Robotics AG Treasury'"
+      }
+    ]
+  },
+  "pools": [
+    {
+      "document": "synthetic_pool_overview.md",
+      "as_of_date": "2026-03-31",
+      "kind": "esop",
+      "label": "ESOP (authorized capital)",
+      "total": 25000,
+      "granted": 0,
+      "unallocated": 25000,
+      "layout": "sheet export: an all-empty first row declared as the header, the pool named on a section row, key-value rows, a '#' cell, a label carrying a number in parentheses ('% of shares issued (1,300,000)') that is NOT the pool size, granted stated as a literal 0, unallocated derived (25000 - 0)"
+    },
+    {
+      "document": "synthetic_esop_plan.md",
+      "as_of_date": "2026-02-15",
+      "kind": "esop",
+      "label": "Employee Stock Option Plan 2026",
+      "total": 25000,
+      "granted": 0,
+      "unallocated": 25000,
+      "layout": "prose plan summary: the pool is named by the title heading and the purpose sentence, 'Date:' is split from its value by a blank line, the key terms are a wrapped bullet list (a quote may join a wrapped bullet on one line); its date precedes both cap tables so it reconciles against the March version"
+    }
+  ],
+  "decoy": {
+    "fixture_logo.ai": "design asset placed in the data room: ingestion must skip it (IGNORED_EXTENSIONS), so it is never parsed nor classified"
+  },
+  "expected_validation": {
+    "issued_total_common": "pass",
+    "issued_total_preferred_a": "pass",
+    "diluted_equation": "pass",
+    "diluted_rowsum": "pass",
+    "register_reconciliation": "pass (nearest-dated: March register vs March cap table; 0 mismatches, no register_only_holder)",
+    "pool_consistency": "pass (3 pool figures agree: cap table, pool overview, plan)",
+    "cla_lender_is_shareholder": "pass / severity info, for Bruno Muster only",
+    "cla_possibly_converted": "must NOT fire",
+    "nominal_floor": "must NOT fire (cap-implied price 5.8 CHF > nominal 0.10)",
+    "shrinking_holder": "warn (planted Bruno anomaly, the ONLY expected cross-version finding)",
+    "shrinking_share_class": "must NOT fire"
+  },
+  "coverage": {
+    "_purpose": "Which learning each planted case regression-tests; the model-free half lives in tests/skills/test_captable_fixture_regressions.py.",
+    "retry_only_failed_documents": "unit tests only (tests/skills/test_captable_build.py); the fixture cannot make a document fail deterministically",
+    "correction_feedback_names_closest_line_and_stated_numbers": "tests/skills/test_captable_table_evidence.py; visible in the build log when a quote is rejected",
+    "blank_or_absent_is_null_never_zero": "register: Bruno's blank Vorzugsaktien cell, Alpina's 'n/a' Stammaktien cell",
+    "dash_or_literal_zero_evidences_zero": "register: '-' cells of Anna and the treasury; pool overview 'Granted | 0'",
+    "sum_of_certificate_rows_never_a_subset": "register: Anna's two certificate rows",
+    "nameless_continuation_rows_belong_to_the_named_row_above": "register: Anna's second row (page 2)",
+    "page_marker_inside_a_table": "register: <!-- sictic-page:2 --> between Bruno's and Alpina's rows",
+    "stacked_history_cell_last_figure_current": "register: Bruno",
+    "padded_apostrophes_and_stray_spaces_inside_a_numeral": "register: '150 ' 000', '500 ' 000', '100 000'",
+    "digits_never_joined_across_cells": "register: certificate numbers next to share counts (1005 is not a count)",
+    "html_entity_pipe_inside_a_cell": "register: Bruno's Bemerkung",
+    "punctuation_only_cells_carry_nothing": "register: treasury '#'; pool overview 'Pool size | 25000 | #'",
+    "no_whole_document_name_matching": "register: quoting Bruno's row for Anna is ignored and reported",
+    "percentage_and_certificate_columns_never_evidence_counts": "register: Beteiligung, Nr, Zertifikat columns",
+    "german_headers_bind_classes": "register: Stammaktien / Vorzorzugsaktien A columns (Stammaktien cannot evidence current_preferred)",
+    "pool_named_by_a_section_row_of_its_sheet": "pool overview",
+    "empty_first_row_declared_as_header": "pool overview",
+    "label_with_a_number_is_not_the_figure": "pool overview: '% of shares issued (1,300,000)'",
+    "derived_third_pool_figure": "pool overview: unallocated = 25000 - 0",
+    "pool_named_by_a_heading_and_a_wrapped_bullet_list": "plan",
+    "date_split_from_its_label_by_a_blank_line": "plan: 'Date:' / '15 February 2026'",
+    "share_classes_with_real_source_rows": "cap table v2: share-class table (nominal value, votes per share)",
+    "header_only_class_quote": "cap table v1: classes named only by column headers",
+    "nearest_dated_reconciliation": "register and pool overview dated March, plan dated February, all against the March cap table",
+    "name_variants": "register: 'Anna Barbara Beispiel, Zürich' vs 'Anna Beispiel'; 'Fixture Robotics AG, Zürich (eigene Aktien / treasury)' vs 'Fixture Robotics AG Treasury'",
+    "insider_bridge_loan": "CLA: co-lender Bruno Muster is a founder shareholder",
+    "multi_lender_cla_with_per_lender_amounts": "CLA: 200,000 + 50,000 = 250,000",
+    "anti_laziness_missing_terms": "CLA: valuation_floor and pro_rata_rights absent",
+    "shrinking_holder_without_transfer_document": "cap table v1 -> v2: Bruno 300000 -> 250000",
+    "design_assets_ignored_by_ingestion": "fixture_logo.ai"
+  },
+  "not_exercised": {
+    "projected_year_columns": "period selection across '2025 / 2026 (projected)' columns is an open gap (Lucas's finding 4); not planted because it makes the current column ambiguous",
+    "subsidiary_register": "a register of a subsidiary is not distinguished from the parent's (open gap)",
+    "nameless_continuation_rows_split_by_a_running_page_header": "when prose sits between the page marker and the continued table, the continuation rows start a new table and lose their owner (open gap; the real OCR registers had the marker directly between table lines)",
+    "phantom_or_cash_settled_pools": "unit test only (SHEET_WITH_SECTIONS in tests/skills/test_captable_table_evidence.py)",
+    "dangling_apostrophe_split_into_the_next_cell": "unit test only (OCR_REGISTER); planting it in a reconciling register would make the class column ambiguous",
+    "safe_harbor_interest_cap_qefr_new_money_minimum_maturity_conversion_price": "plain CLA terms; these fields come back null, which is correct"
   },
   "esignature": {
     "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)"
