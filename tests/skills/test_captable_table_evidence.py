@@ -204,6 +204,32 @@ def test_quoted_bullet_list_spans_adjacent_source_lines():
     assert _review_table_evidence(document)({"pools": [row]}).problems
 
 
+def test_escaped_pipe_inside_a_cell_may_be_quoted_as_a_cell_boundary():
+    document = ("| No | Holder | Note | Shares |\n| --- | --- | --- | --- |\n"
+                "| 3 | Alice Example | 757 15. &#124;I transfer of 85 shares | 85 |")
+    assert not review(document, "| 3 | Alice Example | 757 15. |I transfer of 85 shares | 85 |", 85, name="Alice Example")
+    assert review(document, "| 3 | Alice Example | 757 15. |I transfer of 85 shares | 85 |", 124, name="Alice Example")
+
+
+def test_share_class_named_only_by_year_headers_may_quote_the_header():
+    row = {"id": "shares", "name": "Shares", "nominal_value": None, "votes_per_share": None,
+           "quote": "| Shareholder | 2024 (shares) | 2025 (shares) | 2026 (plan) | % |"}
+    assert not _review_captable(YEAR_SHEET)({"share_classes": [row]}).problems
+    row["name"] = "Preferred"
+    assert _review_captable(YEAR_SHEET)({"share_classes": [row]}).problems
+
+
+def test_third_pool_figure_may_be_derived_from_two_stated_ones():
+    document = "| Pool | Size | Granted |\n| --- | --- | --- |\n| ESOP 2024 | 10000000 | 1000000 |"
+    row = {"kind": "esop", "label": "ESOP 2024", "total": 10000000, "granted": 1000000, "unallocated": 9000000,
+           "quote": "| ESOP 2024 | 10000000 | 1000000 |"}
+    assert not _review_table_evidence(document)({"pools": [row]}).problems
+    row["unallocated"] = 8000000
+    assert _review_table_evidence(document)({"pools": [row]}).problems
+    row["unallocated"] = None
+    assert not _review_table_evidence(document)({"pools": [row]}).problems
+
+
 def test_dropped_middle_cell_in_a_quoted_row_is_tolerated():
     document = "| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n| 1 | Alice Example | 12 | 100 |"
     assert not review(document, "| 1 | Alice Example | 100 |", 100, name="Alice Example")

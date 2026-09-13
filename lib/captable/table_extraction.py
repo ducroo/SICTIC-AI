@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 # Extracted holdings may deviate from the table's own totals by at most this
 # share (covers rounding rows); larger gaps mean silently dropped rows.
 COMPLETENESS_TOLERANCE = 0.005
+POOL_FIELDS = frozenset({"total", "granted", "unallocated"})
 
 
 def _numbers_in_quote(quote: str) -> set[float]:
@@ -50,11 +51,21 @@ def _review_evidence(output: dict, document_text: str) -> list[str]:
             for line in evidence.ignored_rows()[:2]
         )
 
+        def derived(value, field: str) -> bool:
+            """The pool prompt asks to derive the third pool figure from two stated ones."""
+            if field not in POOL_FIELDS or not all(isinstance(row.get(f), (int, float)) for f in POOL_FIELDS - {field}):
+                return False
+            total, granted, unallocated = (row.get(f) for f in ("total", "granted", "unallocated"))
+            expected = {"total": granted + unallocated, "granted": total - unallocated, "unallocated": total - granted}[field]
+            return abs(value - expected) < 1e-6 and all(
+                evidence.evidenced(row[f], f, None) for f in POOL_FIELDS - {field}
+            )
+
         def check_numbers(value, field: str = "", class_id: str | None = None) -> None:
             if isinstance(value, bool):
                 return
             if isinstance(value, (int, float)):
-                if not evidence.evidenced(value, field, class_id):
+                if not evidence.evidenced(value, field, class_id) and not derived(value, field):
                     problems.append(
                         f"{label}.{field}: numeric value {value} is not evidenced by the "
                         f"quoted source cells ({evidence.describe_numbers(field, class_id)})."

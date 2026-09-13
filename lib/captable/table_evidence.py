@@ -68,6 +68,14 @@ TABLE_SCOPE = "table"        # share classes: any line of the same table
 DOCUMENT_HEADINGS = "headings"  # pools: additionally headings and the title block
 
 
+_ENTITY = re.compile(r"&#\d+;|&#x[0-9a-fA-F]+;|&[a-zA-Z]+;")
+
+
+def _clean_cell(cell: str) -> str:
+    """Drop HTML entities converters leave in cells ("&#124;" for a pipe)."""
+    return _ENTITY.sub(" ", cell)
+
+
 def numbers(text: str) -> list[Decimal]:
     """Numerals of one cell or passage, repaired only within that text.
 
@@ -101,6 +109,7 @@ def numbers(text: str) -> list[Decimal]:
 
 def cell_values(cell: str) -> list[Decimal]:
     """Numbers stated by one source cell; an explicit marker states zero."""
+    cell = _clean_cell(cell)
     if cell.strip().casefold() in _ZERO_MARKERS:
         return [Decimal(0)]
     return numbers(cell)
@@ -348,7 +357,7 @@ class Source:
 
 def _cell_key(cell: str) -> str:
     """Comparable form of a cell: alphanumerics, or the marker itself."""
-    stripped = cell.strip()
+    stripped = _clean_cell(cell).strip()
     if stripped.casefold() in _ZERO_MARKERS:
         return stripped
     return normalize_for_matching(stripped)
@@ -370,12 +379,17 @@ def _cells_match_row(quoted: list[str], row: SourceLine) -> bool:
     keys = [key for key in (_cell_key(cell) for cell in quoted) if key]
     if not keys:
         return False
-    position = 0
+    sources = [_cell_key(cell) for cell in row.cells]
+    position = 0      # next source cell to try
+    current = ""      # source cell matched last; a split cell may match several quoted cells
     for key in keys:
-        while position < len(row.cells):
-            source = _cell_key(row.cells[position])
+        if current and key not in _ZERO_MARKERS and key in current:
+            continue
+        while position < len(sources):
+            source = sources[position]
             position += 1
             if source and (key == source or (key not in _ZERO_MARKERS and key in source)):
+                current = source
                 break
         else:
             return False
@@ -499,7 +513,13 @@ class Evidence:
     def identity_found(self) -> bool:
         if self.identity is None:
             return True
-        return bool(self.rows) or any(self._prose_identified(item) for item in self.prose)
+        if self.rows or any(self._prose_identified(item) for item in self.prose):
+            return True
+        # A share class is a column concept: quoting only the header that
+        # names it identifies the class (and evidences no number).
+        return self.scope == TABLE_SCOPE and not any(item.is_row for item in self.resolved) and any(
+            identity_in_text(self.identity, line.text) for line in self.source.lines if line.kind == "header"
+        )
 
     def _prose_identified(self, item: Resolved) -> bool:
         if self.identity is None:
