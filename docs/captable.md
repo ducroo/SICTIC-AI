@@ -36,11 +36,22 @@ another skill artifact.
 Build classifies parsed documents, extracts convertible loans and cap-table,
 register and pool evidence, then reconciles and consolidates them. Required
 extraction failures raise without saving partial results. Every extracted table
-row carries a verbatim quote: each quoted line must appear in the source, a
-reported total must equal a sum of quoted lines, a zero may be evidenced by a
-dash or empty cell, and the holder name must appear in the source. The term
-checklist and assessment settings live in `config/captable_build/`. Assessment, aggregation and
-signature scanning are recomputed when consolidation needs rebuilding.
+row carries a verbatim quote that `lib/captable/table_evidence.py` resolves
+line by line: a quoted table row must match one source row cell by cell (cells
+may be dropped, never crossed), a quoted sentence must sit within a few
+adjacent source lines. Numbers are read from the resolved source cells, not
+from the quote: a value must equal a cell of a row that names the holder (in a
+cell, through the named row above a run of nameless rows, a column header, a
+section row, or the text directly above the table), or the sum of one column
+over every quoted row of that holder. Subsets are never summed, digits are
+never joined across cells, only a dash or a literal 0 evidences zero, and a
+blank cell or absent column evidences nothing, so the model must report null.
+Columns whose header names certificates, dates, percentages, money or the other
+share class never evidence a share count. Rejections tell the model which
+numbers the quoted cells state and the closest source line to an unmatched
+fragment. The term checklist and assessment settings live in
+`config/captable_build/`. Assessment, aggregation and signature scanning are
+recomputed when consolidation needs rebuilding.
 
 Validation covers issued and diluted totals, holder row sums, register and pool
 reconciliation, nominal floors and loan lifecycle questions. Register evidence is

@@ -81,11 +81,11 @@ def test_evidence_rejects_fabricated_rows(mutation):
 
 def test_header_plus_later_row_quote_is_verbatim_per_line():
     """The prompt asks for headers with a row; only the first row is adjacent to them."""
-    document = "| Group | Nominal |\n| --- | --- |\n| Founders | 0.10 |\n| Investors | 0.10 |"
-    quote = "| Group | Nominal |\n| Investors | 0.10 |"
-    row = {"name": "Investors", "current_common": 0.1, "quote": quote}
+    document = "| Group | Shares |\n| --- | --- |\n| Founders | 100 |\n| Investors | 100 |"
+    quote = "| Group | Shares |\n| Investors | 100 |"
+    row = {"name": "Investors", "current_common": 100, "quote": quote}
     assert not _review_table_evidence(document)({"entries": [row]}).problems
-    row["quote"] = "| Group | Nominal |\n| Invented | 0.10 |"
+    row["quote"] = "| Group | Shares |\n| Invented | 100 |"
     assert _review_table_evidence(document)({"entries": [row]}).problems
 
 

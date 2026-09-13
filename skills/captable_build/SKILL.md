@@ -54,6 +54,14 @@ Keep ownership totals, cross-document reconciliation, duplicate-record checks
 and financial consistency in domain code. Schema validation does not establish
 those relationships or the accuracy of extracted evidence.
 
+Extracted table rows are reviewed by `lib/captable/table_evidence.py` before
+the JSON is accepted: every quoted line must resolve to one source row or
+passage, numbers must come from source cells of rows that name the holder,
+sums cover every quoted row of a holder in one column, zero needs a dash or a
+literal 0, and blanks or absent columns are null. Rejections are fed back to
+the model with the numbers the quoted cells state and the closest source line;
+the evidence rules are described in `docs/captable.md`.
+
 ## Side effects and failure behavior
 
 Generation writes only the managed JSON insights and shared freshness metadata.
@@ -82,6 +90,7 @@ The direct build CLI also retains `--model` for explicit test-model overrides.
 
 - [Implementation](captable_build.py)
 - [Insight objects](../../lib/captable/insights.py)
+- [Table evidence rules](../../lib/captable/table_evidence.py)
 - [Artifact schema composition](../../lib/captable/schema.py)
 - [Artifact schemas](../../config/captable_build/artifact_schemas.json)
 - [Term schema](../../config/captable_build/cla_terms.md)

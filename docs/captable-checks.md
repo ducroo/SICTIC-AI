@@ -210,6 +210,15 @@ which sections were searched — and every found value must carry a verbatim
 quote that we locate mechanically in the document. Where the quote does not
 match, the extraction is rejected and redone.
 
+**Table rows.** Cap-table, register and pool rows follow the same principle
+at cell level: the quoted row is matched cell by cell against one source row,
+every number is read from a source cell of a row that names the holder, a
+holder's total is the sum of one column over all its quoted rows, a zero needs
+a dash or a literal 0 in the cell, and a blank cell or an absent column is
+reported as null rather than 0. When a row is rejected, the model is told which
+numbers the quoted cells actually state and which source line comes closest to
+an unmatched fragment, so the retry corrects the specific mistake.
+
 ## Part 2 — What we assess per agreement, and check across all agreements
 
 The per-agreement assessments are plain arithmetic over the extracted values

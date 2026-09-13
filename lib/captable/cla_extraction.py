@@ -37,6 +37,24 @@ def _quote_found(quote: str, normalized_text: str) -> bool:
     )
 
 
+def _closest_line(quote: str, document_text: str) -> str | None:
+    """The source line most similar to an unmatched quote, for feedback."""
+    import difflib
+
+    key = normalize_for_matching(quote)
+    candidates = {
+        normalize_for_matching(line): line.strip()
+        for line in document_text.splitlines() if line.strip()
+    }
+    matches = difflib.get_close_matches(key, list(candidates), n=1, cutoff=0.6)
+    return candidates[matches[0]] if matches else None
+
+
+def _quote_hint(quote: str, document_text: str) -> str:
+    closest = _closest_line(quote, document_text)
+    return f" The closest source line is {closest!r}." if closest else ""
+
+
 def _needs_quote(value: Any) -> bool:
     """True when a value is a positive claim that requires evidence."""
     if value is None or value is False:
@@ -96,6 +114,7 @@ def review_cla_extraction(
                     f"{field}: quote not found verbatim in the document "
                     f"text: {quote!r}. Copy the snippet exactly as it "
                     "appears (whitespace differences are tolerated)."
+                    + _quote_hint(quote, document_text)
                 )
             if _is_absence_claim(field, value, quote, presence_fields):
                 absence_fields.append(field)
@@ -108,6 +127,7 @@ def review_cla_extraction(
                 problems.append(
                     f"lenders[{lender.get('name')!r}]: quote not found "
                     f"verbatim in the document text: {quote!r}."
+                    + _quote_hint(quote, document_text)
                 )
 
         covered = {

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
-import math
-import re
 
-from lib.captable.aggregation import normalize_lender_name
-from lib.captable.documents import normalize_for_matching
+from lib.captable.table_evidence import (
+    DOCUMENT_HEADINGS, ROW_SCOPE, TABLE_SCOPE, QuoteError, Source, numbers, resolve_quote,
+)
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
@@ -20,119 +19,66 @@ COMPLETENESS_TOLERANCE = 0.005
 
 
 def _numbers_in_quote(quote: str) -> set[float]:
-    """Recognize plain and commonly grouped/decimal source numerals."""
-    # Thousands separators: apostrophe, typographic apostrophe, narrow or
-    # plain spaces, and PDF conversions that pad the apostrophe with spaces
-    # ("145 ' 832"). Only join when exactly three digits follow.
-    quote = re.sub(r"(?<=\d)[ \u00a0\u202f]*['\u2019][ \u00a0\u202f]*(?=\d{3}(?:\D|$))", "", quote)
-    quote = re.sub(r"(?<=\d)[ \u00a0\u202f](?=\d{3}(?:\D|$))", "", quote)
-    values = set()
-    for token in re.findall(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*", quote):
-        variants = [token.replace(",", ""), token.replace(".", "").replace(",", ".")]
-        for variant in variants:
-            try:
-                values.add(float(variant))
-            except ValueError:
-                pass
-    return values
-
-
-_IMPLICIT_ZERO = re.compile(r"(?<![\w.])(?:-|\u2013|\u2014|n/?a|none|nil|keine|0)(?![\w.])|\|\s*\|", re.IGNORECASE)
-_MAX_SUBSET_SUMS = 20000
-
-
-def _has_implicit_zero_marker(quote: str) -> bool:
-    """A dash, 'none', an empty table cell or a literal 0 stands for zero."""
-    return bool(_IMPLICIT_ZERO.search(quote))
-
-
-def _subset_sums(numbers: set[float]) -> set[float]:
-    """Sums of two or more quoted numbers, for values reported as totals.
-
-    Bounded so a quote full of percentages and dates cannot explode the set.
-    """
-    positive = sorted(n for n in numbers if n > 0)
-    reachable: set[int] = {0}
-    for number in positive:
-        cents = round(number * 100)
-        reachable |= {total + cents for total in reachable}
-        if len(reachable) > _MAX_SUBSET_SUMS:
-            break
-    singles = {round(n * 100) for n in positive}
-    return {total / 100 for total in reachable if total and total not in singles}
-
-
-def _identity_in_source(identity: str, normalized_document: str, document_tokens: set[str]) -> bool:
-    """The name appears contiguously, or every token of a multi-token name does."""
-    if normalize_for_matching(identity) in normalized_document:
-        return True
-    tokens = normalize_lender_name(identity).split()
-    return len(tokens) >= 2 and all(token in document_tokens for token in tokens)
+    """Recognize source numerals cell by cell, never joining across cells."""
+    return {float(value) for cell in quote.split("|") for value in numbers(cell)}
 
 
 def _review_evidence(output: dict, document_text: str) -> list[str]:
-    normalized = normalize_for_matching(document_text)
-    document_tokens = set(normalize_lender_name(document_text).split())
-    problems = []
+    """Every extracted row must be evidenced by its quote; see table_evidence."""
+    source = Source(document_text)
+    problems: list[str] = []
 
-    def check(label, row, *, identity=None):
-        quote = row.get("quote") or ""
-        # A quote is a list of source fragments, not one contiguous block:
-        # the prompt asks for the column header next to a row, a summed
-        # value needs every summed line, and converted PDFs put page
-        # markers and merged cells between lines. Each fragment (split on
-        # line breaks and ellipses) must appear verbatim on its own.
-        fragments = [
-            normalize_for_matching(fragment)
-            for fragment in re.split(r"\r?\n|\.\.\.|\u2026", quote)
-        ]
-        fragments = [fragment for fragment in fragments if fragment]
-        if not fragments or any(fragment not in normalized for fragment in fragments):
-            problems.append(f"{label}: quote missing or not found verbatim in source.")
+    def check(label: str, row: dict, *, identity: str | None = None, scope: str = ROW_SCOPE) -> None:
+        try:
+            evidence = resolve_quote(row.get("quote") or "", source, identity, scope)
+        except QuoteError as error:
+            problems.append(f"{label}: {error}")
             return
-        # Names often sit in a merged cell above the quoted certificate or
-        # holding line, and converted PDFs interleave name tokens with
-        # certificate numbers; the source as a whole must still contain
-        # the name, contiguously or token by token.
-        if identity and not _identity_in_source(str(identity), normalized, document_tokens):
-            problems.append(f"{label}: identity {identity!r} is not found in the source.")
-        quoted_numbers = _numbers_in_quote(quote)
-        quoted_sums = _subset_sums(quoted_numbers)
-        zero_marker = _has_implicit_zero_marker(quote)
-        digit_stream = re.sub(r"\D", "", quote)
+        if not evidence.identity_found():
+            problems.append(
+                f"{label}: identity {identity!r} is not named by the quoted source rows, "
+                "the named row above a run of nameless rows, a column header, a section "
+                "row of the same table, or the text directly above the table. Quote the "
+                "source row that names it, keeping the source wording, or drop the row."
+            )
+            return
 
-        def evidenced(value: float) -> bool:
-            if any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
-                return True
-            # PDF conversion sometimes breaks a numeral with a stray space
-            # ("21'66 6"); a whole number of four or more digits is accepted
-            # when its digits appear consecutively in the quote.
-            if float(value).is_integer() and value >= 1000 and str(int(value)) in digit_stream:
-                return True
-            # A dash, "none" or an empty cell in the source is how a zero is
-            # written; the row may report it as 0.
-            if value == 0 and zero_marker:
-                return True
-            # A holding split over several source lines is reported as their
-            # sum; accept it when the summed lines are all quoted.
-            return any(math.isclose(value, total, rel_tol=1e-9, abs_tol=0.005) for total in quoted_sums)
+        ignored = "".join(
+            f" The quoted row {line.text[:120]!r} does not name {identity!r} (not in its cells, "
+            "in the named row above its nameless rows, in a header, a section row or the text "
+            "above the table) and was ignored."
+            for line in evidence.ignored_rows()[:2]
+        )
 
-        def check_numbers(value):
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if not evidenced(value):
-                    problems.append(f"{label}: numeric value {value} is not evidenced by its quote.")
+        def check_numbers(value, field: str = "", class_id: str | None = None) -> None:
+            if isinstance(value, bool):
+                return
+            if isinstance(value, (int, float)):
+                if not evidence.evidenced(value, field, class_id):
+                    problems.append(
+                        f"{label}.{field}: numeric value {value} is not evidenced by the "
+                        f"quoted source cells ({evidence.describe_numbers(field, class_id)})."
+                        f"{ignored} Quote the complete source row(s) whose cells state this "
+                        "value for this holder; when the source does not state it, report "
+                        "null and an assumption. A blank cell or an absent column is null, never 0."
+                    )
             elif isinstance(value, dict):
                 for key, child in value.items():
                     if key != "quote":
-                        check_numbers(child)
+                        check_numbers(child, key, value.get("class_id", class_id))
             elif isinstance(value, list):
                 for child in value:
-                    check_numbers(child)
+                    check_numbers(child, field, class_id)
+
         check_numbers(row)
 
+    # A share class is named by its table (a column, a label row); a pool
+    # by its letter's heading; a holder only by rows that carry its name.
+    scopes = {"share_classes": TABLE_SCOPE, "pools": DOCUMENT_HEADINGS}
     for collection in ("stakeholders", "share_classes", "entries", "pools"):
         for index, row in enumerate(output.get(collection, [])):
-            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"))
+            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"),
+                  scope=scopes.get(collection, ROW_SCOPE))
     for field in ("as_of_date", "fully_diluted_definition"):
         entry = output.get(field) or {}
         if entry.get("value") not in (None, "unstated"):
@@ -149,8 +95,6 @@ def _review_table_evidence(document_text: str):
 
 
 def _review_captable(document_text: str):
-    normalized_text = normalize_for_matching(document_text)
-
     def reviewer(output: Any) -> Review[Any]:
         problems: list[str] = _review_evidence(output, document_text)
 
