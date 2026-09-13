@@ -134,9 +134,9 @@ Industry standard range: Typical discount rates run 10–30%, with 20% being the
 25–30%: longer-dated instruments, higher-risk situations, or as a step-up mechanism the longer the loan is outstanding
 Rationale:
 The discount exists to compensate the lender for being first-money-in and taking risk before the company has an external, arm's-length price set by a priced equity round. A few components typically justify the number:
-- Time value / illiquidity — the investor's cash is locked up with no way to mark it, often for a year or more, with no interest paid in cash (interest usually just accrues and converts too).
-- Risk premium for pre-price uncertainty — the lender is betting on a valuation being set later by someone else, and bears the risk that the company deteriorates before that happens.
-- Reward for coming in early — economically, the discount is meant to approximate the return a lender "should" get for bearing seed-stage risk without the negotiating leverage (or information) a priced-round investor has.
+Time value / illiquidity — the investor's cash is locked up with no way to mark it, often for a year or more, with no interest paid in cash (interest usually just accrues and converts too).
+Risk premium for pre-price uncertainty — the lender is betting on a valuation being set later by someone else, and bears the risk that the company deteriorates before that happens.
+Reward for coming in early — economically, the discount is meant to approximate the return a lender "should" get for bearing seed-stage risk without the negotiating leverage (or information) a priced-round investor has.
 
 [^2]: Enrico:
 Variants seen in practice:
