@@ -96,7 +96,8 @@
     ],
     "expected_cross_snapshot": {
       "shrinking_holder": "Bruno Muster 300000 -> 250000 without documented transfer (deliberate anomaly, must WARN)",
-      "shrinking_share_class": "must NOT fire (common unchanged, preferred grew)"
+      "shrinking_share_class": "must NOT fire (common unchanged, preferred grew)",
+      "_note": "check_cross_snapshot(March, June); the build itself does not run it"
     },
     "note": "Supersedes synthetic_captable.md as the latest current_cap_table; both source versions must remain in the table-extraction JSON. The share-class table below the holder table gives share_classes real source rows (issue #70's first victim was a class quoted from nothing).",
     "cumulative_invested_chf": 1450000,
@@ -182,8 +183,9 @@
     "cla_lender_is_shareholder": "pass / severity info, for Bruno Muster only",
     "cla_possibly_converted": "must NOT fire",
     "nominal_floor": "must NOT fire (cap-implied price 5.8 CHF > nominal 0.10)",
-    "shrinking_holder": "warn (planted Bruno anomaly, the ONLY expected cross-version finding)",
-    "shrinking_share_class": "must NOT fire"
+    "_note": "The seven checks above are the complete validation list of a build (a build compares no cap-table versions). The two cross-version entries below describe check_cross_snapshot over the March and June versions, exercised by the model-free suite only.",
+    "shrinking_holder": "warn (planted Bruno anomaly; cross-version primitive only, never in a build's validation list)",
+    "shrinking_share_class": "must NOT fire (cross-version primitive)"
   },
   "coverage": {
     "_purpose": "Which learning each planted case regression-tests; the model-free half lives in tests/skills/test_captable_fixture_regressions.py.",
