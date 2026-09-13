@@ -145,9 +145,9 @@ Others use a simpler two-tier structure: e.g., 10% if converted within the first
 Some cap the maximum discount at 20-25% regardless of how long the loan is outstanding, to avoid it becoming punitive if the round is significantly delayed for reasons outside anyone's control.
 The "minimum period" alternative
 Rationale for the specific breakpoints:
-- Early months (0–3, sometimes 0–6): 0% or minimal discount — the lender has taken on essentially no risk if the priced round closes almost immediately; a full discount here would be a windfall unrelated to any risk borne (minimum-period cutoffs)
-- Mid-range (6–12 months): 15-20% — this is the "modal" scenario most loans are priced around, since most bridge loans are structured with a 12-18 month expected runway to the next round.
-- Long tail (18+ months): 25-30% or capped — compensates for extended risk, but many founders push to cap it rather than let it escalate indefinitely, since an open-ended schedule can create awkward incentives (e.g., a lender arguably benefiting from the round being delayed).
+Early months (0–3, sometimes 0–6): 0% or minimal discount — the lender has taken on essentially no risk if the priced round closes almost immediately; a full discount here would be a windfall unrelated to any risk borne (minimum-period cutoffs)
+Mid-range (6–12 months): 15-20% — this is the "modal" scenario most loans are priced around, since most bridge loans are structured with a 12-18 month expected runway to the next round.
+Long tail (18+ months): 25-30% or capped — compensates for extended risk, but many founders push to cap it rather than let it escalate indefinitely, since an open-ended schedule can create awkward incentives (e.g., a lender arguably benefiting from the round being delayed).
 
 
 
