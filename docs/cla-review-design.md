@@ -113,17 +113,6 @@ qualify for the classic convertible bond treatment. Companies seeking to structu
 An article by Fabienne Limacher discusses the new upper bound of 33% on discount rate, but doesn't provide all the details.
 Reference: https://www.walderwyss.com/assets/content/publications/250522_Newsletter-214_Key-Swiss-Tax-Practice-Update-Welcome-Adjustment-of-Loans.pdf -->
 | Discount, schedule expected when term exceeds | 12 months | SECA note: discount correlates with term, rising schedule advised | placeholder |
-<!-- Enrico:
-Variants seen in practice:
-Some agreements use quarterly steps (0%, 5%, 10%, 15%, 20%, 25% every 3 months) for a smoother ramp.
-Others use a simpler two-tier structure: e.g., 10% if converted within the first 12 months, 20% thereafter.
-Some cap the maximum discount at 20-25% regardless of how long the loan is outstanding, to avoid it becoming punitive if the round is significantly delayed for reasons outside anyone's control.
-The "minimum period" alternative
-Rationale for the specific breakpoints:
-- Early months (0–3, sometimes 0–6): 0% or minimal discount — the lender has taken on essentially no risk if the priced round closes almost immediately; a full discount here would be a windfall unrelated to any risk borne (minimum-period cutoffs)
-- Mid-range (6–12 months): 15-20% — this is the "modal" scenario most loans are priced around, since most bridge loans are structured with a 12-18 month expected runway to the next round.
-- Long tail (18+ months): 25-30% or capped — compensates for extended risk, but many founders push to cap it rather than let it escalate indefinitely, since an open-ended schedule can create awkward incentives (e.g., a lender arguably benefiting from the round being delayed).
--->
 | Valuation cap | required | SECA note: often requested by investors; without it the price is unbounded | rule, no number |
 | Denominator | fully diluted | SECA note: fully diluted is the investor-friendly choice | rule, no number |
 | Qualified-financing threshold, minimum | 1x the aggregate loan amount | SECA note: not too low, or a tiny round converts the loans | placeholder |
