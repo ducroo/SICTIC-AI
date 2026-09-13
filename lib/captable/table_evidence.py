@@ -12,7 +12,13 @@ rows that name the holder: in a cell, through the row that owns a run of
 nameless rows above, through a column header, through a section row of the
 same table, or in the text directly above the table. Additive fields sum
 every such row in one column, never a subset. The whole document is never
-searched for a name.
+searched for a holder's name. Share classes and pools are described across
+the rows of one sheet, so once a quoted row of a table names them the other
+quoted rows of that table count; a class may also be quoted by the header
+that names it. Converter quirks are read locally: page markers inside a
+table, a first data row declared as a header, a numeral split at its
+apostrophe into the next cell, an escaped pipe inside a cell, a quoted list
+spanning a few adjacent lines.
 """
 
 from __future__ import annotations

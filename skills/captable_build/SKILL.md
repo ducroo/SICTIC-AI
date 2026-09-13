@@ -58,9 +58,12 @@ Extracted table rows are reviewed by `lib/captable/table_evidence.py` before
 the JSON is accepted: every quoted line must resolve to one source row or
 passage, numbers must come from source cells of rows that name the holder,
 sums cover every quoted row of a holder in one column, zero needs a dash or a
-literal 0, and blanks or absent columns are null. Rejections are fed back to
-the model with the numbers the quoted cells state and the closest source line;
-the evidence rules are described in `docs/captable.md`.
+literal 0, and blanks or absent columns are null. Share classes and pools may be
+named on another quoted row of the same sheet or by a header; a pool's third
+figure may be derived from the two stated ones. Rejections are fed back to the
+model with the numbers the quoted cells state, the quoted rows that were ignored
+because they do not name the holder, and the closest source line; the evidence
+rules are described in `docs/captable.md`.
 
 ## Side effects and failure behavior
 

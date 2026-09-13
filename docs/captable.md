@@ -47,9 +47,16 @@ over every quoted row of that holder. Subsets are never summed, digits are
 never joined across cells, only a dash or a literal 0 evidences zero, and a
 blank cell or absent column evidences nothing, so the model must report null.
 Columns whose header names certificates, dates, percentages, money or the other
-share class never evidence a share count. Rejections tell the model which
-numbers the quoted cells state and the closest source line to an unmatched
-fragment. The term checklist and assessment settings live in
+share class never evidence a share count. Share classes and pools are described
+across the rows of one sheet: once a quoted row names them, the other quoted
+rows of that sheet count, a class may be quoted by the header that names it
+(evidencing no number), and a pool's third figure may be the arithmetic of the
+two stated ones. Converter quirks are read locally: page markers inside a table,
+the first data row declared as a header, a numeral split at its apostrophe into
+the next cell, an escaped pipe inside a cell, a quoted list spanning up to eight
+adjacent lines. Rejections tell the model which numbers the quoted cells state,
+which quoted row does not name the holder and was ignored, and the closest
+source line to an unmatched fragment. The term checklist and assessment settings live in
 `config/captable_build/`. Assessment, aggregation and signature scanning are
 recomputed when consolidation needs rebuilding.
 
