@@ -24,13 +24,21 @@ Run selected checklists concurrently through
 [the shared audit engine](../standards_and_architecture/SKILL.md#checklist-audits).
 Render validated results with `json_to_markdown_table`; there is no synthesis
 model call. Checklists, classification and statuses belong to
-`config/dd_checks/`.
+`config/dd_checks/`. `audit_response_schema.json` defines the fields and status
+enum; `audit_instructions.md` defines the evidence policy.
 
 The registry declares `startup-profile` as a prerequisite. Direct DD neither
-requests nor consumes that profile. Each invocation reruns classification and
-assembles the final table, reusing eligible chapter audits. The final report
-records DD, batch-audit and structured-output configuration, but is not selected
-through a final-output cache lookup or manual-output lookup.
+requests nor consumes that profile. After synchronization, select a manual or
+reusable final report through `InsightFile.find(selection="reusable")`, using
+DD and structured-output configuration and the indexed dataset revision. Return
+it before industry classification or chapter audits. On a cache miss, classify
+industry and assemble the final table, reusing eligible chapter audits.
+
+Industry generation delegates technical checks to its schema and uses a business
+reviewer to require evidence for a selected industry. Result processing only
+maps the accepted classification or applies the existing general fallback.
+The standalone text parser explicitly uses the shared repair and validation
+functions followed by the same business reviewer.
 
 ## Side effects and failure behavior
 

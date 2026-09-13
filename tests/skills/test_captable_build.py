@@ -286,18 +286,20 @@ def _captable_extraction(document: str) -> dict:
         "as_of_date": {"value": "2026-06-30", "quote": "as of 30 June 2026"},
         "share_classes": [
             {"id": "common", "name": "Common", "nominal_value": 0.10,
-             "votes_per_share": 1},
+             "votes_per_share": 1, "quote": "Common 0.10 1"},
         ],
         "stakeholders": [
             {"name": "Founder", "kind": "individual", "role": "founder",
              "holdings": [{"class_id": "common", "count": 900_000}],
-             "diluted_count": 900_000, "invested_amount": 90_000},
+             "diluted_count": 900_000, "invested_amount": 90_000,
+             "group": None, "quote": "Founder 900,000 90,000"},
             {"name": "ESOP", "kind": "pool", "role": "employee",
-             "holdings": [], "diluted_count": 100_000},
+             "holdings": [], "diluted_count": 100_000, "invested_amount": None,
+             "group": None, "quote": "ESOP 100,000"},
         ],
         "pools": [
             {"kind": "esop", "label": "ESOP", "total": 100_000,
-             "granted": 0, "unallocated": 100_000},
+             "granted": 0, "unallocated": 100_000, "quote": "ESOP 100,000 0 100,000"},
         ],
         "totals": {
             "by_class": [{"class_id": "common", "issued_total": 900_000}],
@@ -347,7 +349,7 @@ def _patched_build(monkeypatch):
 
     async def fake_extract_captable(_dataset, filename, _text):
         calls["captable"] += 1
-        return _captable_extraction(filename)
+        return {**_captable_extraction(filename), "dataset": _dataset}
 
     monkeypatch.setattr(build_mod, "classify_documents", fake_classify)
     monkeypatch.setattr(
@@ -408,3 +410,41 @@ def test_standalone_stages_reject_missing_freshness_metadata(mock_env, monkeypat
     get_storage().remove(insight._manifest_path)
     asyncio.run(build_mod.table("stale-co"))
     assert calls == {"classify": 2, "captable": 2}
+
+
+def _complete_cla(dataset="fixture", **overrides):
+    """Full stored CLA fixture; keep domain-review fixtures independently sparse."""
+    from copy import deepcopy
+
+    fields = deepcopy(_minimal_extraction())
+    for name, shape in _BUILT["schema"]["properties"].items():
+        if name not in fields:
+            if name == "comments":
+                fields[name] = None
+            elif "$ref" in shape:
+                fields[name] = {"value": None, "quote": None}
+            else:
+                value_schema = shape["properties"]["value"]
+                value = [] if value_schema.get("type") == "array" else "unstated"
+                fields[name] = {"value": value, "quote": None}
+    fields = {key: value for key, value in fields.items() if key in _BUILT["schema"]["properties"]}
+    fields.update(dataset=dataset, document="cla.md")
+    fields.update(overrides)
+    for value in fields.values():
+        if isinstance(value, dict) and "value" in value:
+            value.setdefault("quote", None)
+    return fields
+
+
+def _consolidated_artifact(dataset, *, captable=None, loans=None):
+    from lib.captable.aggregation import aggregate_clas
+    from lib.captable.data import assemble_result
+
+    loans = loans or []
+    aggregation = aggregate_clas(loans)
+    aggregation["dataset"] = dataset
+    return assemble_result(
+        dataset, classification={"documents": []}, captable=captable,
+        register=None, pool_docs=[], cla_extraction={"clas": loans, "failures": []},
+        assessment={"assessments": []}, aggregation=aggregation, validation=[],
+    )

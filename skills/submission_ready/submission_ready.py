@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 from lib.batch_audit import batch_audit
 from lib.batch_audit.checklist import parse_checklist
 from lib.batch_audit.rendering import json_to_markdown_table
-from lib.batch_audit.schema import audit_errors, validate_audit_document
+from lib.batch_audit.schema import validate_audit_document
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import (
     dataset_location_for_domain,
@@ -44,7 +44,6 @@ IN_SCOPE_STAGES = {
     "under review": "Under review",
 }
 MAX_ATTEMPTS = 3
-MAX_CONCERNS = 8
 
 T = TypeVar("T")
 
@@ -156,72 +155,25 @@ def _reusable_run_insight(
     return None
 
 
-def _normalize_concerns(value: Any, field: str) -> list[str]:
-    if not isinstance(value, list):
-        raise ValueError(f"{field} must be a JSON list.")
-    return [str(item).strip() for item in value if str(item).strip()]
-
-
-def _parse_proposed_action(
-    result: dict[str, Any],
-    stage: str,
-) -> dict[str, Any]:
-    action = str(result.get("proposed_action", "")).strip()
-    allowed_actions = {
-        "Application": {
-            "Move to Under review",
-            "Send concerns to startup",
-        },
-        "Under review": {
-            "Move to Jury",
-            "Send concerns to startup",
-        },
-    }[stage]
-    if action not in allowed_actions:
-        raise ValueError(
-            f"Invalid proposed action {action!r} for stage {stage!r}."
-        )
-
-    rationale = str(result.get("rationale", "")).strip()
-    if not rationale:
-        raise ValueError("The proposed action requires a rationale.")
-    eligibility = _normalize_concerns(
-        result.get("eligibility_concerns"),
-        "eligibility_concerns",
-    )
-    incomplete = _normalize_concerns(
-        result.get("missing_or_inconsistent_information"),
-        "missing_or_inconsistent_information",
-    )
-    if len(eligibility) + len(incomplete) > MAX_CONCERNS:
-        raise ValueError(
-            f"The proposed action contains more than {MAX_CONCERNS} concerns."
-        )
-    if action == "Send concerns to startup" and not (
-        eligibility or incomplete
-    ):
-        raise ValueError(
-            "Sending concerns requires at least one stated concern."
-        )
-    return {
-        "proposed_action": action,
-        "rationale": rationale,
-        "eligibility_concerns": eligibility,
-        "missing_or_inconsistent_information": incomplete,
+def _review_proposed_action(output: dict | list) -> Review[dict | list]:
+    result = {
+        "proposed_action": output["proposed_action"],
+        "rationale": output["rationale"].strip(),
+        "eligibility_concerns": [
+            item.strip() for item in output["eligibility_concerns"] if item.strip()
+        ],
+        "missing_or_inconsistent_information": [
+            item.strip() for item in output["missing_or_inconsistent_information"]
+            if item.strip()
+        ],
     }
-
-
-def _review_proposed_action(
-    output: dict | list,
-    stage: str,
-) -> Review[dict | list]:
-    if not isinstance(output, dict):
-        return Review(output, ("Proposed action must be a JSON object",))
-    try:
-        _parse_proposed_action(output, stage)
-    except (KeyError, TypeError, ValueError) as error:
-        return Review(output, (str(error),))
-    return Review(output)
+    concern_count = len(result["eligibility_concerns"]) + len(
+        result["missing_or_inconsistent_information"]
+    )
+    problems = []
+    if result["proposed_action"] == "Send concerns to startup" and not concern_count:
+        problems.append("Sending concerns requires at least one stated concern.")
+    return Review(result, tuple(problems))
 
 
 def _specialize_proposed_action_schema(
@@ -270,11 +222,8 @@ async def _generate_proposed_action(
     result = await generate_json(
         prompt,
         effective_schema,
-        reviewer=lambda output: _review_proposed_action(output, stage),
+        reviewer=_review_proposed_action,
     )
-    if not isinstance(result, dict):
-        raise ValueError("Proposed action must be a JSON object")
-    result = _parse_proposed_action(result, stage)
 
     return _render_proposed_action(stage, result), prompt
 
@@ -454,20 +403,11 @@ async def _process_candidate(
         checklist_markdown=check_config["checklist"],
         skill_name="submission_ready",
         llm_instructions=llm_instructions,
-        status_scale=["Pass", "Fail", "Unclear"],
-        missing_evidence_status="Unclear",
+        response_schema=check_config["audit_response_schema"],
     )
-    audit = validate_audit_document(json.loads(audit_insight.content()))
-    failed_checks = audit_errors(audit)
-    if failed_checks:
-        details = "; ".join(
-            f"{check['number']}: {check['error']}"
-            for check in failed_checks
-        )
-        raise RuntimeError(
-            f"Submission audit contains {len(failed_checks)} technical "
-            f"failure(s): {details}"
-        )
+    audit = validate_audit_document(
+        json.loads(audit_insight.content()), require_complete=True,
+    )
     table = json_to_markdown_table(audit_insight)
     checklist_report = (
         "# Completeness and Eligibility Check for "
@@ -640,11 +580,10 @@ def _latest_existing_artifacts(
             extension="json",
         ).find(selection="any")
         if audit_insight is not None:
-            audit = validate_audit_document(
-                json.loads(audit_insight.content())
+            validate_audit_document(
+                json.loads(audit_insight.content()), require_complete=True,
             )
-            if not audit_errors(audit):
-                return audit_insight.path, None
+            return audit_insight.path, None
     except (KeyError, ValueError, json.JSONDecodeError):
         logger.warning(
             "[%s] Could not resolve an older structured submission audit.",

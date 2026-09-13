@@ -9,8 +9,17 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "names": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      "names": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
     },
-    "required": ["names"]
+    "required": [
+      "names"
+    ]
   }
 }

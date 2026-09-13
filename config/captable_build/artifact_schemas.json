@@ -1,0 +1,570 @@
+{
+  "loan-extraction": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dataset": {
+        "type": "string"
+      },
+      "clas": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/cla"
+        }
+      },
+      "failures": {
+        "type": "array",
+        "maxItems": 0
+      }
+    },
+    "required": [
+      "dataset",
+      "clas",
+      "failures"
+    ]
+  },
+  "table-extraction": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dataset": {
+        "type": "string"
+      },
+      "captable": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/captable"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "captable_versions": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/captable"
+        }
+      },
+      "register": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/register"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pool_documents": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/pool"
+        }
+      },
+      "failures": {
+        "type": "array",
+        "maxItems": 0
+      }
+    },
+    "required": [
+      "dataset",
+      "captable",
+      "captable_versions",
+      "register",
+      "pool_documents",
+      "failures"
+    ]
+  },
+  "consolidated": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "dataset": {
+        "type": "string"
+      },
+      "as_of_date": {
+        "type": "string"
+      },
+      "generated_at": {
+        "type": "string"
+      },
+      "tool_version": {
+        "type": "string"
+      },
+      "sources": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "doc": {
+              "$ref": "#/$defs/classification/properties/documents/items/properties/filename"
+            },
+            "class": {
+              "$ref": "#/$defs/classification/properties/documents/items/properties/document_class"
+            },
+            "date": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "doc",
+            "class",
+            "date"
+          ]
+        }
+      },
+      "share_classes": {
+        "anyOf": [
+          {
+            "type": "array",
+            "maxItems": 0
+          },
+          {
+            "$ref": "#/$defs/captable/properties/share_classes"
+          }
+        ]
+      },
+      "stakeholders": {
+        "$ref": "#/$defs/captable/properties/stakeholders"
+      },
+      "pools": {
+        "$ref": "#/$defs/captable/properties/pools"
+      },
+      "totals": {
+        "anyOf": [
+          {
+            "type": "object",
+            "maxProperties": 0
+          },
+          {
+            "$ref": "#/$defs/captable/properties/totals"
+          }
+        ]
+      },
+      "fully_diluted_definition": {
+        "anyOf": [
+          {
+            "type": "object",
+            "maxProperties": 0
+          },
+          {
+            "$ref": "#/$defs/captable/properties/fully_diluted_definition"
+          }
+        ]
+      },
+      "register": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/register"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "pool_documents": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/pool"
+        }
+      },
+      "convertibles": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/cla"
+        }
+      },
+      "convertible_failures": {
+        "type": "array",
+        "maxItems": 0
+      },
+      "aggregation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "type": "string"
+          },
+          "executed_count": {
+            "type": "integer"
+          },
+          "term_sheet_count": {
+            "type": "integer"
+          },
+          "settled_count": {
+            "type": "integer"
+          },
+          "superseded_term_sheets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "open_term_sheets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "identical_terms_groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "documents": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "lender_count": {
+                  "type": "integer"
+                },
+                "total_principal": {
+                  "type": "number"
+                },
+                "unknown_amounts": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "documents",
+                "lender_count",
+                "total_principal",
+                "unknown_amounts"
+              ]
+            }
+          },
+          "ten_twenty_rule": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "max_lenders_on_identical_terms": {
+                "type": "integer"
+              },
+              "total_lenders_all_terms": {
+                "type": "integer"
+              },
+              "ten_rule": {
+                "enum": [
+                  "within",
+                  "exceeded"
+                ]
+              },
+              "twenty_rule": {
+                "enum": [
+                  "within",
+                  "exceeded"
+                ]
+              },
+              "caveats": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "max_lenders_on_identical_terms",
+              "total_lenders_all_terms",
+              "ten_rule",
+              "twenty_rule",
+              "caveats"
+            ]
+          },
+          "outstanding_principal_total": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "outstanding_principal_currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outstanding_principal_by_currency": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "outstanding_unknown_amounts": {
+            "type": "integer"
+          },
+          "per_lender": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "loans": {
+                  "type": "integer"
+                },
+                "total_principal": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "loans",
+                "total_principal"
+              ]
+            }
+          },
+          "maturity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "document": {
+                  "type": "string"
+                },
+                "maturity_date": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "expired_check_for_conversion"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document",
+                "maturity_date",
+                "status",
+                "detail"
+              ]
+            }
+          },
+          "esignature": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "document": {
+                  "type": "string"
+                },
+                "signatures_complete_claimed": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "esign_markers": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "corroborated": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "const": "not_applicable"
+                    }
+                  ]
+                },
+                "note": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "document",
+                "signatures_complete_claimed",
+                "esign_markers",
+                "corroborated"
+              ]
+            }
+          },
+          "diligence_questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "dataset",
+          "executed_count",
+          "term_sheet_count",
+          "settled_count",
+          "superseded_term_sheets",
+          "open_term_sheets",
+          "identical_terms_groups",
+          "ten_twenty_rule",
+          "outstanding_principal_total",
+          "outstanding_principal_currency",
+          "outstanding_principal_by_currency",
+          "outstanding_unknown_amounts",
+          "per_lender",
+          "maturity",
+          "esignature",
+          "diligence_questions"
+        ]
+      },
+      "assessment": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "document": {
+              "type": "string"
+            },
+            "status": {
+              "$ref": "#/$defs/cla/properties/status"
+            },
+            "worst_severity": {
+              "enum": [
+                "info",
+                "medium",
+                "high",
+                "severe"
+              ]
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "item": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "present_market_standard",
+                      "present_deviating",
+                      "absent"
+                    ]
+                  },
+                  "severity": {
+                    "enum": [
+                      "info",
+                      "medium",
+                      "high",
+                      "severe"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "item",
+                  "status",
+                  "severity",
+                  "detail"
+                ]
+              }
+            }
+          },
+          "required": [
+            "document",
+            "status",
+            "worst_severity",
+            "findings"
+          ]
+        }
+      },
+      "validation": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "check": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "skipped"
+              ]
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "medium",
+                "high",
+                "severe"
+              ]
+            },
+            "detail": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "check",
+            "status",
+            "severity",
+            "detail"
+          ]
+        }
+      },
+      "assumptions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "diligence_questions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "dataset",
+      "as_of_date",
+      "generated_at",
+      "tool_version",
+      "sources",
+      "share_classes",
+      "stakeholders",
+      "pools",
+      "totals",
+      "fully_diluted_definition",
+      "register",
+      "pool_documents",
+      "convertibles",
+      "convertible_failures",
+      "aggregation",
+      "assessment",
+      "validation",
+      "assumptions",
+      "diligence_questions"
+    ]
+  }
+}

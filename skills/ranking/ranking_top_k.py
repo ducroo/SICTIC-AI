@@ -48,14 +48,6 @@ def _inspect_ranked_ids(
     ranked_ids: list[str],
     expected_ids: list[str],
 ) -> RankingInspection:
-    expected = set(expected_ids)
-    unexpected = [item for item in ranked_ids if item not in expected]
-    if unexpected:
-        raise ValueError(
-            "Top-k ranking IDs do not match the candidates; "
-            f"unexpected={unexpected}."
-        )
-
     seen: set[str] = set()
     duplicates: list[str] = []
     repaired: list[str] = []
@@ -81,15 +73,7 @@ def _review_ranking(
     *,
     expected_ids: list[str],
 ) -> Review[dict | list]:
-    if not isinstance(output, dict):
-        return Review(output, ("Top-k ranking response must be an object.",))
-    try:
-        inspection = _inspect_ranked_ids(
-            output["ranked_profiles_ids"],
-            expected_ids,
-        )
-    except (KeyError, TypeError, ValueError) as error:
-        return Review(output, (str(error),))
+    inspection = _inspect_ranked_ids(output["ranked_profiles_ids"], expected_ids)
     if inspection.valid:
         return Review(output)
     logger.warning(
@@ -122,7 +106,6 @@ async def rank_chunk(objective: str, profiles: Dict[str, str]) -> List[str]:
         partial(_review_ranking, expected_ids=profile_ids),
         cacheable_prompt_prefix=prefix,
     )
-    assert isinstance(response, dict)
     return response["ranked_profiles_ids"]
 
 

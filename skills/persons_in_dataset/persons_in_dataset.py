@@ -8,7 +8,6 @@ from lib.people.linkedin import LinkedInResolver, extract_linkedin_id
 from lib.datasets.paths import dataset_parsed_path
 from lib.storage import get_storage
 from lib.infrastructure.configuration import load_repository_config
-from lib.infrastructure.ai_text_generation import Review
 from lib.datasets.ingestion import sync_datasets
 from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
@@ -64,25 +63,11 @@ def _add_dataset_linkedin_ids(dataset_name: str, persons: list[Person]) -> None:
 
 
 def _parse_person_names(result: dict) -> list[Person]:
-    names = result.get("names")
-    if not isinstance(names, list) or not all(
-        isinstance(name, str) and name.strip() for name in names
-    ):
-        raise ValueError("Data-room person discovery requires a list of non-blank names.")
+    names = result["names"]
     persons: list[Person] = []
     for name in names:
         _merge_discovered_person(persons, Person(full_name=name.strip()))
     return persons
-
-
-def _review_person_names(result: dict | list) -> Review[dict | list]:
-    try:
-        if not isinstance(result, dict):
-            raise ValueError("Data-room person discovery must return an object.")
-        _parse_person_names(result)
-    except ValueError as error:
-        return Review(result, (str(error),))
-    return Review(result)
 
 
 async def persons_in_dataset_as_person_objects(dataset_name: str) -> list[Person]:
@@ -108,13 +93,10 @@ async def persons_in_dataset_as_person_objects(dataset_name: str) -> list[Person
             queries=config["queries"],
             prompt=config["instructions"],
             schema=config["response_schema"],
-            reviewer=_review_person_names,
             max_chunks=config["max_chunks"],
         )
         # A retrieval failure or no available evidence must not freeze an empty
         # authoritative roster and suppress later discovery.
-        if result is not None and not isinstance(result, dict):
-            raise ValueError("Person discovery must return an object.")
         for person in _parse_person_names(result) if result is not None else []:
             _merge_discovered_person(persons, person)
         _add_dataset_linkedin_ids(dataset_slug, persons)

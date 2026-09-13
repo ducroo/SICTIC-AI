@@ -30,10 +30,6 @@ from lib.infrastructure.ai_text_generation.json import (
     validate_json_schema,
 )
 from lib.infrastructure.configuration import load_repository_config
-from lib.batch_audit.engine import (
-    _review_check_response,
-    _specialize_response_schema,
-)
 from skills.ranking.ranking_rationale import (
     _review_rationales,
     _specialize_schema as _rationale_schema,
@@ -368,7 +364,7 @@ def _rationale_cases(count: int) -> list[BenchmarkCase]:
 
 
 def _audit_cases(count: int) -> list[BenchmarkCase]:
-    section = load_repository_config("batch_audit")
+    section = load_repository_config("dd_checks")
     situations = (
         (
             "Confirm that recurring revenue is evidenced.",
@@ -391,15 +387,13 @@ def _audit_cases(count: int) -> list[BenchmarkCase]:
             "Not applicable",
         ),
     )
-    schema = _specialize_response_schema(
-        section["response_schema"],
-        STATUS_SCALE,
-    )
+    schema = deepcopy(section["audit_response_schema"])
+    schema["properties"]["status"]["enum"] = STATUS_SCALE
     cases: list[BenchmarkCase] = []
     for index in range(count):
         check, evidence, expected = situations[index % len(situations)]
         prompt = (
-            f"{section['llm_instructions']}\n\n"
+            "Use only the supplied evidence. Do not invent facts.\n\n"
             f"### DATASET EVIDENCE\n{evidence}\n\n"
             f"### CURRENT CHECK\n{check}\n\n"
             "Use the exact evidence status represented by the supplied facts."
@@ -410,10 +404,7 @@ def _audit_cases(count: int) -> list[BenchmarkCase]:
                 workflow="batch_audit",
                 prompt=prompt,
                 schema=deepcopy(schema),
-                reviewer=lambda output: _review_check_response(
-                    output,
-                    STATUS_SCALE,
-                ),
+                reviewer=lambda output: Review(output),
                 gold_check=lambda output, expected=expected: (
                     isinstance(output, dict)
                     and output.get("status") == expected
@@ -508,10 +499,7 @@ def _submission_cases(count: int) -> list[BenchmarkCase]:
                     section["response_schema"],
                     stage,
                 ),
-                reviewer=lambda output, stage=stage: _review_proposed_action(
-                    output,
-                    stage,
-                ),
+                reviewer=_review_proposed_action,
                 gold_check=lambda output, expected=expected: (
                     isinstance(output, dict)
                     and output.get("proposed_action") == expected

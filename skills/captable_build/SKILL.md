@@ -27,9 +27,32 @@ Every stage uses shared reusable selection: manual first, then ranked generated
 insights with matching indexed startup revision and effective configuration.
 Extraction keys include selected classification content. Consolidation includes
 all three selected inputs, assessment settings, tool version and evaluation date
-for maturity findings. Editing a manual input invalidates generated dependents.
+for maturity findings. Artifact schema configuration is included in every stage's
+freshness key. Editing a manual input invalidates generated dependents.
 A manual consolidated JSON wins before dependencies run. `--fresh` bypasses
 only generated reuse, without deleting files or overriding manual inputs.
+
+## Validation convention
+
+Follow the shared [JSON validation rule](../standards_and_architecture/SKILL.md#model-calls).
+Classification and extraction use `generate_json`, which already validates
+their response schemas. Do not duplicate those structural checks immediately
+after generation. Loaded artifacts and assembled outputs use
+`validate_json_schema` through `lib.captable.schema.validate_build_artifact`.
+`config/captable_build/artifact_schemas.json` defines the saved envelopes and
+calculated fields. The schema builder reuses the classification, CLA, cap-table,
+register and pool response schemas, adding the dataset/document metadata written
+by the pipeline. CLA fields continue to follow `cla_terms.md`.
+
+Validation runs before an assembled artifact is saved and whenever one is read,
+including manual and cached data. Required fields, nested types, enums and empty
+failure lists are schema constraints. Invalid outputs raise before replacing a
+previous artifact. An absent cap table remains representable, with empty ownership
+data and a domain finding; missing evidence is not a structural error.
+
+Keep ownership totals, cross-document reconciliation, duplicate-record checks
+and financial consistency in domain code. Schema validation does not establish
+those relationships or the accuracy of extracted evidence.
 
 ## Side effects and failure behavior
 
@@ -59,5 +82,7 @@ The direct build CLI also retains `--model` for explicit test-model overrides.
 
 - [Implementation](captable_build.py)
 - [Insight objects](../../lib/captable/insights.py)
+- [Artifact schema composition](../../lib/captable/schema.py)
+- [Artifact schemas](../../config/captable_build/artifact_schemas.json)
 - [Term schema](../../config/captable_build/cla_terms.md)
 - [Domain checks](../../docs/captable-checks.md)

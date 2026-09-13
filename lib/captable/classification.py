@@ -52,8 +52,6 @@ def _review_classification(
     expected = set(filenames)
 
     def reviewer(output: Any) -> Review[Any]:
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         returned = [
             entry.get("filename")
             for entry in output.get("documents", [])
@@ -133,8 +131,6 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
             schema,
             reviewer=_review_classification(filenames),
         )
-        if not isinstance(result, dict):
-            raise ValueError("Classification response must be a JSON object.")
         return result["documents"]
 
     entries: list[dict[str, Any]] = [

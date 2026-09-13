@@ -1,11 +1,10 @@
 import asyncio
 import json
-from functools import partial
 from typing import Any
 
 from lib.batch_audit import batch_audit
 from lib.batch_audit.rendering import json_to_markdown_table
-from lib.batch_audit.schema import audit_errors, validate_audit_document
+from lib.batch_audit.schema import validate_audit_document
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_raw_path
 from lib.insights import InsightFile, InsightResult
@@ -63,6 +62,9 @@ def parse_industry_type(
         effective_schema,
         label="DD industry-classification response",
     )
+    review = _review_industry_type(result)
+    if review.problems:
+        raise ValueError("; ".join(review.problems))
     return _industry_type_from_result(result, allowed_industry_types)
 
 
@@ -80,24 +82,16 @@ def _industry_type_from_result(
             "defaulting to general."
         )
         return allowed_by_lower.get("general", "general")
-    evidence = [item.strip() for item in result["evidence"] if item.strip()]
-    if not evidence:
-        raise ValueError(
-            "Industry classification requires evidence when a type is selected."
-        )
     return allowed_by_lower[industry_type.lower()]
 
 
-def _review_industry_type(
-    output: dict | list,
-    allowed_industry_types: set[str],
-) -> Review[dict | list]:
-    if not isinstance(output, dict):
-        return Review(output, ("Industry classification must be an object",))
-    try:
-        _industry_type_from_result(output, allowed_industry_types)
-    except (KeyError, TypeError, ValueError) as error:
-        return Review(output, (str(error),))
+def _review_industry_type(output: dict | list) -> Review[dict | list]:
+    if output["industry_type"] is not None and not any(
+        item.strip() for item in output["evidence"]
+    ):
+        return Review(output, (
+            "Industry classification requires evidence when a type is selected.",
+        ))
     return Review(output)
 
 
@@ -121,10 +115,7 @@ async def find_industry_type(
             f"Instructions: {industry_instructions}"
         ),
         schema=effective_schema,
-        reviewer=partial(
-            _review_industry_type,
-            allowed_industry_types=allowed_industry_types,
-        ),
+        reviewer=_review_industry_type,
     )
     if result is None:
         logger.warning(
@@ -132,8 +123,6 @@ async def find_industry_type(
             startup_name_lower,
         )
         return "general"
-    if not isinstance(result, dict):
-        raise ValueError("Industry classification must be an object")
     return _industry_type_from_result(result, allowed_industry_types)
 
 async def chapter_by_chapter(
@@ -168,26 +157,11 @@ async def chapter_by_chapter(
                 checklist_markdown=checklist_string,
                 skill_name="dd_checks",
                 llm_instructions=batch_instructions,
-                status_scale=[
-                    "Not Found",
-                    "Critical",
-                    "Borderline",
-                    "Sufficient",
-                    "Fine",
-                ],
-                missing_evidence_status="Not Found",
+                response_schema=dd_config["audit_response_schema"],
             )
-            audit = validate_audit_document(json.loads(audit_insight.content()))
-            technical_errors = audit_errors(audit)
-            if technical_errors:
-                details = "; ".join(
-                    f"{item['number']}: {item['error']}"
-                    for item in technical_errors
-                )
-                raise RuntimeError(
-                    f"DD chapter {chapter!r} contains "
-                    f"{len(technical_errors)} technical failure(s): {details}"
-                )
+            validate_audit_document(
+                json.loads(audit_insight.content()), require_complete=True,
+            )
             chapter_output = json_to_markdown_table(audit_insight)
             return f"## Chapter: {chapter}\n\n{chapter_output}\n", None
         except Exception as error:
@@ -229,7 +203,20 @@ async def dd_checks(startup: str) -> InsightResult:
         
     config = load_repository_config()
     dd_config = config['dd_checks']
-    batch_instructions = config["batch_audit"]["llm_instructions"]
+    effective_config_key = config_cache_key(
+        dd_config,
+        config["structured_output"],
+    )
+    insight = InsightFile(
+        dataset=startup_slug,
+        skill="dd_checks",
+        model=llm_model(),
+        config_key=effective_config_key,
+    )
+    if reusable := insight.find(selection="reusable"):
+        return [reusable]
+
+    batch_instructions = dd_config["audit_instructions"]
     checklists = dd_config['checklists']
 
     chapters, allowed_industry_types = set(), set()
@@ -250,17 +237,6 @@ async def dd_checks(startup: str) -> InsightResult:
         industry_type,
         dd_config,
         batch_instructions,
-    )
-    effective_config_key = config_cache_key(
-        dd_config,
-        config["batch_audit"],
-        config["structured_output"],
-    )
-    insight = InsightFile(
-        dataset=startup_slug,
-        skill="dd_checks",
-        model=llm_model(),
-        config_key=effective_config_key,
     )
     report = (
         f"# M&A Due Diligence Checks for {startup}\n\n"
