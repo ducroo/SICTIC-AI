@@ -15,6 +15,7 @@ A complete generated run has five logical artifacts per model:
 | `captable_build` | loan-extraction | JSON | `insights/captable-build/` |
 | `captable_build` | table-extraction | JSON | `insights/captable-build/` |
 | `captable_build` | consolidated | JSON | `insights/captable-build/` |
+| `captable_build` | loan-extraction-partial, table-extraction-partial (staging) | JSON | `insights/captable-build/` |
 | `captable` | final report | Markdown | `insights/` |
 
 `InsightFile` supplies filenames, model suffixes, manual precedence and freshness
@@ -35,7 +36,10 @@ another skill artifact.
 
 Build classifies parsed documents, extracts convertible loans and cap-table,
 register and pool evidence, then reconciles and consolidates them. Required
-extraction failures raise without saving partial results. Every extracted table
+extraction failures raise without publishing the stage's artifact; the
+successful per-document extractions are kept in a staging insight of the same
+dependency key, and the next run retries only the failed documents (`--fresh`
+retries all). Staging insights are never consolidation inputs. Every extracted table
 row carries a verbatim quote that `lib/captable/table_evidence.py` resolves
 line by line: a quoted table row must match one source row cell by cell (cells
 may be dropped, never crossed), a quoted sentence must sit within a few

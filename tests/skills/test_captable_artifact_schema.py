@@ -27,10 +27,21 @@ def _artifacts():
             "register": None, "pool_documents": [], "failures": [],
         },
         "consolidated": _consolidated_artifact("schema-co", captable=table, loans=[loan]),
+        "loan-extraction-partial": {
+            "dataset": "schema-co", "clas": [loan],
+            "failures": [{"document": "second.pdf", "error": "provider unavailable"}],
+        },
+        "table-extraction-partial": {
+            "dataset": "schema-co", "captable_versions": [table], "register": None, "pool_documents": [],
+            "failures": [{"document": "second.xlsx", "error": "provider unavailable"}],
+        },
     }
 
 
-@pytest.mark.parametrize("identifier", ["classification", "loan-extraction", "table-extraction", "consolidated"])
+@pytest.mark.parametrize("identifier", [
+    "classification", "loan-extraction", "table-extraction", "consolidated",
+    "loan-extraction-partial", "table-extraction-partial",
+])
 def test_roundtrip_all_artifacts_and_reject_missing_fields(mock_env, identifier):
     _install_dataset("schema-co", "Fixture")
     data = _artifacts()[identifier]
@@ -74,6 +85,18 @@ def test_failure_flags_are_rejected_by_schema(identifier, field):
     data = _artifacts()[identifier]
     data[field] = [{"document": "loan.pdf", "error": "provider unavailable"}]
     with pytest.raises(ValueError, match=field):
+        validate_build_artifact(data, identifier)
+
+
+@pytest.mark.parametrize("identifier", ["loan-extraction-partial", "table-extraction-partial"])
+def test_staging_artifacts_require_a_failure_and_reject_a_current_captable(identifier):
+    data = deepcopy(_artifacts()[identifier])
+    data["failures"] = []
+    with pytest.raises(ValueError, match="failures"):
+        validate_build_artifact(data, identifier)
+    data = deepcopy(_artifacts()[identifier])
+    data["captable"] = data.get("captable_versions", [None])[0]
+    with pytest.raises(ValueError, match="does not match the schema"):
         validate_build_artifact(data, identifier)
 
 

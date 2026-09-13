@@ -52,6 +52,30 @@ async def _classification(dataset_name: str, *, fresh: bool = False) -> InsightF
     return _save(insight, await classify_documents(dataset_name))
 
 
+def _partial(insight: InsightFile, *, fresh: bool) -> dict | None:
+    """Successful per-document extractions kept by an earlier failed run.
+
+    Staging has no manual precedence and is ignored by ``--fresh``; it is
+    only read by the stage that wrote it, never by consolidation.
+    """
+    if fresh:
+        return None
+    existing = insight.find(selection="reusable")
+    if existing is None or existing.model == "manual":
+        return None
+    return read_build_insight(existing)
+
+
+def _incomplete(stage: str, insight: InsightFile, partial: dict, successes: int, first_failure: BaseException) -> ValueError:
+    documents = [failure["document"] for failure in partial["failures"]]
+    if successes:
+        _save(insight, partial)
+        hint = "Re-run to retry only these documents; the other extractions are kept."
+    else:
+        hint = "Re-run to retry extraction."
+    return ValueError(f"{stage} extraction incomplete: {documents}. {hint}")
+
+
 async def _loans(dataset_name: str, classification: InsightFile, *, fresh: bool = False) -> InsightFile:
     insight = configured_build_insight(dataset_name, "loan-extraction", classification)
     if existing := _reusable(insight, fresh):
@@ -63,12 +87,28 @@ async def _loans(dataset_name: str, classification: InsightFile, *, fresh: bool 
     missing = [name for name in filenames if name not in texts]
     if missing:
         raise ValueError(f"Classified CLA documents have no parsed text: {missing}")
-    outcomes = await asyncio.gather(*(extract_cla(dataset_name, name, texts[name]) for name in filenames), return_exceptions=True)
-    for name, outcome in zip(filenames, outcomes):
+    staging = configured_build_insight(dataset_name, "loan-extraction-partial", classification)
+    kept = {cla["document"]: cla for cla in (_partial(staging, fresh=fresh) or {}).get("clas", [])}
+    pending = [name for name in filenames if name not in kept]
+    if kept:
+        logger.info("[%s] Reusing %d kept CLA extractions; retrying %d.", dataset_name, len(kept), len(pending))
+    outcomes = await asyncio.gather(*(extract_cla(dataset_name, name, texts[name]) for name in pending), return_exceptions=True)
+    result: dict[str, Any] = {"dataset": dataset_name, "clas": [], "failures": []}
+    first_failure = None
+    for name in filenames:
+        if name in kept:
+            result["clas"].append(kept[name])
+            continue
+        outcome = outcomes[pending.index(name)]
         if isinstance(outcome, BaseException):
             logger.error("[%s] CLA extraction failed for %s: %s", dataset_name, name, outcome)
-            raise ValueError(f"CLA extraction incomplete: {name}. Re-run to retry extraction.") from outcome
-    return _save(insight, {"dataset": dataset_name, "clas": outcomes, "failures": []})
+            first_failure = first_failure or outcome
+            result["failures"].append({"document": name, "error": str(outcome)})
+        else:
+            result["clas"].append(outcome)
+    if result["failures"]:
+        raise _incomplete("CLA", staging, result, len(result["clas"]), first_failure) from first_failure
+    return _save(insight, result)
 
 
 async def _tables(dataset_name: str, classification_insight: InsightFile, *, fresh: bool = False) -> InsightFile:
@@ -146,11 +186,30 @@ async def _tables(dataset_name: str, classification_insight: InsightFile, *, fre
                 ("pool", filename,
                  extract_pools(dataset_name, filename, texts[filename]))
             )
+    staging = configured_build_insight(dataset_name, "table-extraction-partial", classification_insight)
+    partial = _partial(staging, fresh=fresh) or {}
+    kept: dict[tuple[str, str], Any] = {}
+    for version in partial.get("captable_versions", []):
+        kept[("captable_version", version["document"])] = version
+    if partial.get("register"):
+        kept[("register", partial["register"]["document"])] = partial["register"]
+    for pool in partial.get("pool_documents", []):
+        kept[("pool", pool["document"])] = pool
+    pending = [(slot, document, coro) for slot, document, coro in jobs if (slot, document) not in kept]
+    for slot, document, coro in jobs:
+        if (slot, document) in kept:
+            coro.close()
+    if kept:
+        logger.info("[%s] Reusing %d kept table extractions; retrying %d.", dataset_name, len(kept), len(pending))
     outcomes = await asyncio.gather(
-        *(coro for _slot, _doc, coro in jobs), return_exceptions=True
+        *(coro for _slot, _doc, coro in pending), return_exceptions=True
     )
     first_failure = None
-    for (slot, document, _coro), outcome in zip(jobs, outcomes):
+    for slot, document, _coro in jobs:
+        if (slot, document) in kept:
+            outcome: Any = kept[(slot, document)]
+        else:
+            outcome = outcomes[[(s, d) for s, d, _c in pending].index((slot, document))]
         if isinstance(outcome, BaseException):
             first_failure = first_failure or outcome
             result["failures"].append(
@@ -175,7 +234,9 @@ async def _tables(dataset_name: str, classification_insight: InsightFile, *, fre
         )
 
     if result["failures"]:
-        raise ValueError(f"Table extraction incomplete: {[f['document'] for f in result['failures']]}. Re-run to retry extraction.") from first_failure
+        successes = len(result["captable_versions"]) + len(result["pool_documents"]) + (1 if result["register"] else 0)
+        kept_partial = {key: value for key, value in result.items() if key != "captable"}
+        raise _incomplete("Table", staging, kept_partial, successes, first_failure) from first_failure
     return _save(insight, result)
 
 

@@ -394,7 +394,9 @@ checks across source versions remain a separate follow-up.
 ### How results are stored
 
 Four JSON `InsightFile` artifacts live under `insights/captable-build/`:
-classification, loan-extraction, table-extraction and consolidated. The final
+classification, loan-extraction, table-extraction and consolidated, plus two
+staging insights (loan-extraction-partial, table-extraction-partial) that keep
+the successful documents of a failed extraction run for the retry. The final
 `captable` Markdown report lives directly under `insights/`. Shared selection
 prefers manual overrides and checks indexed source revisions, effective
 configuration and selected input content for generated reuse. There are no

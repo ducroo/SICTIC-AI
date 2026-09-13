@@ -10,7 +10,10 @@ description: Extract, reconcile and validate startup ownership and convertible-l
 One startup dataset slug with successfully synchronized parsed documents.
 The canonical API returns `list[InsightFile]` containing the consolidated result.
 Four logical JSON insights live under `insights/captable-build/`: `classification`,
-`loan-extraction`, `table-extraction`, and `consolidated`. Filenames and model
+`loan-extraction`, `table-extraction`, and `consolidated`. Two staging insights,
+`loan-extraction-partial` and `table-extraction-partial`, hold the successful
+per-document extractions of a run in which another document failed; each is read
+only by its own stage and is never an input to consolidation. Filenames and model
 suffixes are supplied by `InsightFile`, using `subdir=True` and `extension="json"`.
 There are no dated snapshots, latest pointers, HTML files, separate assessments,
 aggregation caches or build Markdown reports. Source dates stay inside the JSON.
@@ -69,7 +72,13 @@ rules are described in `docs/captable.md`.
 
 Generation writes only the managed JSON insights and shared freshness metadata.
 Missing/empty parsed sources or failed extractions raise; incomplete outputs are
-not saved as reusable insights. Failures remain in logs and retry on a later run.
+never published as `loan-extraction` or `table-extraction`, and a previous
+complete artifact stays untouched. The successful per-document extractions of a
+failed run are kept in the stage's staging insight (validated against
+`artifact_schemas.json`, same dependency key as the stage), so the next run
+retries only the documents listed in the error; `--fresh` ignores staging, a
+changed source or configuration invalidates it, and a run without any success
+writes none. Failures remain in logs.
 Manual JSON must have the same structure as its generated counterpart. Existing
 legacy files are left untouched and are not selected as alternative inputs.
 This skill never imports, synchronizes or discovers people implicitly. Bulk

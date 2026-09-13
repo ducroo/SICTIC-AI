@@ -31,6 +31,10 @@ def configured_build_insight(dataset: str, identifier: str, *inputs: InsightFile
         "loan-extraction": ("cla_extraction_prompt", "cla_extraction_base_schema", "cla_terms"),
         "table-extraction": ("captable_extraction_prompt", "captable_extraction_response_schema", "register_extraction_prompt", "register_extraction_response_schema", "pool_extraction_prompt", "pool_extraction_response_schema"),
     }
+    # A staging insight keeps successful per-document extractions of a
+    # failed run; it shares its stage's key so it goes stale with it.
+    keys["loan-extraction-partial"] = keys["loan-extraction"]
+    keys["table-extraction-partial"] = keys["table-extraction"]
     if identifier == "consolidated":
         key = config_cache_key(TOOL_VERSION, config["artifact_schemas"], config["assessment_rules"], str(date.today()),
                                *(item.content() for item in inputs))
