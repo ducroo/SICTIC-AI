@@ -15,6 +15,7 @@ import pytest
 from lib.captable.table_extraction import _review_captable, _review_table_evidence
 from lib.captable.validate import check_cross_snapshot, validate_captable
 from lib.datasets.source import IGNORED_EXTENSIONS
+from tests.skills.test_captable_build import _reviewer as cla_reviewer
 
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "captable"
 GROUND_TRUTH = json.loads((FIXTURES / "ground_truth.json").read_text(encoding="utf-8"))
@@ -151,6 +152,24 @@ def test_v2_share_classes_have_real_source_rows():
     header_only = {"id": "common", "name": "Common", "nominal_value": None, "votes_per_share": None,
                    "quote": line("synthetic_captable.md", "| Group |")}
     assert not problems("synthetic_captable.md", {"share_classes": [header_only]}, captable=True)
+
+
+# --- CLA: two lenders, and the borrower is not one of them --------------------
+
+def test_cla_borrower_in_the_party_block_is_not_a_lender():
+    lenders = [
+        {"name": lender["name"], "kind": "individual", "domicile": "CH",
+         "principal_amount": lender["principal_amount"],
+         "quote": f'**{lender["name"]}**'}
+        for lender in GROUND_TRUTH["cla"]["lenders"]
+    ]
+    output = {"borrower_name": {"value": "Fixture Robotics AG", "quote": "**Fixture Robotics AG**"},
+              "lenders": lenders}
+    assert not cla_reviewer(text("synthetic_cla.md"))(output).problems
+    output["lenders"].append({"name": "Fixture Robotics AG", "kind": "entity", "domicile": "CH",
+                              "principal_amount": None, "quote": "**Fixture Robotics AG**"})
+    found = cla_reviewer(text("synthetic_cla.md"))(output).problems
+    assert found and "this is the borrower" in found[0]
 
 
 # --- the planted quirks must stay in the documents ---------------------------

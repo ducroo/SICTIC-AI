@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.captable.aggregation import normalize_lender_name
 from lib.captable.documents import normalize_for_matching
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
@@ -119,6 +120,8 @@ def review_cla_extraction(
             if _is_absence_claim(field, value, quote, presence_fields):
                 absence_fields.append(field)
 
+        borrower = output.get("borrower_name")
+        borrower = borrower.get("value") if isinstance(borrower, dict) else None
         for lender in output.get("lenders", []):
             if not isinstance(lender, dict):
                 continue
@@ -128,6 +131,15 @@ def review_cla_extraction(
                     f"lenders[{lender.get('name')!r}]: quote not found "
                     f"verbatim in the document text: {quote!r}."
                     + _quote_hint(quote, document_text)
+                )
+            # The borrower is a party, never a lender; a multi-party block
+            # tempts the model to list every party.
+            if isinstance(borrower, str) and normalize_lender_name(
+                str(lender.get("name") or "")
+            ) == normalize_lender_name(borrower):
+                problems.append(
+                    f"lenders[{lender.get('name')!r}]: this is the borrower, "
+                    "not a lender. List only the parties granting the loan."
                 )
 
         covered = {

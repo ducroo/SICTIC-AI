@@ -79,8 +79,20 @@
     },
     "diluted_equation": "800000 + 600000 - 100000 + 75000 = 1375000",
     "share_classes": [
-      {"id": "common", "name": "Common shares", "nominal_value": 0.1, "votes_per_share": 1, "issued": 800000},
-      {"id": "preferred_a", "name": "Preferred A shares", "nominal_value": 0.1, "votes_per_share": 1, "issued": 600000}
+      {
+        "id": "common",
+        "name": "Common shares",
+        "nominal_value": 0.1,
+        "votes_per_share": 1,
+        "issued": 800000
+      },
+      {
+        "id": "preferred_a",
+        "name": "Preferred A shares",
+        "nominal_value": 0.1,
+        "votes_per_share": 1,
+        "issued": 600000
+      }
     ],
     "expected_cross_snapshot": {
       "shrinking_holder": "Bruno Muster 300000 -> 250000 without documented transfer (deliberate anomaly, must WARN)",
@@ -189,7 +201,7 @@
     "punctuation_only_cells_carry_nothing": "register: treasury '#'; pool overview 'Pool size | 25000 | #'",
     "no_whole_document_name_matching": "register: quoting Bruno's row for Anna is ignored and reported",
     "percentage_and_certificate_columns_never_evidence_counts": "register: Beteiligung, Nr, Zertifikat columns",
-    "german_headers_bind_classes": "register: Stammaktien / Vorzorzugsaktien A columns (Stammaktien cannot evidence current_preferred)",
+    "german_headers_bind_classes": "register: Stammaktien / Vorzugsaktien A columns (Stammaktien cannot evidence current_preferred)",
     "pool_named_by_a_section_row_of_its_sheet": "pool overview",
     "empty_first_row_declared_as_header": "pool overview",
     "label_with_a_number_is_not_the_figure": "pool overview: '% of shares issued (1,300,000)'",
@@ -204,7 +216,8 @@
     "multi_lender_cla_with_per_lender_amounts": "CLA: 200,000 + 50,000 = 250,000",
     "anti_laziness_missing_terms": "CLA: valuation_floor and pro_rata_rights absent",
     "shrinking_holder_without_transfer_document": "cap table v1 -> v2: Bruno 300000 -> 250000",
-    "design_assets_ignored_by_ingestion": "fixture_logo.ai"
+    "design_assets_ignored_by_ingestion": "fixture_logo.ai",
+    "borrower_listed_as_a_lender_is_rejected": "CLA: the three-party block tempts the model to list the borrower among the lenders; the CLA reviewer rejects a lender named exactly like borrower_name (seen on gpt-5.6-luna, 2026-09-13)"
   },
   "not_exercised": {
     "projected_year_columns": "period selection across '2025 / 2026 (projected)' columns is an open gap (Lucas's finding 4); not planted because it makes the current column ambiguous",

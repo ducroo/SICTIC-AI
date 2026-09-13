@@ -189,6 +189,23 @@ def test_extraction_reviewer_rejects_fabricated_quote() -> None:
     )
 
 
+def test_extraction_reviewer_rejects_the_borrower_listed_as_a_lender() -> None:
+    text = (
+        "between Petra Muster (the Lender) and Fixture Robotics AG (the Borrower). "
+        "The Lender grants the Borrower a loan of CHF 250,000."
+    )
+    party = {"name": "Fixture Robotics AG", "kind": "entity", "domicile": "CH",
+             "principal_amount": None, "quote": "Fixture Robotics AG (the Borrower)"}
+    lender = {"name": "Petra Muster", "kind": "individual", "domicile": "CH",
+              "principal_amount": 250000, "quote": "Petra Muster (the Lender)"}
+    output = {"borrower_name": {"value": "Fixture Robotics AG", "quote": "Fixture Robotics AG (the Borrower)"},
+              "lenders": [lender, party]}
+    problems = _reviewer(text)(output).problems
+    assert len(problems) == 1 and "this is the borrower" in problems[0]
+    output["lenders"] = [lender]
+    assert not _reviewer(text)(output).problems
+
+
 def test_extraction_reviewer_rejects_value_without_quote() -> None:
     reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
