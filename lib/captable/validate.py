@@ -464,7 +464,7 @@ def check_cla_lifecycle(
                 findings.append(
                     _finding(
                         "cla_lender_is_shareholder",
-                        "info",
+                        "pass",
                         "info",
                         f"Lender {lender.get('name')!r} is also a "
                         "shareholder — consistent with an insider bridge "

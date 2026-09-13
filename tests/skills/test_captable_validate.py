@@ -248,3 +248,16 @@ def test_pool_consistency_tolerates_one_sided_coverage() -> None:
     }
     finding = check_pool_consistency(captable, [pool_doc])[0]
     assert finding["status"] == "pass"
+
+
+def test_lender_who_is_a_shareholder_yields_a_schema_valid_status():
+    """Every validation status must be one the consolidated schema declares."""
+    from lib.captable.validate import validate_captable
+
+    captable = {"stakeholders": [{"name": "Alice Example", "holdings": [{"class_id": "common", "count": 100}]}],
+                "totals": {"by_class": [{"class_id": "common", "issued_total": 100}]}}
+    cla = {"status": "executed", "execution_date": {"value": "2026-01-15"},
+           "lenders": [{"name": "Alice Example", "amount": {"value": 1000}}]}
+    findings = validate_captable(captable, clas=[cla])
+    assert any(f["check"] == "cla_lender_is_shareholder" for f in findings)
+    assert {f["status"] for f in findings} <= {"pass", "fail", "skipped"}
