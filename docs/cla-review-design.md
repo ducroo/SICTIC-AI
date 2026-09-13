@@ -106,8 +106,8 @@ Proposed first set of lender-angle bands for `config/cla_review/settings.json`. 
 
 | Parameter | Proposed default | Source | Status |
 |---|---|---|---|
-| Discount, minimum a lender should expect [^1]| 15% | Handbook: 15 to 25% most common for angels; SECA band 5 to 30% | to verify |
-| Discount, schedule expected when term exceeds [^2]| 12 months | SECA note: discount correlates with term, rising schedule advised | placeholder |
+| Discount, minimum a lender should expect | 15% [^1]| Handbook: 15 to 25% most common for angels; SECA band 5 to 30% | to verify |
+| Discount, schedule expected when term exceeds | 12 months [^2]| SECA note: discount correlates with term, rising schedule advised | placeholder |
 | Valuation cap | required | SECA note: often requested by investors; without it the price is unbounded | rule, no number |
 | Denominator | fully diluted | SECA note: fully diluted is the investor-friendly choice | rule, no number |
 | Qualified-financing threshold, minimum | 1x the aggregate loan amount | SECA note: not too low, or a tiny round converts the loans | placeholder |
