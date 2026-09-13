@@ -113,7 +113,7 @@ Proposed first set of lender-angle bands for `config/cla_review/settings.json`. 
 | Qualified-financing threshold, minimum | 1x the aggregate loan amount | SECA note: not too low, or a tiny round converts the loans | placeholder |
 | Qualified-financing threshold, maximum | 3x the company's stated next-round target | SECA note: not too high, or the company can avoid conversion | placeholder |
 | Conversion at maturity | mechanism and price required | SECA note: cap rarely accepted here, fixed valuation or fair market value used | rule, no number |
-| Term, maximum | 24 months [^3]| SECA note: bridge until the next round; number is a placeholder | placeholder |
+| Term, maximum | 24 months | SECA note: bridge until the next round; number is a placeholder | placeholder |
 | Interest above safe harbor with insiders lending | ESTV rate of the year | SECA note and handbook 8.3; published yearly by the tax administration | needs the current figure, dated setting |
 | Change-of-control repayment multiple, minimum | 1x | SECA short form: conversion or repayment on change of control | placeholder |
 | Lender majority for waivers and extensions | defined, at least two thirds of principal | earlier cla_review sketch | placeholder |
@@ -149,7 +149,7 @@ Rationale for the specific breakpoints:
 - Mid-range (6–12 months): 15-20% — this is the "modal" scenario most loans are priced around, since most bridge loans are structured with a 12-18 month expected runway to the next round.
 - Long tail (18+ months): 25-30% or capped — compensates for extended risk, but many founders push to cap it rather than let it escalate indefinitely, since an open-ended schedule can create awkward incentives (e.g., a lender arguably benefiting from the round being delayed).
 
-[^3]: Enrico: I've heard once from Ralf a standard time window of 18 months. No further references on that come to my mind now.
+
 
 
 
