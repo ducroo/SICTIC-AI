@@ -66,7 +66,13 @@ named on another quoted row of the same sheet or by a header; a pool's third
 figure may be derived from the two stated ones. Rejections are fed back to the
 model with the numbers the quoted cells state, the quoted rows that were ignored
 because they do not name the holder, and the closest source line; the evidence
-rules are described in `docs/captable.md`.
+rules are described in `docs/captable.md`. CLA values are reviewed by
+`lib/captable/cla_extraction.py`: every stated value needs a quote found
+verbatim in the document (whitespace-tolerant, `...` may join verbatim parts),
+so a paraphrased or assembled quote is rejected with the closest source line;
+absent terms need a `missing_terms` entry; a lender named like the borrower is
+rejected. A model that does not copy quotes faithfully therefore fails the
+build rather than publishing unevidenced values.
 
 ## Side effects and failure behavior
 
@@ -96,7 +102,10 @@ The direct CLI retains `classify`, `extract`, `table`, `assess`, and `aggregate`
 for inspection. They use the same stage implementations; cheap assessments and
 aggregation only return structured data. The `build` Python adapter returns the
 consolidated dictionary from the same canonical workflow. No `snapshot` command.
-The direct build CLI also retains `--model` for explicit test-model overrides.
+The direct build CLI also retains `--model` for explicit test-model overrides;
+`LLM_API_KEY` is sent to whichever provider the model belongs to, so the key
+must fit that provider. The synthetic `synthcap` dataset
+(`tests/fixtures/captable/README.md`) is the regression run for this skill.
 
 ## References
 

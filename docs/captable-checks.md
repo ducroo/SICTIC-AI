@@ -208,7 +208,12 @@ not a misread value but the claim "this clause does not exist" made without
 really looking. We therefore accept an absence only with a statement of
 which sections were searched — and every found value must carry a verbatim
 quote that we locate mechanically in the document. Where the quote does not
-match, the extraction is rejected and redone.
+match, the extraction is rejected and redone, with the closest source line
+named in the feedback. Whitespace differences are tolerated and a quote may
+join verbatim parts with `...`, but a paraphrase or a passage assembled from
+several places (a signature block stitched from separate lines, a clause with
+a word changed) is not a quote of the document and is rejected. The lenders
+list may not contain the borrower.
 
 **Table rows.** Cap-table, register and pool rows follow the same principle
 at cell level: the quoted row is matched cell by cell against one source row,

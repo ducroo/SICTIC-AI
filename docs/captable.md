@@ -60,7 +60,12 @@ the first data row declared as a header, a numeral split at its apostrophe into
 the next cell, an escaped pipe inside a cell, a quoted list spanning up to eight
 adjacent lines. Rejections tell the model which numbers the quoted cells state,
 which quoted row does not name the holder and was ignored, and the closest
-source line to an unmatched fragment. The term checklist and assessment settings live in
+source line to an unmatched fragment. CLA terms follow the same contract: every
+value carries a quote found verbatim in the document, a paraphrased or assembled
+quote is rejected, absent terms need a `missing_terms` entry with the sections
+searched, and the borrower is never accepted as a lender. Extraction therefore
+depends on the model copying faithfully: a model that rewrites quotes fails the
+build instead of publishing unevidenced values. The term checklist and assessment settings live in
 `config/captable_build/`. Assessment, aggregation and signature scanning are
 recomputed when consolidation needs rebuilding.
 
@@ -131,8 +136,17 @@ model and artifact lifecycle without live model calls.
   (license royalties, litigation, etc.) — that belongs to the dd_checks
   checklist flow, not this skill.
 - Classification confidence varies slightly across runs (LLM-judged);
-  classes have been stable in testing, and an eval suite over the fixture
-  answer key is the planned guardrail.
+  classes have been stable in testing. The guardrail is the synthetic
+  fixture: `ground_truth.json` is the answer key, the model-free suite
+  checks the reviewer and validators over the fixture files, and a build
+  of `synthcap` checks the configured model against the same key.
+- Quote fidelity is model-dependent. gemini-3.8-flash passes the four
+  real rooms used for validation; openai/gpt-5.6-luna passes the synthetic
+  fixture but paraphrases or assembles CLA quotes on real contracts and
+  fails those builds (by design, nothing unevidenced is published).
+- Period selection on rounds-history sheets with projected columns and
+  registers of a subsidiary scoped as the parent's are open follow-ups
+  (listed as not exercised in the fixture's ground truth).
 
 ## Report settings
 

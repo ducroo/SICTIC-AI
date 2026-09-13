@@ -183,7 +183,9 @@ is ours, validated against published worked examples.
   such clause"): absence claims are only accepted with evidence. A
   presence-boolean `false` states the conclusion; the `missing_terms`
   entry carries the sections scanned as its evidence. The synthetic
-  fixture keeps two deliberately absent terms as a recall check.
+  fixture keeps two deliberately absent terms as a recall check and plants
+  every table-evidence quirk learned from real data rooms with a known
+  reading (`tests/fixtures/captable/`).
 - **OCF-inspired consolidated data**: retain stakeholders, classes,
   convertibles and triggers without implementing an event-sourced system.
   Source versions and dates remain evidence within the extracted JSON.
