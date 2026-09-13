@@ -123,6 +123,37 @@ Proposed first set of lender-angle bands for `config/cla_review/settings.json`. 
 | Member count N for the before-and-after | 5 | SICTIC syndicate practice; placeholder | placeholder |
 | Valuation range for the conversion table | 0.5x to 3x the cap | for the cap-versus-discount crossover | placeholder |
 
+[^1]: Enrico: If the 10/20 non-bank rules are adhered to, the CLAs will be treated as individual loans rather than a bond for withholding tax purposes, meaning the conversion discount will generally be exempt from withholding tax. Under the previous administrative practice, a CLA with a conversion discount exceeding 20% would no longer have qualified as a classic convertible bond. As a result, the full conversion discount would have been treated as income and thus been subject to withholding tax.
+A significant update, effective on 1 May 2025, now allows a conversion discount of up to 33 1/3% to
+qualify for the classic convertible bond treatment. Companies seeking to structure CLAs in a tax-efficient manner not only enjoy more flexibility owing to this update, but also the continued favourable tax treatment of the classic convertible bond status. When financing with CLAs, it is crucial to avoid triggering withholding tax. Structuring CLAs within the 10/20 non-bank rules remains essential for this purpose, and companies must carefully track the number of non-bank lenders involved.
+An article by Fabienne Limacher discusses the new upper bound of 33% on discount rate, but doesn't provide all the details. 
+Reference: https://www.walderwyss.com/assets/content/publications/250522_Newsletter-214_Key-Swiss-Tax-Practice-Update-Welcome-Adjustment-of-Loans.pdf 
+Industry standard range: Typical discount rates run 10–30%, with 20% being the most commonly cited "market" number for a straightforward seed-stage convertible loan/note. Rough conventions:
+10–15%: shorter-term bridges (a few months), or rounds where investors have other strong incentives (e.g., a very high-profile lead, or a valuation cap doing most of the work)
+20%: the default/modal discount for a standard 12–18 month convertible loan
+25–30%: longer-dated instruments, higher-risk situations, or as a step-up mechanism the longer the loan is outstanding
+Rationale:
+The discount exists to compensate the lender for being first-money-in and taking risk before the company has an external, arm's-length price set by a priced equity round. A few components typically justify the number:
+- Time value / illiquidity — the investor's cash is locked up with no way to mark it, often for a year or more, with no interest paid in cash (interest usually just accrues and converts too).
+- Risk premium for pre-price uncertainty — the lender is betting on a valuation being set later by someone else, and bears the risk that the company deteriorates before that happens.
+- Reward for coming in early — economically, the discount is meant to approximate the return a lender "should" get for bearing seed-stage risk without the negotiating leverage (or information) a priced-round investor has.
+
+[^2]: Enrico:
+Variants seen in practice:
+Some agreements use quarterly steps (0%, 5%, 10%, 15%, 20%, 25% every 3 months) for a smoother ramp.
+Others use a simpler two-tier structure: e.g., 10% if converted within the first 12 months, 20% thereafter.
+Some cap the maximum discount at 20-25% regardless of how long the loan is outstanding, to avoid it becoming punitive if the round is significantly delayed for reasons outside anyone's control.
+The "minimum period" alternative
+Rationale for the specific breakpoints:
+- Early months (0–3, sometimes 0–6): 0% or minimal discount — the lender has taken on essentially no risk if the priced round closes almost immediately; a full discount here would be a windfall unrelated to any risk borne (minimum-period cutoffs)
+- Mid-range (6–12 months): 15-20% — this is the "modal" scenario most loans are priced around, since most bridge loans are structured with a 12-18 month expected runway to the next round.
+- Long tail (18+ months): 25-30% or capped — compensates for extended risk, but many founders push to cap it rather than let it escalate indefinitely, since an open-ended schedule can create awkward incentives (e.g., a lender arguably benefiting from the round being delayed).
+
+[^3]: Enrico: I've heard once from Ralf a standard time window of 18 months. No further references on that come to my mind now.
+
+
+
+
 Rows marked "rule, no number" are switches rather than bands; they live in the same file so they can be turned off. The non-bank row describes a proposed sourced rule, not an exemption from domain review: its applicability and counting assumptions must be approved before enabling it. The safe-harbor rate changes every year and belongs in a dated setting, not in code. All rows in the table above, including qualitative switches and rows labelled "fixed", remain inactive until their review status is approved.
 
 **4. Audit against the SECA CLA term sheets.** sha_review pattern: rank the SECA short form and long form and run `lib.batch_audit` over checklists written from the lender's perspective, seeded from the earlier sketch: cap and discount interplay, maturity mechanism and price, conversion via consents versus conditional capital and who can block, QEFR realism, lender-majority definition, information rights, pro-rata and MFN, interest versus safe harbor, subordination scope, change-of-control multiple, stamp-duty position on conversion, syndicate or pooling vehicle, execution evidence. The audits cover what bands cannot: wording, consistency, and what the term sheet promises the definitive agreement will contain.
