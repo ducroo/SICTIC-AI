@@ -164,7 +164,7 @@ def test_grantable_pool_uses_its_own_diluted_column_not_investment():
 
 # --- real-world layouts ---------------------------------------------------
 
-YEAR_SHEET = """| Shareholder | 2024 | 2025 | 2026 (plan) | % |
+YEAR_SHEET = """| Shareholder | 2024 (shares) | 2025 (shares) | 2026 (plan) | % |
 | --- | --- | --- | --- | --- |
 | Alice Example | 8'000 | 8'000 | 12'000 | 40.0% |
 | Bob Example | 12'000 | 12'000 | 18'000 | 60.0% |
@@ -185,6 +185,23 @@ def test_punctuation_only_cells_and_trailing_empties_do_not_block_a_match():
     row = {"kind": "grantable", "label": "Total Series A pool, unallocated", "total": 478933, "granted": None,
            "unallocated": None, "quote": "|  | Total Series A pool, unallocated | # | 478933 |  |  | internal |  | 187327 |"}
     assert not _review_table_evidence(document)({"pools": [row]}).problems
+
+
+def test_single_class_sheet_names_its_class_in_year_headers():
+    row = {"id": "shares", "name": "Shares", "nominal_value": None, "votes_per_share": None,
+           "quote": "| Total | 20'000 | 20'000 | 30'000 | 100% |"}
+    assert not _review_captable(YEAR_SHEET)({"share_classes": [row]}).problems
+    row["quote"] = "| Bob Example | 12'000 |"
+    assert not _review_captable(YEAR_SHEET)({"share_classes": [row]}).problems
+
+
+def test_quoted_bullet_list_spans_adjacent_source_lines():
+    document = "Grants under the Plan:\n\n- Managing Director: 500 options\n\n- Head of Sales: 200 options\n\n- Advisor: 50 options\n\nVesting over four years."
+    row = {"kind": "esop", "label": "Plan", "total": None, "granted": None, "unallocated": None,
+           "quote": "Grants under the Plan: - Managing Director: 500 options - Head of Sales: 200 options - Advisor: 50 options"}
+    assert not _review_table_evidence(document)({"pools": [row]}).problems
+    row["quote"] = "Grants under the Plan: - Managing Director: 600 options"
+    assert _review_table_evidence(document)({"pools": [row]}).problems
 
 
 def test_dropped_middle_cell_in_a_quoted_row_is_tolerated():

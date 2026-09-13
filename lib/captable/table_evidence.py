@@ -57,7 +57,7 @@ _PAGE_MARKER = re.compile(r"^\s*<!--\s*[\w-]*page[\w-]*\s*:\s*\d+\s*-->\s*$")
 _FRAGMENT_SPLIT = re.compile(r"\r?\n|\.{3,}|…")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 _HEADING = re.compile(r"^\s*#{1,6}\s+\S")
-PROSE_WINDOW = 3         # adjacent prose lines one fragment may span
+PROSE_WINDOW = 8         # adjacent prose lines one fragment may span (a quoted list)
 CONTEXT_LINES = 3        # prose lines directly above a table that may name a row
 TITLE_LINES = 5          # opening prose lines that may name a pool
 NEARBY_LINES = 10        # prose fragments this close may share one identity
@@ -677,6 +677,20 @@ def _resolve_fragment(fragment: str, source: Source, identity: str | None, used:
     return prose[0]
 
 
+def _other_class_filled(identity: str, line: SourceLine) -> bool:
+    """The row states a positive figure under a column of the other share class."""
+    kind = "preferred" if _PREFERRED_LIKE.search(identity.casefold()) else (
+        "common" if _COMMON_LIKE.search(identity.casefold()) else None)
+    if kind is None:
+        return False
+    for header, cell in zip(line.headers, line.cells):
+        key = header.casefold()
+        other = "preferred" if _PREFERRED_LIKE.search(key) else ("common" if _COMMON_LIKE.search(key) else None)
+        if other and other != kind and any(value > 0 for value in cell_values(cell)):
+            return True
+    return False
+
+
 def _name_columns(identity: str, resolved: list[Resolved], source: Source) -> dict[int, int | None]:
     """Per table, the column holding names: from a quoted named row, else the header."""
     columns: dict[int, int | None] = {}
@@ -709,8 +723,8 @@ def _bind_identity(
         )
         if positive:
             return ("header", positive)
-        if named and scope == TABLE_SCOPE:
-            return None   # the class is a column of this table, but blank on this row
+        if named and scope == TABLE_SCOPE and _other_class_filled(identity, line):
+            return None   # the row holds the other class; this class is blank on it
     if any(identity_in_text(identity, section.text) for section in source.section_rows(line)):
         return ("section", ())
     if any(identity_in_text(identity, above.text) for above in source.context_above(line.table)):
