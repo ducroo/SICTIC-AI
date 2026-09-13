@@ -113,12 +113,14 @@ qualify for the classic convertible bond treatment. Companies seeking to structu
 An article by Fabienne Limacher discusses the new upper bound of 33% on discount rate, but doesn't provide all the details.
 Reference: https://www.walderwyss.com/assets/content/publications/250522_Newsletter-214_Key-Swiss-Tax-Practice-Update-Welcome-Adjustment-of-Loans.pdf -->
 | Discount, schedule expected when term exceeds | 12 months | SECA note: discount correlates with term, rising schedule advised | placeholder |
+<!-- Enrico: I've heard once from Ralf a standard time window of 18 months. No further references on that come to my mind now.-->
 | Valuation cap | required | SECA note: often requested by investors; without it the price is unbounded | rule, no number |
 | Denominator | fully diluted | SECA note: fully diluted is the investor-friendly choice | rule, no number |
 | Qualified-financing threshold, minimum | 1x the aggregate loan amount | SECA note: not too low, or a tiny round converts the loans | placeholder |
 | Qualified-financing threshold, maximum | 3x the company's stated next-round target | SECA note: not too high, or the company can avoid conversion | placeholder |
 | Maturity conversion | mechanism and price required | SECA note: cap rarely accepted here, fixed valuation or fair market value used | rule, no number |
 | Term, maximum | 24 months | SECA note: bridge until the next round; number is a placeholder | placeholder |
+<!-- Enrico: I've heard once from Ralf a standard time window of 18 months. No further references on that come to my mind now.-->
 | Interest above safe harbor with insiders lending | ESTV rate of the year | SECA note and handbook 8.3; published yearly by the tax administration | needs the current figure, dated setting |
 | Change-of-control repayment multiple, minimum | 1x | SECA short form: conversion or repayment on change of control | placeholder |
 | Lender majority for waivers and extensions | defined, at least two thirds of principal | earlier cla_review sketch | placeholder |
