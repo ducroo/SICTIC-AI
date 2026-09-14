@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from scripts.runpod_docling_kpi import (
+    MINIMAL_PDF,
     collect_base_urls,
     estimated_usd,
+    linearized_page_count,
+    load_input_document,
     probe_ready,
     proxy_url,
     rank_gpu_candidates,
@@ -119,6 +122,27 @@ def test_probe_ready_ignores_proxy_404_and_accepts_docs_200(monkeypatch):
     assert ok is True
     assert status == 200
     assert detail == "/docs 200"
+
+
+def test_load_input_document_reads_pdf_and_linearized_page_hint(tmp_path):
+    header = b"%PDF-1.6\n1 0 obj<</Linearized 1/L 100/O 2/E 10/N 15/T 90>>endobj\n"
+    pdf = tmp_path / "deck.pdf"
+    pdf.write_bytes(header + b"%EOF\n")
+
+    filename, data, meta = load_input_document(pdf)
+
+    assert filename == "deck.pdf"
+    assert data.startswith(b"%PDF")
+    assert meta["bytes"] == len(header) + 5
+    assert meta["pages_hint"] == 15
+    assert linearized_page_count(MINIMAL_PDF) is None
+
+
+def test_load_input_document_falls_back_to_builtin_smoke_pdf():
+    filename, data, meta = load_input_document(None)
+    assert filename == "smoke.pdf"
+    assert data == MINIMAL_PDF
+    assert meta["pages_hint"] == 1
 
 
 def test_probe_ready_stays_unready_when_every_route_is_404(monkeypatch):

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import signal
 import sys
 import time
@@ -264,26 +265,72 @@ def probe_ready(base_url: str, timeout_s: float = 8.0) -> tuple[bool, str, int |
     return False, last, None
 
 
-def convert_pdf(base_url: str, pdf: bytes, timeout_s: float) -> dict[str, Any]:
+def linearized_page_count(pdf: bytes) -> int | None:
+    match = re.search(rb"/N\s+(\d+)", pdf[:2048])
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def load_input_document(path: Path | None) -> tuple[str, bytes, dict[str, Any]]:
+    if path is None:
+        return (
+            "smoke.pdf",
+            MINIMAL_PDF,
+            {
+                "source": "builtin",
+                "bytes": len(MINIMAL_PDF),
+                "pages_hint": 1,
+            },
+        )
+    data = path.read_bytes()
+    return (
+        path.name,
+        data,
+        {
+            "source": str(path),
+            "bytes": len(data),
+            "pages_hint": linearized_page_count(data),
+        },
+    )
+
+
+def convert_pdf(
+    base_url: str,
+    pdf: bytes,
+    timeout_s: float,
+    *,
+    filename: str = "smoke.pdf",
+    do_ocr: bool = False,
+    table_mode: str = "fast",
+) -> dict[str, Any]:
     started = time.monotonic()
     response = requests.post(
         f"{base_url}/v1/convert/file",
-        files={"files": ("smoke.pdf", pdf, "application/pdf")},
-        data={"to_formats": "md", "do_ocr": "false", "table_mode": "fast"},
+        files={"files": (filename, pdf, "application/pdf")},
+        data={
+            "to_formats": "md",
+            "do_ocr": "true" if do_ocr else "false",
+            "table_mode": table_mode,
+        },
         headers={"User-Agent": USER_AGENT, "accept": "application/json"},
         timeout=timeout_s,
     )
     elapsed = time.monotonic() - started
     payload = _json_or_text(response)
     markdown = ""
+    errors = None
     if isinstance(payload, dict):
         document = payload.get("document") or {}
         markdown = str(document.get("md_content") or document.get("text_content") or "")
+        errors = payload.get("errors")
     return {
         "http_status": response.status_code,
         "seconds": round(elapsed, 3),
         "markdown_chars": len(markdown),
         "markdown_preview": markdown[:160],
+        "markdown": markdown,
+        "errors": errors,
         "ok": response.status_code == 200 and bool(markdown),
     }
 
@@ -387,6 +434,21 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
         "network_volumes_after": [],
         "ok": False,
     }
+    filename, pdf, input_meta = load_input_document(
+        Path(args.input) if args.input else None
+    )
+    do_ocr = args.do_ocr if args.do_ocr is not None else bool(args.input)
+    table_mode = args.table_mode
+    result["input"] = {
+        **input_meta,
+        "filename": filename,
+        "do_ocr": do_ocr,
+        "table_mode": table_mode,
+    }
+    markdown_output = args.markdown_output
+    if not markdown_output and args.input:
+        markdown_output = str(Path(args.input).with_suffix(".md"))
+    result["markdown_output"] = markdown_output
 
     leftovers = terminate_named_leftovers(session, POD_NAME_PREFIX)
     result["leftover_pods_before"] = leftovers
@@ -496,8 +558,22 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
         raise KpiFailed(f"Docling Serve did not become reachable ({ready_detail})", result)
 
     for label in ("cold", "warm"):
-        convert = convert_pdf(ready_url, MINIMAL_PDF, args.convert_timeout)
+        convert = convert_pdf(
+            ready_url,
+            pdf,
+            args.convert_timeout,
+            filename=filename,
+            do_ocr=do_ocr,
+            table_mode=table_mode,
+        )
         convert["label"] = label
+        markdown = convert.pop("markdown", "")
+        if label == "cold" and markdown_output:
+            out_path = Path(markdown_output)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(markdown, encoding="utf-8")
+            convert["markdown_path"] = str(out_path)
+            print(f"wrote markdown {out_path} chars={len(markdown)}", flush=True)
         result["convert"].append(convert)
         print(
             f"convert {label} {convert['http_status']} "
@@ -564,8 +640,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--disk", type=int, default=DEFAULT_DISK_GB)
     parser.add_argument("--bringup-timeout", type=float, default=1200)
     parser.add_argument("--ready-timeout", type=float, default=900)
-    parser.add_argument("--convert-timeout", type=float, default=180)
+    parser.add_argument("--convert-timeout", type=float, default=600)
     parser.add_argument("--teardown-timeout", type=float, default=300)
+    parser.add_argument("--input", help="PDF to convert. Default is the built-in one-page smoke file.")
+    parser.add_argument(
+        "--markdown-output",
+        help="Where to write the cold-convert markdown. Defaults to <input>.md.",
+    )
+    parser.add_argument(
+        "--do-ocr",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="OCR on convert. Default on when --input is set, off for the smoke PDF.",
+    )
+    parser.add_argument("--table-mode", default="fast", choices=("fast", "accurate"))
     parser.add_argument(
         "--output",
         default="/opt/cursor/artifacts/runpod-docling-kpi.json",
