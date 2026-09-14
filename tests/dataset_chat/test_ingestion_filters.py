@@ -9,6 +9,8 @@ class FakeStorage:
             ("dealum/documents/deck.pdf", 2.0),
             ("dealum/documents/.DS_Store", 2.5),
             ("dealum/documents/logo.svg", 3.0),
+            ("dealum/documents/logo.ai", 3.2),
+            ("dealum/documents/brand.eps", 3.4),
             ("dealum/documents/screenshot.PNG", 4.0),
             ("dealum/manifest.json", 5.0),
             ("dealum/application.raw.json", 6.0),

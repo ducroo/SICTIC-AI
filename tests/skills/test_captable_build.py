@@ -189,6 +189,23 @@ def test_extraction_reviewer_rejects_fabricated_quote() -> None:
     )
 
 
+def test_extraction_reviewer_rejects_the_borrower_listed_as_a_lender() -> None:
+    text = (
+        "between Petra Muster (the Lender) and Fixture Robotics AG (the Borrower). "
+        "The Lender grants the Borrower a loan of CHF 250,000."
+    )
+    party = {"name": "Fixture Robotics AG", "kind": "entity", "domicile": "CH",
+             "principal_amount": None, "quote": "Fixture Robotics AG (the Borrower)"}
+    lender = {"name": "Petra Muster", "kind": "individual", "domicile": "CH",
+              "principal_amount": 250000, "quote": "Petra Muster (the Lender)"}
+    output = {"borrower_name": {"value": "Fixture Robotics AG", "quote": "Fixture Robotics AG (the Borrower)"},
+              "lenders": [lender, party]}
+    problems = _reviewer(text)(output).problems
+    assert len(problems) == 1 and "this is the borrower" in problems[0]
+    output["lenders"] = [lender]
+    assert not _reviewer(text)(output).problems
+
+
 def test_extraction_reviewer_rejects_value_without_quote() -> None:
     reviewer = _reviewer(DOC_TEXT)
     extraction = _minimal_extraction(
@@ -448,3 +465,123 @@ def _consolidated_artifact(dataset, *, captable=None, loans=None):
         register=None, pool_docs=[], cla_extraction={"clas": loans, "failures": []},
         assessment={"assessments": []}, aggregation=aggregation, validation=[],
     )
+
+
+def _two_document_classification(dataset: str, document_class: str) -> dict:
+    return {"dataset": dataset, "documents": [
+        {"filename": name, "document_class": document_class, "confidence": 95,
+         "as_of_date": "2026-06-30", "language": "en", "rationale": "fixture"}
+        for name in ("captable.md", "second.md")
+    ]}
+
+
+def _install_second_document(dataset: str, text: str = "Founder 900,000") -> None:
+    from lib.datasets.paths import dataset_location_for_domain
+    from lib.storage import get_storage
+
+    location = dataset_location_for_domain(dataset, "startups")
+    get_storage().write_text(f"{location.raw_rel}/second.md", text)
+    get_storage().write_text(f"{location.parsed_rel}/second.md", text)
+
+
+def test_failed_table_document_is_retried_alone_on_the_next_run(mock_env, monkeypatch):
+    """Successful extractions of a failed run are kept; only the failed document reruns."""
+    import asyncio
+    from unittest.mock import AsyncMock
+    import lib.captable.table_extraction as table_extraction_mod
+    from lib.captable.insights import build_insight, read_build_insight
+
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
+    build_mod, _ = _patched_build(monkeypatch)
+    _install_dataset("retry-tables", "Founder 900,000")
+    _install_second_document("retry-tables")
+    monkeypatch.setattr(build_mod, "classify_documents",
+                        AsyncMock(return_value=_two_document_classification("retry-tables", "current_cap_table")))
+    extracted: list[str] = []
+
+    async def flaky_extract(dataset, filename, _text):
+        extracted.append(filename)
+        if filename == "second.md" and extracted.count("second.md") == 1:
+            raise RuntimeError("provider outage")
+        return {**_captable_extraction(filename), "dataset": dataset}
+
+    monkeypatch.setattr(table_extraction_mod, "extract_captable", flaky_extract)
+    with pytest.raises(ValueError, match="Table extraction incomplete: \\['second.md'\\].*kept"):
+        asyncio.run(build_mod.build("retry-tables"))
+    assert not build_insight("retry-tables", "table-extraction").exists()
+    partial = read_build_insight(build_insight("retry-tables", "table-extraction-partial"))
+    assert [v["document"] for v in partial["captable_versions"]] == ["captable.md"]
+    assert partial["failures"] == [{"document": "second.md", "error": "provider outage"}]
+    assert extracted == ["captable.md", "second.md"]
+
+    asyncio.run(build_mod.build("retry-tables"))
+    assert extracted == ["captable.md", "second.md", "second.md"]
+    complete = read_build_insight(build_insight("retry-tables", "table-extraction"))
+    assert sorted(v["document"] for v in complete["captable_versions"]) == ["captable.md", "second.md"]
+    assert complete["failures"] == []
+
+    # --fresh ignores the staging insight and re-extracts every document.
+    asyncio.run(build_mod.build("retry-tables", fresh=True))
+    assert extracted[3:] == ["captable.md", "second.md"]
+
+
+def test_staged_table_extractions_go_stale_with_their_inputs(mock_env, monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+    import lib.captable.table_extraction as table_extraction_mod
+
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
+    build_mod, _ = _patched_build(monkeypatch)
+    _install_dataset("stale-tables", "Founder 900,000")
+    _install_second_document("stale-tables")
+    monkeypatch.setattr(build_mod, "classify_documents",
+                        AsyncMock(return_value=_two_document_classification("stale-tables", "current_cap_table")))
+    extracted: list[str] = []
+
+    async def flaky_extract(dataset, filename, _text):
+        extracted.append(filename)
+        if filename == "second.md" and extracted.count("second.md") == 1:
+            raise RuntimeError("provider outage")
+        return {**_captable_extraction(filename), "dataset": dataset}
+
+    monkeypatch.setattr(table_extraction_mod, "extract_captable", flaky_extract)
+    with pytest.raises(ValueError, match="incomplete"):
+        asyncio.run(build_mod.build("stale-tables"))
+    # A corrected source (new indexed revision) invalidates the staging insight.
+    _install_dataset("stale-tables", "Founder 850,000")
+    _install_second_document("stale-tables", "Founder 850,000")
+    asyncio.run(build_mod.build("stale-tables"))
+    assert extracted == ["captable.md", "second.md", "captable.md", "second.md"]
+
+
+def test_failed_cla_document_is_retried_alone_on_the_next_run(mock_env, monkeypatch):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from lib.captable.insights import build_insight, read_build_insight
+
+    monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
+    build_mod, _ = _patched_build(monkeypatch)
+    _install_dataset("retry-loans", "CLA text")
+    _install_second_document("retry-loans", "CLA text")
+    monkeypatch.setattr(build_mod, "classify_documents",
+                        AsyncMock(return_value=_two_document_classification("retry-loans", "cla_executed")))
+    extracted: list[str] = []
+
+    async def flaky_extract(dataset, filename, _text):
+        extracted.append(filename)
+        if filename == "captable.md" and extracted.count("captable.md") == 1:
+            raise RuntimeError("provider outage")
+        return _complete_cla(dataset, document=filename, status="executed")
+
+    monkeypatch.setattr(build_mod, "extract_cla", flaky_extract)
+    with pytest.raises(ValueError, match="CLA extraction incomplete: \\['captable.md'\\].*kept"):
+        asyncio.run(build_mod.extract("retry-loans"))
+    assert not build_insight("retry-loans", "loan-extraction").exists()
+    partial = read_build_insight(build_insight("retry-loans", "loan-extraction-partial"))
+    assert [cla["document"] for cla in partial["clas"]] == ["second.md"]
+    assert partial["failures"][0]["document"] == "captable.md"
+
+    result = asyncio.run(build_mod.extract("retry-loans"))
+    assert extracted == ["captable.md", "second.md", "captable.md"]
+    assert [cla["document"] for cla in result["clas"]] == ["captable.md", "second.md"]
+    assert result["failures"] == []
