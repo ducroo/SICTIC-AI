@@ -152,8 +152,8 @@ def test_quality_profile_requests_json_graph_and_accurate_tables():
 
     assert options["to_formats"] == ["json", "md", "html"]
     assert options["table_mode"] == "accurate"
-    assert options["do_chart_extraction"] is True
     assert options["do_pdf_heading_hierarchy"] is True
+    assert "do_chart_extraction" not in options
     assert ("to_formats", "json") in fields
     assert ("table_mode", "accurate") in fields
     assert options.keys() >= QUALITY_CONVERT_OPTIONS.keys()

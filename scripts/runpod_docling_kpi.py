@@ -302,8 +302,6 @@ QUALITY_CONVERT_OPTIONS = {
     "table_mode": "accurate",
     "do_table_structure": True,
     "do_pdf_heading_hierarchy": True,
-    "do_chart_extraction": True,
-    "do_picture_classification": True,
     "image_export_mode": "placeholder",
     "include_images": False,
     "include_page_images": False,
@@ -520,6 +518,16 @@ def convert_pdf(
 
     task = poll_convert_task(base_url, str(task_id), timeout_s)
     if str(task.get("task_status")) != "success":
+        result_payload = None
+        try:
+            failed = requests.get(
+                f"{base_url}/v1/result/{task_id}",
+                headers=headers,
+                timeout=30,
+            )
+            result_payload = _json_or_text(failed)
+        except requests.RequestException:
+            result_payload = None
         elapsed = time.monotonic() - started
         return {
             "http_status": 504 if task.get("task_status") == "timeout" else 500,
@@ -531,8 +539,12 @@ def convert_pdf(
             "markdown": "",
             "html": "",
             "json_document": None,
-            "errors": task,
-            "response_preview": str(task.get("task_status")),
+            "errors": result_payload or task,
+            "response_preview": str(
+                (result_payload or {}).get("detail")
+                if isinstance(result_payload, dict)
+                else task.get("task_status")
+            )[:300],
             "ok": False,
         }
 
@@ -800,15 +812,44 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
         result["openapi_paths"] = []
         print(f"openapi inspect failed: {type(exc).__name__}", flush=True)
 
+    option_sets = [convert_options]
+    if args.quality:
+        option_sets.append(
+            {
+                "to_formats": list(convert_options.get("to_formats") or ["json", "md"]),
+                "do_ocr": True,
+                "table_mode": "accurate",
+                "do_table_structure": True,
+                "image_export_mode": "placeholder",
+                "include_images": False,
+                "document_timeout": args.convert_timeout,
+            }
+        )
+
     labels = ("cold",) if args.skip_warm else ("cold", "warm")
     for label in labels:
-        convert = convert_pdf(
-            ready_url,
-            pdf,
-            args.convert_timeout,
-            filename=filename,
-            options=convert_options,
-        )
+        convert = None
+        used_options = convert_options
+        for attempt_options in option_sets if label == "cold" else [convert_options]:
+            used_options = attempt_options
+            convert = convert_pdf(
+                ready_url,
+                pdf,
+                args.convert_timeout,
+                filename=filename,
+                options=attempt_options,
+            )
+            if convert["ok"]:
+                convert_options = attempt_options
+                result["input"]["convert_options_used"] = attempt_options
+                break
+            print(
+                f"convert failed options={sorted(attempt_options)} "
+                f"preview={convert.get('response_preview')}",
+                flush=True,
+            )
+        if convert is None:
+            raise KpiFailed("convert produced no response", result)
         convert["label"] = label
         markdown = convert.pop("markdown", "")
         html = convert.pop("html", "")
