@@ -56,24 +56,29 @@ def _captable_extraction(document: str) -> dict:
         "as_of_date": {"value": "2026-06-30", "quote": "as of 30 June 2026"},
         "share_classes": [
             {"id": "common", "name": "Common", "nominal_value": 0.10,
-             "votes_per_share": 1},
+             "votes_per_share": 1, "quote": "Common 0.10 1"},
         ],
         "stakeholders": [
             {"name": "Jane Doe", "kind": "individual", "role": "founder",
              "holdings": [{"class_id": "common", "count": 600_000}],
-             "diluted_count": 600_000, "invested_amount": 60_000},
+             "diluted_count": 600_000, "invested_amount": 60_000,
+             "group": None, "quote": "Jane Doe 600,000 60,000"},
             {"name": "Fixture Angels", "kind": "entity", "role": "investor",
              "holdings": [{"class_id": "common", "count": 300_000}],
-             "diluted_count": 300_000, "invested_amount": 300_000},
+             "diluted_count": 300_000, "invested_amount": 300_000,
+             "group": None, "quote": "Fixture Angels 300,000"},
             {"name": "Treasury", "kind": "treasury", "role": "company",
              "holdings": [{"class_id": "common", "count": 50_000}],
-             "diluted_count": None},
+             "diluted_count": None, "invested_amount": None,
+             "group": None, "quote": "Treasury 50,000"},
             {"name": "ESOP", "kind": "pool", "role": "employee",
-             "holdings": [], "diluted_count": 100_000},
+             "holdings": [], "diluted_count": 100_000, "invested_amount": None,
+             "group": None, "quote": "ESOP 100,000"},
         ],
         "pools": [
             {"kind": "esop", "label": "ESOP 2025", "total": 100_000,
-             "granted": 40_000, "unallocated": 60_000},
+             "granted": 40_000, "unallocated": 60_000,
+             "quote": "ESOP 2025 100,000 40,000 60,000"},
         ],
         "totals": {
             "by_class": [{"class_id": "common", "issued_total": 950_000}],
@@ -91,6 +96,8 @@ def _captable_extraction(document: str) -> dict:
 def _captable_snapshot() -> dict:
     """A stored snapshot (stage 7 output) for the analysis smoke."""
     extraction = _captable_extraction("fixture.md")
+    from lib.captable.aggregation import aggregate_clas
+
     return {
         "dataset": "example-startup",
         "as_of_date": "2026-06-30",
@@ -109,7 +116,7 @@ def _captable_snapshot() -> dict:
         "pool_documents": [],
         "convertibles": [],
         "convertible_failures": [],
-        "aggregation": {},
+        "aggregation": {**aggregate_clas([]), "dataset": "example-startup"},
         "assessment": [],
         "validation": [],
         "assumptions": [],

@@ -5,6 +5,7 @@ import json
 from datetime import date
 
 from lib.captable.data import TOOL_VERSION
+from lib.captable.schema import validate_build_artifact
 from lib.infrastructure.configuration import config_cache_key, load_repository_config
 
 from lib.insights import InsightFile
@@ -18,10 +19,7 @@ def build_insight(dataset: str, identifier: str, config_key: str = "") -> Insigh
 
 def read_build_insight(insight: InsightFile) -> dict:
     data = json.loads(insight.content())
-    if not isinstance(data, dict):
-        raise ValueError(f"Expected a JSON object in {insight.path}")
-    if data.get("failures") or data.get("convertible_failures"):
-        raise ValueError(f"Incomplete extraction in {insight.path}; repair the manual input or rerun captable_build.")
+    validate_build_artifact(data, insight.identifier)
     return data
 
 
@@ -33,11 +31,15 @@ def configured_build_insight(dataset: str, identifier: str, *inputs: InsightFile
         "loan-extraction": ("cla_extraction_prompt", "cla_extraction_base_schema", "cla_terms"),
         "table-extraction": ("captable_extraction_prompt", "captable_extraction_response_schema", "register_extraction_prompt", "register_extraction_response_schema", "pool_extraction_prompt", "pool_extraction_response_schema"),
     }
+    # A staging insight keeps successful per-document extractions of a
+    # failed run; it shares its stage's key so it goes stale with it.
+    keys["loan-extraction-partial"] = keys["loan-extraction"]
+    keys["table-extraction-partial"] = keys["table-extraction"]
     if identifier == "consolidated":
-        key = config_cache_key(TOOL_VERSION, config["assessment_rules"], str(date.today()),
+        key = config_cache_key(TOOL_VERSION, config["artifact_schemas"], config["assessment_rules"], str(date.today()),
                                *(item.content() for item in inputs))
     else:
-        key = config_cache_key(TOOL_VERSION, {name: config[name] for name in keys[identifier]},
+        key = config_cache_key(TOOL_VERSION, config["artifact_schemas"], {name: config[name] for name in keys[identifier]},
                                *(item.content() for item in inputs))
     return build_insight(dataset, identifier, key)
 

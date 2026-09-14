@@ -208,7 +208,21 @@ not a misread value but the claim "this clause does not exist" made without
 really looking. We therefore accept an absence only with a statement of
 which sections were searched — and every found value must carry a verbatim
 quote that we locate mechanically in the document. Where the quote does not
-match, the extraction is rejected and redone.
+match, the extraction is rejected and redone, with the closest source line
+named in the feedback. Whitespace differences are tolerated and a quote may
+join verbatim parts with `...`, but a paraphrase or a passage assembled from
+several places (a signature block stitched from separate lines, a clause with
+a word changed) is not a quote of the document and is rejected. The lenders
+list may not contain the borrower.
+
+**Table rows.** Cap-table, register and pool rows follow the same principle
+at cell level: the quoted row is matched cell by cell against one source row,
+every number is read from a source cell of a row that names the holder, a
+holder's total is the sum of one column over all its quoted rows, a zero needs
+a dash or a literal 0 in the cell, and a blank cell or an absent column is
+reported as null rather than 0. When a row is rejected, the model is told which
+numbers the quoted cells actually state and which source line comes closest to
+an unmatched fragment, so the retry corrects the specific mistake.
 
 ## Part 2 — What we assess per agreement, and check across all agreements
 
@@ -360,9 +374,12 @@ holdings could be compared) is reported.
 
 **Pool consistency.** The cap table's pool figures are compared with the
 pool overview documents, paired by pool identity. Within the family of
-employee pools a single pool may be compared across kinds (a table calling
-it "grantable" and an overview calling it "ESOP"); one-sided coverage is
-tolerated; a date gap is disclosed. A genuine disagreement — the cap table
+share-backed employee pools (ESOP, grantable, authorized capital) a single
+pool may be compared across kinds (a table calling it "grantable" and an
+overview calling it "ESOP") when each source lists exactly one such pool
+with a stated total; a phantom plan (PSOP, cash-settled) is only ever
+compared with another phantom plan; one-sided coverage is tolerated; a date
+gap is disclosed. A genuine disagreement — the cap table
 saying one pool size and the ESOP overview another — stays a failure,
 because it is exactly what a diligence question is for.
 
@@ -385,7 +402,9 @@ checks across source versions remain a separate follow-up.
 ### How results are stored
 
 Four JSON `InsightFile` artifacts live under `insights/captable-build/`:
-classification, loan-extraction, table-extraction and consolidated. The final
+classification, loan-extraction, table-extraction and consolidated, plus two
+staging insights (loan-extraction-partial, table-extraction-partial) that keep
+the successful documents of a failed extraction run for the retry. The final
 `captable` Markdown report lives directly under `insights/`. Shared selection
 prefers manual overrides and checks indexed source revisions, effective
 configuration and selected input content for generated reuse. There are no

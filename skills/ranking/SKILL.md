@@ -45,6 +45,9 @@ supplied candidates. The existing ranking reviewer removes duplicate IDs and
 appends missing IDs in input order; unexpected IDs require correction. Rationale
 validation rejects missing, duplicate or unexpected IDs and blank explanations.
 
+Schemas reject unexpected IDs and blank rationales. Reviewers handle ID coverage
+and duplicates; accepted rationales are then attached without a second review.
+
 ## Side effects and failure behavior
 
 The engine calls models but does not discover people, refresh profiles, ingest

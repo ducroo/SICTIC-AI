@@ -42,6 +42,16 @@ reuse the audit and create a new response; unrelated indexed changes can invalid
 it. Timestamped output reuse uses exact-model `is_reusable()`, with stage and
 audit content in its key, rather than manual-first output selection.
 
+The skill supplies `audit_response_schema.json` to the engine. Assessment fields
+and status values are schema-defined; results are nested under `result` in the
+version-2 audit artifact, with technical errors recorded separately.
+
+The action schema enforces stage-specific actions and nonblank rationales.
+The business reviewer trims text, drops blank concerns, and checks that sending
+concerns has at least one concern. Eight concerns is prompt guidance only;
+neither the schema nor the reviewer imposes a count limit.
+Rendering consumes the accepted result without repeating those checks.
+
 ## Side effects and failure behavior
 
 Import Dealum data, synchronize, call models and save artifacts. Do not send

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.captable.aggregation import normalize_lender_name
 from lib.captable.documents import normalize_for_matching
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
@@ -35,6 +36,24 @@ def _quote_found(quote: str, normalized_text: str) -> bool:
         normalize_for_matching(fragment) in normalized_text
         for fragment in fragments
     )
+
+
+def _closest_line(quote: str, document_text: str) -> str | None:
+    """The source line most similar to an unmatched quote, for feedback."""
+    import difflib
+
+    key = normalize_for_matching(quote)
+    candidates = {
+        normalize_for_matching(line): line.strip()
+        for line in document_text.splitlines() if line.strip()
+    }
+    matches = difflib.get_close_matches(key, list(candidates), n=1, cutoff=0.6)
+    return candidates[matches[0]] if matches else None
+
+
+def _quote_hint(quote: str, document_text: str) -> str:
+    closest = _closest_line(quote, document_text)
+    return f" The closest source line is {closest!r}." if closest else ""
 
 
 def _needs_quote(value: Any) -> bool:
@@ -79,8 +98,6 @@ def review_cla_extraction(
     normalized_text = normalize_for_matching(document_text)
 
     def reviewer(output: Any) -> Review[Any]:
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         problems: list[str] = []
         absence_fields: list[str] = []
 
@@ -98,10 +115,13 @@ def review_cla_extraction(
                     f"{field}: quote not found verbatim in the document "
                     f"text: {quote!r}. Copy the snippet exactly as it "
                     "appears (whitespace differences are tolerated)."
+                    + _quote_hint(quote, document_text)
                 )
             if _is_absence_claim(field, value, quote, presence_fields):
                 absence_fields.append(field)
 
+        borrower = output.get("borrower_name")
+        borrower = borrower.get("value") if isinstance(borrower, dict) else None
         for lender in output.get("lenders", []):
             if not isinstance(lender, dict):
                 continue
@@ -110,6 +130,16 @@ def review_cla_extraction(
                 problems.append(
                     f"lenders[{lender.get('name')!r}]: quote not found "
                     f"verbatim in the document text: {quote!r}."
+                    + _quote_hint(quote, document_text)
+                )
+            # The borrower is a party, never a lender; a multi-party block
+            # tempts the model to list every party.
+            if isinstance(borrower, str) and normalize_lender_name(
+                str(lender.get("name") or "")
+            ) == normalize_lender_name(borrower):
+                problems.append(
+                    f"lenders[{lender.get('name')!r}]: this is the borrower, "
+                    "not a lender. List only the parties granting the loan."
                 )
 
         covered = {
@@ -156,8 +186,6 @@ async def extract_cla(
             built["presence_fields"],
         ),
     )
-    if not isinstance(result, dict):
-        raise ValueError("CLA extraction response must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result

@@ -13,6 +13,10 @@ from lib.infrastructure.configuration import load_repository_config
 from lib.insights import InsightFile
 from lib.storage import get_storage
 
+AUDIT_SCHEMA = json.loads(
+    (Path(__file__).resolve().parents[2] / "config/sha_review/audit_response_schema.json").read_text()
+)
+
 
 def _actual_identification_schema() -> dict:
     return json.loads(
@@ -116,8 +120,8 @@ async def test_sha_checks_assess_full_agreement_without_search_hits(
     )
     [check] = audits[0][1]["chapters"][0]["checks"]
     assert len(calls) == 1
-    assert check["status"] == "balanced"
-    assert check["source_documents"] == ["legal/sha.pdf — clause 8"]
+    assert check["result"]["status"] == "balanced"
+    assert check["result"]["source_documents"] == ["legal/sha.pdf — clause 8"]
     assert check["error"] is None
 
 
@@ -185,7 +189,6 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         "# Review\n\n## Terms\n\n### Balance\n\n"
         "Is the provision balanced?\n"
     )
-    status_scale = ["unclear", "too weak", "balanced", "too strong"]
     sha_config = {
         "document_identification_queries": ["signed shareholders agreement"],
         "document_identification_prompt": "Find the latest signed SHA.",
@@ -208,10 +211,7 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
             "first": checklist,
             "second": checklist.replace("# Review", "# Review Two"),
         },
-        "audit_settings": {
-            "status_scale": status_scale,
-            "missing_evidence_status": "unclear",
-        },
+        "audit_response_schema": AUDIT_SCHEMA,
         "summary_instructions": "Summarize {{startup}}.",
     }
     monkeypatch.setattr(
@@ -219,7 +219,6 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         "load_repository_config",
             lambda: {
                 "sha_review": sha_config,
-                "batch_audit": {"response_schema": {}, "llm_instructions": ""},
                 "structured_output": {
                     "json_response_instructions": "fixture"
                 },
@@ -277,13 +276,13 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
         await asyncio.sleep(0)
         assert len(audit_starts) == 2
         audit = {
-            "schema_version": 1,
+            "schema_version": 2,
             "skill": "sha_review",
             "checklist_title": title,
             "dataset": "acme",
             "model": "ollama/test_model:1b",
             "generated_at": "2026-08-20T00:00:00Z",
-            "status_scale": status_scale,
+            "response_schema": AUDIT_SCHEMA,
             "chapters": [
                 {
                     "number": "1",
@@ -292,12 +291,14 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
                         {
                             "number": "1.1",
                             "check": "Balance",
-                            "status": "balanced",
-                            "rationale": "Fixture rationale.",
-                            "source_documents": [
-                                "legal/shareholders-agreement.pdf"
-                            ],
-                            "proposed_next_steps_and_questions": [],
+                            "result": {
+                                "status": "balanced",
+                                "rationale": "Fixture rationale.",
+                                "source_documents": [
+                                    "legal/shareholders-agreement.pdf"
+                                ],
+                                "proposed_next_steps_and_questions": [],
+                            },
                             "error": None,
                         }
                     ],
@@ -338,8 +339,7 @@ async def test_sha_review_composes_existing_skills_and_returns_summary(
     assert "Operative provisions substantively match a SHA." not in report
     assert "Material finding" in report
     assert len(audit_calls) == 2
-    assert all(call["status_scale"] == status_scale for call in audit_calls)
-    assert all(call["missing_evidence_status"] == "unclear" for call in audit_calls)
+    assert all(call["response_schema"] == AUDIT_SCHEMA for call in audit_calls)
     assert "legal/shareholders-agreement.pdf.md" in audit_calls[0]["llm_instructions"]
     assert len(identification_prompts) == 1
     assert len(json_calls) == 1
@@ -367,8 +367,13 @@ def test_sha_identification_rejects_inconsistent_none_result(
         "selection_reason": "Fixture selection rationale.",
     }
 
-    with pytest.raises(ValueError, match="null path if and only if"):
-        module._parse_identification(response)
+    from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+    schema = module.load_repository_config("sha_review")[
+        "document_identification_response_schema"
+    ]
+    with pytest.raises(ValueError):
+        validate_json_schema(response, schema)
 
 
 def test_sha_identification_stops_only_when_no_candidate_exists(mock_env):
@@ -381,8 +386,7 @@ def test_sha_identification_stops_only_when_no_candidate_exists(mock_env):
         "selection_reason": "The retrieved documents do not contain SHA terms.",
     }
 
-    with pytest.raises(
-        ValueError,
-        match="No plausible Shareholders' Agreement could be identified",
-    ):
-        module._parse_identification(response)
+    assert module._review_identification(response).problems == (
+        "No plausible Shareholders' Agreement could be identified: "
+        + response["selection_reason"],
+    )

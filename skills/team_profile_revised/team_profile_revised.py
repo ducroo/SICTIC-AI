@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from lib.batch_audit import batch_audit
-from lib.batch_audit.schema import audit_errors, validate_audit_document
+from lib.batch_audit.schema import validate_audit_document
 from lib.datasets.ingestion import sync_datasets
 from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.infrastructure.configuration import config_cache_key, load_repository_config
@@ -49,7 +49,6 @@ async def _run_audits(
     if not isinstance(checklists, dict) or not checklists:
         raise ValueError("team_profile_revised.checklists requires configured checklists.")
     instructions = shared_context + "\n\n" + config["audit_instructions"]
-    settings = config["audit_settings"]
     keys = sorted(checklists)
     results = await asyncio.gather(*(
         batch_audit(
@@ -57,18 +56,15 @@ async def _run_audits(
             checklist_markdown=checklists[key],
             skill_name="team_profile_revised",
             llm_instructions=instructions,
-            status_scale=settings["status_scale"],
-            missing_evidence_status=settings["missing_evidence_status"],
+            response_schema=config["audit_response_schema"],
         )
         for key in keys
     ))
     audits = []
     for key, result in zip(keys, results):
-        audit = validate_audit_document(json.loads(result.content()))
-        failures = audit_errors(audit)
-        if failures:
-            details = "; ".join(f"{item['number']}: {item['error']}" for item in failures)
-            raise RuntimeError(f"Team checklist {key!r} contains technical failures: {details}")
+        audit = validate_audit_document(
+            json.loads(result.content()), require_complete=True,
+        )
         audits.append((key, audit))
     return audits
 
@@ -114,7 +110,6 @@ async def team_profile_revised(startup_name: str) -> InsightResult:
         model=llm_model(),
         config_key=config_cache_key(
             team_config,
-            config["batch_audit"],
             config["structured_output"],
             config["startup_profile"],
             config["person_profile"],

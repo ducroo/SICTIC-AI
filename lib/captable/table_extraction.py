@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from typing import Any
-import math
-import re
 
-from lib.captable.documents import normalize_for_matching
+from lib.captable.table_evidence import (
+    DOCUMENT_HEADINGS, ROW_SCOPE, TABLE_SCOPE, QuoteError, Source, numbers, resolve_quote,
+)
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
@@ -16,51 +16,80 @@ logger = get_logger(__name__)
 # Extracted holdings may deviate from the table's own totals by at most this
 # share (covers rounding rows); larger gaps mean silently dropped rows.
 COMPLETENESS_TOLERANCE = 0.005
+POOL_FIELDS = frozenset({"total", "granted", "unallocated"})
 
 
 def _numbers_in_quote(quote: str) -> set[float]:
-    """Recognize plain and commonly grouped/decimal source numerals."""
-    quote = re.sub(r"(?<=\d)[ '\u2019\u00a0\u202f](?=\d{3}(?:\D|$))", "", quote)
-    values = set()
-    for token in re.findall(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*", quote):
-        variants = [token.replace(",", ""), token.replace(".", "").replace(",", ".")]
-        for variant in variants:
-            try:
-                values.add(float(variant))
-            except ValueError:
-                pass
-    return values
+    """Recognize source numerals cell by cell, never joining across cells."""
+    return {float(value) for cell in quote.split("|") for value in numbers(cell)}
 
 
 def _review_evidence(output: dict, document_text: str) -> list[str]:
-    normalized = normalize_for_matching(document_text)
-    problems = []
+    """Every extracted row must be evidenced by its quote; see table_evidence."""
+    source = Source(document_text)
+    problems: list[str] = []
 
-    def check(label, row, *, identity=None):
-        quote = row.get("quote") or ""
-        if not normalize_for_matching(quote) or normalize_for_matching(quote) not in normalized:
-            problems.append(f"{label}: quote missing or not found verbatim in source.")
+    def check(label: str, row: dict, *, identity: str | None = None, scope: str = ROW_SCOPE) -> None:
+        try:
+            evidence = resolve_quote(row.get("quote") or "", source, identity, scope)
+        except QuoteError as error:
+            problems.append(f"{label}: {error}")
             return
-        if identity and normalize_for_matching(str(identity)) not in normalize_for_matching(quote):
-            problems.append(f"{label}: identity {identity!r} is not evidenced by its quote.")
-        quoted_numbers = _numbers_in_quote(quote)
+        if not evidence.identity_found():
+            problems.append(
+                f"{label}: identity {identity!r} is not named by the quoted source rows, "
+                "the named row above a run of nameless rows, a column header, a section "
+                "row of the same table, or the text directly above the table. Quote the "
+                "source row that names it, keeping the source wording, or drop the row."
+            )
+            return
 
-        def check_numbers(value):
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if not any(math.isclose(value, number, rel_tol=1e-9, abs_tol=1e-9) for number in quoted_numbers):
-                    problems.append(f"{label}: numeric value {value} is not evidenced by its quote.")
+        ignored = "".join(
+            f" The quoted row {line.text[:120]!r} does not name {identity!r} (not in its cells, "
+            "in the named row above its nameless rows, in a header, a section row or the text "
+            "above the table) and was ignored."
+            for line in evidence.ignored_rows()[:2]
+        )
+
+        def derived(value, field: str) -> bool:
+            """The pool prompt asks to derive the third pool figure from two stated ones."""
+            if field not in POOL_FIELDS or not all(isinstance(row.get(f), (int, float)) for f in POOL_FIELDS - {field}):
+                return False
+            total, granted, unallocated = (row.get(f) for f in ("total", "granted", "unallocated"))
+            expected = {"total": granted + unallocated, "granted": total - unallocated, "unallocated": total - granted}[field]
+            return abs(value - expected) < 1e-6 and all(
+                evidence.evidenced(row[f], f, None) for f in POOL_FIELDS - {field}
+            )
+
+        def check_numbers(value, field: str = "", class_id: str | None = None) -> None:
+            if isinstance(value, bool):
+                return
+            if isinstance(value, (int, float)):
+                if not evidence.evidenced(value, field, class_id) and not derived(value, field):
+                    problems.append(
+                        f"{label}.{field}: numeric value {value} is not evidenced by the "
+                        f"quoted source cells ({evidence.describe_numbers(field, class_id)})."
+                        f"{ignored} Quote the complete source row(s) whose cells state this "
+                        "value for this holder; when the source does not state it, report "
+                        "null and an assumption. A blank cell or an absent column is null, never 0."
+                    )
             elif isinstance(value, dict):
                 for key, child in value.items():
                     if key != "quote":
-                        check_numbers(child)
+                        check_numbers(child, key, value.get("class_id", class_id))
             elif isinstance(value, list):
                 for child in value:
-                    check_numbers(child)
+                    check_numbers(child, field, class_id)
+
         check_numbers(row)
 
+    # A share class is named by its table (a column, a label row); a pool
+    # by its letter's heading; a holder only by rows that carry its name.
+    scopes = {"share_classes": TABLE_SCOPE, "pools": DOCUMENT_HEADINGS}
     for collection in ("stakeholders", "share_classes", "entries", "pools"):
         for index, row in enumerate(output.get(collection, [])):
-            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"))
+            check(f"{collection}[{index}]", row, identity=row.get("name") or row.get("label"),
+                  scope=scopes.get(collection, ROW_SCOPE))
     for field in ("as_of_date", "fully_diluted_definition"):
         entry = output.get(field) or {}
         if entry.get("value") not in (None, "unstated"):
@@ -72,18 +101,12 @@ def _review_evidence(output: dict, document_text: str) -> list[str]:
 
 def _review_table_evidence(document_text: str):
     def reviewer(output):
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         return Review(output, tuple(_review_evidence(output, document_text)))
     return reviewer
 
 
 def _review_captable(document_text: str):
-    normalized_text = normalize_for_matching(document_text)
-
     def reviewer(output: Any) -> Review[Any]:
-        if not isinstance(output, dict):
-            return Review(output, ("Response must be a JSON object.",))
         problems: list[str] = _review_evidence(output, document_text)
 
         # A fully-diluted definition must be evidenced by definitional
@@ -139,8 +162,6 @@ async def extract_captable(
         config["captable_extraction_response_schema"],
         reviewer=_review_captable(document_text),
     )
-    if not isinstance(result, dict):
-        raise ValueError("Cap-table extraction must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result
@@ -159,8 +180,6 @@ async def extract_register(
         prompt, config["register_extraction_response_schema"],
         reviewer=_review_table_evidence(document_text),
     )
-    if not isinstance(result, dict):
-        raise ValueError("Register extraction must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result
@@ -179,8 +198,6 @@ async def extract_pools(
         prompt, config["pool_extraction_response_schema"],
         reviewer=_review_table_evidence(document_text),
     )
-    if not isinstance(result, dict):
-        raise ValueError("Pool extraction must be a JSON object.")
     result["document"] = filename
     result["dataset"] = dataset_name
     return result

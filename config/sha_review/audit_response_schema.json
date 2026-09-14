@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Assessment status selected from the configured scale.",
+      "enum": [
+        "unclear",
+        "too weak",
+        "balanced",
+        "too strong"
+      ],
+      "title": "Status"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Rationale",
+      "pattern": "\\S"
+    },
+    "source_documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Source documents"
+    },
+    "proposed_next_steps_and_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Proposed next steps and questions"
+    }
+  },
+  "required": [
+    "status",
+    "rationale",
+    "source_documents",
+    "proposed_next_steps_and_questions"
+  ]
+}

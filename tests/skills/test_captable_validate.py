@@ -248,3 +248,42 @@ def test_pool_consistency_tolerates_one_sided_coverage() -> None:
     }
     finding = check_pool_consistency(captable, [pool_doc])[0]
     assert finding["status"] == "pass"
+
+
+def test_pool_consistency_never_pairs_a_share_pool_with_a_phantom_plan() -> None:
+    """A cap table's ESOP is not the plan document's phantom plan, even when the
+    cap table lists its own phantom plan without a total."""
+    captable = {
+        "pools": [
+            {"kind": "authorized_capital", "label": "New ESOP", "total": 1_843_596,
+             "granted": None, "unallocated": None},
+            {"kind": "psop", "label": "Legacy PSO (phantom)", "total": None,
+             "granted": None, "unallocated": None},
+        ]
+    }
+    pool_doc = {"document": "pso-plan.xlsx",
+                "pools": [{"kind": "psop", "label": "PSO plan", "total": 1_000_000,
+                           "granted": None, "unallocated": None}]}
+    finding = check_pool_consistency(captable, [pool_doc])[0]
+    assert finding["status"] == "skipped"
+    esop_only = {"pools": [{"kind": "esop", "label": "ESOP", "total": 1_000_000,
+                            "granted": None, "unallocated": None}]}
+    assert check_pool_consistency(esop_only, [pool_doc])[0]["status"] == "skipped"
+    grantable = {"pools": [{"kind": "grantable", "label": "Pool", "total": 1_000_000,
+                            "granted": None, "unallocated": None}]}
+    esop_doc = {"document": "esop.xlsx", "pools": [{"kind": "esop", "label": "ESOP", "total": 1_000_000,
+                                                    "granted": None, "unallocated": None}]}
+    assert check_pool_consistency(grantable, [esop_doc])[0]["status"] == "pass"
+
+
+def test_lender_who_is_a_shareholder_yields_a_schema_valid_status():
+    """Every validation status must be one the consolidated schema declares."""
+    from lib.captable.validate import validate_captable
+
+    captable = {"stakeholders": [{"name": "Alice Example", "holdings": [{"class_id": "common", "count": 100}]}],
+                "totals": {"by_class": [{"class_id": "common", "issued_total": 100}]}}
+    cla = {"status": "executed", "execution_date": {"value": "2026-01-15"},
+           "lenders": [{"name": "Alice Example", "amount": {"value": 1000}}]}
+    findings = validate_captable(captable, clas=[cla])
+    assert any(f["check"] == "cla_lender_is_shareholder" for f in findings)
+    assert {f["status"] for f in findings} <= {"pass", "fail", "skipped"}

@@ -110,7 +110,7 @@ async def test_ranking_rank_chunk_retries_then_repairs_duplicate_ids(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatch):
+async def test_ranking_rank_chunk_schema_rejects_unknown_id(monkeypatch):
     import json
     from pathlib import Path
 
@@ -138,8 +138,10 @@ async def test_ranking_rank_chunk_accepts_valid_retry_after_duplicate(monkeypatc
         cacheable_prompt_prefix,
     ):
         assert cacheable_prompt_prefix.startswith("fixture objective")
-        invalid = reviewer({"ranked_profiles_ids": ["x", "b"]})
-        assert invalid.problems
+        from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+        with pytest.raises(ValueError):
+            validate_json_schema({"ranked_profiles_ids": ["x", "b"]}, _schema)
         return {"ranked_profiles_ids": ["a", "b"]}
 
     monkeypatch.setattr(

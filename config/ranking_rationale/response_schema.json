@@ -8,12 +8,23 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string"},
-          "rationale": {"type": "string", "minLength": 1}
+          "id": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
         },
-        "required": ["id", "rationale"]
+        "required": [
+          "id",
+          "rationale"
+        ]
       }
     }
   },
-  "required": ["results"]
+  "required": [
+    "results"
+  ]
 }

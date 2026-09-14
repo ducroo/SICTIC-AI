@@ -17,7 +17,7 @@ from lib.insights import InsightFile
 from lib.captable.insights import build_insight, read_build_insight, select_consolidated
 from lib.storage import get_storage
 from tests.skills.test_captable_analysis import _snapshot
-from tests.skills.test_captable_build import _install_dataset, _patched_build
+from tests.skills.test_captable_build import _install_dataset, _patched_build, _complete_cla, _consolidated_artifact
 from skills.captable.captable import build_scenarios
 
 
@@ -79,6 +79,79 @@ def test_evidence_rejects_fabricated_rows(mutation):
     assert reviewer(table).problems
 
 
+def test_header_plus_later_row_quote_is_verbatim_per_line():
+    """The prompt asks for headers with a row; only the first row is adjacent to them."""
+    document = "| Group | Shares |\n| --- | --- |\n| Founders | 100 |\n| Investors | 100 |"
+    quote = "| Group | Shares |\n| Investors | 100 |"
+    row = {"name": "Investors", "current_common": 100, "quote": quote}
+    assert not _review_table_evidence(document)({"entries": [row]}).problems
+    row["quote"] = "| Group | Shares |\n| Invented | 100 |"
+    assert _review_table_evidence(document)({"entries": [row]}).problems
+
+
+REGISTER = (
+    "<!-- page:1 -->\n"
+    "| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n"
+    "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n"
+    "<!-- page:2 -->\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |"
+)
+
+
+def test_spaced_apostrophe_thousands_are_one_number():
+    """PDF conversion pads the Swiss apostrophe: "145 ' 832" is 145832."""
+    from lib.captable.table_extraction import _numbers_in_quote
+
+    assert 145832.0 in _numbers_in_quote("| 95 ' 832 145 ' 832 | 256'311 |")
+    assert 256311.0 in _numbers_in_quote("| 95 ' 832 145 ' 832 | 256'311 |")
+    assert 1941117.0 in _numbers_in_quote("1 941 117")
+
+
+def test_name_tokens_interleaved_with_numbers_are_accepted():
+    """Converted PDFs put the first name before and the surname after the certificate numbers."""
+    document = "| 26 | Alice 26 | 9'244 | ... | 27 Example 3013 |\n| 27 | Bob Example | 100 |"
+    row = {"name": "Alice Example", "current_common": 9244, "quote": "| 26 | Alice 26 | 9'244 |"}
+    assert not _review_table_evidence(document)({"entries": [row]}).problems
+    row["name"] = "Alice Invented"
+    assert _review_table_evidence(document)({"entries": [row]}).problems
+
+
+def test_numeral_broken_by_a_stray_space_is_accepted():
+    document = "| Carol Example | 12'036 21'66 6 |"
+    row = {"name": "Carol Example", "current_common": 21666, "quote": "| Carol Example | 12'036 21'66 6 |"}
+    assert not _review_table_evidence(document)({"entries": [row]}).problems
+    row["current_common"] = 99999
+    assert _review_table_evidence(document)({"entries": [row]}).problems
+
+
+def test_ellipsis_between_quoted_lines_is_accepted():
+    row = {"name": "Alice Example", "current_common": 100, "quote": "| No | Holder | ... | 12 | 100 |"}
+    assert not _review_table_evidence(REGISTER)({"entries": [row]}).problems
+    row["quote"] = "| No | Holder | 12 ... 100 | 999 |"
+    assert _review_table_evidence(REGISTER)({"entries": [row]}).problems
+
+
+def test_total_of_quoted_certificate_lines_is_evidenced():
+    quote = "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n| | | 14 | 400 |"
+    row = {"name": "Alice Example", "current_common": 750, "quote": quote}
+    assert not _review_table_evidence(REGISTER)({"entries": [row]}).problems
+    row["quote"] = "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |"
+    assert _review_table_evidence(REGISTER)({"entries": [row]}).problems
+
+
+def test_dash_in_source_evidences_zero():
+    row = {"name": "Bob Example", "current_common": 0, "quote": "| 2 | Bob Example | 15 | - |"}
+    assert not _review_table_evidence(REGISTER)({"entries": [row]}).problems
+    row = {"name": "Alice Example", "current_common": 0, "quote": "| 1 | Alice Example | 12 | 100 |"}
+    assert _review_table_evidence(REGISTER)({"entries": [row]}).problems
+
+
+def test_name_in_merged_cell_outside_the_quoted_line_is_accepted():
+    row = {"name": "Alice Example", "current_common": 400, "quote": "| | | 14 | 400 |"}
+    assert not _review_table_evidence(REGISTER)({"entries": [row]}).problems
+    row["name"] = "Invented Owner"
+    assert _review_table_evidence(REGISTER)({"entries": [row]}).problems
+
+
 @pytest.mark.parametrize("rows", ["entries", "pools"])
 def test_register_and_pool_evidence_is_checked(rows):
     row = {"name": "Alice", "current_common": 100, "quote": "Alice 100"} if rows == "entries" else {"label": "ESOP", "total": 100, "quote": "ESOP 100"}
@@ -103,7 +176,7 @@ def test_unparsed_documents_stop_build_coverage(mock_env, empty):
 async def test_failed_cla_is_not_published_or_reused(mock_env, monkeypatch):
     module, _ = _patched_build(monkeypatch)
     _install_dataset("failed-co", "CLA and cap table")
-    classification = {"documents": [{"filename": "captable.md", "document_class": "cla_executed"}]}
+    classification = {"dataset": "failed-co", "documents": [{"filename": "captable.md", "document_class": "cla_executed", "confidence": 95, "as_of_date": None, "language": "en", "rationale": "fixture"}]}
     monkeypatch.setattr(module, "classify_documents", AsyncMock(return_value=classification))
     extract = AsyncMock(side_effect=RuntimeError("temporary outage"))
     monkeypatch.setattr(module, "extract_cla", extract)
@@ -112,7 +185,7 @@ async def test_failed_cla_is_not_published_or_reused(mock_env, monkeypatch):
     assert not build_insight("failed-co", "loan-extraction").exists()
     assert not get_storage().exists(f"{dataset_location('failed-co').insights_rel}/captable/latest.json")
     extract.side_effect = None
-    extract.return_value = {"document": "captable.md", "status": "term_sheet", "lenders": []}
+    extract.return_value = _complete_cla("failed-co", document="captable.md", status="term_sheet")
     await module.extract("failed-co")
     assert extract.await_count == 2
     assert read_build_insight(build_insight("failed-co", "loan-extraction"))["failures"] == []
@@ -128,6 +201,13 @@ def analysis_env(mock_env, monkeypatch):
     manifest.save()
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")
     snapshot = _snapshot()
+    for row in snapshot["share_classes"]:
+        row["quote"] = "Common shares"
+    for row in snapshot["stakeholders"]:
+        row.update(group=None, quote=row["name"])
+    snapshot = {**_consolidated_artifact("analysis-co"), **snapshot}
+    snapshot["aggregation"] = _consolidated_artifact("analysis-co")["aggregation"]
+    snapshot["convertibles"] = [_complete_cla("analysis-co", **loan) for loan in snapshot["convertibles"]]
     snapshot.update(dataset="analysis-co", as_of_date="2026-06-30", generated_at="2026-09-08", tool_version="test")
     InsightFile("analysis-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json").save(json.dumps(snapshot))
     generation = AsyncMock(return_value="Narrative")
@@ -182,7 +262,7 @@ async def test_manual_build_report_precedes_even_forced_generation(mock_env, mon
     module, _ = _patched_build(monkeypatch)
     _install_dataset("manual-co", "Cap table")
     manual = InsightFile("manual-co", "captable_build", "manual", identifier="consolidated", subdir=True, extension="json")
-    manual.save(json.dumps({"dataset": "manual-co", "note": "Human cap table data"}))
+    manual.save(json.dumps(_consolidated_artifact("manual-co")))
     build = AsyncMock(side_effect=AssertionError("manual must win first"))
     monkeypatch.setattr(module, "_classification", build)
     [result] = await module.captable_build("manual-co", fresh=True)

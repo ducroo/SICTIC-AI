@@ -306,28 +306,31 @@ def check_pool_consistency(
 ) -> list[dict]:
     """Pool figures agree across the cap table and pool documents."""
     # Compare pools by identity, not as bags of floats. Exact kinds pair
-    # directly; sources often label the same economic pool differently
-    # ("grantable" vs "esop"), so within the employee-equity family a
-    # cross-kind pair is made only when each source has exactly ONE pool in
-    # that family (unambiguous). One-sided coverage is a note, never a
+    # directly; sources often label the same share-backed employee pool
+    # differently ("grantable" vs "esop"), so within that family a cross-kind
+    # pair is made only when each source lists exactly ONE such pool and
+    # states its total (unambiguous). A phantom plan (psop, cash-settled) is
+    # never paired with a share pool. One-sided coverage is a note, never a
     # contradiction.
-    employee_family = {"esop", "psop", "grantable", "authorized_capital"}
+    share_pools = {"esop", "grantable", "authorized_capital"}
 
-    def family(kind: str) -> str:
-        return "employee" if kind in employee_family else kind
-
-    per_source: dict[str, dict[str, float]] = {}
-    for pool in captable.get("pools", []):
-        if pool.get("total") is not None:
-            per_source.setdefault("captable", {})[
-                pool.get("kind") or "other"
-            ] = pool["total"]
-    for doc in pool_docs:
-        for pool in doc.get("pools", []):
+    per_source: dict[str, dict[str, float]] = {}   # kind -> stated total
+    listed: dict[str, set[str]] = {}                # kinds listed, total or not
+    sources_pools = [("captable", captable.get("pools", []))] + [
+        (doc.get("document", "?"), doc.get("pools", [])) for doc in pool_docs
+    ]
+    for source, pools in sources_pools:
+        for pool in pools:
+            kind = pool.get("kind") or "other"
+            listed.setdefault(source, set()).add(kind)
             if pool.get("total") is not None:
-                per_source.setdefault(doc.get("document", "?"), {})[
-                    pool.get("kind") or "other"
-                ] = pool["total"]
+                per_source.setdefault(source, {})[kind] = pool["total"]
+
+    def share_pool(source: str, pools: dict[str, float], other: dict[str, float]):
+        kinds = [k for k in listed.get(source, set()) if k in share_pools and k not in other]
+        if len(kinds) != 1 or kinds[0] not in pools:
+            return None
+        return kinds[0], pools[kinds[0]]
 
     def comparable_pairs():
         sources = list(per_source.items())
@@ -336,19 +339,11 @@ def check_pool_consistency(
                 for kind in set(pools_a) & set(pools_b):
                     yield (kind, source_a, pools_a[kind],
                            source_b, pools_b[kind])
-                fam_a = {
-                    k: v for k, v in pools_a.items()
-                    if family(k) == "employee" and k not in pools_b
-                }
-                fam_b = {
-                    k: v for k, v in pools_b.items()
-                    if family(k) == "employee" and k not in pools_a
-                }
-                if len(fam_a) == 1 and len(fam_b) == 1:
-                    (kind_a, val_a), = fam_a.items()
-                    (kind_b, val_b), = fam_b.items()
-                    yield (f"{kind_a}~{kind_b}", source_a, val_a,
-                           source_b, val_b)
+                pair_a = share_pool(source_a, pools_a, pools_b)
+                pair_b = share_pool(source_b, pools_b, pools_a)
+                if pair_a and pair_b:
+                    yield (f"{pair_a[0]}~{pair_b[0]}", source_a, pair_a[1],
+                           source_b, pair_b[1])
 
     pairs = list(comparable_pairs())
     if not pairs:
@@ -464,7 +459,7 @@ def check_cla_lifecycle(
                 findings.append(
                     _finding(
                         "cla_lender_is_shareholder",
-                        "info",
+                        "pass",
                         "info",
                         f"Lender {lender.get('name')!r} is also a "
                         "shareholder — consistent with an insider bridge "

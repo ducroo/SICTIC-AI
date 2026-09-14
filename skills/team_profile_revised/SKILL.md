@@ -32,6 +32,10 @@ The configured synthesis rules give `(core)` findings more weight and require
 patterns of missing information to be mentioned. Assess active founders;
 include the larger team only where material to execution, support or governance.
 
+The skill supplies `audit_response_schema.json` to the engine. Assessment fields
+and status values are schema-defined; results are nested under `result` in the
+version-2 audit artifact, with technical errors recorded separately.
+
 ## Side effects and failure behavior
 
 Dependencies may import Dealum data, enrich LinkedIn, synchronize datasets and

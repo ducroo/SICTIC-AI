@@ -15,6 +15,7 @@ A complete generated run has five logical artifacts per model:
 | `captable_build` | loan-extraction | JSON | `insights/captable-build/` |
 | `captable_build` | table-extraction | JSON | `insights/captable-build/` |
 | `captable_build` | consolidated | JSON | `insights/captable-build/` |
+| `captable_build` | loan-extraction-partial, table-extraction-partial (staging) | JSON | `insights/captable-build/` |
 | `captable` | final report | Markdown | `insights/` |
 
 `InsightFile` supplies filenames, model suffixes, manual precedence and freshness
@@ -35,9 +36,41 @@ another skill artifact.
 
 Build classifies parsed documents, extracts convertible loans and cap-table,
 register and pool evidence, then reconciles and consolidates them. Required
-extraction failures raise without saving partial results. The term checklist and
-assessment settings live in `config/captable_build/`. Assessment, aggregation and
-signature scanning are recomputed when consolidation needs rebuilding.
+extraction failures raise without publishing the stage's artifact; the
+successful per-document extractions are kept in a staging insight of the same
+dependency key, and the next run retries only the failed documents (`--fresh`
+retries all). Staging insights are never consolidation inputs. Every extracted table
+row carries a verbatim quote that `lib/captable/table_evidence.py` resolves
+line by line: a quoted table row must match one source row cell by cell (cells
+may be dropped, never crossed), a quoted sentence must sit within a few
+adjacent source lines. Numbers are read from the resolved source cells, not
+from the quote: a value must equal a cell of a row that names the holder (in a
+cell, through the named row above a run of nameless rows, a column header, a
+section row, or the text directly above the table), or the sum of one column
+over every quoted row of that holder. Subsets are never summed, digits are
+never joined across cells, only a dash or a literal 0 evidences zero, and a
+blank cell or absent column evidences nothing, so the model must report null.
+Columns whose header names certificates, dates, percentages, money or the other
+share class never evidence a share count. Share classes and pools are described
+across the rows of one sheet: once a quoted row names them, the other quoted
+rows of that sheet count, a class may be quoted by the header that names it
+(evidencing no number), and a pool's third figure may be the arithmetic of the
+two stated ones. Converter quirks are read locally: page markers inside a table
+(a table declaring its own text header after a page break stays a new table;
+nameless rows that open a page below a running page header still belong to the
+holder named before the break and inherit that table's header), the first data
+row declared as a header, a numeral split at its apostrophe into the next cell,
+an escaped pipe inside a cell, a quoted list spanning up to eight adjacent
+lines. Rejections tell the model which numbers the quoted cells state,
+which quoted row does not name the holder and was ignored, and the closest
+source line to an unmatched fragment. CLA terms follow the same contract: every
+value carries a quote found verbatim in the document, a paraphrased or assembled
+quote is rejected, absent terms need a `missing_terms` entry with the sections
+searched, and the borrower is never accepted as a lender. Extraction therefore
+depends on the model copying faithfully: a model that rewrites quotes fails the
+build instead of publishing unevidenced values. The term checklist and assessment settings live in
+`config/captable_build/`. Assessment, aggregation and signature scanning are
+recomputed when consolidation needs rebuilding.
 
 Validation covers issued and diluted totals, holder row sums, register and pool
 reconciliation, nominal floors and loan lifecycle questions. Register evidence is
@@ -79,9 +112,11 @@ Harness commands are `/captable_build` and `/captable`. The report accepts
 See the [build skill](../skills/captable_build/SKILL.md) for stage adapters and
 [report skill](../skills/captable/SKILL.md) for input and reuse contracts.
 The [design](captable-design.md) and [checks](captable-checks.md) explain the
-financial model. Synthetic source fixtures and ground truth are under
-`tests/fixtures/captable/`; pytest covers the model and artifact lifecycle without
-live model calls.
+financial model. The synthetic data room under `tests/fixtures/captable/` plants
+every evidence quirk learned from real rooms with a known answer key; its
+model-free half (`tests/skills/test_captable_fixture_regressions.py`) and a build
+of the `synthcap` dataset are the regression test of this skill. pytest covers the
+model and artifact lifecycle without live model calls.
 
 ## Known limitations / follow-ups
 
@@ -104,8 +139,17 @@ live model calls.
   (license royalties, litigation, etc.) — that belongs to the dd_checks
   checklist flow, not this skill.
 - Classification confidence varies slightly across runs (LLM-judged);
-  classes have been stable in testing, and an eval suite over the fixture
-  answer key is the planned guardrail.
+  classes have been stable in testing. The guardrail is the synthetic
+  fixture: `ground_truth.json` is the answer key, the model-free suite
+  checks the reviewer and validators over the fixture files, and a build
+  of `synthcap` checks the configured model against the same key.
+- Quote fidelity is model-dependent. gemini-3.8-flash passes the four
+  real rooms used for validation; openai/gpt-5.6-luna passes the synthetic
+  fixture but paraphrases or assembles CLA quotes on real contracts and
+  fails those builds (by design, nothing unevidenced is published).
+- Period selection on rounds-history sheets with projected columns and
+  registers of a subsidiary scoped as the parent's are open follow-ups
+  (listed as not exercised in the fixture's ground truth).
 
 ## Report settings
 
