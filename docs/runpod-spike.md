@@ -118,6 +118,29 @@ next to the PDF. Most of the 526 KB is 22 embedded page images. A text-only
 sidecar is `2q26-media-release-en.text-only.md`. Convert is still seconds. Bring-up
 is still the bill.
 
+Third live run, same PDF, quality profile. Community `NVIDIA RTX A4000` at
+`$0.17/hr`. Image was already on the host, so bring-up was 23 s. Convert used
+async poll. Options were `to_formats=json,md,html`, `do_ocr=true`,
+`table_mode=accurate`, `do_table_structure=true`,
+`do_pdf_heading_hierarchy=true`, `image_export_mode=placeholder`. Chart
+extraction and picture classification failed in 4 s on this image. Skip them.
+
+| KPI | Measured |
+|---|---|
+| Create accepted | 1.5 s |
+| HTTP ready (`/docs` 200) | 23 s |
+| Docling quality convert | 18.0 s, 200 |
+| JSON graph | 15 pages, 390 texts, 7 tables, 22 pictures |
+| Terminate / gone | 0.77 s / immediate |
+| Billed window | 54 s, about `$0.003` |
+
+The graph is the useful artifact. Markdown still flattens the cover KPI tiles.
+The JSON keeps table grids (including an 8-column revenue split and a 40-row
+table), section headers, and picture bounding boxes. Reload
+`DoclingDocument` on CPU later. No GPU needed after this file exists.
+
+Files are under `/opt/cursor/artifacts/docling-kpi-quality/`.
+
 ## Open questions
 
 - Pay for an always-on Docling Serve GPU pod, or wrap `docling-serve` as a
