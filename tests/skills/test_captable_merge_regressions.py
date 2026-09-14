@@ -90,10 +90,10 @@ def test_header_plus_later_row_quote_is_verbatim_per_line():
 
 
 REGISTER = (
-    "<!-- page:1 -->\n"
+    "<!-- sictic-page:1 -->\n"
     "| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n"
     "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n"
-    "<!-- page:2 -->\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |"
+    "<!-- sictic-page:2 -->\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |"
 )
 
 

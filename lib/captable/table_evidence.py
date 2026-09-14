@@ -32,6 +32,7 @@ import re
 
 from lib.captable.aggregation import normalize_lender_name
 from lib.captable.documents import normalize_for_matching
+from lib.datasets.page_markers import PAGE_MARKER_RE
 from lib.markdown_tables import is_separator_row, is_table_line, parse_table, split_cells
 
 # Column meanings used to exclude columns that cannot evidence a field.
@@ -61,7 +62,6 @@ _PROSE_LABELS = {
     "votes_per_share": re.compile(r"\bvotes?\b|\bvoting\b|stimm", re.I),
 }
 _ZERO_MARKERS = frozenset({"-", "–", "—", "0", "none", "nil", "keine", "aucun", "aucune"})
-_PAGE_MARKER = re.compile(r"^\s*<!--\s*[\w-]*page[\w-]*\s*:\s*\d+\s*-->\s*$")
 _FRAGMENT_SPLIT = re.compile(r"\r?\n|\.{3,}|…")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 _HEADING = re.compile(r"^\s*#{1,6}\s+\S")
@@ -77,6 +77,11 @@ DOCUMENT_HEADINGS = "headings"  # pools: additionally headings and the title blo
 
 
 _ENTITY = re.compile(r"&#\d+;|&#x[0-9a-fA-F]+;|&[a-zA-Z]+;")
+
+
+def _is_page_marker(line: str) -> bool:
+    """A page boundary as the shared converter writes it (lib.datasets.page_markers)."""
+    return PAGE_MARKER_RE.fullmatch(line.strip()) is not None
 
 
 def _clean_cell(cell: str) -> str:
@@ -215,7 +220,7 @@ def _drop_page_breaks(raw_lines: list[str]) -> list[str]:
     index = 0
     while index < len(raw_lines):
         line = raw_lines[index]
-        if _PAGE_MARKER.match(line):
+        if _is_page_marker(line):
             before = len(kept) - 1
             while before >= 0 and not kept[before].strip():
                 before -= 1
@@ -277,7 +282,7 @@ def source_lines(document: str) -> list[SourceLine]:
         pending.clear()
 
     for raw in _drop_page_breaks(document.splitlines()):
-        if _PAGE_MARKER.match(raw):
+        if _is_page_marker(raw):
             flush_table()
             lines.append(SourceLine(len(lines), raw, "page"))
             continue
