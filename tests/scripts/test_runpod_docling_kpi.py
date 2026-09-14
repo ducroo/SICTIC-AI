@@ -186,6 +186,23 @@ def test_load_input_document_falls_back_to_builtin_smoke_pdf():
     assert meta["pages_hint"] == 1
 
 
+def test_probe_ready_ignores_health_200_without_docs(monkeypatch):
+    class _FakeSession:
+        headers: dict[str, str] = {}
+
+        def get(self, url, timeout=8.0, allow_redirects=True):
+            path = "/" + url.rsplit("/", 1)[-1]
+            if url.endswith("/openapi.json"):
+                path = "/openapi.json"
+            return _FakeResponse(200 if path == "/health" else 404)
+
+    monkeypatch.setattr("scripts.runpod_docling_kpi.requests.Session", lambda: _FakeSession())
+    ok, detail, status = probe_ready("http://1.2.3.4:5001")
+    assert ok is False
+    assert status is None
+    assert "404" in detail
+
+
 def test_probe_ready_stays_unready_when_every_route_is_404(monkeypatch):
     class _FakeSession:
         headers: dict[str, str] = {}

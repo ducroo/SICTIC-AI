@@ -46,7 +46,8 @@ trailer<< /Root 1 0 R >>
 _active_pod_id: str | None = None
 _session: requests.Session | None = None
 
-READY_PATHS = ("/health", "/docs", "/openapi.json", "/ui")
+READY_PATHS = ("/docs", "/openapi.json", "/health", "/ui")
+STRONG_READY_PATHS = ("/docs", "/openapi.json")
 
 
 class KpiFailed(RuntimeError):
@@ -260,7 +261,7 @@ def probe_ready(base_url: str, timeout_s: float = 8.0) -> tuple[bool, str, int |
             last = f"{path} {type(exc).__name__}"
             continue
         last = f"{path} {response.status_code}"
-        if 200 <= response.status_code < 400:
+        if 200 <= response.status_code < 400 and path in STRONG_READY_PATHS:
             return True, last, response.status_code
     return False, last, None
 
@@ -481,6 +482,11 @@ def convert_pdf(
         "html": html,
         "json_document": json_document,
         "errors": errors,
+        "response_preview": (
+            payload.get("detail")
+            if isinstance(payload, dict)
+            else str(payload)[:300]
+        ),
         "ok": response.status_code == 200 and bool(json_document or markdown),
     }
 
