@@ -90,20 +90,20 @@ def test_header_plus_later_row_quote_is_verbatim_per_line():
 
 
 REGISTER = (
-    "<!-- page:1 -->\n"
+    "<!-- sictic-page:1 -->\n"
     "| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n"
     "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n"
-    "<!-- page:2 -->\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |"
+    "<!-- sictic-page:2 -->\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |"
 )
 
 
 def test_spaced_apostrophe_thousands_are_one_number():
     """PDF conversion pads the Swiss apostrophe: "145 ' 832" is 145832."""
-    from lib.captable.table_extraction import _numbers_in_quote
+    from lib.captable.table_evidence import numbers
 
-    assert 145832.0 in _numbers_in_quote("| 95 ' 832 145 ' 832 | 256'311 |")
-    assert 256311.0 in _numbers_in_quote("| 95 ' 832 145 ' 832 | 256'311 |")
-    assert 1941117.0 in _numbers_in_quote("1 941 117")
+    assert 145832 in numbers("95 ' 832 145 ' 832")
+    assert 256311 in numbers("256'311")
+    assert 1941117 in numbers("1 941 117")
 
 
 def test_name_tokens_interleaved_with_numbers_are_accepted():

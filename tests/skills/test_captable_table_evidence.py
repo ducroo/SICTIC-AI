@@ -236,7 +236,7 @@ def test_dropped_middle_cell_in_a_quoted_row_is_tolerated():
     assert review(document, "| 1 | Alice Example | 12100 |", 12100, name="Alice Example")
 
 
-OCR_REGISTER = """<!-- source-page:3 -->
+OCR_REGISTER = """<!-- sictic-page:3 -->
 
 | Example Holdings AG Bahnhofstrasse 1 8001 Zurich 1'388'001 | 13'880.01 | 50% | 13.88% 6.75% | Capital increase, 27.04.2022 | | | 5 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -246,7 +246,7 @@ OCR_REGISTER = """<!-- source-page:3 -->
 | | 13'480.98 | 100% | 6.55% | Allocation 2, 16.12.2025 | Shares | 01.09.2025 | |
 | Carol Example Seestrasse 5 8002 Zurich | 25'631 | 100% | | | | | 6 |
 
-<!-- source-page:4 -->
+<!-- sictic-page:4 -->
 
 | 30 | 28 5 ' | 135 | 51.35 | 50% 100% | 0.02% | Allocation 5, 19.06.2025 | Shares paid-up | 01.09.2025 | Dan Example Hauptstrasse 9 8003 Zurich |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -282,7 +282,7 @@ def test_numeral_split_at_a_dangling_apostrophe_is_joined_across_the_cell_bounda
 def test_page_markers_do_not_split_a_continued_table():
     document = ("| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n"
                 "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n"
-                "<!-- page:2 -->\n\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |")
+                "<!-- sictic-page:2 -->\n\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |")
     assert not review(document, "| | | 14 | 400 |", 400, name="Alice Example")
     assert not review(document, "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n| | | 14 | 400 |", 750, name="Alice Example")
     assert review(document, "| | | 14 | 400 |", 400, name="Bob Example")
@@ -290,7 +290,7 @@ def test_page_markers_do_not_split_a_continued_table():
 
 def test_a_table_declaring_its_own_text_header_after_a_page_break_is_a_new_table():
     document = ("| Holder | Certificate | Shares |\n| --- | --- | --- |\n| Alice Example | 12 | 100 |\n| | 13 | 250 |\n"
-                "<!-- page:2 -->\n\n| Pool | Granted | Unallocated |\n| --- | --- | --- |\n| ESOP | 10 | 90 |")
+                "<!-- sictic-page:2 -->\n\n| Pool | Granted | Unallocated |\n| --- | --- | --- |\n| ESOP | 10 | 90 |")
     rows = [line for line in Source(document).lines if line.kind == "row"]
     assert len({line.table for line in rows}) == 2
     assert rows[-1].headers == ("Pool", "Granted", "Unallocated")
@@ -300,7 +300,7 @@ def test_a_table_declaring_its_own_text_header_after_a_page_break_is_a_new_table
 
 def test_nameless_rows_below_a_running_page_header_belong_to_the_holder_before_the_break():
     document = ("| No | Holder | Certificate | Shares |\n| --- | --- | --- | --- |\n| 1 | Alice Example | 12 | 100 |\n\n"
-                "<!-- page:2 -->\n\nShare register, page 2\n\n"
+                "<!-- sictic-page:2 -->\n\nShare register, page 2\n\n"
                 "| | | 13 | 250 |\n| --- | --- | --- | --- |\n| | | 14 | 400 |\n| 2 | Bob Example | 15 | - |")
     quote = "| 1 | Alice Example | 12 | 100 |\n| | | 13 | 250 |\n| | | 14 | 400 |"
     assert not review(document, quote, 750, name="Alice Example")
