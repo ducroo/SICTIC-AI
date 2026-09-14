@@ -65,14 +65,39 @@ not the dataset pipeline.
 
 ## Community Docling Serve KPI
 
-`scripts/runpod_docling_kpi.py` creates the Hub template `qgrb3e19va`
+`scripts/runpod_docling_kpi.py` creates Hub template `qgrb3e19va`
 (`quay.io/docling-project/docling-serve-cu128`) on community cloud, converts a
 one-page PDF twice, then terminates the pod. It always terminates, including on
 failure. The token stays in `.env.runpod` and is gitignored.
 
-Measured numbers land in `/opt/cursor/artifacts/runpod-docling-kpi.json` after a
-live run. The template has no network volume, so terminate should drop the
-container disk.
+Live run on 2026-09-14 (UTC). Community `NVIDIA RTX A4500` at `$0.19/hr`, 64 GB
+container disk, no network volume. The cheapest listed GPU (`A4000` at `$0.17`)
+had no stock.
+
+| KPI | Measured |
+|---|---|
+| Create accepted | 1.9 s |
+| API `RUNNING` | 0.0 s after create (this is desired state, not a listening container) |
+| HTTP ready (`/health` 200 on public TCP) | 259 s from create, 255 s after the `RUNNING` flag |
+| Docling cold convert (1-page text PDF) | 4.38 s, 200, markdown `## SICTIC cloud smoke test` |
+| Docling warm convert (same file) | 2.35 s |
+| Terminate accepted | 0.72 s (`204`) |
+| Pod gone | 0.0 s after that |
+| Leftover pods / network volumes | none |
+| Billed window | 267 s, about `$0.014` |
+
+The shared HTTP proxy (`{podId}-5001.proxy.runpod.net`) stayed `404` for the
+whole run. The convert went to the public IP on the mapped TCP port, which
+matches the template's 90-second proxy warning. v2 `runtime` was `null` until
+that public port appeared, around 4 minutes in. That gap is image pull plus
+process start, and it is almost the entire bill.
+
+An earlier attempt treated a proxy `404` as ready, failed the convert, and
+terminated in a few seconds. That pod is also gone.
+
+Cheap path for this template. Do not attach a network volume. Talk to the pod
+IP, not the proxy. Start the pod only for a batch, then terminate. Leaving it
+idle costs `$0.19` every hour and buys nothing once convert is 2 to 4 seconds.
 
 ## Open questions
 
