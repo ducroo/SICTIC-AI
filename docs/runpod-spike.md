@@ -99,6 +99,25 @@ Cheap path for this template. Do not attach a network volume. Talk to the pod
 IP, not the proxy. Start the pod only for a batch, then terminate. Leaving it
 idle costs `$0.19` every hour and buys nothing once convert is 2 to 4 seconds.
 
+Second live run, same day, larger file. `2q26-media-release-en.pdf` is a 15-page
+UBS 2Q26 media release, 643 KB. OCR on, `table_mode=fast`. Community
+`NVIDIA RTX 4000 SFF Ada Generation` at `$0.18/hr`.
+
+| KPI | Measured |
+|---|---|
+| Create accepted | 1.0 s |
+| HTTP ready on public TCP | 284 s |
+| Docling cold convert | 18.94 s, 200, 526,149 markdown chars |
+| Docling warm convert | 16.80 s |
+| Terminate / gone | 0.67 s / immediate |
+| Leftover pods / network volumes | none |
+| Billed window | 323 s, about `$0.016` |
+
+The markdown is at `/opt/cursor/artifacts/docling-kpi-large/2q26-media-release-en.md`
+next to the PDF. Most of the 526 KB is 22 embedded page images. A text-only
+sidecar is `2q26-media-release-en.text-only.md`. Convert is still seconds. Bring-up
+is still the bill.
+
 ## Open questions
 
 - Pay for an always-on Docling Serve GPU pod, or wrap `docling-serve` as a
