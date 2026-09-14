@@ -27,6 +27,7 @@ def test_spike_status_reads_backends_and_secret_presence(monkeypatch, tmp_path):
     status = spike_status()
 
     assert status.parser == "llamaparse"  # pragma: allowlist secret
+    assert status.converter == status.parser
     assert status.store == "firestore"  # pragma: allowlist secret
     assert status.llama_cloud_key is True
     assert status.firebase_credentials is True
@@ -47,6 +48,7 @@ def test_spike_status_secret_flags_absent_and_empty_embedding_model(monkeypatch)
     status = spike_status()
 
     assert status.parser == "docling"  # pragma: allowlist secret
+    assert status.converter == "docling_stack"
     assert status.store == "qdrant"  # pragma: allowlist secret
     assert status.llama_cloud_key is False
     assert status.firebase_credentials is False
@@ -139,6 +141,20 @@ def test_parse_json_demo_requires_object_query_and_markdown():
     assert demo.payload == b"# Acme\n"
 
 
+def test_parse_json_demo_accepts_base64_file():
+    from spike.web import parse_json_demo
+
+    demo = parse_json_demo(
+        {
+            "query": "what",
+            "filename": "../deck.pdf",
+            "content_base64": "JVBERi0=",
+        }
+    )
+    assert demo.filename == "deck.pdf"
+    assert demo.payload == b"%PDF"
+
+
 def test_parse_skill_call_builds_harness_command():
     from spike.runtime import parse_skill_call
 
@@ -194,6 +210,13 @@ def test_hosting_rewrites_api_to_function():
         assert function.get("functionId") == "spikeGateway"
     else:
         assert function == "spikeGateway"
+
+
+def test_hosting_spa_has_file_upload():
+    html = (REPO_ROOT / "hosting" / "public" / "index.html").read_text(encoding="utf-8")
+    assert 'id="file"' in html
+    assert "content_base64" in html
+    assert "Search a file or pasted markdown" in html
 
 
 def test_image_omits_heavy_local_stack():

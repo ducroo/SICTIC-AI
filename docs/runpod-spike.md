@@ -53,7 +53,7 @@ Keep `convert_document` and `EmbeddingService`. Point them at HTTP backends.
 
 | Today | RunPod candidate |
 |---|---|
-| `DOCUMENT_CONVERTER=docling_stack` in-process | Docling Serve Pod, or a custom Serverless wrapper around `docling-serve` |
+| `DOCUMENT_CONVERTER=docling_stack` in-process | `DOCUMENT_CONVERTER=docling_serve` against a Docling Serve Pod, or a custom Serverless wrapper around `docling-serve` |
 | `DOCUMENT_PARSER` SaaS parse | Same convert HTTP, or granite-docling on vLLM for PDFs only |
 | `EMBEDDING_*` OpenAI / OpenRouter / Ollama | Infinity Embedding, `https://api.runpod.ai/v2/<id>/openai/v1` |
 | `LLM_*` | vLLM worker, same OpenAI client shape |
@@ -148,8 +148,8 @@ search, manifests, and skills. RunPod replaces the three paid/GPU endpoints
 a startup upload needs: convert, embed, generate.
 
 Middleware first. `convert_document` still returns Markdown. The JSON graph
-is the stored source. `scripts/docling_graph_markdown.py` walks `body`
-children on CPU and emits:
+is the stored source. `lib/infrastructure/document_conversion/graph_markdown.py`
+walks `body` children on CPU and emits:
 
 - `<!-- sictic-page:N -->` so the existing chunker keeps page ids
 - Markdown tables from `tables[].data.grid`
@@ -157,9 +157,31 @@ children on CPU and emits:
 - Figure placeholders with page numbers
 - Dropped page headers and footers
 
+`scripts/docling_graph_markdown.py` stays as a CLI over that module.
+
 Do not send raw Docling JSON to the LLM. Skills already consume Markdown and
-tables. Keep `DocumentConversion.markdown`. Persist the `.docling.json` next
-to the source so we can re-render without another GPU pass.
+tables. Keep `DocumentConversion.markdown`. The `docling_serve` converter
+writes `{filename}.docling.json` next to the source so we can re-render
+without another GPU pass.
+
+## Stage 1. Convert through Docling Serve
+
+Set `DOCUMENT_PARSER=docling` and `DOCUMENT_CONVERTER=docling_serve`. Point
+`DOCLING_SERVE_URL` at a running Docling Serve, including a community Pod
+brought up by `scripts/runpod_docling_kpi.py`. Spreadsheets, RTF, and
+`.md`/`.txt`/`.json` still convert locally. The spike image still does not
+install Docling. It only speaks HTTP.
+
+Bring up a pod, convert, then terminate. Do not leave the GPU running.
+Optional `DOCLING_SERVE_TIMEOUT` is seconds, default 300.
+
+The hosting SPA and `POST /api/demo` accept a file as JSON
+`{query, filename, content_base64}` so the existing Function gateway can
+forward it. Markdown paste still works. The Python form at `/demo` still
+posts multipart.
+
+Pytest covers the path with `tests/infrastructure/fake_docling_serve.py`.
+That stand-in is also runnable as a local HTTP server.
 
 `lib.model_config.llm_endpoint` and `embedding_endpoint` already take
 `LLM_BASE_URL` / `EMBEDDING_BASE_URL`. A RunPod OpenAI URL is a config change,

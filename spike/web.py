@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import os
 from dataclasses import asdict, dataclass
 from html import escape
@@ -18,6 +20,8 @@ from spike.runtime import (
 )
 
 logger = get_logger(__name__)
+
+MAX_DEMO_UPLOAD_BYTES = 10 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,7 @@ def render_page(
   <h1>SICTIC spike</h1>
   <dl>
     <dt>Parser</dt><dd><code>{escape(status.parser)}</code></dd>
+    <dt>Converter</dt><dd><code>{escape(status.converter)}</code></dd>
     <dt>Store</dt><dd><code>{escape(status.store)}</code></dd>
     <dt>LlamaCloud key</dt><dd>{_present(status.llama_cloud_key)}</dd>
     <dt>Firebase credentials</dt><dd>{_present(status.firebase_credentials)}</dd>
@@ -123,7 +128,19 @@ def parse_demo_request(post) -> DemoRequest:
         filename = "note.md"
     if not payload.strip() or not query:
         raise ValueError("Query and markdown (or a file) are required.")
+    if len(payload) > MAX_DEMO_UPLOAD_BYTES:
+        raise ValueError("File is too large.")
     return DemoRequest(filename=filename, payload=payload, query=query)
+
+
+def _decode_base64_payload(raw: str) -> bytes:
+    try:
+        data = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise ValueError("content_base64 is not valid base64.") from error
+    if len(data) > MAX_DEMO_UPLOAD_BYTES:
+        raise ValueError("File is too large.")
+    return data
 
 
 def parse_json_demo(body: object) -> DemoRequest:
@@ -131,9 +148,23 @@ def parse_json_demo(body: object) -> DemoRequest:
         raise ValueError("JSON object required.")
     query = str(body.get("query") or "").strip()
     markdown = str(body.get("markdown") or "")
+    filename = Path(str(body.get("filename") or "")).name.strip()
+    raw_base64 = body.get("content_base64")
+    if raw_base64 not in (None, ""):
+        payload = _decode_base64_payload(str(raw_base64))
+        if not payload or not query:
+            raise ValueError("Query and markdown (or a file) are required.")
+        return DemoRequest(
+            filename=filename or "upload.bin",
+            payload=payload,
+            query=query,
+        )
     if not markdown.strip() or not query:
-        raise ValueError("Query and markdown are required.")
-    return DemoRequest(filename="note.md", payload=markdown.encode("utf-8"), query=query)
+        raise ValueError("Query and markdown (or a file) are required.")
+    payload = markdown.encode("utf-8")
+    if len(payload) > MAX_DEMO_UPLOAD_BYTES:
+        raise ValueError("File is too large.")
+    return DemoRequest(filename="note.md", payload=payload, query=query)
 
 
 def parse_json_skill(body: object):
@@ -157,13 +188,41 @@ def _health_payload(status: SpikeStatus) -> dict:
     return {
         "ok": ok,
         "parser": status.parser,
+        "converter": status.converter,
         "store": status.store,
         "llama_cloud_key": status.llama_cloud_key,
         "firebase_credentials": status.firebase_credentials,
     }
 
 
+def _hosting_spa_path() -> Path | None:
+    configured = (os.environ.get("REPO_PATH") or "").strip()
+    roots = []
+    if configured:
+        roots.append(Path(configured).expanduser().resolve())
+    roots.append(Path(__file__).resolve().parents[1])
+    seen: set[Path] = set()
+    for root in roots:
+        if root in seen:
+            continue
+        seen.add(root)
+        candidate = root / "hosting" / "public" / "index.html"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 async def handle_index(_request: web.Request) -> web.Response:
+    spa = _hosting_spa_path()
+    if spa is not None:
+        return web.FileResponse(spa)
+    return web.Response(
+        text=render_page(status=spike_status()),
+        content_type="text/html",
+    )
+
+
+async def handle_demo_page(_request: web.Request) -> web.Response:
     return web.Response(
         text=render_page(status=spike_status()),
         content_type="text/html",
@@ -218,6 +277,7 @@ async def handle_healthz(_request: web.Request) -> web.Response:
             {
                 "ok": False,
                 "parser": "",
+                "converter": "",
                 "store": "",
                 "llama_cloud_key": False,
                 "firebase_credentials": False,
@@ -232,8 +292,10 @@ async def handle_api_status(_request: web.Request) -> web.Response:
 
 async def handle_api_demo(request: web.Request) -> web.Response:
     try:
-        body = await request.json()
-        demo = parse_json_demo(body)
+        if (request.content_type or "").startswith("multipart/"):
+            demo = parse_demo_request(await request.post())
+        else:
+            demo = parse_json_demo(await request.json())
     except ValueError as error:
         return web.json_response({"error": str(error)}, status=400)
     except Exception:
@@ -270,6 +332,7 @@ async def handle_api_skill(request: web.Request) -> web.Response:
 
 ROUTES = (
     web.get("/", handle_index),
+    web.get("/demo", handle_demo_page),
     web.post("/demo", handle_demo),
     web.get("/healthz", handle_healthz),
     web.get("/api/status", handle_api_status),

@@ -6,7 +6,7 @@
   <title>SICTIC spike</title>
   <style>
     body { font-family: sans-serif; max-width: 48rem; margin: 1.5rem auto; padding: 0 1rem; }
-    label, textarea, input[type=text], select { display: block; width: 100%; }
+    label, textarea, input[type=text], input[type=file], select { display: block; width: 100%; }
     textarea { min-height: 10rem; }
     .hit { border-top: 1px solid #ccc; padding: 0.75rem 0; }
     pre { white-space: pre-wrap; }
@@ -31,9 +31,12 @@
   </form>
   <pre id="skillOutput" hidden></pre>
   <form id="demo">
-    <h2>Search pasted markdown</h2>
+    <h2>Search a file or pasted markdown</h2>
     <label for="query">Query</label>
     <input id="query" name="query" type="text">
+    <label for="file">File</label>
+    <input id="file" name="file" type="file">
+    <p class="hint">PDF, Office, and other convertibles go through the configured converter. Markdown still works as a paste.</p>
     <label for="markdown">Markdown</label>
     <textarea id="markdown" name="markdown"></textarea>
     <button type="submit">Search</button>
@@ -81,11 +84,25 @@
         : "";
     }
 
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Could not read the file."));
+        reader.onload = () => {
+          const result = String(reader.result || "");
+          const comma = result.indexOf(",");
+          resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
     async function loadStatus() {
       const status = await readJson(await fetch("/api/status"));
       lastStatus = status;
+      const converter = status.converter ? ` · converter ${status.converter}` : "";
       statusEl.textContent =
-        `Parser ${status.parser} · store ${status.store} · embedding ${status.embedding_model}`;
+        `Parser ${status.parser}${converter} · store ${status.store} · embedding ${status.embedding_model}`;
       commands = status.commands || [];
       skillSelect.replaceChildren();
       for (const command of commands) {
@@ -129,13 +146,21 @@
       showError("");
       hitsEl.replaceChildren();
       try {
+        const query = document.getElementById("query").value;
+        const markdown = document.getElementById("markdown").value;
+        const fileInput = document.getElementById("file");
+        const file = fileInput.files && fileInput.files[0];
+        const body = { query };
+        if (file) {
+          body.filename = file.name;
+          body.content_base64 = await fileToBase64(file);
+        } else {
+          body.markdown = markdown;
+        }
         const result = await readJson(await fetch("/api/demo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: document.getElementById("query").value,
-            markdown: document.getElementById("markdown").value,
-          }),
+          body: JSON.stringify(body),
         }));
         const heading = document.createElement("h2");
         heading.textContent = `Hits in ${result.dataset_name}`;

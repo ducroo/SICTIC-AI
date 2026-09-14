@@ -5,7 +5,10 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.infrastructure.document_parser import document_parser_backend
+from lib.infrastructure.document_parser import (
+    document_converter_provider,
+    document_parser_backend,
+)
 from lib.infrastructure.vector_store import vector_store_backend
 from lib.datasets.search import dataset_search
 from lib.ephemeral_dataset import prepare_ephemeral_dataset
@@ -27,6 +30,7 @@ class HarnessCommandInfo:
 @dataclass(frozen=True)
 class SpikeStatus:
     parser: str
+    converter: str
     store: str
     llama_cloud_key: bool
     firebase_credentials: bool
@@ -135,6 +139,7 @@ async def run_skill(call: SkillCall) -> SkillResult:
 def spike_status() -> SpikeStatus:
     return SpikeStatus(
         parser=document_parser_backend(),
+        converter=document_converter_provider(),
         store=vector_store_backend(),
         llama_cloud_key=bool((os.environ.get("LLAMA_CLOUD_API_KEY") or "").strip()),
         firebase_credentials=bool(
