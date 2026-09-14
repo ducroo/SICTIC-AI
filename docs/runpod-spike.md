@@ -141,6 +141,63 @@ table), section headers, and picture bounding boxes. Reload
 
 Files are under `/opt/cursor/artifacts/docling-kpi-quality/`.
 
+## On-demand replacement map
+
+LlamaIndex is not the product. We already own chunking (`split_markdown`),
+search, manifests, and skills. RunPod replaces the three paid/GPU endpoints
+a startup upload needs: convert, embed, generate.
+
+Middleware first. `convert_document` still returns Markdown. The JSON graph
+is the stored source. `scripts/docling_graph_markdown.py` walks `body`
+children on CPU and emits:
+
+- `<!-- sictic-page:N -->` so the existing chunker keeps page ids
+- Markdown tables from `tables[].data.grid`
+- Metric tables from `key_value_area` groups (the cover KPI tiles)
+- Figure placeholders with page numbers
+- Dropped page headers and footers
+
+Do not send raw Docling JSON to the LLM. Skills already consume Markdown and
+tables. Keep `DocumentConversion.markdown`. Persist the `.docling.json` next
+to the source so we can re-render without another GPU pass.
+
+`lib.model_config.llm_endpoint` and `embedding_endpoint` already take
+`LLM_BASE_URL` / `EMBEDDING_BASE_URL`. A RunPod OpenAI URL is a config change,
+not a new client.
+
+| Step | Today | RunPod option | Product | GPU | On-demand shape |
+|---|---|---|---|---|---|
+| 1. Convert | SaaS parse or in-process Docling | Community Pod `qgrb3e19va` | Pod, not Serverless | 16–24 GB (A4000 / A4500 / 3090) | Create, convert the pack, terminate. ~4 min cold image, ~18 s/15-page PDF, ~$0.17–0.22/hr |
+| 1b. Convert later | same | Custom Serverless worker around `docling-serve` | We would build this | 16–24 GB | `workersMin=0`. FlashBoot. No official `worker-docling` yet |
+| 2. Embed | OpenRouter / OpenAI | [Infinity Embedding](https://console.runpod.io/hub/runpod-workers/worker-infinity-embedding) | Official Serverless | 8–24 GB | Scale to zero. `https://api.runpod.ai/v2/<id>/openai/v1`. Set `MODEL_NAMES`. Match the stored vector width |
+| 2b. Rerank | `RERANK_*` | Same Infinity worker | Official Serverless | same | Infinity rerank route |
+| 3. Skills LLM | OpenRouter / OpenAI | [vLLM](https://console.runpod.io/hub/runpod-workers/worker-vllm) | Official Serverless | 24 GB for ~8B, 48 GB for ~32B, 80 GB for ~70B | Scale to zero. Same OpenAI chat client. Pick one model that can emit skill JSON |
+
+Do not put convert, embed, and the LLM on one fat Pod. They have different
+lifetimes. Convert is bursty and dies after the upload. Embed and generate
+should scale from zero per request.
+
+A single always-on A6000 with all three processes is simpler and wastes
+money. Community idle is still $0.17+/hr with no work.
+
+Startup upload flow:
+
+1. Create the Docling Pod (or hit a future convert worker).
+2. Convert each file to JSON. Run the CPU walker. Index Markdown.
+3. Terminate the convert Pod.
+4. Embed chunks on Infinity.
+5. Run the requested skills on vLLM.
+6. Let embed/LLM workers scale to zero.
+
+Cold start is the tax. Convert image pull is ~4 minutes the first time on a
+host, ~20 seconds when the image is warm. Serverless vLLM/Infinity cold
+starts are seconds, not minutes, if the worker image is cached. FlashBoot
+and a baked or network-volume model help.
+
+Embedding width is a contract. The SaaS spike stores 1536-d vectors with a
+2048 cap. Pick an Infinity model that matches, or change the stored size on
+purpose. Do not silently swap a 1024-d model onto those indexes.
+
 ## Open questions
 
 - Pay for an always-on Docling Serve GPU pod, or wrap `docling-serve` as a
