@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from scripts.runpod_docling_kpi import (
     MINIMAL_PDF,
+    QUALITY_CONVERT_OPTIONS,
     collect_base_urls,
+    convert_form_fields,
     estimated_usd,
     linearized_page_count,
     load_input_document,
+    parse_args,
+    parse_json_content,
     probe_ready,
     proxy_url,
     rank_gpu_candidates,
+    summarize_docling_graph,
+    build_convert_options,
 )
 
 
@@ -136,6 +142,41 @@ def test_load_input_document_reads_pdf_and_linearized_page_hint(tmp_path):
     assert meta["bytes"] == len(header) + 5
     assert meta["pages_hint"] == 15
     assert linearized_page_count(MINIMAL_PDF) is None
+
+
+def test_quality_profile_requests_json_graph_and_accurate_tables():
+    args = parse_args(["--quality", "--input", "deck.pdf", "--convert-timeout", "900"])
+    options = build_convert_options(args)
+    fields = convert_form_fields(options)
+
+    assert options["to_formats"] == ["json", "md", "html"]
+    assert options["table_mode"] == "accurate"
+    assert options["do_chart_extraction"] is True
+    assert options["do_pdf_heading_hierarchy"] is True
+    assert ("to_formats", "json") in fields
+    assert ("table_mode", "accurate") in fields
+    assert options.keys() >= QUALITY_CONVERT_OPTIONS.keys()
+
+
+def test_summarize_docling_graph_counts_tables_and_pages():
+    graph = {
+        "schema_name": "DoclingDocument",
+        "name": "deck",
+        "body": {"self_ref": "#/body"},
+        "pages": {"1": {}, "2": {}},
+        "texts": [{}, {}],
+        "tables": [{"label": "table", "data": {"grid": [[{}, {}], [{}, {}]]}}],
+        "pictures": [{"label": "picture", "classifications": [{"class_name": "chart"}]}],
+        "groups": [{}],
+    }
+    summary = summarize_docling_graph(graph)
+    assert summary["pages"] == 2
+    assert summary["tables"] == 1
+    assert summary["table_shapes"] == [{"rows": 2, "cols": 2, "label": "table"}]
+    assert summary["pictures"] == 1
+    assert parse_json_content('{"schema_name":"DoclingDocument"}')["schema_name"] == (
+        "DoclingDocument"
+    )
 
 
 def test_load_input_document_falls_back_to_builtin_smoke_pdf():

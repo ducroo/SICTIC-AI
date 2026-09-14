@@ -295,43 +295,193 @@ def load_input_document(path: Path | None) -> tuple[str, bytes, dict[str, Any]]:
     )
 
 
+QUALITY_CONVERT_OPTIONS = {
+    "to_formats": ["json", "md", "html"],
+    "do_ocr": True,
+    "table_mode": "accurate",
+    "do_table_structure": True,
+    "do_pdf_heading_hierarchy": True,
+    "do_chart_extraction": True,
+    "do_picture_classification": True,
+    "image_export_mode": "placeholder",
+    "include_images": False,
+    "include_page_images": False,
+}
+
+
+def build_convert_options(args: argparse.Namespace) -> dict[str, Any]:
+    if args.quality:
+        options = dict(QUALITY_CONVERT_OPTIONS)
+    else:
+        options = {
+            "to_formats": ["md"],
+            "do_ocr": bool(args.input) if args.do_ocr is None else args.do_ocr,
+            "table_mode": args.table_mode or "fast",
+        }
+    if args.to_formats:
+        options["to_formats"] = list(args.to_formats)
+    if args.do_ocr is not None:
+        options["do_ocr"] = args.do_ocr
+    if args.table_mode:
+        options["table_mode"] = args.table_mode
+    options["document_timeout"] = args.convert_timeout
+    return options
+
+
+def write_convert_artifacts(
+    *,
+    markdown: str,
+    html: str,
+    json_document: dict[str, Any] | None,
+    markdown_output: str,
+    html_output: str,
+    json_output: str,
+) -> dict[str, Any]:
+    written: dict[str, Any] = {}
+    if markdown:
+        path = Path(markdown_output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown, encoding="utf-8")
+        written["markdown_path"] = str(path)
+        print(f"wrote markdown {path} chars={len(markdown)}", flush=True)
+    if html:
+        path = Path(html_output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(html, encoding="utf-8")
+        written["html_path"] = str(path)
+        print(f"wrote html {path} chars={len(html)}", flush=True)
+    if json_document:
+        path = Path(json_output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(json_document, indent=2) + "\n", encoding="utf-8")
+        summary = summarize_docling_graph(json_document)
+        summary_path = path.with_name(path.stem + ".summary.json")
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        written["json_path"] = str(path)
+        written["json_summary_path"] = str(summary_path)
+        written["json_nodes"] = summary
+        print(
+            f"wrote json {path} pages={summary['pages']} "
+            f"texts={summary['texts']} tables={summary['tables']} "
+            f"pictures={summary['pictures']}",
+            flush=True,
+        )
+    return written
+
+
+def convert_form_fields(options: dict[str, Any]) -> list[tuple[str, str]]:
+    fields: list[tuple[str, str]] = []
+    for key, value in options.items():
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            fields.append((key, "true" if value else "false"))
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                fields.append((key, str(item)))
+        else:
+            fields.append((key, str(value)))
+    return fields
+
+
+def parse_json_content(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def summarize_docling_graph(document: dict[str, Any]) -> dict[str, Any]:
+    tables = document.get("tables") or []
+    pictures = document.get("pictures") or []
+    texts = document.get("texts") or []
+    groups = document.get("groups") or []
+    pages = document.get("pages") or {}
+    table_shapes = []
+    for table in tables:
+        data = table.get("data") or {}
+        grid = data.get("grid") or []
+        table_shapes.append(
+            {
+                "rows": len(grid),
+                "cols": len(grid[0]) if grid else int(data.get("num_cols") or 0),
+                "label": table.get("label"),
+            }
+        )
+    picture_labels = []
+    for picture in pictures:
+        classifications = picture.get("classifications") or picture.get("predicted_class")
+        picture_labels.append(
+            {
+                "label": picture.get("label"),
+                "classifications": classifications,
+            }
+        )
+    return {
+        "schema_name": document.get("schema_name"),
+        "name": document.get("name"),
+        "pages": len(pages) if isinstance(pages, dict) else 0,
+        "texts": len(texts),
+        "tables": len(tables),
+        "table_shapes": table_shapes,
+        "pictures": len(pictures),
+        "picture_labels": picture_labels[:20],
+        "groups": len(groups),
+        "has_body": bool(document.get("body")),
+    }
+
+
 def convert_pdf(
     base_url: str,
     pdf: bytes,
     timeout_s: float,
     *,
     filename: str = "smoke.pdf",
-    do_ocr: bool = False,
-    table_mode: str = "fast",
+    options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    convert_options = options or {
+        "to_formats": ["md"],
+        "do_ocr": False,
+        "table_mode": "fast",
+    }
     started = time.monotonic()
     response = requests.post(
         f"{base_url}/v1/convert/file",
         files={"files": (filename, pdf, "application/pdf")},
-        data={
-            "to_formats": "md",
-            "do_ocr": "true" if do_ocr else "false",
-            "table_mode": table_mode,
-        },
+        data=convert_form_fields(convert_options),
         headers={"User-Agent": USER_AGENT, "accept": "application/json"},
         timeout=timeout_s,
     )
     elapsed = time.monotonic() - started
     payload = _json_or_text(response)
     markdown = ""
+    html = ""
+    json_document = None
     errors = None
     if isinstance(payload, dict):
         document = payload.get("document") or {}
         markdown = str(document.get("md_content") or document.get("text_content") or "")
+        html = str(document.get("html_content") or "")
+        json_document = parse_json_content(document.get("json_content"))
         errors = payload.get("errors")
     return {
         "http_status": response.status_code,
         "seconds": round(elapsed, 3),
         "markdown_chars": len(markdown),
+        "html_chars": len(html),
+        "json_nodes": summarize_docling_graph(json_document) if json_document else None,
         "markdown_preview": markdown[:160],
         "markdown": markdown,
+        "html": html,
+        "json_document": json_document,
         "errors": errors,
-        "ok": response.status_code == 200 and bool(markdown),
+        "ok": response.status_code == 200 and bool(json_document or markdown),
     }
 
 
@@ -437,18 +587,19 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     filename, pdf, input_meta = load_input_document(
         Path(args.input) if args.input else None
     )
-    do_ocr = args.do_ocr if args.do_ocr is not None else bool(args.input)
-    table_mode = args.table_mode
+    convert_options = build_convert_options(args)
     result["input"] = {
         **input_meta,
         "filename": filename,
-        "do_ocr": do_ocr,
-        "table_mode": table_mode,
+        "convert_options": convert_options,
     }
-    markdown_output = args.markdown_output
-    if not markdown_output and args.input:
-        markdown_output = str(Path(args.input).with_suffix(".md"))
+    stem = Path(args.input).with_suffix("") if args.input else Path("/opt/cursor/artifacts/smoke")
+    markdown_output = args.markdown_output or (str(stem) + ".md")
+    json_output = args.json_output or (str(stem) + ".docling.json")
+    html_output = args.html_output or (str(stem) + ".html")
     result["markdown_output"] = markdown_output
+    result["json_output"] = json_output
+    result["html_output"] = html_output
 
     leftovers = terminate_named_leftovers(session, POD_NAME_PREFIX)
     result["leftover_pods_before"] = leftovers
@@ -557,34 +708,42 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     if not ok_ready or not ready_url:
         raise KpiFailed(f"Docling Serve did not become reachable ({ready_detail})", result)
 
-    for label in ("cold", "warm"):
+    labels = ("cold",) if args.skip_warm else ("cold", "warm")
+    for label in labels:
         convert = convert_pdf(
             ready_url,
             pdf,
             args.convert_timeout,
             filename=filename,
-            do_ocr=do_ocr,
-            table_mode=table_mode,
+            options=convert_options,
         )
         convert["label"] = label
         markdown = convert.pop("markdown", "")
-        if label == "cold" and markdown_output:
-            out_path = Path(markdown_output)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(markdown, encoding="utf-8")
-            convert["markdown_path"] = str(out_path)
-            print(f"wrote markdown {out_path} chars={len(markdown)}", flush=True)
+        html = convert.pop("html", "")
+        json_document = convert.pop("json_document", None)
+        if label == "cold":
+            written = write_convert_artifacts(
+                markdown=markdown,
+                html=html,
+                json_document=json_document,
+                markdown_output=markdown_output,
+                html_output=html_output,
+                json_output=json_output,
+            )
+            convert.update(written)
         result["convert"].append(convert)
         print(
             f"convert {label} {convert['http_status']} "
-            f"{convert['seconds']}s chars={convert['markdown_chars']}",
+            f"{convert['seconds']}s md={convert['markdown_chars']} "
+            f"json={bool(convert.get('json_nodes'))}",
             flush=True,
         )
         if not convert["ok"]:
             raise KpiFailed(f"{label} convert failed HTTP {convert['http_status']}", result)
 
     result["timings_s"]["docling_cold"] = result["convert"][0]["seconds"]
-    result["timings_s"]["docling_warm"] = result["convert"][1]["seconds"]
+    if len(result["convert"]) > 1:
+        result["timings_s"]["docling_warm"] = result["convert"][1]["seconds"]
 
     terminate_started = time.monotonic()
     terminate_status = terminate_pod(session, pod_id)
@@ -647,13 +806,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--markdown-output",
         help="Where to write the cold-convert markdown. Defaults to <input>.md.",
     )
+    parser.add_argument("--json-output", help="Where to write the Docling JSON graph.")
+    parser.add_argument("--html-output", help="Where to write HTML.")
     parser.add_argument(
         "--do-ocr",
         action=argparse.BooleanOptionalAction,
         default=None,
         help="OCR on convert. Default on when --input is set, off for the smoke PDF.",
     )
-    parser.add_argument("--table-mode", default="fast", choices=("fast", "accurate"))
+    parser.add_argument("--table-mode", default=None, choices=("fast", "accurate"))
+    parser.add_argument(
+        "--to-format",
+        action="append",
+        dest="to_formats",
+        choices=("md", "json", "html", "text", "doctags"),
+        help="Repeatable. Default is md, or json+md+html with --quality.",
+    )
+    parser.add_argument(
+        "--quality",
+        action="store_true",
+        help="Accurate tables, heading hierarchy, chart extraction, JSON graph.",
+    )
+    parser.add_argument(
+        "--skip-warm",
+        action="store_true",
+        help="Convert once. Skip the second warm pass.",
+    )
     parser.add_argument(
         "--output",
         default="/opt/cursor/artifacts/runpod-docling-kpi.json",
