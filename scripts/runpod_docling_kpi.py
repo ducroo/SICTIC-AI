@@ -438,6 +438,37 @@ def summarize_docling_graph(document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def extract_convert_payload(payload: Any) -> tuple[str, str, dict[str, Any] | None, Any]:
+    if not isinstance(payload, dict):
+        return "", "", None, None
+    document = payload.get("document") or {}
+    markdown = str(document.get("md_content") or document.get("text_content") or "")
+    html = str(document.get("html_content") or "")
+    json_document = parse_json_content(document.get("json_content"))
+    return markdown, html, json_document, payload.get("errors")
+
+
+def poll_convert_task(base_url: str, task_id: str, timeout_s: float) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_s
+    last: dict[str, Any] = {"task_id": task_id}
+    while time.monotonic() < deadline:
+        response = requests.get(
+            f"{base_url}/v1/status/poll/{task_id}",
+            headers={"User-Agent": USER_AGENT, "accept": "application/json"},
+            timeout=30,
+        )
+        last = _json_or_text(response) if response.content else {"http_status": response.status_code}
+        if not isinstance(last, dict):
+            last = {"detail": str(last), "http_status": response.status_code}
+        status = str(last.get("task_status") or "")
+        print(f"task {task_id} status={status or response.status_code}", flush=True)
+        if status in {"success", "failure"}:
+            return last
+        time.sleep(2)
+    last["task_status"] = last.get("task_status") or "timeout"
+    return last
+
+
 def convert_pdf(
     base_url: str,
     pdf: bytes,
@@ -452,25 +483,67 @@ def convert_pdf(
         "table_mode": "fast",
     }
     started = time.monotonic()
-    response = requests.post(
-        f"{base_url}/v1/convert/file",
-        files={"files": (filename, pdf, "application/pdf")},
-        data=convert_form_fields(convert_options),
-        headers={"User-Agent": USER_AGENT, "accept": "application/json"},
-        timeout=timeout_s,
+    files = {"files": (filename, pdf, "application/pdf")}
+    data = convert_form_fields(convert_options)
+    headers = {"User-Agent": USER_AGENT, "accept": "application/json"}
+    submit = requests.post(
+        f"{base_url}/v1/convert/file/async",
+        files=files,
+        data=data,
+        headers=headers,
+        timeout=60,
+        allow_redirects=False,
     )
-    elapsed = time.monotonic() - started
+    submit_payload = _json_or_text(submit)
+    task_id = submit_payload.get("task_id") if isinstance(submit_payload, dict) else None
+    if not task_id:
+        markdown, html, json_document, errors = extract_convert_payload(submit_payload)
+        elapsed = time.monotonic() - started
+        return {
+            "http_status": submit.status_code,
+            "seconds": round(elapsed, 3),
+            "markdown_chars": len(markdown),
+            "html_chars": len(html),
+            "json_nodes": summarize_docling_graph(json_document) if json_document else None,
+            "markdown_preview": markdown[:160],
+            "markdown": markdown,
+            "html": html,
+            "json_document": json_document,
+            "errors": errors,
+            "response_preview": (
+                submit_payload.get("detail")
+                if isinstance(submit_payload, dict)
+                else str(submit_payload)[:300]
+            ),
+            "ok": submit.status_code == 200 and bool(json_document or markdown),
+        }
+
+    task = poll_convert_task(base_url, str(task_id), timeout_s)
+    if str(task.get("task_status")) != "success":
+        elapsed = time.monotonic() - started
+        return {
+            "http_status": 504 if task.get("task_status") == "timeout" else 500,
+            "seconds": round(elapsed, 3),
+            "markdown_chars": 0,
+            "html_chars": 0,
+            "json_nodes": None,
+            "markdown_preview": "",
+            "markdown": "",
+            "html": "",
+            "json_document": None,
+            "errors": task,
+            "response_preview": str(task.get("task_status")),
+            "ok": False,
+        }
+
+    response = requests.get(
+        f"{base_url}/v1/result/{task_id}",
+        headers=headers,
+        timeout=min(timeout_s, 120),
+    )
     payload = _json_or_text(response)
-    markdown = ""
-    html = ""
-    json_document = None
-    errors = None
-    if isinstance(payload, dict):
-        document = payload.get("document") or {}
-        markdown = str(document.get("md_content") or document.get("text_content") or "")
-        html = str(document.get("html_content") or "")
-        json_document = parse_json_content(document.get("json_content"))
-        errors = payload.get("errors")
+    markdown, html, json_document, errors = extract_convert_payload(payload)
+    elapsed = time.monotonic() - started
     return {
         "http_status": response.status_code,
         "seconds": round(elapsed, 3),
@@ -482,10 +555,11 @@ def convert_pdf(
         "html": html,
         "json_document": json_document,
         "errors": errors,
+        "task_id": str(task_id),
         "response_preview": (
             payload.get("detail")
-            if isinstance(payload, dict)
-            else str(payload)[:300]
+            if isinstance(payload, dict) and not json_document and not markdown
+            else None
         ),
         "ok": response.status_code == 200 and bool(json_document or markdown),
     }
@@ -713,6 +787,18 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     result["ready_detail"] = ready_detail
     if not ok_ready or not ready_url:
         raise KpiFailed(f"Docling Serve did not become reachable ({ready_detail})", result)
+    try:
+        spec = requests.get(
+            f"{ready_url}/openapi.json",
+            headers={"User-Agent": USER_AGENT},
+            timeout=15,
+        )
+        paths = sorted((spec.json() or {}).get("paths") or {}) if spec.ok else []
+        result["openapi_paths"] = [path for path in paths if "convert" in path]
+        print(f"openapi convert paths={result['openapi_paths']}", flush=True)
+    except Exception as exc:
+        result["openapi_paths"] = []
+        print(f"openapi inspect failed: {type(exc).__name__}", flush=True)
 
     labels = ("cold",) if args.skip_warm else ("cold", "warm")
     for label in labels:

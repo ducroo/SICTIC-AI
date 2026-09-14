@@ -5,6 +5,7 @@ from scripts.runpod_docling_kpi import (
     QUALITY_CONVERT_OPTIONS,
     collect_base_urls,
     convert_form_fields,
+    extract_convert_payload,
     estimated_usd,
     linearized_page_count,
     load_input_document,
@@ -156,6 +157,24 @@ def test_quality_profile_requests_json_graph_and_accurate_tables():
     assert ("to_formats", "json") in fields
     assert ("table_mode", "accurate") in fields
     assert options.keys() >= QUALITY_CONVERT_OPTIONS.keys()
+
+
+def test_extract_convert_payload_reads_json_and_markdown():
+    markdown, html, graph, errors = extract_convert_payload(
+        {
+            "document": {
+                "md_content": "# Title",
+                "html_content": "<h1>Title</h1>",
+                "json_content": {"schema_name": "DoclingDocument", "texts": [{}]},
+            },
+            "errors": [],
+        }
+    )
+    assert markdown == "# Title"
+    assert html.startswith("<h1>")
+    assert graph is not None
+    assert graph["schema_name"] == "DoclingDocument"
+    assert errors == []
 
 
 def test_summarize_docling_graph_counts_tables_and_pages():
