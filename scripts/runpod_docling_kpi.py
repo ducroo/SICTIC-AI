@@ -45,6 +45,14 @@ trailer<< /Root 1 0 R >>
 _active_pod_id: str | None = None
 _session: requests.Session | None = None
 
+READY_PATHS = ("/health", "/docs", "/openapi.json", "/ui")
+
+
+class KpiFailed(RuntimeError):
+    def __init__(self, message: str, result: dict[str, Any]):
+        super().__init__(message)
+        self.result = result
+
 
 def load_api_key(env_path: Path) -> str:
     if not env_path.is_file():
@@ -240,17 +248,19 @@ def wait_until(
 
 
 def probe_ready(base_url: str, timeout_s: float = 8.0) -> tuple[bool, str, int | None]:
+    """A RunPod proxy 404 means the container is not listening yet. Ignore it."""
     client = requests.Session()
     client.headers["User-Agent"] = USER_AGENT
-    for path in ("/health", "/docs", "/ui", "/"):
+    last = "no probe"
+    for path in READY_PATHS:
         try:
             response = client.get(f"{base_url}{path}", timeout=timeout_s, allow_redirects=True)
         except requests.RequestException as exc:
             last = f"{path} {type(exc).__name__}"
             continue
-        if response.status_code < 500:
-            return True, f"{path} {response.status_code}", response.status_code
         last = f"{path} {response.status_code}"
+        if 200 <= response.status_code < 400:
+            return True, last, response.status_code
     return False, last, None
 
 
@@ -353,7 +363,9 @@ def place_pod(
                 continue
             if response.status_code == 201:
                 return response.json(), candidate, attempts
-    raise RuntimeError(f"no community GPU accepted a create after {len(attempts)} tries")
+    error = RuntimeError(f"no community GPU accepted a create after {len(attempts)} tries")
+    error.attempts = attempts
+    raise error
 
 
 def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
@@ -391,7 +403,7 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     candidates = rank_gpu_candidates(catalog.json().get("gpus") or [], cloud=args.cloud)
     result["candidates"] = candidates[:12]
     if not candidates:
-        raise RuntimeError("catalog had no usable community GPUs")
+        raise KpiFailed("catalog had no usable community GPUs", result)
     print(
         "gpu queue "
         + ", ".join(f"{item['id']} ${item['price']}" for item in candidates[:8]),
@@ -400,13 +412,17 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
 
     name = f"{POD_NAME_PREFIX}-{int(time.time())}"
     create_started = time.monotonic()
-    pod, chosen, attempts = place_pod(
-        session,
-        name=name,
-        candidates=candidates,
-        cloud=args.cloud,
-        disk=args.disk,
-    )
+    try:
+        pod, chosen, attempts = place_pod(
+            session,
+            name=name,
+            candidates=candidates,
+            cloud=args.cloud,
+            disk=args.disk,
+        )
+    except RuntimeError as exc:
+        result["attempts"] = getattr(exc, "attempts", [])
+        raise KpiFailed(str(exc), result) from exc
     result["attempts"] = attempts
     result["timings_s"]["create_accepted"] = round(time.monotonic() - create_started, 3)
     pod_id = str(pod["id"])
@@ -431,7 +447,7 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
         status = str(current.get("status") or "")
         print(f"pod status={status} code={status_code}", flush=True)
         if status in {"FAILED", "TERMINATED", "DEAD"}:
-            raise RuntimeError(f"pod entered {status}")
+            raise KpiFailed(f"pod entered {status}", result)
         return status == "RUNNING"
 
     ok_running, running_s = wait_until(
@@ -442,7 +458,7 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     )
     result["timings_s"]["status_running"] = round(running_s, 3)
     if not ok_running:
-        raise RuntimeError("pod did not reach RUNNING")
+        raise KpiFailed("pod did not reach RUNNING", result)
     result["data_center_id"] = running.get("dataCenterId")
     result["pod_cost"] = running.get("cost")
     result["ports"] = (running.get("runtime") or {}).get("ports")
@@ -477,7 +493,7 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     )
     result["ready_detail"] = ready_detail
     if not ok_ready or not ready_url:
-        raise RuntimeError(f"Docling Serve did not become reachable ({ready_detail})")
+        raise KpiFailed(f"Docling Serve did not become reachable ({ready_detail})", result)
 
     for label in ("cold", "warm"):
         convert = convert_pdf(ready_url, MINIMAL_PDF, args.convert_timeout)
@@ -489,7 +505,7 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
             flush=True,
         )
         if not convert["ok"]:
-            raise RuntimeError(f"{label} convert failed: {convert}")
+            raise KpiFailed(f"{label} convert failed HTTP {convert['http_status']}", result)
 
     result["timings_s"]["docling_cold"] = result["convert"][0]["seconds"]
     result["timings_s"]["docling_warm"] = result["convert"][1]["seconds"]
@@ -517,7 +533,7 @@ def run_kpi(args: argparse.Namespace) -> dict[str, Any]:
     result["timings_s"]["teardown"] = round(gone_s, 3)
     result["timings_s"]["billed_window"] = round(time.monotonic() - create_started, 3)
     if not ok_gone:
-        raise RuntimeError("pod still present after terminate")
+        raise KpiFailed("pod still present after terminate", result)
 
     remaining = [
         {"id": pod.get("id"), "name": pod.get("name"), "status": pod.get("status")}
@@ -567,6 +583,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = run_kpi(args)
         return 0
+    except KpiFailed as exc:
+        result = exc.result
+        result["error"] = str(exc)
+        result["ok"] = False
+        result["finished_at"] = utc_now()
+        print(f"kpi failed: {exc}", flush=True)
+        return 1
     except Exception as exc:
         result.setdefault("error", f"{type(exc).__name__}: {exc}")
         result["ok"] = False

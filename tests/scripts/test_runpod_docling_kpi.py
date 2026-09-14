@@ -3,6 +3,7 @@ from __future__ import annotations
 from scripts.runpod_docling_kpi import (
     collect_base_urls,
     estimated_usd,
+    probe_ready,
     proxy_url,
     rank_gpu_candidates,
 )
@@ -89,3 +90,46 @@ def test_collect_base_urls_prefers_proxy_then_direct_port():
 def test_estimated_usd_uses_hourly_rate_over_elapsed_seconds():
     assert estimated_usd(0.22, 180) == 0.011
     assert estimated_usd(None, 180) is None
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+
+
+def test_probe_ready_ignores_proxy_404_and_accepts_docs_200(monkeypatch):
+    statuses = {
+        "/health": 404,
+        "/docs": 200,
+        "/openapi.json": 404,
+        "/ui": 404,
+    }
+
+    class _FakeSession:
+        headers: dict[str, str] = {}
+
+        def get(self, url, timeout=8.0, allow_redirects=True):
+            path = "/" + url.rsplit("/", 1)[-1]
+            if url.endswith("/openapi.json"):
+                path = "/openapi.json"
+            return _FakeResponse(statuses[path])
+
+    monkeypatch.setattr("scripts.runpod_docling_kpi.requests.Session", lambda: _FakeSession())
+    ok, detail, status = probe_ready("https://abc-5001.proxy.runpod.net")
+    assert ok is True
+    assert status == 200
+    assert detail == "/docs 200"
+
+
+def test_probe_ready_stays_unready_when_every_route_is_404(monkeypatch):
+    class _FakeSession:
+        headers: dict[str, str] = {}
+
+        def get(self, url, timeout=8.0, allow_redirects=True):
+            return _FakeResponse(404)
+
+    monkeypatch.setattr("scripts.runpod_docling_kpi.requests.Session", lambda: _FakeSession())
+    ok, detail, status = probe_ready("https://abc-5001.proxy.runpod.net")
+    assert ok is False
+    assert status is None
+    assert detail.endswith("404")
