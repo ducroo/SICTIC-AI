@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY lib /app/lib
 COPY skills /app/skills
 COPY config /app/config
+COPY hosting/public /app/hosting/public
 COPY spike /app/spike
 
 ENV PYTHONUNBUFFERED=1
