@@ -12,6 +12,7 @@ from tests.infrastructure.fake_docling_serve import MINIMAL_PDF, create_app as c
 class MemoryStore:
     def __init__(self, *args, **kwargs):
         self.points: list[dict] = []
+        self.collection_name = "temp"
 
     def collection_exists(self) -> bool:
         return bool(self.points)

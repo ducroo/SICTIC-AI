@@ -44,6 +44,7 @@ IGNORED_EXTENSIONS = (
     ".gsheet",
     ".gslide",
     ".gdraw",
+    ".docling.json",
 )
 IGNORED_FILENAMES = {
     ".DS_Store",

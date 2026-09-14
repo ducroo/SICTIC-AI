@@ -7,6 +7,7 @@ class FakeStorage:
             (".DS_Store", 0.5),
             ("application.md", 1.0),
             ("dealum/documents/deck.pdf", 2.0),
+            ("dealum/documents/deck.pdf.docling.json", 2.1),
             ("dealum/documents/.DS_Store", 2.5),
             ("dealum/documents/logo.svg", 3.0),
             ("dealum/documents/logo.ai", 3.2),

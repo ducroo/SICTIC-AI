@@ -152,7 +152,7 @@ def test_parse_json_demo_accepts_base64_file():
         }
     )
     assert demo.filename == "deck.pdf"
-    assert demo.payload == b"%PDF"
+    assert demo.payload == b"%PDF-"
 
 
 def test_parse_skill_call_builds_harness_command():
