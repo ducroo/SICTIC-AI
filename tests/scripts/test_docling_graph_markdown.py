@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from scripts.docling_graph_markdown import graph_to_markdown
+from scripts import docling_graph_markdown as script
+from lib.infrastructure.document_conversion.graph_markdown import graph_to_markdown
 
 
 GRAPH = {
@@ -63,3 +64,7 @@ def test_graph_to_markdown_emits_page_markers_tables_and_kpi_pairs():
     assert "| Revenue | 7,112 |" in markdown
     assert "<!-- figure page 2 -->" in markdown
     assert "Media Relations" not in markdown
+
+
+def test_script_reexports_lib_renderer():
+    assert script.graph_to_markdown is graph_to_markdown
