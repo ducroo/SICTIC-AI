@@ -11,13 +11,16 @@ Markdown sources sync in seconds (no OCR). Copy every data-room file, but
 never the answer key or this README:
 
 ```bash
-DATA="$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets"
-mkdir -p "$DATA"
+conda run -n sictic-env python -m skills.dataset_maintenance create synthcap
+DATA="$LOCAL_STORAGE_PATH/storage/startups/synthcap/datasets"   # startups domain, config/storage_domains.json
 find tests/fixtures/captable -type f ! -name README.md ! -name ground_truth.json \
      -exec cp {} "$DATA/" \;
 conda run -n sictic-env python -m skills.dataset_chat sync synthcap --force
 conda run -n sictic-env python -m skills.captable_build build --startup synthcap --fresh
 ```
+
+The first command creates the standard dataset layout and the active
+marker through the shared dossier helper; it is safe to repeat.
 
 The build runs on the configured `LLM_MODEL`; `--model` overrides it (the
 key must fit that provider). A correct run ends with seven validation
