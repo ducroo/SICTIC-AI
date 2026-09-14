@@ -16,6 +16,14 @@ def test_document_parser_defaults_to_docling(monkeypatch):
     assert _backend("docling_stack").__module__.endswith("docling_stack.converter")
 
 
+def test_document_converter_env_selects_docling_serve(monkeypatch):
+    monkeypatch.setenv("DOCUMENT_PARSER", "docling")
+    monkeypatch.setenv("DOCUMENT_CONVERTER", "docling_serve")
+    assert document_parser.document_parser_backend() == "docling"
+    assert document_parser.document_converter_provider() == "docling_serve"
+    assert _backend("docling_serve").__module__.endswith("document_conversion.docling_serve")
+
+
 def test_document_parser_selects_llamaparse(monkeypatch):  # pragma: allowlist secret
     monkeypatch.setenv("DOCUMENT_PARSER", SAAS_DOCUMENT_PARSER)
     monkeypatch.setenv("DOCUMENT_CONVERTER", "docling_stack")

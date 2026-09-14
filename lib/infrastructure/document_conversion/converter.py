@@ -65,6 +65,12 @@ def _backend(provider: str) -> Backend:
         )
 
         return convert_with_docling_stack
+    if provider == "docling_serve":
+        from lib.infrastructure.document_conversion.docling_serve import (
+            convert_document as convert_with_docling_serve,
+        )
+
+        return convert_with_docling_serve
     raise InfrastructureError(
         f"Unknown document converter {provider!r}",
         kind=InfrastructureErrorKind.CONFIGURATION,
