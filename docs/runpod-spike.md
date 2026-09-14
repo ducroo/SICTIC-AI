@@ -63,6 +63,17 @@ LlamaIndex itself stays out of the picture. We already own chunking, manifests,
 and search. RunPod would replace the GPU-heavy convert and model endpoints,
 not the dataset pipeline.
 
+## Community Docling Serve KPI
+
+`scripts/runpod_docling_kpi.py` creates the Hub template `qgrb3e19va`
+(`quay.io/docling-project/docling-serve-cu128`) on community cloud, converts a
+one-page PDF twice, then terminates the pod. It always terminates, including on
+failure. The token stays in `.env.runpod` and is gitignored.
+
+Measured numbers land in `/opt/cursor/artifacts/runpod-docling-kpi.json` after a
+live run. The template has no network volume, so terminate should drop the
+container disk.
+
 ## Open questions
 
 - Pay for an always-on Docling Serve GPU pod, or wrap `docling-serve` as a
