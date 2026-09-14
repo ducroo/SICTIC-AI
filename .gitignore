@@ -1,4 +1,5 @@
 .env
+.env.runpod
 .DS_Store
 **/.DS_Store
 .openclaw/
