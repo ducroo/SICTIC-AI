@@ -36,7 +36,7 @@ def discovery(mock_env, monkeypatch):
     module.WebSearchAdapter.return_value.search.return_value = []
     monkeypatch.setattr(module, "search_people", Mock(return_value=[]))
     monkeypatch.setattr(module, "website_from_evidence", Mock(return_value=None))
-    monkeypatch.setattr(module, "startup_website_import", Mock())
+    monkeypatch.setattr(module, "startup_website_import", Mock(return_value=Mock(failed_pages=0)))
     monkeypatch.setattr(module, "dataset_search", AsyncMock(return_value=[]))
     monkeypatch.setattr(module, "reconcile_people", AsyncMock(side_effect=lambda people, *_args, **_kwargs: people))
 
@@ -298,3 +298,36 @@ async def test_startup_context_comes_only_from_public_skill(discovery):
     await discovery.persons_in_dataset("acme")
     discovery.startup_profile.assert_awaited_once_with("acme")
     assert discovery.reconcile_people.await_args.kwargs["startup_context"] == "Acme startup context"
+
+
+@pytest.mark.asyncio
+async def test_empty_website_crawl_preserves_dataset_candidates(discovery):
+    discovery.website_from_evidence.return_value = "https://acme.example"
+    discovery.startup_website_import.side_effect = InfrastructureError(
+        "Website import saved no HTML pages", provider="website", operation="import",
+        kind=InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+    )
+    [artifact] = await discovery.persons_in_dataset("acme")
+    assert artifact.content().startswith("> **INCOMPLETE:**")
+    assert [p.full_name for p in read_roster("acme")] == ["Jane Doe", "Ann Advisor"]
+    assert discovery._scan.call_count == 1
+    assert artifact.is_reusable()
+
+
+@pytest.mark.asyncio
+async def test_partial_website_crawl_uses_saved_pages_and_marks_incomplete(discovery):
+    discovery.website_from_evidence.return_value = "https://acme.example"
+    discovery.startup_website_import.return_value.failed_pages = 2
+    [artifact] = await discovery.persons_in_dataset("acme")
+    assert artifact.content().startswith("> **INCOMPLETE:**")
+    assert discovery._scan.call_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [OSError("storage failure"), ValueError("invalid input")])
+async def test_unexpected_website_errors_still_raise(discovery, error):
+    discovery.website_from_evidence.return_value = "https://acme.example"
+    discovery.startup_website_import.side_effect = error
+    with pytest.raises(type(error), match=str(error)):
+        await discovery.persons_in_dataset("acme")
+    discovery.reconcile_people.assert_not_awaited()

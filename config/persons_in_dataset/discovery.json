@@ -4,7 +4,7 @@
     "batch_size": 32
   },
   "ner_max_candidates": 30,
-  "incomplete_notice": "> **INCOMPLETE:** Some external searches or LinkedIn profile retrievals could not finish. This roster uses the available evidence and may omit people or details. Please review and edit the list; follow the filename instructions below to preserve your edits.",
+  "incomplete_notice": "> **INCOMPLETE:** Some website imports, external searches or LinkedIn profile retrievals could not finish. This roster uses the available evidence and may omit people or details. Please review and edit the list; follow the filename instructions below to preserve your edits.",
   "queries": [
     "Names of founders cofounders executives employees management team and their roles",
     "Employment agreements CVs team slides organisation chart named people"

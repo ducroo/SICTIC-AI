@@ -118,7 +118,9 @@ affect reusable selection. Normal freshness and manual precedence still apply,
 including invalidation when newly imported LinkedIn source files change.
 There is no retry timer, automatic pause state, or subscription management.
 Programming errors, invalid responses, ingestion and save failures still propagate.
-Website-import failures retain their existing behavior.
+Website imports with no saved HTML are logged and discovery continues with dataset
+evidence. Partial crawls use the saved pages. Both cases mark new roster Markdown
+incomplete; unrelated website errors still propagate.
 
 No supported people leaves the roster absent, or leaves prior artifacts
 unchanged. Invalid roster input raises. Automated discovery never writes a

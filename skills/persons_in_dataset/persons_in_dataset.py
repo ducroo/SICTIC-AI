@@ -11,7 +11,7 @@ from lib.datasets.paths import dataset_location
 from lib.datasets.search import dataset_search
 from lib.datasets.source import iter_parsed_chunks, snapshot_source_files
 from lib.infrastructure.configuration import config_cache_key, load_repository_config
-from lib.infrastructure.errors import InfrastructureError
+from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 from lib.people.linkedin.errors import is_acquisition_unavailable
 from lib.infrastructure.logging import get_logger
 from lib.infrastructure.web_search import WebSearchAdapter
@@ -130,11 +130,23 @@ async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
     people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
     website = website_from_evidence(names, chunks) if location.domain == "startups" else None
     if website and not get_storage().is_dir(f"{location.raw_rel}/website"):
-        await asyncio.to_thread(startup_website_import, dataset, website,
-                                depth=config["search"]["website_depth"], max_pages=config["search"]["website_max_pages"],
-                                include_pdfs=False)
-        await sync_datasets([dataset], raise_on_error=True)
-        people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
+        try:
+            imported = await asyncio.to_thread(
+                startup_website_import, dataset, website,
+                depth=config["search"]["website_depth"], max_pages=config["search"]["website_max_pages"],
+                include_pdfs=False,
+            )
+        except InfrastructureError as error:
+            if error.provider != "website" or error.kind != InfrastructureErrorKind.SERVICE_UNAVAILABLE:
+                raise
+            complete = False
+            logger.warning("[%s] Website acquisition incomplete; continuing with dataset evidence: %s", dataset, error)
+        else:
+            if imported.failed_pages:
+                complete = False
+                logger.warning("[%s] Website acquisition incomplete: %d pages failed; continuing with saved pages", dataset, imported.failed_pages)
+            await sync_datasets([dataset], raise_on_error=True)
+            people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
     elif not website and location.domain == "startups":
         logger.info("[%s] No unambiguous documented website; skipping website crawl", dataset)
     people = _shortlist_ner_people(people, config["ner_max_candidates"])

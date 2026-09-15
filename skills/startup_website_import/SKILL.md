@@ -23,7 +23,8 @@ Save Markdown pages with source metadata, PDFs under `website/pdfs/`, plus
 `linkedin-urls.md` and `linkedin-and-resume-links.md`. These are discovered
 links and possible-resume hints, not verified person identities.
 
-Failed pages/PDFs are logged and skipped. Zero saved HTML pages raises and leaves
+Failed pages/PDFs are logged and skipped. Zero saved HTML pages raises `InfrastructureError` with provider `website`,
+operation `import` and kind `SERVICE_UNAVAILABLE` (still a `RuntimeError`), and leaves
 the existing website snapshot intact. Once a crawl succeeds, replacement removes
 the old directory before copying staged files; this copy is not transactional.
 Other dossier data is retained. There is no indexing, profile generation or
