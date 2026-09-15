@@ -1,9 +1,25 @@
-"""Process-wide application logging configuration."""
+"""Process-wide application logging configuration.
+
+Every process appends to ``logs/sictic-ai.log`` through one rotating file
+handler. The file is renamed to ``sictic-ai.log.1`` once it reaches
+``LOG_MAX_BYTES`` and ``LOG_BACKUP_COUNT`` backups are kept, so the log
+directory stays bounded whatever level is configured. Several long-running
+processes (MCP servers, CLI runs) share the file and each rotates on its
+own; the standard handler tolerates that, but a process may keep writing
+into an already rotated, or already deleted, backup until its own next
+rollover, so up to one file of that process's lines can be misplaced or
+lost.
+
+``LOG_LEVEL`` governs the project's own loggers. Library loggers never
+write below INFO into the shared file, so requesting DEBUG shows the
+project's diagnostics without transport traces or echoed request bodies.
+"""
 
 from __future__ import annotations
 
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from threading import Lock
 from typing import Final
@@ -17,6 +33,13 @@ from lib.infrastructure.errors import (
 _REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 LOG_DIR = _REPO_ROOT / "logs"
 LOG_FILE = LOG_DIR / "sictic-ai.log"
+LOG_MAX_BYTES = 10_000_000
+LOG_BACKUP_COUNT = 5
+
+_LIBRARY_LEVEL_FLOOR: Final[int] = logging.INFO
+_PROJECT_NAMESPACES: Final[frozenset[str]] = frozenset(
+    {"lib", "skills", "scripts", "__main__"}
+)
 
 _FORMAT: Final[str] = (
     "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
@@ -27,7 +50,7 @@ _CONFIGURATION_LOCK: Final[Lock] = Lock()
 
 
 def _configured_level() -> int:
-    configured = get_env_var("LOG_LEVEL", required=False) or "DEBUG"
+    configured = get_env_var("LOG_LEVEL", required=False) or "INFO"
     level = logging.getLevelNamesMapping().get(configured.upper())
     if not isinstance(level, int):
         supported = "DEBUG, INFO, WARNING, ERROR or CRITICAL"
@@ -38,6 +61,20 @@ def _configured_level() -> int:
             operation="configure_logging",
         )
     return level
+
+
+def _is_project_logger(name: str) -> bool:
+    return name.partition(".")[0] in _PROJECT_NAMESPACES
+
+
+class _LibraryLevelFloor(logging.Filter):
+    """Drop library records below INFO whatever LOG_LEVEL asks for."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return (
+            record.levelno >= _LIBRARY_LEVEL_FLOOR
+            or _is_project_logger(record.name)
+        )
 
 
 def _managed_handlers(root: logging.Logger) -> list[logging.Handler]:
@@ -74,7 +111,12 @@ def _configure_logging() -> None:
 
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
-            handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+            handler = RotatingFileHandler(
+                LOG_FILE,
+                maxBytes=LOG_MAX_BYTES,
+                backupCount=LOG_BACKUP_COUNT,
+                encoding="utf-8",
+            )
         except OSError as error:
             raise InfrastructureError(
                 f"Cannot open application log file {LOG_FILE}: {error}",
@@ -85,6 +127,7 @@ def _configure_logging() -> None:
 
         setattr(handler, _HANDLER_MARKER, True)
         handler.setLevel(level)
+        handler.addFilter(_LibraryLevelFloor())
         handler.setFormatter(
             logging.Formatter(_FORMAT, datefmt=_DATE_FORMAT)
         )

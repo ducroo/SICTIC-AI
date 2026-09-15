@@ -49,13 +49,13 @@ def test_testing_logger_does_not_install_file_handler(monkeypatch, tmp_path):
     assert not log_dir.exists()
 
 
-def test_debug_is_the_default_level(monkeypatch):
+def test_info_is_the_default_level(monkeypatch):
     monkeypatch.setenv("SICTIC_TESTING", "1")
     monkeypatch.delenv("LOG_LEVEL", raising=False)
 
     logger = application_logging.get_logger("tests.default-level")
 
-    assert logger.getEffectiveLevel() == logging.DEBUG
+    assert logger.getEffectiveLevel() == logging.INFO
 
 
 def test_log_level_is_read_from_the_environment(monkeypatch):
@@ -135,3 +135,46 @@ def test_log_file_setup_failure_is_an_infrastructure_error(
 
     with pytest.raises(InfrastructureError, match="Cannot open"):
         application_logging.get_logger("tests.file-error")
+
+
+def test_log_file_rotates_at_the_size_limit(monkeypatch, tmp_path):
+    log_file = _use_log_file(monkeypatch, tmp_path)
+    monkeypatch.setattr(application_logging, "LOG_MAX_BYTES", 300)
+    logger = application_logging.get_logger("tests.rotation")
+
+    for index in range(12):
+        logger.warning("rotation message %02d", index)
+    _flush_managed_handlers()
+
+    written = sorted(log_file.parent.iterdir())
+    assert log_file in written
+    assert log_file.with_name(f"{log_file.name}.1") in written
+    assert len(written) <= 1 + application_logging.LOG_BACKUP_COUNT
+    lines = [
+        line
+        for path in written
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert sorted(line.rsplit(" | ", 1)[1] for line in lines) == [
+        f"rotation message {index:02d}" for index in range(12)
+    ]
+
+
+def test_library_loggers_never_write_below_info(monkeypatch, tmp_path):
+    log_file = _use_log_file(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    project = application_logging.get_logger("lib.tests.project")
+
+    project.debug("project detail")
+    logging.getLogger("__main__").debug("script detail")
+    logging.getLogger("httpcore.http11").debug("send_request_headers.started")
+    logging.getLogger("LiteLLM").debug("Params passed to completion()")
+    logging.getLogger("LiteLLM").info("completion() model= example")
+    _flush_managed_handlers()
+
+    content = log_file.read_text(encoding="utf-8")
+    assert "| DEBUG    | lib.tests.project | project detail" in content
+    assert "| DEBUG    | __main__ | script detail" in content
+    assert "httpcore.http11" not in content
+    assert "Params passed to completion()" not in content
+    assert "| INFO     | LiteLLM | completion() model= example" in content
