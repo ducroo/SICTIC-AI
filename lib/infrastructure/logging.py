@@ -9,6 +9,10 @@ own; the standard handler tolerates that, but a process may keep writing
 into an already rotated, or already deleted, backup until its own next
 rollover, so up to one file of that process's lines can be misplaced or
 lost.
+
+``LOG_LEVEL`` governs the project's own loggers. Library loggers never
+write below INFO into the shared file, so requesting DEBUG shows the
+project's diagnostics without transport traces or echoed request bodies.
 """
 
 from __future__ import annotations
@@ -32,6 +36,11 @@ LOG_FILE = LOG_DIR / "sictic-ai.log"
 LOG_MAX_BYTES = 10_000_000
 LOG_BACKUP_COUNT = 5
 
+_LIBRARY_LEVEL_FLOOR: Final[int] = logging.INFO
+_PROJECT_NAMESPACES: Final[frozenset[str]] = frozenset(
+    {"lib", "skills", "scripts", "__main__"}
+)
+
 _FORMAT: Final[str] = (
     "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 )
@@ -52,6 +61,20 @@ def _configured_level() -> int:
             operation="configure_logging",
         )
     return level
+
+
+def _is_project_logger(name: str) -> bool:
+    return name.partition(".")[0] in _PROJECT_NAMESPACES
+
+
+class _LibraryLevelFloor(logging.Filter):
+    """Drop library records below INFO whatever LOG_LEVEL asks for."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return (
+            record.levelno >= _LIBRARY_LEVEL_FLOOR
+            or _is_project_logger(record.name)
+        )
 
 
 def _managed_handlers(root: logging.Logger) -> list[logging.Handler]:
@@ -104,6 +127,7 @@ def _configure_logging() -> None:
 
         setattr(handler, _HANDLER_MARKER, True)
         handler.setLevel(level)
+        handler.addFilter(_LibraryLevelFloor())
         handler.setFormatter(
             logging.Formatter(_FORMAT, datefmt=_DATE_FORMAT)
         )

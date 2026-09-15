@@ -158,3 +158,23 @@ def test_log_file_rotates_at_the_size_limit(monkeypatch, tmp_path):
     assert sorted(line.rsplit(" | ", 1)[1] for line in lines) == [
         f"rotation message {index:02d}" for index in range(12)
     ]
+
+
+def test_library_loggers_never_write_below_info(monkeypatch, tmp_path):
+    log_file = _use_log_file(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    project = application_logging.get_logger("lib.tests.project")
+
+    project.debug("project detail")
+    logging.getLogger("__main__").debug("script detail")
+    logging.getLogger("httpcore.http11").debug("send_request_headers.started")
+    logging.getLogger("LiteLLM").debug("Params passed to completion()")
+    logging.getLogger("LiteLLM").info("completion() model= example")
+    _flush_managed_handlers()
+
+    content = log_file.read_text(encoding="utf-8")
+    assert "| DEBUG    | lib.tests.project | project detail" in content
+    assert "| DEBUG    | __main__ | script detail" in content
+    assert "httpcore.http11" not in content
+    assert "Params passed to completion()" not in content
+    assert "| INFO     | LiteLLM | completion() model= example" in content
