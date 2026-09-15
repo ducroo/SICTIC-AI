@@ -35,10 +35,11 @@ exists.
 
 ## How work should be shaped
 
-**Additive first.** A new capability is a new skill package. It composes what is
-already in `lib/` and `skills/`, and changes nothing existing. If your feature
-seems to need an existing routine changed, that is a separate conversation and a
-separate pull request — write the reasons down and let a human decide.
+**Additive first.** Prefer a new capability as a new skill package. It composes
+what is already in `lib/` and `skills/`, and changes nothing existing by default.
+If your feature seems to need an existing routine changed, confirm that change
+is explicitly authorized, preserve established contracts, and explain who it
+affects; otherwise add alongside existing code.
 
 **One way to do each thing.** One checklist format and one parser. One person
 model. One path resolver. One way to store output. If the existing one does not

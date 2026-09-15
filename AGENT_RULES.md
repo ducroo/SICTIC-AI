@@ -30,8 +30,10 @@ find it and compose it, not to write it again.
   checklist format, one checklist parser, one person model, one path resolver,
   one way to store generated output. If the existing one does not fit, say so
   and ask — do not fork it.
-* **Do not modify existing code to make your feature fit.** Add alongside it.
-  Propose the refactor separately, in writing, and let a human decide.
+* **Preserve established contracts.** Do not modify existing code or established
+  contracts unless the change is explicitly authorized. When authorized work
+  requires an existing change, preserve the repository's contracts and explain
+  who it affects; otherwise add alongside existing code.
 * **Do not hardcode.** No prompts in Python, no model names, no storage paths,
   no magic thresholds. Prompts and settings live in `config/`; paths come from
   `lib.datasets.paths`; the model comes from `lib.model_config.llm_model`.
@@ -52,7 +54,7 @@ Confirm each one against the source before using it.
 | get a startup's dossier ready | `lib.startups.sources.ensure_startup_dataset`, then `lib.datasets.ingestion.sync_datasets` |
 | find where data lives | `lib.datasets.paths` — never build a path by hand |
 | ask a question of a dossier | `skills.dataset_chat.dataset_chat.dataset_chat` |
-| run a checklist over a dossier | `lib.batch_audit.engine.batch_audit` |
+| run a checklist over a dossier | `lib.batch_audit.batch_audit` |
 | parse a checklist | `lib.batch_audit.checklist.parse_checklist` — the only checklist parser |
 | render an audit as a table | `lib.batch_audit.rendering.json_to_markdown_table` |
 | force structured output from a model | `lib.infrastructure.ai_text_generation.generate_json` |
@@ -64,7 +66,11 @@ Confirm each one against the source before using it.
 | load prompts and settings | `lib.infrastructure.configuration.load_repository_config` |
 | build a CLI | `lib.cli.run_command` + Typer, in a `__main__.py` with no logic in it |
 
-## The shape of a skill
+## The shape of an insight-producing executable skill
+
+The following layout applies to executable workflows that produce managed
+insights. Instruction-only skills need no CLI; operational tools and shared
+utilities retain their established APIs.
 
 ```text
 skills/<skill_name>/
@@ -76,8 +82,9 @@ skills/<skill_name>/
 └── utils/            (optional) helpers unique to this skill
 ```
 
-The main function returns a flat `list[InsightFile]`, including when the result
-came from cache. If it takes a dataset, that is its first parameter.
+An insight-producing main function returns a flat `list[InsightFile]`, including
+when the result came from cache. If it takes a dataset, that is its first
+parameter.
 
 ## When you finish
 
