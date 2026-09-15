@@ -93,11 +93,10 @@ async def test_weighted_shortlist_precedes_search_and_preserves_independent_sour
     discovery.PersonExtractor.return_value.extract.return_value = [Person(full_name="Web Search Person")]
     discovery.search_people.return_value = [Person(linkedin_id="search-id")]
     people = await discovery.persons_in_dataset_as_person_objects("acme")
-    names_searched = discovery.search_people.call_args.args[1]
-    assert "Strong Candidate" in names_searched
-    assert "Weak Candidate" not in names_searched
-    assert "Website Person" in names_searched
-    assert "Web Search Person" in names_searched
+    discovery.search_people.assert_called_once()
+    assert discovery.search_people.call_args.args == ("acme",)
+    assert "Weak Candidate" not in [p.full_name for p in people]
+    assert {"Strong Candidate", "Website Person", "Web Search Person"} <= {p.full_name for p in people}
     assert {p.linkedin_id for p in people} >= {"explicit-id", "cached-id", "search-id"}
     assert any(p.email_addresses == ["person@example.com"] for p in people)
 
@@ -196,7 +195,9 @@ async def test_unavailable_profiles_add_markdown_notice_without_changing_reuse(d
 
 
 @pytest.mark.asyncio
-async def test_search_credit_failure_preserves_other_evidence(discovery):
+async def test_search_credit_failure_preserves_other_evidence(discovery, monkeypatch):
+    from lib.people.linkedin.search import search_people
+    monkeypatch.setattr(discovery, "search_people", search_people)
     discovery.WebSearchAdapter.return_value.search.side_effect = InfrastructureError(
         "Credit exhausted", kind=InfrastructureErrorKind.PERMISSION_DENIED, provider="apify", operation="run_actor")
     artifacts = await discovery.persons_in_dataset("acme")
@@ -331,3 +332,23 @@ async def test_unexpected_website_errors_still_raise(discovery, error):
     with pytest.raises(type(error), match=str(error)):
         await discovery.persons_in_dataset("acme")
     discovery.reconcile_people.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_one_company_search_regardless_of_candidate_count(discovery, monkeypatch):
+    from lib.people.linkedin.search import search_people
+    monkeypatch.setattr(discovery, "search_people", search_people)
+    website = build_chunk("Team directory", "website/team.md", 1, 0)
+    discovery._scan.side_effect = lambda *_: (
+        [Person(full_name=f"Candidate {i}", mentions=[website]) for i in range(100)], []
+    )
+    discovery.WebSearchAdapter.return_value.search.return_value = [{
+        "title": "Employee at Acme", "snippet": "Acme team member",
+        "link": "https://linkedin.com/in/discovered-employee",
+    }]
+    people = await discovery.persons_in_dataset_as_person_objects("acme")
+    discovery.WebSearchAdapter.return_value.search.assert_called_once_with(
+        'site:linkedin.com/in/ "acme" (founder OR employee OR team)', num_results=10,
+    )
+    assert any(p.linkedin_id == "discovered-employee" for p in people)
+    assert any(p.full_name == "Candidate 99" for p in people)

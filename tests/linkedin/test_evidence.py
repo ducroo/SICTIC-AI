@@ -6,18 +6,14 @@ from lib.people.model import Person
 from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 
 
-def test_search_retains_successes_around_failed_queries(mocker):
+def test_single_search_failure_is_reported_without_further_queries(mocker):
     search = mocker.Mock()
     error = InfrastructureError("Busy", kind=InfrastructureErrorKind.RESOURCE_BUSY, provider="apify", operation="run_actor")
-    search.search.side_effect = [
-        [{"title": "Jane", "snippet": "Founder", "link": "https://linkedin.com/in/jane-id"}],
-        error,
-        [{"title": "John", "snippet": "Founder", "link": "https://linkedin.com/in/john-id"}],
-    ]
+    search.search.side_effect = error
     failures = []
-    people = search_people("Acme", [], queries=["first", "second", "third"], num_results=10,
-                           search=search, on_error=failures.append)
-    assert [person.linkedin_id for person in people] == ["jane-id", "john-id"]
+    assert search_people("Acme", query='"{company}" team', num_results=10,
+                         search=search, on_error=failures.append) == []
+    search.search.assert_called_once_with('"Acme" team', num_results=10)
     assert failures == [error]
 
 
@@ -55,18 +51,10 @@ def test_condensation_preserves_nested_dates_and_grouped_positions():
 def test_search_returns_unverified_ids_with_provenance(mocker):
     search = mocker.Mock()
     search.search.return_value = [{"title": "Jane Doe - Acme", "link": "https://linkedin.com/in/jane-id/", "snippet": "CTO at Acme"}]
-    people = search_people("Acme", ["Jane Doe", "Jane Doe"], queries=['site:linkedin.com/in/ "{company}"'], num_results=10, search=search)
-    assert search.search.call_count == 2
+    people = search_people("Acme", query='site:linkedin.com/in/ "{company}"', num_results=10, search=search)
+    assert search.search.call_count == 1
     assert all(person.linkedin_id == "jane-id" and not person.full_name for person in people)
     assert people[0].mentions[0].document_name == "https://linkedin.com/in/jane-id/"
-
-
-def test_named_search_uses_supplied_template_and_deduplicates_names(mocker):
-    search = mocker.Mock()
-    search.search.return_value = []
-    search_people("Acme", ["Jane Doe", "Jane Doe"], queries=[], num_results=7,
-                  search=search, name_query='"{company}" "{name}" site:linkedin.com/in/')
-    search.search.assert_called_once_with('"Acme" "Jane Doe" site:linkedin.com/in/', num_results=7)
 
 
 def test_condensation_handles_stored_timeperiod_and_current_position_shapes():

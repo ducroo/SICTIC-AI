@@ -1,6 +1,6 @@
 """Opt-in company-search/profile integration; uses an isolated registry/store.
 
-Deliberately excludes the potentially hundreds of per-candidate searches.
+Uses the production single company-wide LinkedIn search; no per-person searches.
 Not a full skill run: no website import, indexing or roster generation.
 """
 
@@ -88,7 +88,7 @@ def test_live_company_search_and_profile_cache(dataset, company, monkeypatch):
             people = [Person(**row) for row in json.loads(search_file.read_text())]
         else:
             people = []
-            for candidate in search_people(company, [], queries=config["linkedin_queries"], num_results=config["results_per_query"]):
+            for candidate in search_people(company, query=config["linkedin_query"], num_results=config["results_per_query"]):
                 merge_person(people, candidate)
             search_file.write_text(json.dumps([{"linkedin_id": p.linkedin_id} for p in people]))
         before = set(resolver.profiles)
@@ -97,7 +97,7 @@ def test_live_company_search_and_profile_cache(dataset, company, monkeypatch):
             resolver.get_profiles(people)
         except Exception as exc:
             error = str(exc)
-        report = {"dataset": dataset, "company_queries": 2, "per_name_queries": 0,
+        report = {"dataset": dataset, "company_queries": 1, "per_name_queries": 0,
                   "search_ids": [p.linkedin_id for p in people], "previously_cached": sorted(before),
                   "cached_after": sorted(resolver.profile_store.load_all()),
                   "seconds": round(time.monotonic() - started, 2), "error": error}

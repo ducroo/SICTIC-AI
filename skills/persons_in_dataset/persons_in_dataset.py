@@ -2,9 +2,7 @@
 
 import asyncio
 from importlib.metadata import PackageNotFoundError, version
-from collections.abc import Callable
 
-from lib.datasets.chunking import build_chunk
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.models import Chunk
 from lib.datasets.paths import dataset_location
@@ -69,20 +67,6 @@ def _shortlist_ner_people(people: list[Person], limit: int) -> list[Person]:
     for rank, (person, score) in enumerate(ranked[:limit], 1):
         logger.debug("NER rank %d: %s (document weight %.6f)", rank, person.display_name, score)
     return result
-
-
-def _search_web(company: str, config: dict, search: WebSearchAdapter,
-                on_error: Callable[[InfrastructureError], None]) -> list[Chunk]:
-    chunks = []
-    for query in config["web_queries"]:
-        try:
-            results = search.search(query.format(company=company), num_results=config["results_per_query"])
-        except InfrastructureError as error:
-            on_error(error)
-            continue
-        for result in results:
-            chunks.append(build_chunk(f"{result['title']}\n{result['snippet']}\n{result['link']}", result["link"], "n/a", 0))
-    return chunks
 
 
 async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
@@ -156,15 +140,14 @@ async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
     if location.domain == "startups":
         search = WebSearchAdapter()
         company = dataset.replace("-", " ")
-        web_chunks = await asyncio.to_thread(_search_web, company, config["search"], search, acquisition_failed)
+        external = await asyncio.to_thread(
+            search_people, company, query=config["search"]["linkedin_query"],
+            num_results=config["search"]["results_per_query"], search=search,
+            on_error=acquisition_failed,
+        )
+        web_chunks = list({chunk.chunk_id: chunk for person in external for chunk in person.mentions}.values())
         for person in await asyncio.to_thread(extractor.extract, web_chunks):
             merge_person(people, person)
-        missing_names = [person.full_name for person in people if person.full_name and not person.linkedin_id]
-        external = await asyncio.to_thread(search_people, company, missing_names,
-                                          queries=config["search"]["linkedin_queries"],
-                                          name_query=config["search"]["linkedin_name_query"],
-                                          num_results=config["search"]["results_per_query"], search=search,
-                                          on_error=acquisition_failed)
         for person in external:
             merge_person(people, person)
     try:

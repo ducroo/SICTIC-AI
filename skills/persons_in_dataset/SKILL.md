@@ -54,14 +54,15 @@ Existing manual rosters are not migrated, deleted or automatically regenerated.
    limits and no PDFs, then synchronize and scan the resulting source material.
    Existing website snapshots are reused. Missing/ambiguous URLs are logged.
    Names from imported `website/` sources survive the NER cutoff. Cached profiles
-   and company web/LinkedIn search discoveries are also independent of the cutoff.
-6. Use the shared Apify-backed web search for startup team evidence and the
-   LinkedIn module for focused searches, including named candidates without IDs.
-   Resolve all candidate LinkedIn IDs through the existing cache and registry.
-   Expected Apify availability, access, credit and capacity errors are logged per
-   query; retain successful results and continue the remaining searches. Failed
-   profile retrieval retains available enriched people and outstanding registry
-   requests. These failures mark the generated roster incomplete.
+   and company-wide LinkedIn search discoveries are also independent of the cutoff.
+6. Make one company-wide query through the LinkedIn module and shared Apify-backed
+   web search, looking for founders and employees associated with the startup.
+   There are no per-person searches and no separate general web search. The
+   configured result limit defaults to 10. Retain returned profile IDs and snippets
+   as unverified evidence; names without IDs remain valid dataset candidates.
+   Resolve candidate LinkedIn IDs through the existing cache and registry.
+   Expected acquisition errors are logged and mark newly generated rosters
+   incomplete; successful enrichment and outstanding registry requests are retained.
 7. Synchronize acquired profiles and retrieve a small supplementary set of team
    chunks. Condense structured LinkedIn employment history locally; no preliminary
    person-profile generation is performed.
