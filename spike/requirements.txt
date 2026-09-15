@@ -1,0 +1,20 @@
+aiohttp
+apify-client
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-cloud-firestore  # pragma: allowlist secret
+jsonschema
+langchain-text-splitters
+llama-cloud>=2.8
+litellm
+openpyxl
+polars
+pydantic
+python-dotenv
+rapidfuzz
+requests
+rich
+striprtf==0.0.29
+typer
+xlrd

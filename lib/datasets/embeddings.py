@@ -55,7 +55,7 @@ class EmbeddingService:
         self.endpoint = embedding_endpoint()
 
     async def vector_size(self) -> int:
-        kwargs = self.endpoint.litellm_kwargs()
+        kwargs = _embedding_call_kwargs(self.endpoint)
         cache_key = (self.model, repr(sorted(kwargs.items())))
         cached_size = _vector_size_cache.get(cache_key)
         if cached_size is not None:
@@ -126,9 +126,21 @@ async def _execute_embedding(
     import litellm
 
     litellm.disable_aiohttp_transport = True
-    kwargs = endpoint.litellm_kwargs()
+    kwargs = _embedding_call_kwargs(endpoint)
     kwargs.update({"input": texts, "timeout": timeout})
     return await litellm.aembedding(**kwargs)
+
+
+def _embedding_call_kwargs(endpoint: ModelEndpoint) -> dict[str, Any]:
+    kwargs = dict(endpoint.litellm_kwargs())
+    from lib.infrastructure.vector_store import (
+        firestore_embedding_dimensions,  # pragma: allowlist secret
+        vector_store_backend,
+    )
+
+    if vector_store_backend() == "firestore":  # pragma: allowlist secret
+        kwargs["dimensions"] = firestore_embedding_dimensions()  # pragma: allowlist secret
+    return kwargs
 
 
 def _inspect_embedding(kwargs: Mapping[str, Any]) -> JobProfile:
