@@ -262,6 +262,7 @@ Internal building blocks are intentionally omitted.
 | `startup_traction` | ✅ | Summarizes and quantifies commercial traction. |
 | `dd_checks` | ✅ | Runs a broad suite of due-diligence checks. |
 | `dd_priorities` | ✅ | Synthesizes up to eight decision-relevant priorities from a saved `dd_checks` report. |
+| `jury_priorities` | ✅ | Formats a saved rating report into a non-ratable four-section jury briefing; it does not run checks or score startups. |
 | `startup_website_import` | ✅ | Imports a startup's public website into its due-diligence dataset. |
 | `market_review` | ◻️ | Reviews market size, customer needs, competition, and substitutes. |
 | `sha_review` | 🚧 | Reviews a selected Shareholders' Agreement against a reference SHA and legal checklists. |
