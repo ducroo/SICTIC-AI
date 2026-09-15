@@ -80,6 +80,46 @@ def test_explicit_generated_dataset_is_rejected(mock_env):
         bulk_refresh_module._select_datasets("person-profile")
 
 
+@pytest.mark.parametrize("selector,excluded,expected", [
+    (None, "sictic-members", ("active-startup", "inactive-startup")),
+    ("all", "sictic-members", ("active-startup", "inactive-startup")),
+    ("active-startup,inactive-startup", "inactive-startup", ("active-startup",)),
+    ("active-startup", "sictic-members", ("active-startup",)),
+    ("active-startup", "active-startup", ()),
+    (None, " SICTIC Members , inactive-startup,sictic-members ", ("active-startup",)),
+])
+def test_exclusions_subtract_from_all_or_explicit_scope(mocker, selector, excluded, expected):
+    locations = {name: SimpleNamespace(domain=domain) for name, domain in [
+        ("active-startup", "startups"), ("inactive-startup", "startups"), ("sictic-members", "community")
+    ]}
+    mocker.patch.object(bulk_refresh_module, "list_all_dataset_names", return_value=list(locations))
+    mocker.patch.object(bulk_refresh_module, "dataset_location", side_effect=locations.__getitem__)
+    active = mocker.patch.object(bulk_refresh_module, "is_active_dataset", return_value=False)
+    scope = bulk_refresh_module._select_datasets(selector, excluded)
+    assert scope.names == expected
+    assert set(scope.domains) == set(expected)
+    active.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("excluded", ["typo", "known,typo", " , "])
+async def test_invalid_exclusions_fail_before_preparation(mocker, excluded):
+    mocker.patch.object(bulk_refresh_module, "list_all_dataset_names", return_value=["known"])
+    prepare = mocker.patch.object(bulk_refresh_module, "_prepare_datasets")
+    with pytest.raises(ValueError, match="Unknown excluded source datasets|exclude must contain"):
+        await bulk_refresh_module.bulk_refresh(exclude=excluded)
+    prepare.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_excluding_every_dataset_skips_preparation(mocker):
+    mocker.patch.object(bulk_refresh_module, "list_all_dataset_names", return_value=["known"])
+    mocker.patch.object(bulk_refresh_module, "dataset_location", return_value=SimpleNamespace(domain="startups"))
+    prepare = mocker.patch.object(bulk_refresh_module, "_prepare_datasets")
+    await bulk_refresh_module.bulk_refresh(exclude="known", skills="persons-in-dataset")
+    prepare.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_dependencies_run_before_dependants(mock_env, mocker):
     calls = []

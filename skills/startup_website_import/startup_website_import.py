@@ -15,6 +15,7 @@ import requests
 
 from lib.datasets.paths import dataset_location_for_domain
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 from lib.slugify import slugify
 from lib.startups.dossier import ensure_startup_dossier
 from lib.storage import Storage, get_storage
@@ -267,7 +268,11 @@ def startup_website_import(
 
     if pages_saved == 0:
         storage.rmtree(staging_root)
-        raise RuntimeError("Website import saved no HTML pages; leaving existing website data unchanged.")
+        raise InfrastructureError(
+            "Website import saved no HTML pages; leaving existing website data unchanged.",
+            kind=InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+            provider="website", operation="import",
+        )
 
     staging_link_manifest_path = f"{staging_root}/linkedin-and-resume-links.md"
     staging_linkedin_urls_path = f"{staging_root}/linkedin-urls.md"

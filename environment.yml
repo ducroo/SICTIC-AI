@@ -22,6 +22,7 @@ dependencies:
   - requests
   - rich
   - striprtf
+  - spacy
   - typer<0.25
   - xlrd
 

@@ -37,7 +37,11 @@ first when the roster is missing; bulk refresh declares that dependency.
 
 LinkedIn resolution can fetch profiles and update stored JSON and registry state.
 Resolution and synchronization occur even before a manual or reusable profile
-is selected. Generation settings affect freshness metadata, not filenames.
+is selected. Expected LinkedIn/Apify acquisition failures are logged; profiling
+continues with successful enrichment and available dataset evidence. Newly generated
+profiles with unresolved LinkedIn retrieval carry a Markdown INCOMPLETE notice.
+The notice does not change reuse rules or manual precedence. Unexpected errors
+and synchronization failures still raise. Generation settings affect freshness metadata, not filenames.
 
 A missing or invalid roster raises. An empty roster with no explicit names
 returns `[]`. With no dossier, mentions or LinkedIn payload, generation saves a
