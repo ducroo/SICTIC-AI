@@ -96,6 +96,23 @@ def _resolver(apify, registry=None):
     return resolver
 
 
+def test_successful_profiles_are_attached_before_unresolved_error(mocker):
+    resolver = _resolver(_FakeApify())
+    people = [Person(linkedin_id="resolved-id"), Person(linkedin_id="pending-id")]
+
+    def collect():
+        resolver.profiles["resolved-id"] = {"publicIdentifier": "resolved-id", "fullName": "Resolved Person"}
+        resolver.registry.remove_identity("resolved-id")
+        resolver.registry.set_status(["pending-id"], "failed")
+
+    mocker.patch.object(resolver, "_process_outstanding_profiles", side_effect=collect)
+    with pytest.raises(InfrastructureError, match="manual retrieval"):
+        resolver.get_profiles(people)
+    assert people[0].full_name == "Resolved Person"
+    assert people[0].linkedin_profile["publicIdentifier"] == "resolved-id"
+    assert resolver.registry.load()["pending-id"]["status"] == "failed"
+
+
 def test_cached_profile_enriches_existing_person():
     resolver = LinkedInResolver.__new__(LinkedInResolver)
     resolver.profiles = {
@@ -111,7 +128,7 @@ def test_cached_profile_enriches_existing_person():
     )
 
     assert resolver.get_profiles([person]) == [person]
-    assert person.full_name == "Patrick Schuler"
+    assert person.full_name == "Patrick S."
     assert person.linkedin_profile["fullName"] == "Patrick S."
     assert person.email_addresses == [
         "patrick@example.com",
@@ -227,3 +244,61 @@ def test_blank_linkedin_id_is_not_registered_or_scraped():
     )
 
     assert resolver.get_profiles([person]) == [person]
+
+
+def test_collect_pending_profiles_does_not_submit_open_requests():
+    apify = _FakeApify()
+    resolver = _resolver(apify)
+    resolver.registry.upsert("jane-doe", dataset="example", full_name="Jane Doe", linkedin_id="jane-doe", status="open")
+    pending = resolver.collect_pending_profiles()
+    assert [person.linkedin_id for person in pending] == ["jane-doe"]
+    assert apify.calls == []
+
+
+def test_resolve_pending_checks_running_actor_once_without_resubmitting():
+    apify = _FakeApify()
+    resolver = _resolver(apify)
+    resolver.registry.upsert("jane-doe", dataset="example", full_name="Jane Doe", linkedin_id="jane-doe", status="existing-run")
+    with pytest.raises(InfrastructureError, match="still being processed"):
+        resolver.resolve_pending_profiles()
+    assert apify.calls == [("get", "existing-run")]
+
+
+def test_resolve_pending_collects_completed_actor_in_one_pass(mocker):
+    apify = _CompletedApify([{"publicIdentifier": "jane-doe", "fullName": "Jane Doe"}])
+    resolver = _resolver(apify)
+    resolver.registry.upsert("jane-doe", dataset="example", full_name="Jane Doe", linkedin_id="jane-doe", status="existing-run")
+    mocker.patch.object(resolver, "_store_profile", return_value="jane-doe")
+    resolver.resolve_pending_profiles()
+    assert apify.calls == [("get", "existing-run"), ("items", "existing-run"), ("delete", "existing-run")]
+    assert resolver.registry.entries == {}
+
+
+def test_resolve_pending_ignores_other_datasets_and_confirmed_absence():
+    apify = _FakeApify()
+    resolver = _resolver(apify)
+    resolver.registry.upsert("other", dataset="other", full_name="Other", linkedin_id="other", status="open")
+    resolver.registry.upsert("missing", dataset="example", full_name="Missing", linkedin_id="missing", status="not_found")
+    resolver.resolve_pending_profiles()
+    assert apify.calls == []
+
+
+def test_collect_pending_profiles_checks_existing_runs_without_waiting():
+    apify = _FakeApify()
+    resolver = _resolver(apify)
+    resolver.registry.upsert("jane-doe", dataset="example", full_name="Jane Doe", linkedin_id="jane-doe", status="existing-run")
+    pending = resolver.collect_pending_profiles()
+    assert [person.linkedin_id for person in pending] == ["jane-doe"]
+    assert apify.calls == [("get", "existing-run")]
+    assert resolver.registry.entries["jane-doe"]["status"] == "existing-run"
+
+
+def test_collect_completed_profiles_stores_results_and_removes_registry_entry(mocker):
+    apify = _CompletedApify([{"publicIdentifier": "jane-doe", "fullName": "Jane Doe"}])
+    resolver = _resolver(apify)
+    resolver.registry.upsert("jane-doe", dataset="example", full_name="Jane Doe", linkedin_id="jane-doe", status="existing-run")
+    mocker.patch.object(resolver, "_store_profile", return_value="jane-doe")
+    assert resolver.collect_pending_profiles() == []
+    resolver._store_profile.assert_called_once_with(apify.payloads[0], ["example"])
+    assert resolver.registry.entries == {}
+    assert not any(call[0] in {"start", "wait"} for call in apify.calls)

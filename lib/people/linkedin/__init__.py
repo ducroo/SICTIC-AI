@@ -1,7 +1,8 @@
 """People-facing LinkedIn profile service."""
 
 from lib.people.linkedin.cleaning import clean_linkedin_payload
-from lib.people.linkedin.identity import extract_linkedin_id
+from lib.people.linkedin.identity import extract_linkedin_id, extract_linkedin_ids
+from lib.people.linkedin.evidence import condense_profile
 from lib.people.linkedin.maintenance import diagnose_registry, import_profiles
 from lib.people.linkedin.registry import (
     STATUS_FAILED,
@@ -20,6 +21,8 @@ __all__ = [
     "clean_linkedin_payload",
     "diagnose_registry",
     "extract_linkedin_id",
+    "extract_linkedin_ids",
+    "condense_profile",
     "find_cached_person",
     "import_profiles",
 ]

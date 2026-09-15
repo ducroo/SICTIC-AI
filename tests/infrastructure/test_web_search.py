@@ -1,6 +1,14 @@
 import pytest
 
 from lib.infrastructure.web_search import WebSearchAdapter
+from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+
+
+def test_search_preserves_structured_apify_failure():
+    error = InfrastructureError("Busy", kind=InfrastructureErrorKind.RESOURCE_BUSY, provider="apify", operation="run_actor")
+    with pytest.raises(InfrastructureError) as caught:
+        _adapter(_FakeApifyAdapter(error=error)).search("example")
+    assert caught.value is error
 
 
 class _FakeApifyAdapter:

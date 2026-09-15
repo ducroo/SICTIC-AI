@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+
 from dataclasses import dataclass
 
 import pytest
@@ -201,7 +203,7 @@ def test_startup_website_import_preserves_existing_website_when_no_pages_saved(m
     storage = get_storage()
     storage.write_text("storage/startups/example/datasets/website/stale.md", "old")
 
-    with pytest.raises(RuntimeError, match="saved no HTML pages"):
+    with pytest.raises(InfrastructureError, match="saved no HTML pages") as caught:
         startup_website_import(
             "Example",
             "https://example.com",
@@ -209,6 +211,9 @@ def test_startup_website_import_preserves_existing_website_when_no_pages_saved(m
             storage=storage,
         )
 
+    assert isinstance(caught.value, RuntimeError)
+    assert caught.value.provider == "website"
+    assert caught.value.kind == InfrastructureErrorKind.SERVICE_UNAVAILABLE
     assert storage.read_text("storage/startups/example/datasets/website/stale.md") == "old"
     assert not storage.exists("cache/startup_website_import/example/website")
 

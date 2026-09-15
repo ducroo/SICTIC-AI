@@ -43,7 +43,13 @@ Use `Person.identifier`: **LinkedIn ID → first normalized email → slugified
 full name**. `Person.display_name` is display text, not artifact identity.
 Use `extract_linkedin_id` from `lib.people.linkedin` for URLs or ID inputs.
 
-Reconcile through `Person.match_score`, `matches`, `find_best_match` and `merge`.
+Reconcile through `Person.match_score`, `matches`, `find_matches`, `find_best_match`
+and `merge`. Candidate selection returns only exact LinkedIn-ID matches when
+present; otherwise it ranks qualifying shared scores, preserving input order on
+ties. `find_best_match` returns the first selection. Dropping an ID for a retry
+is an explicit caller policy, not an automatic shared fallback.
+On merge, prefer the structured name from the person's own LinkedIn profile;
+without an available matching profile name, retain the existing longer-name rule.
 Confirm the match before merging; `merge` does not validate compatibility.
 LinkedIn-cache resolution uses the stricter `find_cached_person` policy and
 preserves explicit ID boundaries. Do not substitute general matching for it.
@@ -59,10 +65,11 @@ owns reading and rendering. Its synchronous readers never discover or enrich:
 - `persons_in_dataset`: absent file raises, directing callers to the skill.
 - Both return `[]` for an intentionally empty valid table and reject invalid input.
 
-The manual roster is authoritative. Preserve edits; generated discovery JSON
-is not an alternative input. Empty discovery must not create a permanent empty
-roster. Consumers must read it without implicit discovery; bulk refresh may run
-the declared discovery dependency.
+The manual roster is authoritative. Preserve edits. Without one, the general
+reader selects an existing model-generated Markdown roster through InsightFile;
+generated discovery JSON is not an alternative input. Empty discovery must not
+create a permanent empty roster. Consumers read without implicit discovery or
+freshness enforcement; bulk refresh may run the declared discovery dependency.
 The discovery sources and `sictic-members` cache-only path belong in the skill.
 
 Use the roster reader for roster inputs. For other person tables, use
@@ -76,14 +83,23 @@ incidental-mention lists. Its `get_filtered_chunks`, `person_in_filename` and
 `is_personal_document` own retrieval filtering and document selection.
 Dossiers exclude LinkedIn documents; profiling supplies that evidence separately.
 Preserve source-document and page metadata; do not recreate selection in skills.
+Local discovery uses shared source enumeration/chunking and the person extraction
+module. Candidate evidence belongs in `Person.mentions`; its merge deduplicates
+by chunk identity, preserving different passages from the same document page.
 
 ### LinkedIn retrieval and persistence
 
 Use [LinkedInResolver](../../lib/people/linkedin/service.py):
 
 - `get_cached_persons`: cached `Person` objects without external requests.
+- `resolve_pending_profiles`: resolve this dataset's registered requests in one
+  existing resolver pass before the standard manual/reusable insight lookup.
+- `collect_pending_profiles`: collect existing runs without new submissions or
+  waiting; return this dataset's unresolved people for the existing resolver.
 - `get_profiles`: enriches people; may fetch profiles, write stored files and
   registry state, or raise unresolved-profile errors.
+  Successfully retrieved profiles are attached before unresolved-profile errors
+  are raised, so callers that handle those errors retain partial enrichment.
 - `get_profiles(allow_scrape=False)`: can still register missing profiles;
   it is not read-only.
 - `get_all_persons`: display-name strings, not a roster or complete objects.
@@ -91,6 +107,9 @@ Use [LinkedInResolver](../../lib/people/linkedin/service.py):
 Use [LinkedInProfileStore](../../lib/people/linkedin/store.py); its `write`
 applies shared `clean_linkedin_payload`. Stored LinkedIn JSON and generated
 profile Markdown are distinct artifacts. Do not vary stored payloads by skill.
+LinkedIn-focused search and local employment-evidence condensation belong in
+the LinkedIn module. Condensation does not modify stored payloads or generate
+person profiles.
 
 Use [LinkedInRegistry](../../lib/people/linkedin/registry.py) mutation methods
 and their locked updates, not independent load–modify–save or direct JSON edits.
@@ -161,6 +180,9 @@ such as JSON; not every insight is Markdown.
 Save through `save()`. Manual precedence is applied during selection;
 `save()` itself does not prevent overwriting a manual file.
 Automated generation must preserve manual overrides.
+
+When a workflow produces partial output, describe that limitation in its Markdown
+for the deal lead. Such notices do not change InsightFile or its freshness rules.
 
 ### Selection and freshness
 
@@ -413,6 +435,12 @@ supported. Prompt caching does not replace insight freshness checks.
 Use `ApifyAdapter`, `DealumAdapter` and `WebSearchAdapter` for their
 provider operations. Business decisions belong in domain libraries
 or skills, not generic adapters.
+
+Apify API/HTTP failures use `InfrastructureError` with provider `apify` and the
+operation name; web search preserves that structured error. Capacity, credit,
+authentication, rate limits and transport failures remain distinguishable from
+invalid responses. Callers decide whether an unavailable acquisition step allows
+an incomplete output; adapters do not silently substitute empty results.
 
 Use dataset-scoped `QdrantAdapter` operations and preserve dataset
 filtering within shared collections. Deleting a dataset is different
