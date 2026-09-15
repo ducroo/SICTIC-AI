@@ -1,109 +1,57 @@
-# Contributing to SICTIC-AI
+# Contributing
 
-This repository is worked on by multiple contributors, several of them using AI
-coding agents. This page is what a new contributor reads first.
+Read [AGENTS.md](AGENTS.md) for scope and review procedures and the
+[standards and architecture skill](skills/standards_and_architecture/SKILL.md)
+for technical contracts. Read the affected skill's `SKILL.md` before changing
+its behavior. These are the authoritative references; this guide does not
+maintain a second API catalogue.
 
-If you are directing an AI agent, give it **`AGENT_RULES.md`** as well. It is the
-same rules, written for the agent rather than for you.
+## Scope and shared implementations
 
----
+Start from current `main`, or compare your branch with it before proposing
+changes. A maintainer request or an agreed issue provides the scope; a separate
+issue is not required for every change. Existing code may be refactored within
+that scope. Ask about unresolved requirements or contract changes, without
+repeating approval already given.
 
-## Before you start
+Search `skills/` and `lib/` for existing capabilities before adding one. Verify
+routine names, signatures and side effects against their implementation and
+callers. Follow the standards' ownership boundaries: compose public skill APIs
+for workflows and shared libraries for their documented primitives. Explicit
+object-returning adapters should reuse the same underlying workflow.
 
-**1. Agree what you are building, with a person.** Open an issue describing the
-problem before writing a solution. Most wasted work here is not badly written —
-it is a duplicate, or the wrong shape, and both are cheap to catch in a
-paragraph and expensive to catch in a diff.
+Keep changes focused and explain affected consumers when modifying shared
+behavior. Preserve contracts unless their change has been agreed. Update the
+owning documentation instead of copying its rules into another guide.
 
-**2. Check whether it already exists.** The repository's skills and shared `lib/`
-already cover a lot:
+## Validation
 
-```bash
-ls skills/        # the capabilities that exist
-ls lib/           # the shared infrastructure
-grep -rn "def <the-thing-you-want>" lib skills
+Run validation appropriate to the change:
+
+- Documentation: check accuracy, referenced APIs and links.
+- CLI changes: check argument parsing and forwarding to the public API.
+- Identity, storage or other shared contracts: retain or add regression coverage
+  for the established behavior and affected consumers.
+- Extraction or assessment prompts: evaluate representative dossier evidence
+  and inspect the resulting output when validating model behavior.
+
+Use the `sictic-env` environment described in
+[environment.yml](environment.yml) and the [installer](install.sh). From the
+repository root, run the non-live suite with:
+
+```sh
+python -m pytest -q -m "not live"
 ```
 
-**3. Read `skills/standards_and_architecture/SKILL.md`.** It is the binding
-description of the layout and the coding rules. Everything below assumes it.
+GitHub Actions runs this suite on pull requests and pushes to `main`.
+Live service or paid model runs are not required for every change. State what
+was checked, what was not checked, and any remaining uncertainty; mocked tests
+alone do not establish model output quality. Do not weaken tests to hide failures.
 
-**4. Start from current `main`.** Not from your checkout of three weeks ago.
-This is the most common cause of accidentally rewriting something that already
-exists.
+## Pull requests
 
----
-
-## How work should be shaped
-
-**Additive first.** Prefer a new capability as a new skill package. It composes
-what is already in `lib/` and `skills/`, and changes nothing existing by default.
-If your feature seems to need an existing routine changed, confirm that change
-is explicitly authorized, preserve established contracts, and explain who it
-affects; otherwise add alongside existing code.
-
-**One way to do each thing.** One checklist format and one parser. One person
-model. One path resolver. One way to store output. If the existing one does not
-fit your case, say so before working around it. A second way to do something
-costs everyone, permanently.
-
-**Nothing hardcoded.** Prompts, instructions and thresholds live in `config/`
-and are loaded with `load_repository_config()`. Paths come from
-`lib.datasets.paths`. The model comes from `lib.model_config.llm_model`. If you
-are typing a prompt into a `.py` file, stop.
-
-**Small pull requests.** One reviewable change. A large PR does not get reviewed
-carefully — it gets approved.
-
----
-
-## What a pull request must contain
-
-* **Tests that run.** Add or update relevant tests in `tests/`.
-* **A `SKILL.md`** for any new skill — what it does, how it works, how to
-  invoke it.
-* **A description that says what you did not verify.** "Not yet run against a
-  real startup dossier" is a useful sentence, not an admission of failure.
-* **Green checks.** Never disable, skip or weaken a check to get there.
-
----
-
-## Where things are stored
-
-Nothing generated goes in the repository. It goes to configured storage.
-
-| what | where |
-|---|---|
-| prompts, instructions, checklists, schemas | `config/<skill>/` |
-| raw startup and community data | the `startups` / `community` storage domains |
-| generated reports and profiles | `insights`, always through `lib.insights.InsightFile` |
-| disposable cache | `cache/` — never anything you would miss |
-
-`InsightFile` handles naming, the model tag, freshness and reuse. Do not write
-files yourself and do not construct paths by hand.
-
----
-
-## How to document
-
-* **`SKILL.md`** — mandatory for every skill, and the first thing anyone reads.
-* **The main function's docstring** — one paragraph, plain language, describing
-  what the skill produces. It is what a person sees when they list skills.
-* **Comments** — explain *why*, not *what*. The code already says what.
-* **Leave a wishlist.** Anything you wanted to change but deliberately did not.
-  This is how the repository learns where it hurts.
-
----
-
-## Working with AI agents
-
-Agents are already contributing here. They are fast and they are good until they
-are asked to reuse something — at which point, unprompted, they will confidently
-rewrite it.
-
-* Give the agent **`AGENT_RULES.md`** at the start of every session.
-* Make it show you which existing routines it used, **by file and function
-  name**, and check one or two.
-* Treat "successfully implemented" as an unverified claim. Ask what it ran, and
-  what it did not.
-* An agent's tests passing is not evidence the feature works. It is evidence the
-  tests pass.
+Explain the problem and resulting behavior, the existing implementations reused,
+the validation performed and any risks or unverified behavior. Update relevant
+skill documentation and configuration when behavior changes. Include CLI,
+harness, registry and artifact compatibility checks when the change affects
+those contracts, as described in the standards.

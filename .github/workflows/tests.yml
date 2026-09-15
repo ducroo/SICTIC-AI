@@ -1,8 +1,3 @@
-# Runs the non-live test suite on every pull request and every push to main.
-#
-# This is the cheapest safety net available: it uses tests that already exist
-# and excludes checks that require live local services or external data.
-
 name: Tests
 
 on:
@@ -10,9 +5,17 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -27,5 +30,4 @@ jobs:
         env:
           SICTIC_TESTING: "1"
           RANKED_LLMS: "ollama/test_model:1b"
-          PYTHONPATH: .
-        run: pytest -q -m "not live"
+        run: python -m pytest -q -m "not live"

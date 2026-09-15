@@ -1,34 +1,18 @@
-## What this changes, and why
+## Problem and change
 
-<!-- One paragraph. What problem, what you did. -->
+<!-- Describe the problem and resulting behavior. Mention affected contracts. -->
 
-## What already existed that this uses
+## Shared implementations
 
-<!-- List the existing routines you reused, by file and function name.
-     If you wrote something new that feels like it should already exist,
-     say so here - someone will know. -->
+<!-- Explain what was reused, or why a new abstraction is needed. -->
 
--
+## Validation
 
-## Scope
+<!-- List checks and results appropriate to this change. For skill changes,
+include relevant CLI/harness, registry, artifact reuse and documentation checks.
+For prompt changes, describe representative evidence/output review if performed. -->
 
-- [ ] This is additive - no existing code or config was changed
-- [ ] It changes existing code (explain below, and say who it affects)
+## Risks and unverified behavior
 
-## Checks
-
-- [ ] Tests added or updated, and they run
-- [ ] `SKILL.md` written or updated, if a skill changed
-- [ ] Prompts and settings are in `config/`, not in Python
-- [ ] Output goes through `InsightFile`; no paths built by hand
-- [ ] No check was skipped, disabled or weakened to get green
-
-## What I have not verified
-
-<!-- Be specific. "Not run against a real dossier" is a useful sentence.
-     A pull request that claims everything is verified gets read with
-     more suspicion, not less. -->
-
-## Wishlist
-
-<!-- Anything you wanted to change but deliberately did not. -->
+<!-- State limitations and anything not checked, including live services or
+model output quality where relevant. -->
