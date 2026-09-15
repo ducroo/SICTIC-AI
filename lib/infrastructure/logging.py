@@ -41,7 +41,7 @@ _CONFIGURATION_LOCK: Final[Lock] = Lock()
 
 
 def _configured_level() -> int:
-    configured = get_env_var("LOG_LEVEL", required=False) or "DEBUG"
+    configured = get_env_var("LOG_LEVEL", required=False) or "INFO"
     level = logging.getLevelNamesMapping().get(configured.upper())
     if not isinstance(level, int):
         supported = "DEBUG, INFO, WARNING, ERROR or CRITICAL"

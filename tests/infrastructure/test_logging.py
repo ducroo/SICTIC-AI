@@ -49,13 +49,13 @@ def test_testing_logger_does_not_install_file_handler(monkeypatch, tmp_path):
     assert not log_dir.exists()
 
 
-def test_debug_is_the_default_level(monkeypatch):
+def test_info_is_the_default_level(monkeypatch):
     monkeypatch.setenv("SICTIC_TESTING", "1")
     monkeypatch.delenv("LOG_LEVEL", raising=False)
 
     logger = application_logging.get_logger("tests.default-level")
 
-    assert logger.getEffectiveLevel() == logging.DEBUG
+    assert logger.getEffectiveLevel() == logging.INFO
 
 
 def test_log_level_is_read_from_the_environment(monkeypatch):
