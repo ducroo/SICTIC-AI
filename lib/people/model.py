@@ -132,24 +132,31 @@ class Person:
         """Determines if two Person objects represent the same individual (1-to-1 equivalence)."""
         return self.match_score(other) >= threshold
         
-    def find_best_match(self, candidates: List['Person'], threshold: int = 85) -> 'Person | None':
-        """Returns the best matching Person from a list of candidates, or None if no match meets the threshold."""
-        best_match = None
-        highest_score = 0
-        
+    def find_matches(self, candidates: List['Person'], threshold: int = 85) -> List['Person']:
+        """Prefer exact LinkedIn IDs exclusively; otherwise rank shared scores.
+
+        Ties retain candidate order. Different explicit IDs remain non-matches;
+        dropping an ID for a retry is an explicit caller decision.
+        """
+        if self.linkedin_id:
+            exact = [candidate for candidate in candidates if candidate.linkedin_id == self.linkedin_id]
+            if exact:
+                return exact if threshold <= 100 else []
+        scored = []
         for candidate in candidates:
             score = self.match_score(candidate)
-            if score >= threshold and score > highest_score:
-                highest_score = score
-                best_match = candidate
-                # Early exit for perfect matches
-                if score == 100:
-                    return best_match
-                    
-        return best_match
+            if score >= threshold and score > 0:
+                scored.append((score, candidate))
+        return [candidate for _, candidate in sorted(scored, key=lambda item: item[0], reverse=True)]
+
+    def find_best_match(self, candidates: List['Person'], threshold: int = 85) -> 'Person | None':
+        """Return the first shared selection, or None when no candidate matches."""
+        matches = self.find_matches(candidates, threshold=threshold)
+        return matches[0] if matches else None
 
     def merge(self, other: 'Person') -> None:
         """Merges missing or richer attributes from another Person object into this one."""
+        profile_owner = self.linkedin_id if self.linkedin_profile else ""
         # Prefer longer, more complete names ("Johannes Aicher" > "J. Aicher")
         if not self.full_name and other.full_name:
             self.full_name = other.full_name
@@ -163,6 +170,16 @@ class Person:
             
         if not self.linkedin_profile and other.linkedin_profile:
             self.linkedin_profile = other.linkedin_profile
+            profile_owner = other.linkedin_id
+
+        if self.linkedin_id and profile_owner == self.linkedin_id:
+            # Import lazily: the LinkedIn package also consumes Person.
+            from lib.people.linkedin.identity import profile_full_name, profile_linkedin_id
+            payload_id = profile_linkedin_id(self.linkedin_profile)
+            if not payload_id or payload_id == self.linkedin_id:
+                profile_name = profile_full_name(self.linkedin_profile)
+                if profile_name:
+                    self.full_name = profile_name
             
         if not self.person_profile_markdown and other.person_profile_markdown:
             self.person_profile_markdown = other.person_profile_markdown
@@ -179,8 +196,8 @@ class Person:
                     existing_dossier.add(c.document_name)
                     
         if other.mentions:
-            existing_mentions = { (c.document_name, c.page_number) for c in self.mentions }
+            existing_mentions = {c.chunk_id for c in self.mentions}
             for c in other.mentions:
-                if (c.document_name, c.page_number) not in existing_mentions:
+                if c.chunk_id not in existing_mentions:
                     self.mentions.append(c)
-                    existing_mentions.add((c.document_name, c.page_number))
+                    existing_mentions.add(c.chunk_id)

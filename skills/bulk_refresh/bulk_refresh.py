@@ -42,12 +42,20 @@ def _parse_selector(value: str | None, *, label: str) -> list[str]:
     return list(dict.fromkeys(values))
 
 
-def _select_datasets(datasets: str | None) -> _DatasetScope:
+def _select_datasets(datasets: str | None, exclude: str | None = None) -> _DatasetScope:
     requested = _parse_selector(datasets, label="datasets")
+    excluded = set(_parse_selector(exclude, label="exclude"))
+    if excluded:
+        available = list_all_dataset_names(domains=SOURCE_DOMAINS)
+        unknown = excluded.difference(available)
+        if unknown:
+            raise ValueError(f"Unknown excluded source datasets: {', '.join(sorted(unknown))}")
     if ALL_DATASETS in requested and requested != [ALL_DATASETS]:
         raise ValueError("'all' cannot be combined with named datasets.")
 
-    if requested == [ALL_DATASETS]:
+    if not requested and excluded:
+        names = available
+    elif requested == [ALL_DATASETS]:
         names = list_all_dataset_names(domains=SOURCE_DOMAINS)
     elif requested:
         names = requested
@@ -67,7 +75,10 @@ def _select_datasets(datasets: str | None) -> _DatasetScope:
                 f"domain '{location.domain}'."
             )
         domains[name] = location.domain
-    return _DatasetScope(tuple(names), domains)
+    return _DatasetScope(
+        tuple(name for name in names if name not in excluded),
+        {name: domain for name, domain in domains.items() if name not in excluded},
+    )
 
 
 def _select_skills(skills: str | None) -> tuple[str, ...]:
@@ -230,9 +241,10 @@ async def _prepare_datasets(
 async def bulk_refresh(
     datasets: str | None = None,
     skills: str | None = None,
+    exclude: str | None = None,
 ) -> None:
     """Refresh selected insight skills without aborting on individual failures."""
-    selected_datasets = _select_datasets(datasets)
+    selected_datasets = _select_datasets(datasets, exclude)
     selected_skills = _select_skills(skills)
     logger.info(
         "Starting bulk refresh routine (skills=%s, datasets=%s)...",

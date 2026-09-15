@@ -1,121 +1,196 @@
-"""Resolve the editable roster before individual profiling."""
+"""Discover startup people and maintain a generated roster with manual precedence."""
+
 import asyncio
-import re
-from lib.insights import InsightFile, InsightResult
-from lib.people.discovery import manual_persons_in_dataset, _render_manual_persons_table
-from lib.people.model import Person
-from lib.people.linkedin import LinkedInResolver, extract_linkedin_id
-from lib.datasets.paths import dataset_parsed_path
-from lib.storage import get_storage
-from lib.infrastructure.configuration import load_repository_config
+from importlib.metadata import PackageNotFoundError, version
+from collections.abc import Callable
+
+from lib.datasets.chunking import build_chunk
 from lib.datasets.ingestion import sync_datasets
+from lib.datasets.models import Chunk
+from lib.datasets.paths import dataset_location
+from lib.datasets.search import dataset_search
+from lib.datasets.source import iter_parsed_chunks, snapshot_source_files
+from lib.infrastructure.configuration import config_cache_key, load_repository_config
+from lib.infrastructure.errors import InfrastructureError
+from lib.people.linkedin.errors import is_acquisition_unavailable
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.web_search import WebSearchAdapter
+from lib.insights import InsightFile, InsightResult
+from lib.model_config import llm_model
+from lib.people.discovery import _render_manual_persons_table, manual_persons_in_dataset, read_persons_roster
+from lib.people.extraction import PersonExtractor, merge_person, rank_people_by_document_weight
+from lib.people.linkedin import LinkedInResolver
+from lib.people.linkedin.search import search_people
+from lib.people.linkedin.identity import is_linkedin_document
+from lib.people.model import Person
 from lib.slugify import slugify
-from skills.dataset_chat.dataset_chat import dataset_chat_json
+from lib.startups.identity import canonical_startup_slug, startup_aliases
+from lib.startups.website import website_from_evidence
+from lib.storage import get_storage
+from skills.persons_in_dataset.reconciliation import reconcile_people
+from skills.startup_profile.startup_profile import startup_profile
+from skills.startup_website_import.startup_website_import import startup_website_import
 
 logger = get_logger(__name__)
 
-_PROFILE_URL = re.compile(
-    r"(?<![\w.-])(?:https?://)?(?:[a-z]{2,3}\.)?linkedin\.com/(?:in|pub)/[\w%\-]+",
-    re.IGNORECASE,
-)
+
+def _roster_insight(dataset: str, config: dict) -> InsightFile:
+    location = dataset_location(dataset)
+    sources = [(source.filename, source.sha256) for source in snapshot_source_files(get_storage(), location.raw_rel)]
+    packages = {}
+    for package in ("spacy", config["ner"]["model"]):
+        try:
+            packages[package] = version(package)
+        except PackageNotFoundError:
+            packages[package] = None
+    return InsightFile(dataset, "persons_in_dataset", llm_model(), config_key=config_cache_key(
+        "people-discovery-v2", config, sorted(sources), packages, startup_aliases(),
+    ))
 
 
-def _merge_discovered_person(persons: list[Person], candidate: Person) -> None:
-    """Use the shared person identity and merge rules for every discovery source."""
-    existing = candidate.find_best_match(persons)
-    if existing is None:
-        persons.append(candidate)
-        return
-    existing.merge(candidate)
-    # An explicit named link may connect a name-only entry and an ID-only entry.
-    # Reconcile both while retaining Person.matches' distinct-ID safeguard.
-    for other in list(persons):
-        if other is not existing and existing.matches(other):
-            existing.merge(other)
-            persons.remove(other)
+def _scan(dataset: str, extractor: PersonExtractor) -> tuple[list[Person], list[Chunk]]:
+    chunks = list(iter_parsed_chunks(dataset))
+    # LinkedIn JSON is consumed as structured data, never as NER input.
+    chunks = [chunk for chunk in chunks if not is_linkedin_document(chunk.document_name)]
+    return extractor.extract(chunks), chunks
 
 
-def _add_dataset_linkedin_ids(dataset_name: str, persons: list[Person]) -> None:
-    """Retain explicit profile URLs, including people absent from name retrieval."""
-    storage = get_storage()
-    directory = dataset_parsed_path(dataset_name)
-    filenames = [name for name, _ in storage.list_with_mtime(directory, recursive=True)
-                 if name.lower().endswith(".md")]
-    for filename in sorted(filenames):
-        content = storage.read_text(f"{directory}/{filename}")
-        # A named Markdown link explicitly associates an existing name with an ID.
-        for label, url in re.findall(r"\[([^\]]+)\]\(([^\s)]+)\)", content):
-            if not _PROFILE_URL.fullmatch(url.split("?", 1)[0].rstrip("/")):
-                continue
-            identifier = extract_linkedin_id(url)
-            named = Person(full_name=label).find_best_match(
-                [person for person in persons if person.full_name]
-            )
-            if named is not None:
-                _merge_discovered_person(
-                    persons, Person(full_name=named.full_name, linkedin_id=identifier)
-                )
-        for match in _PROFILE_URL.finditer(content):
-            identifier = extract_linkedin_id(match.group())
-            if identifier:
-                _merge_discovered_person(persons, Person(linkedin_id=identifier))
+def _shortlist_ner_people(people: list[Person], limit: int) -> list[Person]:
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        raise ValueError("ner_max_candidates must be a positive integer")
+    ranked = rank_people_by_document_weight(people)
+    selected = {id(person) for person, _ in ranked[:limit]}
+    # Explicit contacts and imported website discoveries are independent inputs.
+    result = [person for person in people if id(person) in selected
+              or person.linkedin_id or person.email_addresses
+              or any(chunk.document_name.startswith("website/") for chunk in person.mentions)]
+    logger.info("NER weighted shortlist: %d/%d names selected; %d candidates retained including contacts and website evidence",
+                min(limit, len(ranked)), len(ranked), len(result))
+    for rank, (person, score) in enumerate(ranked[:limit], 1):
+        logger.debug("NER rank %d: %s (document weight %.6f)", rank, person.display_name, score)
+    return result
 
 
-def _parse_person_names(result: dict) -> list[Person]:
-    names = result["names"]
-    persons: list[Person] = []
-    for name in names:
-        _merge_discovered_person(persons, Person(full_name=name.strip()))
-    return persons
+def _search_web(company: str, config: dict, search: WebSearchAdapter,
+                on_error: Callable[[InfrastructureError], None]) -> list[Chunk]:
+    chunks = []
+    for query in config["web_queries"]:
+        try:
+            results = search.search(query.format(company=company), num_results=config["results_per_query"])
+        except InfrastructureError as error:
+            on_error(error)
+            continue
+        for result in results:
+            chunks.append(build_chunk(f"{result['title']}\n{result['snippet']}\n{result['link']}", result["link"], "n/a", 0))
+    return chunks
+
+
+async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
+    dataset = slugify(dataset_name)
+    manual_file = InsightFile(dataset, "persons_in_dataset", "manual")
+    if dataset == "sictic-members":
+        manual = manual_persons_in_dataset(dataset)
+        if manual is not None:
+            return [manual_file], manual
+        people: list[Person] = []
+        for person in await asyncio.to_thread(LinkedInResolver(dataset).get_cached_persons):
+            merge_person(people, person)
+        if people:
+            manual_file.save(_render_manual_persons_table(dataset_name, people))
+        return ([manual_file] if people else []), people
+
+    complete = True
+
+    def acquisition_failed(error: InfrastructureError) -> None:
+        nonlocal complete
+        if not is_acquisition_unavailable(error):
+            raise error
+        complete = False
+        logger.warning("[%s] Discovery incomplete; continuing with available evidence: %s", dataset, error)
+
+    resolver = LinkedInResolver(dataset)
+    try:
+        await asyncio.to_thread(resolver.resolve_pending_profiles)
+    except InfrastructureError as error:
+        acquisition_failed(error)
+    config = load_repository_config("persons_in_dataset", "discovery")
+    insight = _roster_insight(dataset, config)
+    reusable = insight.find(selection="reusable")
+    if reusable:
+        return [reusable], read_persons_roster(reusable)
+
+    await sync_datasets([dataset], raise_on_error=True)
+    location = dataset_location(dataset)
+    context = ""
+    if location.domain == "startups":
+        profiles = await startup_profile(dataset)
+        context = "\n\n".join(profile.content() for profile in profiles)
+    names = [dataset, *(alias for alias in startup_aliases() if canonical_startup_slug(alias) == canonical_startup_slug(dataset))]
+    extractor = await asyncio.to_thread(PersonExtractor, **config["ner"])
+    people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
+    website = website_from_evidence(names, chunks) if location.domain == "startups" else None
+    if website and not get_storage().is_dir(f"{location.raw_rel}/website"):
+        await asyncio.to_thread(startup_website_import, dataset, website,
+                                depth=config["search"]["website_depth"], max_pages=config["search"]["website_max_pages"],
+                                include_pdfs=False)
+        await sync_datasets([dataset], raise_on_error=True)
+        people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
+    elif not website and location.domain == "startups":
+        logger.info("[%s] No unambiguous documented website; skipping website crawl", dataset)
+    people = _shortlist_ner_people(people, config["ner_max_candidates"])
+    for person in resolver.get_cached_persons():
+        merge_person(people, person)
+    web_chunks: list[Chunk] = []
+    if location.domain == "startups":
+        search = WebSearchAdapter()
+        company = dataset.replace("-", " ")
+        web_chunks = await asyncio.to_thread(_search_web, company, config["search"], search, acquisition_failed)
+        for person in await asyncio.to_thread(extractor.extract, web_chunks):
+            merge_person(people, person)
+        missing_names = [person.full_name for person in people if person.full_name and not person.linkedin_id]
+        external = await asyncio.to_thread(search_people, company, missing_names,
+                                          queries=config["search"]["linkedin_queries"],
+                                          name_query=config["search"]["linkedin_name_query"],
+                                          num_results=config["search"]["results_per_query"], search=search,
+                                          on_error=acquisition_failed)
+        for person in external:
+            merge_person(people, person)
+    try:
+        await asyncio.to_thread(resolver.get_profiles, people)
+    except InfrastructureError as error:
+        acquisition_failed(error)
+    reconciled: list[Person] = []
+    for person in people:
+        merge_person(reconciled, person)
+    people = reconciled
+    team_chunks = await dataset_search(dataset_name=dataset, query=config["queries"],
+                                       max_chunks=config["max_chunks"], raise_on_error=True)
+    team_chunks = [chunk for chunk in team_chunks if not is_linkedin_document(chunk.document_name)]
+    team_chunks = list({chunk.chunk_id: chunk for chunk in [*team_chunks, *web_chunks]}.values())
+    if not people and not team_chunks:
+        logger.info("[%s] No candidate evidence; leaving roster absent", dataset)
+        return [], []
+    insight = _roster_insight(dataset, config)
+    people = await reconcile_people(people, team_chunks, startup_context=context,
+                                    company_names=names, config=config)
+    if not people:
+        logger.info("[%s] No supported people; leaving existing artifacts unchanged", dataset)
+        return [], []
+    content = _render_manual_persons_table(dataset_name, people, generated=insight)
+    if not complete:
+        content = config["incomplete_notice"] + "\n\n" + content
+    insight.save(content)
+    logger.info("[%s] Saved generated roster with %d people (complete=%s)", dataset, len(people), complete)
+    return [insight], people
 
 
 async def persons_in_dataset_as_person_objects(dataset_name: str) -> list[Person]:
-    """Use the manual roster first, otherwise discover names from dataset evidence.
-
-    No web search, LinkedIn fetch, or biography generation. Existing local
-    LinkedIn person objects seed discovery before dataset evidence is added.
-    """
-    dataset_slug = slugify(dataset_name)
-    manual = manual_persons_in_dataset(dataset_slug)
-    if manual is not None:
-        return manual
-    logger.info("[%s] Discovering people for missing roster", dataset_slug)
-    persons: list[Person] = []
-    cached = await asyncio.to_thread(LinkedInResolver(dataset_slug).get_cached_persons)
-    for person in cached:
-        _merge_discovered_person(persons, person)
-    if dataset_slug != "sictic-members":
-        await sync_datasets([dataset_slug], raise_on_error=True)
-        config = load_repository_config("persons_in_dataset", "discovery")
-        result = await dataset_chat_json(
-            dataset_name=dataset_slug,
-            queries=config["queries"],
-            prompt=config["instructions"],
-            schema=config["response_schema"],
-            max_chunks=config["max_chunks"],
-        )
-        # A retrieval failure or no available evidence must not freeze an empty
-        # authoritative roster and suppress later discovery.
-        for person in _parse_person_names(result) if result is not None else []:
-            _merge_discovered_person(persons, person)
-        _add_dataset_linkedin_ids(dataset_slug, persons)
-    if not persons:
-        logger.info("[%s] No people found; leaving roster absent", dataset_slug)
-        return []
-    # Recheck after asynchronous work in case a deal lead created the roster.
-    manual = manual_persons_in_dataset(dataset_slug)
-    if manual is not None:
-        return manual
-    InsightFile(dataset=dataset_slug, skill="persons_in_dataset", model="manual").save(
-        _render_manual_persons_table(dataset_name, persons)
-    )
-    logger.info("[%s] Created editable roster with %d people", dataset_slug, len(persons))
-    return persons
+    """Share the canonical roster workflow while retaining in-memory evidence."""
+    _, people = await _workflow(dataset_name)
+    return people
 
 
 async def persons_in_dataset(dataset_name: str) -> InsightResult:
-    """Create or reuse the single editable roster and return its artifact."""
-    await persons_in_dataset_as_person_objects(dataset_name)
-    insight = InsightFile(dataset=slugify(dataset_name), skill="persons_in_dataset", model="manual")
-    return [insight] if manual_persons_in_dataset(dataset_name) is not None else []
+    """Return the manual, reusable, or newly generated roster artifacts."""
+    insights, _ = await _workflow(dataset_name)
+    return insights
