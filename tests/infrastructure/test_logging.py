@@ -135,3 +135,26 @@ def test_log_file_setup_failure_is_an_infrastructure_error(
 
     with pytest.raises(InfrastructureError, match="Cannot open"):
         application_logging.get_logger("tests.file-error")
+
+
+def test_log_file_rotates_at_the_size_limit(monkeypatch, tmp_path):
+    log_file = _use_log_file(monkeypatch, tmp_path)
+    monkeypatch.setattr(application_logging, "LOG_MAX_BYTES", 300)
+    logger = application_logging.get_logger("tests.rotation")
+
+    for index in range(12):
+        logger.warning("rotation message %02d", index)
+    _flush_managed_handlers()
+
+    written = sorted(log_file.parent.iterdir())
+    assert log_file in written
+    assert log_file.with_name(f"{log_file.name}.1") in written
+    assert len(written) <= 1 + application_logging.LOG_BACKUP_COUNT
+    lines = [
+        line
+        for path in written
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert sorted(line.rsplit(" | ", 1)[1] for line in lines) == [
+        f"rotation message {index:02d}" for index in range(12)
+    ]
