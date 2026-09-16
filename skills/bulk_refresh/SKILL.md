@@ -9,11 +9,18 @@ Prepare selected datasets and execute their applicable registry workflows.
 
 ## Operations and effects
 
-The async `bulk_refresh(datasets=None, skills=None)` returns `None` on success.
+The async `bulk_refresh(datasets=None, skills=None, exclude=None)` returns `None` on success.
 Selectors are comma-separated strings or `all`. No dataset selector means
 active startup/community datasets; `all` includes inactive ones. Named datasets
 may also be inactive. Generated datasets are excluded. Omitted skills select
 the full registry; named skills expand their prerequisites.
+
+`exclude` / `--exclude` accepts comma-separated source dataset names using the
+same normalization as `--datasets`. With exclusions and no dataset selector,
+start from all startup/community datasets, including inactive ones. Otherwise
+subtract exclusions from the explicit selection. Unknown excluded source names
+raise before preparation; known names outside the selection have no effect.
+Excluding every selected dataset logs and returns without doing work.
 
 Prepare and synchronize every selected dataset before running skills.
 Independent ready jobs run concurrently. Cross-domain dependencies cover
@@ -34,6 +41,7 @@ Each skill owns artifact reuse. The command does not itself install a schedule.
 ```bash
 conda run -n sictic-env python -m skills.bulk_refresh --datasets example-startup,sictic-members --skills expert-search
 conda run -n sictic-env python -m skills.bulk_refresh --datasets all --skills startup-profile
+conda run -n sictic-env python -m skills.bulk_refresh --exclude sictic-members --skills persons-in-dataset
 ```
 
 This operational tool has no harness command.

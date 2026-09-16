@@ -16,7 +16,7 @@ def main(
         "-d",
         help=(
             "Comma-separated source datasets, or 'all'. "
-            "Defaults to active startup and community datasets."
+            "Defaults to active startup and community datasets, or all when --exclude is supplied."
         ),
     ),
     skills: Optional[str] = typer.Option(
@@ -28,9 +28,14 @@ def main(
             "Required dependencies are included automatically."
         ),
     ),
+    exclude: Optional[str] = typer.Option(
+        None,
+        "--exclude",
+        help="Comma-separated source datasets to exclude. Unknown names are rejected.",
+    ),
 ):
     run_command(
-        lambda: bulk_refresh(datasets=datasets, skills=skills),
+        lambda: bulk_refresh(datasets=datasets, skills=skills, exclude=exclude),
         logger=logger,
         error_prefix="Bulk refresh failed",
     )

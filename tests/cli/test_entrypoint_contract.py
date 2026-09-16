@@ -117,9 +117,10 @@ def test_bulk_refresh_cli_uses_plural_scope_options(monkeypatch):
     module = importlib.import_module("skills.bulk_refresh.__main__")
     captured = {}
 
-    async def fake_bulk_refresh(*, datasets, skills):
+    async def fake_bulk_refresh(*, datasets, skills, exclude=None):
         captured["datasets"] = datasets
         captured["skills"] = skills
+        captured["exclude"] = exclude
 
     monkeypatch.setattr(module, "bulk_refresh", fake_bulk_refresh)
 
@@ -137,7 +138,21 @@ def test_bulk_refresh_cli_uses_plural_scope_options(monkeypatch):
     assert captured == {
         "datasets": "avientus,miraex",
         "skills": "sha-review,dd-checks",
+        "exclude": None,
     }
+
+
+def test_bulk_refresh_cli_forwards_exclude_without_dataset_selector(monkeypatch):
+    module = importlib.import_module("skills.bulk_refresh.__main__")
+    captured = {}
+
+    async def fake_bulk_refresh(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(module, "bulk_refresh", fake_bulk_refresh)
+    result = CliRunner().invoke(module.app, ["--exclude", "sictic-members,ovomind", "--skills", "persons-in-dataset"])
+    assert result.exit_code == 0
+    assert captured == {"datasets": None, "skills": "persons-in-dataset", "exclude": "sictic-members,ovomind"}
 
 
 def test_suggested_startups_cli_accepts_comma_separated_investors(monkeypatch):

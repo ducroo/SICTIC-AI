@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from collections.abc import Callable
 
 from rapidfuzz import fuzz
@@ -15,6 +13,9 @@ from lib.infrastructure.logging import get_logger
 from lib.people.linkedin.identity import (
     extract_linkedin_id,
     linkedin_profile_not_found,
+    profile_full_name,
+    profile_linkedin_id,
+    sanitize_name,
 )
 from lib.people.linkedin.registry import (
     KNOWN_STATUSES,
@@ -30,17 +31,6 @@ from lib.storage import get_storage
 logger = get_logger(__name__)
 LINKEDIN_PROFILE_ACTOR = "dev_fusion/Linkedin-Profile-Scraper"
 _TERMINAL_RUN_STATUSES = {"SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED"}
-
-
-def sanitize_name(name: str) -> str:
-    if not name:
-        return ""
-    clean = "".join(
-        character
-        for character in name
-        if not unicodedata.category(character).startswith(("So", "C"))
-    )
-    return re.sub(r"\s+", " ", clean).strip()
 
 
 def find_cached_person(
@@ -89,18 +79,8 @@ def find_cached_person(
 
 
 def _person_from_payload(linkedin_id: str, payload: dict) -> Person:
-    raw_name = str(payload.get("fullName") or "").strip()
-    if not raw_name:
-        raw_name = " ".join(
-            str(value).strip()
-            for value in (
-                payload.get("firstName", ""),
-                payload.get("lastName", ""),
-            )
-            if value
-        )
     return Person(
-        full_name=sanitize_name(raw_name) or raw_name,
+        full_name=profile_full_name(payload),
         linkedin_id=linkedin_id,
         email_addresses=extract_email_addresses(payload),
         linkedin_profile=payload,
@@ -160,14 +140,7 @@ class LinkedInResolver:
 
     @staticmethod
     def _payload_linkedin_id(payload: dict) -> str:
-        source = (
-            payload.get("publicIdentifier", "")
-            or payload.get("url", "")
-            or payload.get("linkedinUrl", "")
-            or payload.get("inputUrl", "")
-            or payload.get("linkedin_id", "")
-        )
-        return extract_linkedin_id(source)
+        return profile_linkedin_id(payload)
 
     def _reconcile_run(
         self,
@@ -208,17 +181,50 @@ class LinkedInResolver:
         self.registry.set_status(sorted(failed), STATUS_FAILED)
         apify.delete_run(run_id)
 
-    def _process_outstanding_profiles(self) -> None:
+    def resolve_pending_profiles(self) -> None:
+        """Resume this dataset's registered requests through one resolver pass.
+
+        Collect finished runs, submit open requests and propagate unresolved
+        statuses before the caller checks its reusable insight.
+        """
+        pending = [
+            Person(full_name=entry.get("full_name", ""), linkedin_id=entry["linkedin_id"])
+            for entry in self.registry.load().values()
+            if self.dataset_name in entry.get("datasets", [])
+            and entry.get("linkedin_id")
+            and entry.get("status") != STATUS_NOT_FOUND
+        ]
+        self.get_profiles(pending)
+
+    def collect_pending_profiles(self) -> list[Person]:
+        """Collect existing runs; return this dataset's unresolved requests.
+
+        Does not submit open requests or wait for running actors. Callers can
+        honor manual artifacts before passing the returned people to get_profiles.
+        Run IDs and failed statuses remain owned by the shared registry.
+        """
+        self._process_outstanding_profiles(submit_open=False)
+        self.profiles.update(self.profile_store.load_all())
+        return [
+            Person(full_name=entry.get("full_name", ""), linkedin_id=entry["linkedin_id"])
+            for entry in self.registry.load().values()
+            if self.dataset_name in entry.get("datasets", [])
+            and entry.get("linkedin_id") not in self.profiles
+            and entry.get("status") != STATUS_NOT_FOUND
+        ]
+
+    def _process_outstanding_profiles(self, *, submit_open: bool = True) -> None:
         entries = self.registry.load()
         open_ids = sorted(
             entry["linkedin_id"]
             for entry in entries.values()
-            if entry.get("status") == STATUS_OPEN and entry.get("linkedin_id")
+            if submit_open and entry.get("status") == STATUS_OPEN and entry.get("linkedin_id")
         )
         run_ids = {
             str(entry.get("status"))
             for entry in entries.values()
             if entry.get("status") not in KNOWN_STATUSES
+            and (submit_open or self.dataset_name in entry.get("datasets", []))
         }
         if not open_ids and not run_ids:
             return
@@ -363,7 +369,6 @@ class LinkedInResolver:
 
         self._process_outstanding_profiles()
         self.profiles.update(self.profile_store.load_all())
-        self._raise_for_unresolved(requested_ids)
         resolved = [
             _person_from_payload(linkedin_id, self.profiles[linkedin_id])
             for linkedin_id in requested_ids
@@ -373,4 +378,5 @@ class LinkedInResolver:
             match = find_cached_person(person, resolved)
             if match is not None:
                 person.merge(match)
+        self._raise_for_unresolved(requested_ids)
         return person_list
