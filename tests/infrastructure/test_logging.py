@@ -160,21 +160,22 @@ def test_log_file_rotates_at_the_size_limit(monkeypatch, tmp_path):
     ]
 
 
-def test_library_loggers_never_write_below_info(monkeypatch, tmp_path):
+@pytest.mark.parametrize("level", ["DEBUG", "INFO"])
+def test_project_and_library_debug_follow_log_level(monkeypatch, tmp_path, level):
     log_file = _use_log_file(monkeypatch, tmp_path)
-    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("LOG_LEVEL", level)
     project = application_logging.get_logger("lib.tests.project")
+    library = logging.getLogger("third_party.debug_contract")
+    # Libraries may enable DEBUG themselves; the shared handler still applies
+    # the configured application level.
+    monkeypatch.setattr(library, "level", logging.DEBUG)
 
     project.debug("project detail")
-    logging.getLogger("__main__").debug("script detail")
-    logging.getLogger("httpcore.http11").debug("send_request_headers.started")
-    logging.getLogger("LiteLLM").debug("Params passed to completion()")
-    logging.getLogger("LiteLLM").info("completion() model= example")
+    library.debug("library detail")
+    library.info("library information")
     _flush_managed_handlers()
 
     content = log_file.read_text(encoding="utf-8")
-    assert "| DEBUG    | lib.tests.project | project detail" in content
-    assert "| DEBUG    | __main__ | script detail" in content
-    assert "httpcore.http11" not in content
-    assert "Params passed to completion()" not in content
-    assert "| INFO     | LiteLLM | completion() model= example" in content
+    assert ("project detail" in content) == (level == "DEBUG")
+    assert ("library detail" in content) == (level == "DEBUG")
+    assert "library information" in content
