@@ -85,6 +85,8 @@ are:
   endpoint, and API key. Blank `RERANK_MODEL` disables reranking.
 - `RETRIEVAL_*`: how wide retrieval runs and how much of an answer one document
   may occupy. See [Retrieval](#retrieval).
+- `LOG_LEVEL`: verbosity of the application log `logs/sictic-ai.log`, INFO by
+  default. The file rotates at 10 MB and five backups are kept.
 
 The complete set and its local defaults are in `.env-template`. Optional Google
 Drive synchronization is configured independently under `rclone-sync/`; it is

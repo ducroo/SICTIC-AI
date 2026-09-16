@@ -49,13 +49,13 @@ def test_testing_logger_does_not_install_file_handler(monkeypatch, tmp_path):
     assert not log_dir.exists()
 
 
-def test_debug_is_the_default_level(monkeypatch):
+def test_info_is_the_default_level(monkeypatch):
     monkeypatch.setenv("SICTIC_TESTING", "1")
     monkeypatch.delenv("LOG_LEVEL", raising=False)
 
     logger = application_logging.get_logger("tests.default-level")
 
-    assert logger.getEffectiveLevel() == logging.DEBUG
+    assert logger.getEffectiveLevel() == logging.INFO
 
 
 def test_log_level_is_read_from_the_environment(monkeypatch):
@@ -135,3 +135,47 @@ def test_log_file_setup_failure_is_an_infrastructure_error(
 
     with pytest.raises(InfrastructureError, match="Cannot open"):
         application_logging.get_logger("tests.file-error")
+
+
+def test_log_file_rotates_at_the_size_limit(monkeypatch, tmp_path):
+    log_file = _use_log_file(monkeypatch, tmp_path)
+    monkeypatch.setattr(application_logging, "LOG_MAX_BYTES", 300)
+    logger = application_logging.get_logger("tests.rotation")
+
+    for index in range(12):
+        logger.warning("rotation message %02d", index)
+    _flush_managed_handlers()
+
+    written = sorted(log_file.parent.iterdir())
+    assert log_file in written
+    assert log_file.with_name(f"{log_file.name}.1") in written
+    assert len(written) <= 1 + application_logging.LOG_BACKUP_COUNT
+    lines = [
+        line
+        for path in written
+        for line in path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert sorted(line.rsplit(" | ", 1)[1] for line in lines) == [
+        f"rotation message {index:02d}" for index in range(12)
+    ]
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "INFO"])
+def test_project_and_library_debug_follow_log_level(monkeypatch, tmp_path, level):
+    log_file = _use_log_file(monkeypatch, tmp_path)
+    monkeypatch.setenv("LOG_LEVEL", level)
+    project = application_logging.get_logger("lib.tests.project")
+    library = logging.getLogger("third_party.debug_contract")
+    # Libraries may enable DEBUG themselves; the shared handler still applies
+    # the configured application level.
+    monkeypatch.setattr(library, "level", logging.DEBUG)
+
+    project.debug("project detail")
+    library.debug("library detail")
+    library.info("library information")
+    _flush_managed_handlers()
+
+    content = log_file.read_text(encoding="utf-8")
+    assert ("project detail" in content) == (level == "DEBUG")
+    assert ("library detail" in content) == (level == "DEBUG")
+    assert "library information" in content
