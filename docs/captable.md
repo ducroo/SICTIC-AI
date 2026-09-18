@@ -120,10 +120,11 @@ model and artifact lifecycle without live model calls.
 
 ## Known limitations / follow-ups
 
-- The 33.33% discount reclassification threshold is **unverified with
-  tax counsel** (it lives in `assessment_rules.json`, not code); the
-  newly-issued-vs-treasury-shares tax question is likewise recorded as a
+- The newly-issued-vs-treasury-shares tax question is recorded as a
   verify-with-counsel item in [captable-design.md](captable-design.md).
+  (The 33 1/3% discount reclassification threshold is sourced since
+  the ESTV practice change of 1 May 2025 and lives in
+  `assessment_rules.json`, not code.)
 - Anti-dilution provisions, phantom-share liabilities, and exit
   waterfalls are not yet extracted or modelled.
 - Syndicate members are not resolved (the 10/20 outputs say so rather
