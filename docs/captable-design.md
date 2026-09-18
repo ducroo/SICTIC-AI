@@ -109,13 +109,16 @@ feeds cross-document consistency.
 - **Nominal-value floor (art. 624 CO)**: shares cannot be issued below
   nominal value. A cap/discount-implied conversion price below nominal
   is legally impossible → validation finding, never a silent clamp.
-- **Discount above 33.33%** reportedly reclassifies the CLA as
-  "non-classic" (discount portion income-taxable, withholding
-  complications). **Threshold unverified with tax counsel** — it lives
-  in `config/captable_build/assessment_rules.json`, not code, so it can be
-  corrected without a release. A second **verify-with-counsel** item:
-  the claimed tax requirement that conversion shares be newly issued
-  rather than treasury shares — recorded here, not enforced anywhere.
+- **Discount above 33 1/3%** reclassifies the CLA as "non-classic"
+  (discount portion income-taxable, withholding complications). ESTV
+  practice since 1 May 2025 raised this limit from 20% to one third;
+  source: Walder Wyss Newsletter 214 of 22 May 2025, quoted in Enrico's
+  footnote in [cla-review-design.md](cla-review-design.md). The
+  threshold lives in `config/captable_build/assessment_rules.json` as
+  33.33, not in code, so it can follow future practice changes without
+  a release. One **verify-with-counsel** item remains: the claimed tax
+  requirement that conversion shares be newly issued rather than
+  treasury shares — recorded here, not enforced anywhere.
 - **1% issuance stamp duty (Emissionsabgabe)** above the one-time
   CHF 1M exemption: CLA conversions count as contributions and often
   push a startup over the threshold together with the priced round. The

@@ -66,9 +66,9 @@ def assess_cla(
                 STATUS_DEVIATING,
                 "high",
                 f"Discount {discount:g}% exceeds the {tax_threshold:g}% "
-                "reclassification threshold (reported ESTV practice: "
-                "non-classic loan, income tax on the discount; verify "
-                "with tax counsel).",
+                "reclassification threshold (ESTV practice since "
+                "1 May 2025: non-classic convertible, income tax on "
+                "the discount).",
             )
         )
     elif not (band_low <= discount <= band_high):
