@@ -1,0 +1,30 @@
+[
+  {
+    "id": "synthetic-evidence-01",
+    "snapshot_id": "synthetic-snapshot-001",
+    "startup_id": "synthetic-startup",
+    "document_id": "synthetic-document-01",
+    "excerpt": "Synthetic excerpt: a fictional lantern glows beside a paper kite."
+  },
+  {
+    "id": "synthetic-evidence-02",
+    "snapshot_id": "synthetic-snapshot-001",
+    "startup_id": "synthetic-startup",
+    "document_id": "synthetic-document-01",
+    "excerpt": "Synthetic excerpt: an imaginary compass points toward a moonlit pond."
+  },
+  {
+    "id": "synthetic-evidence-03",
+    "snapshot_id": "synthetic-snapshot-001",
+    "startup_id": "synthetic-startup",
+    "document_id": "synthetic-document-02",
+    "excerpt": "Synthetic excerpt: the fictional notebook contains four blank stars."
+  },
+  {
+    "id": "synthetic-evidence-04",
+    "snapshot_id": "synthetic-snapshot-001",
+    "startup_id": "synthetic-startup",
+    "document_id": "synthetic-document-02",
+    "excerpt": "Synthetic excerpt: a make-believe bell rings once at dawn."
+  }
+]
