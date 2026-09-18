@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "visibility": "public",
+  "source_of_truth": true,
+  "description": "The public vocabulary and metric-contract matrix for the audit-v2 integration. This file contains public interfaces only; generated documentation is a view, not an input.",
+  "generated_document": "docs/GLOSSARY.md",
+  "supported_contracts": {
+    "audit-v2": 2,
+    "metric-v1": 1
+  },
+  "terms": [
+    {
+      "id": "audit-v2",
+      "term": "audit-v2",
+      "definition": "The canonical structured audit envelope produced by the shared checklist engine.",
+      "references": [
+        {
+          "path": "config/batch_audit/audit_schema.json",
+          "symbol": null
+        },
+        {
+          "path": "lib/batch_audit/schema.py",
+          "symbol": "validate_audit_document"
+        },
+        {
+          "path": "lib/batch_audit/engine.py",
+          "symbol": "batch_audit"
+        }
+      ]
+    },
+    {
+      "id": "metric.check-result",
+      "term": "check-result",
+      "definition": "The per-check result value in an audit-v2 document. A successful result is an object; a technical failure is represented by a null result and a non-empty error.",
+      "references": [
+        {
+          "path": "config/batch_audit/audit_schema.json",
+          "symbol": null
+        },
+        {
+          "path": "lib/batch_audit/schema.py",
+          "symbol": "validate_audit_document"
+        },
+        {
+          "path": "lib/batch_audit/rendering.py",
+          "symbol": "json_to_markdown_table"
+        }
+      ]
+    },
+    {
+      "id": "metric.check-error",
+      "term": "check-error",
+      "definition": "The technical error paired with a failed check. It is null for a successful check and non-empty when the result is null.",
+      "references": [
+        {
+          "path": "config/batch_audit/audit_schema.json",
+          "symbol": null
+        },
+        {
+          "path": "lib/batch_audit/engine.py",
+          "symbol": "batch_audit"
+        },
+        {
+          "path": "lib/batch_audit/schema.py",
+          "symbol": "validate_audit_document"
+        }
+      ]
+    }
+  ],
+  "metric_contracts": [
+    {
+      "id": "contract.audit-check-result",
+      "contract": "metric-v1",
+      "metric": "metric.check-result",
+      "producer": {
+        "reference": "lib/batch_audit/engine.py::batch_audit",
+        "path": "chapters[].checks[].result",
+        "type": ["object", "null"]
+      },
+      "consumers": [
+        {
+          "reference": "lib/batch_audit/schema.py::validate_audit_document",
+          "path": "chapters[].checks[].result",
+          "type": ["object", "null"]
+        },
+        {
+          "reference": "lib/batch_audit/rendering.py::json_to_markdown_table",
+          "path": "chapters[].checks[].result",
+          "type": ["object", "null"]
+        }
+      ]
+    },
+    {
+      "id": "contract.audit-check-error",
+      "contract": "metric-v1",
+      "metric": "metric.check-error",
+      "producer": {
+        "reference": "lib/batch_audit/engine.py::batch_audit",
+        "path": "chapters[].checks[].error",
+        "type": ["string", "null"]
+      },
+      "consumers": [
+        {
+          "reference": "lib/batch_audit/schema.py::validate_audit_document",
+          "path": "chapters[].checks[].error",
+          "type": ["string", "null"]
+        },
+        {
+          "reference": "lib/batch_audit/rendering.py::json_to_markdown_table",
+          "path": "chapters[].checks[].error",
+          "type": ["string", "null"]
+        }
+      ]
+    }
+  ]
+}
