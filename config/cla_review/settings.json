@@ -1,0 +1,134 @@
+{
+  "_purpose": "Lender-angle rules for cla_review. Every rule stays INACTIVE until its status is 'approved' (Enrico, Lucas); an inactive rule may raise an open question in the report but never a judgment. Values follow the proposal table in docs/cla-review-design.md, section 4, step 3. Change values here, never in code.",
+  "rule_statuses": ["approved", "to verify", "placeholder", "rule", "fixed"],
+  "rules": {
+    "discount_minimum_pct": {
+      "value": 15,
+      "unit": "percent",
+      "source": "Swiss Angel Investor Handbook 8.3: 15 to 25% most common for angels; SECA band 5 to 30%; Enrico (design doc footnote 1): market 10 to 30%, 20% modal for a 12 to 18 month loan",
+      "status": "to verify",
+      "effective_date": null,
+      "active": false
+    },
+    "discount_schedule_expected_above_months": {
+      "value": 12,
+      "unit": "months",
+      "source": "SECA drafting note: discount correlates with term, rising schedule advised; Enrico (design doc footnote 2) on schedule variants",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "valuation_cap_required": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA drafting note: cap often requested by investors; without it the conversion price is unbounded",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "denominator_fully_diluted_expected": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA drafting note: fully diluted is the investor-friendly choice",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "qefr_threshold_minimum_multiple_of_aggregate_loan": {
+      "value": 1,
+      "unit": "multiple",
+      "source": "SECA drafting note: not too low, or a tiny round converts the loans",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "qefr_threshold_maximum_multiple_of_round_target": {
+      "value": 3,
+      "unit": "multiple",
+      "source": "SECA drafting note: not too high, or the company can avoid conversion",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "maturity_conversion_required": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA drafting note: cap rarely accepted at maturity, fixed valuation or fair market value used",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "term_maximum_months": {
+      "value": 24,
+      "unit": "months",
+      "source": "SECA drafting note: bridge until the next round; number is a placeholder",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "interest_safe_harbor_rate_pct": {
+      "value": null,
+      "unit": "percent",
+      "source": "ESTV safe-harbor interest rate, published yearly; SECA drafting note and Handbook 8.3. Needs the current figure and its year.",
+      "status": "to verify",
+      "effective_date": null,
+      "active": false
+    },
+    "coc_repayment_multiple_minimum": {
+      "value": 1,
+      "unit": "multiple",
+      "source": "SECA short form: conversion or repayment on change of control",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "lender_majority_minimum_share_of_principal": {
+      "value": 0.6667,
+      "unit": "fraction",
+      "source": "earlier cla_review sketch: defined, at least two thirds of principal",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "exclusivity_flagged": {
+      "value": true,
+      "unit": "switch",
+      "source": "Swiss Angel Investor Handbook: not recommended for angel rounds",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "legal_fees_each_party_own": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA short form wording",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "non_bank_rules": {
+      "value": {"identical_terms_lenders": 10, "total_lenders": 20},
+      "unit": "count",
+      "source": "Swiss Angel Investor Handbook 8.4, fixed by law; applicability and counting assumptions still need approval",
+      "status": "fixed",
+      "effective_date": null,
+      "active": false
+    },
+    "member_count_n": {
+      "value": 5,
+      "unit": "count",
+      "source": "SICTIC syndicate practice; placeholder",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "valuation_grid_multiples_of_cap": {
+      "value": [0.5, 3],
+      "unit": "multiple",
+      "source": "for the cap-versus-discount crossover; uncapped loans need an explicit grid",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    }
+  }
+}

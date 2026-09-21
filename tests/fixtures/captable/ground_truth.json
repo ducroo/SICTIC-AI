@@ -232,6 +232,99 @@
     "new_table_after_a_page_break": "a table declaring its own text header right after a page marker stays a separate table; unit test only (tests/skills/test_captable_table_evidence.py)"
   },
   "esignature": {
-    "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)"
+    "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)",
+    "synthetic_cla_term_sheet.md": "not_applicable (markdown source, unsigned draft: signature blocks read '(unsigned)')"
+  },
+  "cla_term_sheet": {
+    "_purpose": "Unsigned CLA term sheet for the cla_review skill (docs/cla-review-design.md, slice 0). Classification: cla_term_sheet; status term_sheet, so it never enters outstanding totals and aggregation reports it as an open term sheet (term_sheet_count 1, not superseded: no executed loan matches its lender). Planted absences below MUST be reported absent, not invented.",
+    "document": "synthetic_cla_term_sheet.md",
+    "status": "term_sheet",
+    "execution_date": null,
+    "signatures_complete": false,
+    "borrower_name": "Fixture Robotics AG",
+    "lenders": [
+      {
+        "name": "Fixture Angels",
+        "kind": "entity",
+        "domicile": "CH",
+        "principal_amount": 150000,
+        "shareholder": false,
+        "note": "Lead investor; further investors accede. The aggregate CHF 300,000 to 500,000 is a range, not a lender."
+      }
+    ],
+    "principal_total": 150000,
+    "principal_total_note": "Slice-1 decision: 150,000 follows the executed-CLA convention (sum of committed lenders); the aggregate range CHF 300,000 to 500,000 sits in term_sheet_only_fields. Not settled.",
+    "principal_currency": "CHF",
+    "interest_mode": "fixed",
+    "interest_rate_pct": 4,
+    "interest_day_count": "act/365",
+    "interest_compounding": "simple",
+    "maturity_date": "2028-08-15",
+    "qefr_present": true,
+    "qefr_min_raise": 3000000,
+    "qefr_mandatory": true,
+    "coc_present": false,
+    "maturity_conversion_present": false,
+    "valuation_cap": 12000000,
+    "discount_pct": 20,
+    "discount_schedule": null,
+    "valuation_floor": null,
+    "denominator_basis": "unstated",
+    "subordinated": true,
+    "subordination_scope": "loan_balance_full",
+    "mfn_clause": false,
+    "pro_rata_rights": false,
+    "conversion_capital_sources": [
+      "conditional_capital",
+      "consents"
+    ],
+    "shareholder_consents_referenced": true,
+    "sha_accession_required": true,
+    "governing_law": "Swiss law",
+    "expected_missing_terms": [
+      "execution_date",
+      "coc_present",
+      "maturity_conversion_present",
+      "discount_schedule",
+      "valuation_floor",
+      "denominator_basis",
+      "mfn_clause",
+      "pro_rata_rights"
+    ],
+    "term_sheet_only_fields": {
+      "_note": "Proposed additions to config/captable_build/cla_terms.md (design decision 1, slice 1); names are provisional until that checklist is extended.",
+      "aggregate_amount_min": 300000,
+      "aggregate_amount_max": 500000,
+      "lead_investor": "Fixture Angels",
+      "accession_of_further_investors": true,
+      "pre_emption_reduction": true,
+      "conversion_share_class": "preferred A shares (same class as the round)",
+      "non_qualified_voluntary_conversion": true,
+      "conditions_precedent": null,
+      "representations_and_covenants": null,
+      "binding_provisions": [
+        "Confidentiality",
+        "Legal Fees and Expenses",
+        "Exclusivity",
+        "Applicable Law and Jurisdiction"
+      ],
+      "exclusivity_present": true,
+      "exclusivity_until": "2026-09-30",
+      "investor_majority": "two thirds of aggregate principal",
+      "documentation": "SECA CLA Model Documentation (short form)",
+      "documentation_counsel": "Fixture Legal AG"
+    },
+    "lender_angle_expectations": {
+      "_note": "What the lender-angle rules in config/cla_review/settings.json would flag once approved and active; none is active in slice 0.",
+      "valuation_cap_required": "pass (cap present)",
+      "denominator_fully_diluted_expected": "flag (denominator unstated)",
+      "maturity_conversion_required": "flag (repayment only at maturity, no conversion mechanism)",
+      "coc_repayment_multiple_minimum": "flag (no change-of-control clause)",
+      "exclusivity_flagged": "flag (exclusivity until 2026-09-30, and it is binding)",
+      "legal_fees_each_party_own": "pass",
+      "lender_majority_minimum_share_of_principal": "pass (two thirds)",
+      "discount_minimum_pct": "pass at 15% (discount 20%)",
+      "term_maximum_months": "pass at 24 months (exactly 24)"
+    }
   }
 }
