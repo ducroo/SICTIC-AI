@@ -289,29 +289,27 @@
       "valuation_floor",
       "denominator_basis",
       "mfn_clause",
-      "pro_rata_rights"
+      "pro_rata_rights",
+      "conditions_precedent",
+      "representations_and_covenants"
     ],
     "term_sheet_only_fields": {
-      "_note": "Proposed additions to config/captable_build/cla_terms.md (design decision 1, slice 1); names are provisional until that checklist is extended.",
+      "_note": "Fields of the 'Term sheet provisions' group of config/captable_build/cla_terms.md (added for cla_review, design decision 1).",
       "aggregate_amount_min": 300000,
       "aggregate_amount_max": 500000,
       "lead_investor": "Fixture Angels",
       "accession_of_further_investors": true,
       "pre_emption_reduction": true,
-      "conversion_share_class": "preferred A shares (same class as the round)",
+      "conversion_share_class": "the same class of shares issued in that round (expected: preferred A shares)",
       "non_qualified_voluntary_conversion": true,
-      "conditions_precedent": null,
-      "representations_and_covenants": null,
-      "binding_provisions": [
-        "Confidentiality",
-        "Legal Fees and Expenses",
-        "Exclusivity",
-        "Applicable Law and Jurisdiction"
-      ],
+      "conditions_precedent": false,
+      "representations_and_covenants": false,
+      "binding_provisions": "Confidentiality, Legal Fees and Expenses, Exclusivity, Applicable Law and Jurisdiction",
       "exclusivity_present": true,
       "exclusivity_until": "2026-09-30",
-      "investor_majority": "two thirds of aggregate principal",
-      "documentation": "SECA CLA Model Documentation (short form)",
+      "investor_majority": "Investors holding at least two thirds of the aggregate principal amount of the Loans",
+      "legal_fees_each_party_own": true,
+      "documentation_form": "seca_short_form",
       "documentation_counsel": "Fixture Legal AG"
     },
     "lender_angle_expectations": {
@@ -324,7 +322,9 @@
       "legal_fees_each_party_own": "pass",
       "lender_majority_minimum_share_of_principal": "pass (two thirds)",
       "discount_minimum_pct": "pass at 15% (discount 20%)",
-      "term_maximum_months": "pass at 24 months (exactly 24)"
+      "term_maximum_months": "pass at 24 months (exactly 24)",
+      "binding_provisions_limited": "flag (exclusivity is declared binding)",
+      "documentation_seca_form_expected": "pass (SECA short form referenced)"
     }
   }
 }

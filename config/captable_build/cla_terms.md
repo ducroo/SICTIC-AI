@@ -251,6 +251,102 @@ conversion?
 
 The governing law and forum, as stated.
 
+## Term sheet provisions
+
+These terms appear in a convertible-loan TERM SHEET (SECA CLA model term
+sheet, short or long form) and rarely in an executed loan agreement. In an
+executed agreement most of them are absent: report them null/false with a
+`missing_terms` entry, do not infer them from the loan terms.
+
+### aggregate_amount_min (number)
+
+The minimum aggregate amount of the whole CLA round (all investors
+together) that the term sheet requires, e.g. for a first closing. Not the
+individual lender's amount. Null when only a maximum is stated.
+
+### aggregate_amount_max (number)
+
+The maximum aggregate amount of the whole CLA round ("up to an aggregate
+amount of ..."). Not the individual lender's amount.
+
+### lead_investor (string)
+
+The lead investor named in the term sheet, as written. Null when no lead
+investor is named.
+
+### accession_of_further_investors (boolean)
+
+True when further investors may accede to the term sheet or the loan
+(accession declaration, countersignature, joining on the same terms); false
+when the document states that no further investors may join.
+
+### pre_emption_reduction (boolean)
+
+True when the investment amount may be reduced to the extent existing
+shareholders exercise pre-emption or subscription rights; false when the
+document excludes such a reduction.
+
+### conversion_share_class (string)
+
+The class of shares the loan converts into, as stated (e.g. "the same class
+as issued in the round", "preferred A shares", "common shares"). Null when
+unstated.
+
+### non_qualified_voluntary_conversion (presence boolean)
+
+True when the lender may convert at its election upon an equity financing
+that does not qualify (below the qualified-round threshold), at stated terms.
+
+### conditions_precedent (presence boolean)
+
+True when the term sheet lists conditions precedent to disbursement or
+closing (shareholder consents, due diligence, board approval, documentation).
+
+### representations_and_covenants (presence boolean)
+
+True when representations, warranties or covenants of the borrower are
+provided for (the SECA long form does; the short form does not).
+
+### binding_provisions (string)
+
+The provisions the term sheet declares legally binding, as listed in the
+document (typically confidentiality, costs, effect of the term sheet,
+governing law, sometimes exclusivity). Quote the list. Null when the
+document does not distinguish binding from non-binding provisions.
+
+### exclusivity_present (presence boolean)
+
+True when the borrower undertakes not to solicit or negotiate other
+financing for a period (exclusivity, no-shop).
+
+### exclusivity_until (string)
+
+The end date or duration of the exclusivity period, as stated. Null when
+there is no exclusivity or no period is stated.
+
+### investor_majority (string)
+
+How decisions of the investors or lenders are taken for waivers, amendments
+and extensions (e.g. "investors holding at least two thirds of the aggregate
+principal"), as stated. Null when the document does not define it.
+
+### legal_fees_each_party_own (boolean)
+
+True when each party bears its own costs and expenses; false when the
+borrower pays the investors' costs (or vice versa) or a cost cap is agreed.
+
+### documentation_form (enum: seca_short_form | seca_long_form | bespoke | unstated)
+
+The model documentation the definitive agreements will follow: `seca_short_form`
+or `seca_long_form` when the SECA CLA Model Documentation is referenced with its
+form, `bespoke` when other or the borrower's own documentation is named,
+`unstated` when the term sheet does not say.
+
+### documentation_counsel (string)
+
+Who drafts the definitive agreements, as named (a law firm or "counsel to
+the Borrower"). Null when unstated.
+
 ## Evidence
 
 ### missing_terms (structural)

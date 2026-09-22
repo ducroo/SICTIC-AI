@@ -337,6 +337,21 @@ TERM_SHEET_QUOTES = {
     "sha_accession_required": (True, "Upon conversion the Investors accede to the shareholders' agreement"),
     "governing_law": ("Swiss law", "Swiss law; courts of Zurich."),
     "denominator_basis": ("unstated", None),
+    # term-sheet provisions (cla_terms.md group added for cla_review)
+    "aggregate_amount_min": (300000, "minimum aggregate amount of CHF 300,000 for the first closing"),
+    "aggregate_amount_max": (500000, "Up to an aggregate amount of CHF 500,000"),
+    "lead_investor": ("Fixture Angels", "CHF 150,000 from Fixture Angels, Zug"),
+    "accession_of_further_investors": (True, "Additional investors may, with the consent of the Borrower and the Lead Investor, accede to this Term Sheet"),
+    "pre_emption_reduction": (True, "The Investment Amount may be reduced to the extent existing shareholders of the Borrower exercise their pre-emption rights."),
+    "conversion_share_class": ("the same class of shares issued in that round (expected: preferred A shares)", "converts into the same class of shares issued in that round (expected: preferred A shares)"),
+    "non_qualified_voluntary_conversion": (True, "If an equity financing round closes that does not qualify, each Investor may elect to convert its Loan"),
+    "binding_provisions": ("Confidentiality, Legal Fees and Expenses, Exclusivity, Applicable Law and Jurisdiction", "Only the sections marked \"Binding\" (Confidentiality, Legal Fees and Expenses, Exclusivity, Applicable Law and Jurisdiction) are legally binding."),
+    "exclusivity_present": (True, "the Borrower shall not solicit or negotiate any other convertible loan financing"),
+    "exclusivity_until": ("2026-09-30", "Until 30 September 2026"),
+    "investor_majority": ("Investors holding at least two thirds of the aggregate principal amount of the Loans", "require the consent of Investors holding at least two thirds of the aggregate principal amount of the Loans"),
+    "legal_fees_each_party_own": (True, "Each party bears its own costs and expenses"),
+    "documentation_form": ("seca_short_form", "based on the SECA CLA Model Documentation (short form)"),
+    "documentation_counsel": ("Fixture Legal AG", "drafted by Fixture Legal AG, Zurich, as counsel to the Borrower"),
 }
 
 
@@ -345,10 +360,11 @@ def _term_sheet_extraction() -> dict:
     truth = GROUND_TRUTH["cla_term_sheet"]
     output: dict = {"status": truth["status"], "status_evidence": "Not signed.", "comments": None}
     absent = []
+    planted = {**truth, **truth["term_sheet_only_fields"]}
     for field in _BUILT["quoted_fields"]:
         value, quote = TERM_SHEET_QUOTES.get(field, (None, None))
-        if field in truth and field not in TERM_SHEET_QUOTES:
-            value = truth[field]  # planted absences: None / False / "unstated"
+        if field in planted and field not in TERM_SHEET_QUOTES:
+            value = planted[field]  # planted absences: None / False / "unstated"
         output[field] = {"value": value, "quote": quote}
         if quote is None:
             absent.append(field)
@@ -365,8 +381,9 @@ def _term_sheet_extraction() -> dict:
 def test_term_sheet_faithful_extraction_passes_and_planted_absences_are_declared():
     truth = GROUND_TRUTH["cla_term_sheet"]
     output = _term_sheet_extraction()
+    planted = {**truth, **truth["term_sheet_only_fields"]}
     for field, (value, _quote) in TERM_SHEET_QUOTES.items():
-        assert truth[field] == value, field
+        assert planted[field] == value, field
     assert not cla_reviewer(text("synthetic_cla_term_sheet.md"))(output).problems
     declared = {entry["term"] for entry in output["missing_terms"]}
     assert set(truth["expected_missing_terms"]) <= declared
