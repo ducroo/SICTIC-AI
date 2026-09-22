@@ -1,6 +1,12 @@
 {
-  "_purpose": "Lender-angle rules for cla_review. Every rule stays INACTIVE until its status is 'approved' (Enrico, Lucas); an inactive rule may raise an open question in the report but never a judgment. Values follow the proposal table in docs/cla-review-design.md, section 4, step 3. Change values here, never in code.",
-  "rule_statuses": ["approved", "to verify", "placeholder", "rule", "fixed"],
+  "_purpose": "Lender-angle rules for cla_review. Every rule stays INACTIVE until its status is 'approved' (Enrico, Lucas); an inactive rule may raise an open question in the report but never a judgment. Values follow the proposal table in docs/cla-review-design.md, section 4, step 3. Change values here, never in code. member_count_n and valuation_grid_multiples_of_cap are scenario inputs for question 2, not rules; they are listed here so one file holds every tunable number.",
+  "rule_statuses": [
+    "approved",
+    "to verify",
+    "placeholder",
+    "rule",
+    "fixed"
+  ],
   "rules": {
     "discount_minimum_pct": {
       "value": 15,
@@ -106,8 +112,27 @@
       "effective_date": null,
       "active": false
     },
+    "binding_provisions_limited": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA short form: binding provisions limited to confidentiality, costs, effect of the term sheet and applicable law; economic terms or exclusivity declared binding are flagged",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "documentation_seca_form_expected": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA CLA Model Documentation: the definitive agreements should follow the SECA short or long form; bespoke or unnamed documentation is flagged",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
     "non_bank_rules": {
-      "value": {"identical_terms_lenders": 10, "total_lenders": 20},
+      "value": {
+        "identical_terms_lenders": 10,
+        "total_lenders": 20
+      },
       "unit": "count",
       "source": "Swiss Angel Investor Handbook 8.4, fixed by law; applicability and counting assumptions still need approval",
       "status": "fixed",
@@ -123,12 +148,19 @@
       "active": false
     },
     "valuation_grid_multiples_of_cap": {
-      "value": [0.5, 3],
+      "value": [
+        0.5,
+        3
+      ],
       "unit": "multiple",
       "source": "for the cap-versus-discount crossover; uncapped loans need an explicit grid",
       "status": "placeholder",
       "effective_date": null,
       "active": false
     }
-  }
+  },
+  "inputs_not_rules": [
+    "member_count_n",
+    "valuation_grid_multiples_of_cap"
+  ]
 }

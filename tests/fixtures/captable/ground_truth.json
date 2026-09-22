@@ -324,7 +324,10 @@
       "discount_minimum_pct": "pass at 15% (discount 20%)",
       "term_maximum_months": "pass at 24 months (exactly 24)",
       "binding_provisions_limited": "flag (exclusivity is declared binding)",
-      "documentation_seca_form_expected": "pass (SECA short form referenced)"
+      "documentation_seca_form_expected": "pass (SECA short form referenced)",
+      "discount_schedule_expected_above_months": "flag (24-month term, no discount schedule)",
+      "qefr_threshold_minimum_multiple_of_aggregate_loan": "pass (3,000,000 >= 1x the 500,000 aggregate)",
+      "_as_of": "2026-08-15 (the expected first closing; the 24-month term is measured from it)"
     }
   }
 }
