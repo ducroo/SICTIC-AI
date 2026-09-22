@@ -352,6 +352,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "skills.deep_dive_invitation.deep_dive_invitation"
     )
     sha_review_mod = importlib.import_module("skills.sha_review.sha_review")
+    cla_review_mod = importlib.import_module("skills.cla_review.cla_review")
     expert_search_mod = importlib.import_module("skills.expert_search.expert_search")
     investor_profile_mod = importlib.import_module("skills.investor_profile.investor_profile")
     person_profile_mod = importlib.import_module("skills.person_profile.person_profile")
@@ -396,6 +397,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         team_profile_revised_mod,
         dd_checks_mod,
         sha_review_mod,
+        cla_review_mod,
         submission_ready_mod,
         expert_search_mod,
         potential_investors_mod,
@@ -424,6 +426,15 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         fake_llm_chat,
     )
     monkeypatch.setattr(sha_review_mod, "generate_json", fake_generate_json)
+    monkeypatch.setattr(cla_review_mod, "dataset_chat_json", fake_dataset_chat_json)
+    monkeypatch.setattr(cla_review_mod, "ensure_startup_dataset", fake_ensure_startup_dataset)
+
+    async def fake_extract_cla(dataset_name, filename, _document_text):
+        from tests.skills.test_captable_build import _complete_cla
+
+        return _complete_cla(dataset=dataset_name, document=filename, status="term_sheet")
+
+    monkeypatch.setattr(cla_review_mod, "extract_cla", fake_extract_cla)
     monkeypatch.setattr(sha_review_mod, "generate_markdown", fake_llm_chat)
     monkeypatch.setattr(
         batch_audit_engine_mod,

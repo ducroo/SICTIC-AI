@@ -1,0 +1,55 @@
+{
+  "identification": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["dataset", "source_path", "selection", "document_match", "concerns", "paths_for_alternative_candidates", "selection_reason"],
+    "properties": {
+      "dataset": {"type": "string", "minLength": 1},
+      "source_path": {"type": "string", "minLength": 1},
+      "selection": {"type": "string", "enum": ["explicit", "automatic"]},
+      "document_match": {"type": "string", "enum": ["High", "Medium", "Low", "Explicit"]},
+      "concerns": {"type": "array", "items": {"type": "string", "minLength": 1}},
+      "paths_for_alternative_candidates": {"type": "array", "items": {"type": "string", "minLength": 1}},
+      "selection_reason": {"type": "string", "minLength": 1}
+    }
+  },
+  "assessment": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["dataset", "source_path", "as_of", "company_angle", "lender_angle"],
+    "properties": {
+      "dataset": {"type": "string", "minLength": 1},
+      "source_path": {"type": "string", "minLength": 1},
+      "as_of": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+      "company_angle": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+      "lender_angle": {"type": "array", "items": {"$ref": "#/$defs/lender_finding"}}
+    },
+    "$defs": {
+      "finding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "status", "severity", "detail"],
+        "properties": {
+          "item": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "minLength": 1},
+          "severity": {"type": "string", "enum": ["info", "medium", "high", "severe"]},
+          "detail": {"type": "string", "minLength": 1}
+        }
+      },
+      "lender_finding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "status", "severity", "detail", "rule", "rule_status", "active"],
+        "properties": {
+          "item": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "enum": ["flagged", "acceptable", "absent", "open_question", "not_evaluated"]},
+          "severity": {"type": "string", "enum": ["info", "medium", "high", "severe"]},
+          "detail": {"type": "string", "minLength": 1},
+          "rule": {"type": "string", "minLength": 1},
+          "rule_status": {"type": "string", "minLength": 1},
+          "active": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

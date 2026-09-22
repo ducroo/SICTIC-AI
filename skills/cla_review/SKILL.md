@@ -22,32 +22,53 @@ configuration key, so a new ticket replaces the generated result for that
 document. `fresh` bypasses generated reuse without deleting files or
 overriding manual inputs.
 
-**Slice 0 (current):** the contract above, `config/cla_review/settings.json`
-with the lender-angle rules, the two SECA reference term sheets and the
-fixture term sheet exist; the workflow does not. Calling the skill validates
-the configuration and fails with a clear message. The slices are listed in
+**Slices:** slice 0 (contract, rules, references, fixture) and slice 1
+(question 1: identify, extract, company- and lender-angle assessment,
+deterministic report) are built; the audits against the SECA term sheets,
+the conversion, the existing loans, the SHA context and the synthesis are
+listed in the report as pending. The slices are defined in
 [docs/cla-review-design.md](../../docs/cla-review-design.md#7-slices).
+
+Artifact identity is the slugified full relative path of the document, so
+equal basenames in different folders stay distinct. The automatic
+identification is one dataset-level artifact (`identification-automatic`);
+an explicit `document` gets its own (`<document>-identification`), so the
+two never reuse each other. The report is
+`cla-review-<startup>-<document>-<model>.md` directly under `insights/`.
 
 ## Workflow and dependencies
 
-Two questions, one report. Question 1, the terms themselves: identify the
-document, extract it with the shared `captable_build` CLA checklist
-(`config/captable_build/cla_terms.md`, extended with term-sheet-only fields),
-assess it from the lender's side with the rules in `settings.json`, and audit
-it against the closest SECA reference through
-[batch audit](../standards_and_architecture/SKILL.md#checklist-audits) with
-lender-perspective checklists. Question 2, the terms in this company: the
-member's conversion on the consolidated `captable_build` insight via
-`lib.captable.model`, the existing loans compared (MFN, identical-terms
-groups, 10/20 non-bank rules before and after N members), and the SHA and
-articles for executability. The consolidated insight is read through
+Prepare and synchronize the startup. Identify the term sheet: an explicit
+`document` is resolved through the shared document-path resolution at the
+configured minimum score; otherwise the model selects the most recent CLA
+term sheet or draft from three retrieval queries, executed loans being
+context and never candidates, and only the selected path is resolved. An
+existing `captable_build` classification, when present, seeds candidates
+and exclusions and is part of the identification key.
+
+Extract the selected document with the shared `captable_build` CLA
+checklist (`config/captable_build/cla_terms.md`, including its term-sheet
+provisions group); every value carries a verbatim quote and every absence a
+`missing_terms` entry. Assess it twice: `assess_cla` with the
+`captable_build` bands (company angle) and `lib.cla_review.assessment`
+with `config/cla_review/settings.json` (lender angle). Every lender rule
+carries value, source, status, effective date and an `active` flag; only
+`approved` rules may be active and judge, an inactive rule yields an open
+question with the observation, a rule whose input is unavailable is not
+evaluated and names the input. The term in months is measured from the
+run date, which is part of the assessment key.
+
+Each stage is a managed JSON artifact validated on read and write against
+`config/cla_review/artifact_schemas.json` or the `captable_build` CLA
+schema; a stage reuses its artifact when the configuration and the
+upstream artifact are unchanged. Manual files win, `fresh` bypasses
+generated reuse only, failures are never saved. `ticket` is part of the
+report key so a new ticket regenerates the report for the same document
+without regenerating the extraction.
+
+Later slices consume the consolidated `captable_build` insight through
 `lib.captable.insights.select_consolidated`; it is never generated
 implicitly and the registry declares no prerequisite.
-
-Every rule in `settings.json` carries value, source, status, effective date
-and an `active` flag. Only rules with status `approved` may be active; an
-inactive rule can raise an open question in the report but never a
-judgment. Loading rejects an active rule that is not approved.
 
 ## Side effects and failure behavior
 
@@ -55,8 +76,9 @@ Preparation may import, convert and index documents. The review calls models
 and saves intermediates and the report; it sends nothing. An absent or stale
 cap-table snapshot yields insufficient-evidence findings for question 2;
 malformed artifacts, failed path resolution and technical audit failures
-remain errors. Slice 0 raises `ValueError` before any dataset work. The report
-aids human review and is not legal advice.
+remain errors. No plausible term sheet, an unresolvable path or an extraction
+failure stops the run without saving a partial artifact. The report aids human
+review and is not legal advice.
 
 ## Usage
 

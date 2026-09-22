@@ -106,7 +106,7 @@ def _qefr_threshold_minimum_multiple_of_aggregate_loan(x, v, ctx) -> Verdict:
 def _qefr_threshold_maximum_multiple_of_round_target(x, v, ctx) -> Verdict:
     target = ctx.get("round_target")
     if target is None:
-        return STATUS_NOT_EVALUATED, "The company's stated next-round target is not an input yet."
+        return STATUS_NOT_EVALUATED, "The stated next-round target of the company is not an input yet."
     threshold = extraction_value(x, "qefr_min_raise")
     if threshold is None:
         return STATUS_ABSENT, "No qualified-financing threshold stated."
@@ -265,7 +265,7 @@ def assess_lender_angle(
         else:
             status = STATUS_OPEN_QUESTION
             detail = (
-                f"Not judged: rule '{name}' has status '{rule['status']}' and is inactive. "
+                f"Not judged: rule {name} has status {rule['status']} and is inactive. "
                 f"Observed: {observation}"
             )
         findings.append({

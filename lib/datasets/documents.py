@@ -76,6 +76,7 @@ def resolve_document_path(
     if not proposed_aliases:
         raise ValueError("A proposed document path is required.")
 
+    proposed_full = _normalized_path(proposed_path)
     scored_paths = []
     for document_path in _document_paths(dataset_name):
         document_aliases = _path_aliases(document_path)
@@ -84,11 +85,14 @@ def resolve_document_path(
             for proposed in proposed_aliases
             for candidate in document_aliases
         )
-        scored_paths.append((score, document_path))
+        # Equal basenames in different folders tie on the alias score; the
+        # full path decides between them before the lexical fallback.
+        full_score = fuzz.ratio(proposed_full, _normalized_path(document_path))
+        scored_paths.append((score, full_score, document_path))
 
-    score, matched_path = max(
+    score, _full_score, matched_path = max(
         scored_paths,
-        key=lambda item: (item[0], item[1]),
+        key=lambda item: (item[0], item[1], item[2]),
     )
     return matched_path, float(score)
 
