@@ -367,6 +367,11 @@ policies belong to the shared pipeline.
 Use `is_active_dataset`, `activate_dataset` and `archive_dataset`
 for refresh-status markers. Archiving changes refresh eligibility;
 it does not delete the dataset.
+`update_dataset_inactivity` applies the bulk-refresh calendar-month expiry rule
+using `latest_dataset_edit`; the existing `archive_dataset(age_days=...)` retains
+its marker-age semantics for compatibility. Bulk archive markers are terminal for
+automation; only manual activation removes the block. Bulk stage policy and expiry
+rules are documented in the bulk-refresh skill.
 
 Use the `dataset_maintenance` skill for operational maintenance rather
 than adding repair or rebuild logic to unrelated skills.
@@ -465,6 +470,18 @@ Keep scheduling metadata non-sensitive.
 Preserve shared concurrency, lease and cloud-budget policies.
 Do not modify scheduler state directly; use `snapshot()` for diagnostics.
 
+The default scheduler has one dispatcher thread per process, shared across
+caller event loops. Jobs await grant futures instead of polling. The dispatcher
+batches registrations, releases and heartbeats under one shared-state lock;
+arrivals and completions wake it immediately. While requests wait, it polls
+at the configured interval for capacity changes in other processes. With only
+running work it wakes for heartbeats; with no work it exits and restarts on demand.
+Scheduler-state I/O failures allow three consecutive attempts before failing waiting
+callers. Running jobs remain tracked, and the dispatcher continues heartbeat and
+cleanup attempts. Retried registrations are idempotent even if an earlier write
+was published before reporting an error. Persistent storage outages can still
+exceed the shared lease lifetime; retries do not change lease-expiry policy.
+
 Scheduler waiting and provider request timeouts are separate.
 Use the shared transient-error retry mechanism and keep provider
 retries distinct from output-correction attempts. Do not add
@@ -557,9 +574,16 @@ Harness registration does not imply bulk-refresh registration.
 
 Register batch workflows in `skills/skill_registry.py` with their
 callable, supported domains and prerequisite skill keys.
+The registry also owns `mandatory_stages` for default per-dataset selection.
+Selected `prepares_sources` jobs run before insight jobs for the same dataset;
+this ordering does not add required dependencies or propagate failure skips.
+These acquisition jobs are not implicitly added to explicit skill selections.
 
 Bulk callables must support invocation with the dataset as their
-single positional argument. Other required inputs must not be hidden
+single positional argument. The scheduler awaits async callables and runs
+synchronous callables in worker threads. A skill may resolve an optional input
+through its documented shared evidence helpers, as website import does for URLs.
+Other required inputs must not be hidden
 behind invented defaults just to make a skill batch-compatible.
 
 Dependencies must reference registered skills and form an acyclic

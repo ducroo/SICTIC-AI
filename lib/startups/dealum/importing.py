@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.infrastructure.dealum import DealumAdapter
+from lib.infrastructure.filesystem import replace_directory_snapshot as _replace_directory_snapshot
 from lib.datasets.paths import dataset_location_for_domain
 from lib.infrastructure.logging import get_logger
 from lib.startups.dealum.manifest import (
@@ -24,7 +25,9 @@ from lib.startups.dealum.manifest import (
 from lib.startups.dealum.matching import reconcile_dealum_startup
 from lib.startups.dealum.rendering import render_application_markdown
 from lib.startups.dossier import ensure_startup_dossier
+from lib.startups.dealum.session import current_session
 from lib.storage import get_storage
+from lib.insights.locking import write_if_changed
 
 logger = get_logger(__name__)
 
@@ -58,23 +61,6 @@ class DealumImportResult:
     step: str | None = None
 
 
-def _replace_directory_snapshot(staging: Path, target: Path) -> None:
-    """Replace target with staging while preserving target if the swap fails."""
-    backup = target.with_name(f".{target.name}-backup-{uuid.uuid4().hex}")
-    target_existed = target.exists()
-
-    if target_existed:
-        os.replace(target, backup)
-    try:
-        os.replace(staging, target)
-    except Exception:
-        if target_existed and backup.exists():
-            os.replace(backup, target)
-        raise
-    if backup.exists():
-        shutil.rmtree(backup)
-
-
 def import_startup_from_dealum(
     startup: str,
     *,
@@ -92,6 +78,19 @@ def import_startup_from_dealum(
     )
     application = match.application
     dataset_slug = match.dataset_slug
+
+    session = current_session()
+    if session is not None and dataset_slug in session.source_imports_disabled:
+        return DealumImportResult(
+            startup=startup, dataset_slug=dataset_slug, imported=False, changed=False,
+            application_found=True, step=match.step,
+        )
+    cache_key = (dataset_slug, download_documents)
+    if session is not None and cache_key in session.imports:
+        if activate:
+            from lib.datasets.state import activate_dataset
+            activate_dataset(dataset_slug)
+        return session.imports[cache_key]
 
     storage = get_storage()
     location = dataset_location_for_domain(dataset_slug, "startups")
@@ -216,7 +215,35 @@ def import_startup_from_dealum(
             f"{staging_rel}/{MANIFEST_JSON}",
             stable_json(manifest),
         )
-        _replace_directory_snapshot(staging_path, target_path)
+        # Reuse identical files rather than rewriting them. The staged hard link
+        # keeps both source content and mtime intact if another source changes.
+        unchanged_sources = True
+        staged_sources = set()
+        reusable_sources = []
+        for name, _ in storage.list_with_mtime(staging_rel, recursive=True):
+            if name in {APPLICATION_RAW_JSON, MANIFEST_JSON}:
+                continue
+            staged_sources.add(name)
+            old, new = f"{dealum_rel}/{name}", f"{staging_rel}/{name}"
+            if storage.exists(old) and storage.read_bytes(old) == storage.read_bytes(new):
+                reusable_sources.append((old, new))
+            else:
+                unchanged_sources = False
+        previous_sources = {
+            name for name, _ in storage.list_with_mtime(dealum_rel, recursive=True)
+            if name not in {APPLICATION_RAW_JSON, MANIFEST_JSON}
+        }
+        if unchanged_sources and staged_sources == previous_sources:
+            # No source changes: leave the live snapshot alone. Only refresh
+            # bookkeeping when its contents changed; it does not count as activity.
+            for filename in (APPLICATION_RAW_JSON, MANIFEST_JSON):
+                write_if_changed(storage, f"{dealum_rel}/{filename}",
+                                 storage.read_text(f"{staging_rel}/{filename}"))
+        else:
+            for old, new in reusable_sources:
+                Path(storage.local_path(new)).unlink()
+                os.link(storage.local_path(old), storage.local_path(new))
+            _replace_directory_snapshot(staging_path, target_path)
     finally:
         if staging_path.exists():
             shutil.rmtree(staging_path)
@@ -248,7 +275,7 @@ def import_startup_from_dealum(
         stale_files,
         match.step,
     )
-    return DealumImportResult(
+    result = DealumImportResult(
         startup=startup,
         dataset_slug=dataset_slug,
         imported=True,
@@ -268,3 +295,6 @@ def import_startup_from_dealum(
         stale_files=stale_files,
         step=application.get("step"),
     )
+    if session is not None:
+        session.imports[cache_key] = result
+    return result

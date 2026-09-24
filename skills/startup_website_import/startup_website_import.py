@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import re
+import uuid
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from hashlib import sha256
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.robotparser import RobotFileParser
@@ -14,10 +15,17 @@ from urllib.robotparser import RobotFileParser
 import requests
 
 from lib.datasets.paths import dataset_location_for_domain
+from lib.datasets.source import list_source_files, parsed_filepath
+from lib.datasets.chunking import split_markdown
 from lib.infrastructure.logging import get_logger
 from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+from lib.infrastructure.configuration import load_repository_config
+from lib.infrastructure.filesystem import replace_directory_snapshot
+from lib.insights.locking import manifest_write_lock
 from lib.slugify import slugify
 from lib.startups.dossier import ensure_startup_dossier
+from lib.startups.identity import canonical_startup_slug, startup_aliases
+from lib.startups.website import website_from_evidence
 from lib.storage import Storage, get_storage
 
 logger = get_logger(__name__)
@@ -49,6 +57,7 @@ class WebsiteImportResult:
     linkedin_urls_path: str
     linkedin_urls_found: int
     failed_pages: int = 0
+    skipped_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +164,40 @@ class _HtmlDocument(HTMLParser):
 
 def startup_website_import(
     startup_name: str,
-    url: str,
+    url: str | None = None,
+    *,
+    depth: int | None = None,
+    max_pages: int | None = None,
+    include_pdfs: bool | None = None,
+    max_pdfs: int | None = None,
+    max_pdf_mb: int | None = None,
+    respect_robots: bool | None = None,
+    session: requests.Session | None = None,
+    storage: Storage | None = None,
+) -> WebsiteImportResult:
+    """Acquire once, using shared crawl settings and an optional documented URL."""
+    storage = storage or get_storage()
+    slug = canonical_startup_slug(startup_name)
+    website_root = f"{dataset_location_for_domain(slug, 'startups').raw_rel}/website"
+    if list_source_files(storage, website_root):
+        return _skipped_result(slug, website_root, "Website already imported")
+    lock_path = Path(storage.local_path(f"cache/startup_website_import/{slug}/acquisition"))
+    with manifest_write_lock(lock_path):
+        # Another caller may have completed the crawl while this one waited.
+        if list_source_files(storage, website_root):
+            return _skipped_result(slug, website_root, "Website already imported")
+        options = dict(load_repository_config("startup_website_import", "crawl"))
+        options.update({key: value for key, value in {
+            "depth": depth, "max_pages": max_pages, "include_pdfs": include_pdfs,
+            "max_pdfs": max_pdfs, "max_pdf_mb": max_pdf_mb,
+            "respect_robots": respect_robots,
+        }.items() if value is not None})
+        return _crawl_website(startup_name, url, session=session, storage=storage, **options)
+
+
+def _crawl_website(
+    startup_name: str,
+    url: str | None = None,
     *,
     depth: int = 1,
     max_pages: int = 50,
@@ -173,16 +215,30 @@ def startup_website_import(
     if max_pdfs < 0:
         raise ValueError("max_pdfs must be >= 0")
 
+    storage = storage or get_storage()
+    dataset_slug = canonical_startup_slug(startup_name)
+    location = dataset_location_for_domain(dataset_slug, "startups")
+    website_root = f"{location.raw_rel}/website"
+    if url is None:
+        names = [dataset_slug, *(alias for alias in startup_aliases()
+                                if canonical_startup_slug(alias) == dataset_slug)]
+        chunks = []
+        for filename, mtime in list_source_files(storage, location.raw_rel):
+            path = (f"{location.raw_rel}/{filename}" if filename.lower().endswith(".md")
+                    else parsed_filepath(location.parsed_rel, filename))
+            if storage.exists(path):
+                chunks.extend(split_markdown(storage.read_text(path), filename, mtime))
+        url = website_from_evidence(names, chunks)
+    if not url:
+        return _skipped_result(dataset_slug, website_root, "No unambiguous documented website")
+
     start_url = _normalize_start_url(url)
     host = urlparse(start_url).netloc.lower()
     session = session or requests.Session()
-    storage = storage or get_storage()
-
-    dataset_slug = ensure_startup_dossier(startup_name, storage=storage, activate=False)
-    location = dataset_location_for_domain(dataset_slug, "startups")
-    website_root = f"{location.raw_rel}/website"
-    staging_root = f"cache/startup_website_import/{dataset_slug}/website"
-    storage.rmtree(staging_root)
+    ensure_startup_dossier(startup_name, storage=storage, activate=False)
+    # A sibling staging directory permits atomic rename even when cache is on
+    # another filesystem. Hidden staging files do not count as dataset activity.
+    staging_root = f"{location.raw_rel}/.website-staging-{uuid.uuid4().hex}"
     storage.mkdir(staging_root)
 
     robots = _load_robots(start_url, session) if respect_robots else None
@@ -292,9 +348,11 @@ def startup_website_import(
             pdf_records=pdf_records,
         ),
     )
-    storage.rmtree(website_root)
-    _copy_tree(storage, staging_root, website_root)
-    storage.rmtree(staging_root)
+    try:
+        replace_directory_snapshot(Path(storage.local_path(staging_root)),
+                                   Path(storage.local_path(website_root)))
+    finally:
+        storage.rmtree(staging_root)
 
     return WebsiteImportResult(
         dataset_slug=dataset_slug,
@@ -305,6 +363,16 @@ def startup_website_import(
         linkedin_urls_path=f"{website_root}/linkedin-urls.md",
         linkedin_urls_found=len(sorted_linkedin_urls),
         failed_pages=failed_pages,
+    )
+
+
+def _skipped_result(dataset: str, website_root: str, reason: str) -> WebsiteImportResult:
+    logger.info("[%s] Website import skipped: %s", dataset, reason)
+    return WebsiteImportResult(
+        dataset_slug=dataset, website_path=website_root, pages_saved=0, pdfs_saved=0,
+        link_manifest_path=f"{website_root}/linkedin-and-resume-links.md",
+        linkedin_urls_path=f"{website_root}/linkedin-urls.md", linkedin_urls_found=0,
+        skipped_reason=reason,
     )
 
 
@@ -485,14 +553,6 @@ def _download_pdfs(
             )
         )
     return records
-
-
-def _copy_tree(storage: Storage, source_root: str, target_root: str) -> None:
-    storage.mkdir(target_root)
-    for relative_path, _mtime in storage.list_with_mtime(source_root, recursive=True):
-        source_path = f"{source_root}/{relative_path}"
-        target_path = f"{target_root}/{relative_path}"
-        storage.write_bytes(target_path, storage.read_bytes(source_path))
 
 
 def _render_markdown_page(

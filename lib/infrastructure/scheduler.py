@@ -8,11 +8,13 @@ import json
 import math
 import os
 import subprocess
+import threading
 import time
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
-from dataclasses import asdict, dataclass
+from concurrent.futures import Future
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TypeVar
 
@@ -115,6 +117,29 @@ class SchedulerRequest:
     parameters: dict[str, object] | None = None
 
 
+@dataclass
+class _PendingSlot:
+    request: SchedulerRequest
+    deadline: float
+    granted: Future[SchedulerLease] = field(default_factory=Future)
+    released: Future[None] = field(default_factory=Future)
+    registered: bool = False
+    closing: bool = False
+    succeeded: bool = False
+    lease: SchedulerLease | None = None
+    timed_out: bool = False
+
+
+@dataclass(frozen=True)
+class _DispatchResult:
+    leases: dict[str, SchedulerLease]
+    counts: dict[str, dict[str, int]]
+    active: set[str]
+    arrival_counts: dict[str, dict[str, int]]
+    arrival_active: set[str]
+    occupancy: dict[str, int]
+
+
 def default_scheduler_state_path() -> Path:
     """Return the scheduler state path under the repository-local cache."""
     local_data_root = (
@@ -214,6 +239,10 @@ class Scheduler:
         self._process_start = _process_start_token(os.getpid()) or str(
             time.time_ns()
         )
+        self._condition = threading.Condition()
+        self._slots: dict[str, _PendingSlot] = {}
+        self._dispatcher: threading.Thread | None = None
+        self._wake = False
 
     def _empty_state(self) -> dict:
         return {
@@ -421,12 +450,171 @@ class Scheduler:
 
         return self._with_locked_state(heartbeat)
 
-    async def _heartbeat_loop(self, lease: SchedulerLease) -> None:
-        interval = max(0.01, self.lease_max_age / 3)
-        while True:
-            await asyncio.sleep(interval)
-            if not await asyncio.to_thread(self._heartbeat, lease):
-                return
+    def _dispatch_transaction(
+        self,
+        additions: list[SchedulerRequest],
+        removals: list[tuple[SchedulerRequest, bool]],
+        owned_ids: set[str],
+        heartbeat: bool,
+    ) -> _DispatchResult:
+        """Apply one dispatcher's pending changes under one cross-process lock."""
+        def update(state):
+            for request, succeeded in removals:
+                lease = next((item for item in state["leases"][request.resource]
+                              if item["request_id"] == request.request_id), None)
+                if lease is not None:
+                    self._policy.release(
+                        state, resource=request.resource, lease_id=lease["lease_id"],
+                        request_id=request.request_id, succeeded=succeeded,
+                    )
+                self._policy.remove_request(
+                    state, resource=request.resource, request_id=request.request_id,
+                )
+            existing_ids = {
+                item["request_id"]
+                for pools in (state["requests"], state["leases"])
+                for pool in pools.values() for item in pool
+            }
+            for request in additions:
+                # A write can succeed before fsync/unlock reports an I/O error.
+                # Retrying must not duplicate a queued or already granted request.
+                if request.request_id not in existing_ids:
+                    state["requests"][request.resource].append(asdict(request))
+                    existing_ids.add(request.request_id)
+            arrival_counts = self._counts(state)
+            arrival_active = self._active_local_descriptors(state)
+            if heartbeat:
+                now = time.time()
+                for pool in state["leases"].values():
+                    for lease in pool:
+                        if lease["request_id"] in owned_ids:
+                            lease["heartbeat_at"] = now
+            self._grant_available(state)
+            leases = {
+                item["request_id"]: SchedulerLease(**item)
+                for pool in state["leases"].values() for item in pool
+                if item["request_id"] in owned_ids
+            }
+            return _DispatchResult(
+                leases, self._counts(state), self._active_local_descriptors(state),
+                arrival_counts, arrival_active,
+                {resource: len(pool) for resource, pool in state["leases"].items()},
+            )
+
+        return self._with_locked_state(update)
+
+    def _enqueue(self, request: SchedulerRequest, timeout: float) -> _PendingSlot:
+        entry = _PendingSlot(request, time.monotonic() + timeout)
+        with self._condition:
+            self._slots[request.request_id] = entry
+            self._wake = True
+            if self._dispatcher is None:
+                self._dispatcher = threading.Thread(
+                    target=self._dispatch, name="sictic-scheduler", daemon=True,
+                )
+                self._dispatcher.start()
+            self._condition.notify()
+        return entry
+
+    def _dispatch(self) -> None:
+        """The only polling/heartbeat loop, independent of callers' event loops."""
+        heartbeat_interval = max(0.01, self.lease_max_age / 3)
+        next_heartbeat = time.monotonic() + heartbeat_interval
+        io_failures = 0
+        try:
+            while True:
+                with self._condition:
+                    if not self._slots:
+                        self._dispatcher = None
+                        return
+                    self._wake = False
+                    now = time.monotonic()
+                    entries = list(self._slots.values())
+                    for entry in entries:
+                        if (entry.registered and not entry.closing
+                                and entry.lease is None and now >= entry.deadline):
+                            entry.closing = True
+                            entry.timed_out = True
+                    finished = [entry for entry in entries if entry.closing]
+                    additions = [entry for entry in entries
+                                 if not entry.registered and not entry.closing]
+                    heartbeat = now >= next_heartbeat
+
+                try:
+                    result = self._dispatch_transaction(
+                        [entry.request for entry in additions],
+                        [(entry.request, entry.succeeded) for entry in finished],
+                        {entry.request.request_id for entry in entries}, heartbeat,
+                    )
+                except OSError as error:
+                    io_failures += 1
+                    logger.warning("Scheduler I/O attempt %d failed: %s", io_failures, error)
+                    if io_failures >= 3:
+                        with self._condition:
+                            for entry in entries:
+                                if entry.lease is None or entry.closing:
+                                    entry.closing = True
+                                    if not entry.granted.done():
+                                        entry.granted.set_exception(error)
+                                    if not entry.released.done():
+                                        entry.released.set_exception(error)
+                    # Keep running leases and pending cleanup owned by this loop.
+                    # No grants are delivered until shared state is usable again.
+                    time.sleep(min(self.poll_interval, heartbeat_interval))
+                    continue
+                io_failures = 0
+                if heartbeat:
+                    next_heartbeat = time.monotonic() + heartbeat_interval
+                with self._condition:
+                    for entry in additions:
+                        entry.registered = True
+                    if additions:
+                        logger.info("Scheduler request received: %s", self._format_counts(
+                            result.arrival_counts, active_descriptors=result.arrival_active,
+                        ))
+                    newly_granted = False
+                    for entry in entries:
+                        lease = result.leases.get(entry.request.request_id)
+                        if lease is not None and entry.lease is None and not entry.closing:
+                            entry.lease = lease
+                            entry.granted.set_result(lease)
+                            newly_granted = True
+                    if newly_granted:
+                        logger.info("Scheduler job started: %s", self._format_counts(
+                            result.counts, active_descriptors=result.active,
+                        ))
+                    for entry in finished:
+                        self._slots.pop(entry.request.request_id)
+                        if entry.timed_out and not entry.granted.done():
+                            entry.granted.set_exception(SchedulingTimeoutError(
+                                f"Timed out waiting for {entry.request.descriptor}; "
+                                f"active leases: {result.occupancy}"
+                            ))
+                        elif not entry.granted.done():
+                            entry.granted.cancel()
+                        if not entry.released.done():
+                            entry.released.set_result(None)
+                    if not self._slots:
+                        self._dispatcher = None
+                        return
+                    delay = max(0, next_heartbeat - time.monotonic())
+                    waiting = [entry for entry in self._slots.values() if entry.lease is None]
+                    if waiting:
+                        delay = min(delay, self.poll_interval,
+                                    max(0, min(e.deadline for e in waiting) - time.monotonic()))
+                    self._condition.wait_for(lambda: self._wake, timeout=delay)
+        except Exception as error:
+            logger.exception("Scheduler dispatcher failed")
+            with self._condition:
+                # Fail callers promptly; retain the original infrastructure error.
+                entries = list(self._slots.values())
+                self._slots.clear()
+                self._dispatcher = None
+                for entry in entries:
+                    if not entry.granted.done():
+                        entry.granted.set_exception(error)
+                    if not entry.released.done():
+                        entry.released.set_exception(error)
 
     def snapshot(self) -> dict:
         """Return cleaned scheduler state for diagnostics and tests."""
@@ -563,11 +751,13 @@ class Scheduler:
                 operation="register_request",
             )
         wait_timeout = self.wait_timeout if timeout is None else timeout
-        started = time.monotonic()
-        request, counts, active_descriptors = await asyncio.to_thread(
-            self._register_request,
-            resource,
-            descriptor_key,
+        request = SchedulerRequest(
+            request_id=uuid.uuid4().hex,
+            resource=resource,
+            descriptor=descriptor_key,
+            pid=os.getpid(),
+            process_start=self._process_start,
+            requested_at=time.time(),
             max_concurrent=capacity,
             budget_units=budget_units,
             affinity_key=affinity_key,
@@ -576,66 +766,35 @@ class Scheduler:
             cached_input_size=cached_input_size,
             parameters=parameters,
         )
-        logger.info(
-            "Scheduler request received: %s",
-            self._format_counts(
-                counts,
-                active_descriptors=active_descriptors,
-            ),
-        )
-        lease = None
-        heartbeat_task: asyncio.Task[None] | None = None
+        entry = self._enqueue(request, wait_timeout)
+        granted = asyncio.wrap_future(entry.granted)
         succeeded = False
-
         try:
-            while True:
-                lease, counts, active_descriptors = await asyncio.to_thread(
-                    self._try_acquire,
-                    request,
-                )
-                if lease is not None:
-                    break
-                elapsed = time.monotonic() - started
-                if elapsed >= wait_timeout:
-                    state = await asyncio.to_thread(self.snapshot)
-                    occupancy = {
-                        name: len(items)
-                        for name, items in state["leases"].items()
-                    }
-                    raise SchedulingTimeoutError(
-                        f"Timed out after {elapsed:.1f}s waiting for "
-                        f"{descriptor_key}; active leases: {occupancy}"
-                    )
-                await asyncio.sleep(self.poll_interval)
-
-            if counts is not None:
-                logger.info(
-                    "Scheduler job started: %s",
-                    self._format_counts(
-                        counts,
-                        active_descriptors=active_descriptors,
-                    ),
-                )
-            heartbeat_task = asyncio.create_task(
-                self._heartbeat_loop(lease)
-            )
+            lease = await asyncio.shield(granted)
             yield lease
             succeeded = True
         finally:
-            if heartbeat_task is not None:
-                heartbeat_task.cancel()
-                try:
-                    await heartbeat_task
-                except asyncio.CancelledError:
-                    pass
-            if lease is None:
-                await asyncio.to_thread(self._remove_request, request)
-            else:
-                await asyncio.to_thread(
-                    self._release,
-                    lease,
-                    succeeded=succeeded,
-                )
+            # Detach a cancelled caller from the grant future. The dispatcher
+            # still owns cleanup, including grants made during cancellation.
+            with self._condition:
+                entry.closing = True
+                entry.succeeded = succeeded
+                self._wake = True
+                self._condition.notify()
+            if not granted.done():
+                granted.cancel()
+            try:
+                await asyncio.shield(asyncio.wrap_future(entry.released))
+            except Exception:
+                # I/O failures leave cleanup with the dispatcher. Only a fatal
+                # dispatcher exit needs this fallback once the caller exits.
+                with self._condition:
+                    tracked = request.request_id in self._slots
+                if not tracked:
+                    await asyncio.to_thread(
+                        self._dispatch_transaction, [], [(request, succeeded)], set(), False,
+                    )
+                raise
 
 
 class _DefaultScheduler:
@@ -643,10 +802,12 @@ class _DefaultScheduler:
 
     def __init__(self) -> None:
         self._instance: Scheduler | None = None
+        self._lock = threading.Lock()
 
     def _get(self) -> Scheduler:
-        if self._instance is None:
-            self._instance = Scheduler()
+        with self._lock:
+            if self._instance is None:
+                self._instance = Scheduler()
         return self._instance
 
     def __getattr__(self, name: str):

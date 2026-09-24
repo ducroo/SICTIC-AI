@@ -113,12 +113,10 @@ async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
     extractor = await asyncio.to_thread(PersonExtractor, **config["ner"])
     people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
     website = website_from_evidence(names, chunks) if location.domain == "startups" else None
-    if website and not get_storage().is_dir(f"{location.raw_rel}/website"):
+    if website:
         try:
             imported = await asyncio.to_thread(
                 startup_website_import, dataset, website,
-                depth=config["search"]["website_depth"], max_pages=config["search"]["website_max_pages"],
-                include_pdfs=False,
             )
         except InfrastructureError as error:
             if error.provider != "website" or error.kind != InfrastructureErrorKind.SERVICE_UNAVAILABLE:
@@ -129,8 +127,9 @@ async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
             if imported.failed_pages:
                 complete = False
                 logger.warning("[%s] Website acquisition incomplete: %d pages failed; continuing with saved pages", dataset, imported.failed_pages)
-            await sync_datasets([dataset], raise_on_error=True)
-            people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
+            if imported.pages_saved:
+                await sync_datasets([dataset], raise_on_error=True)
+                people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
     elif not website and location.domain == "startups":
         logger.info("[%s] No unambiguous documented website; skipping website crawl", dataset)
     people = _shortlist_ner_people(people, config["ner_max_candidates"])

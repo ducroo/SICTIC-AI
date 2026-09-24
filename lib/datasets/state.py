@@ -1,4 +1,6 @@
+import calendar
 import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from lib.infrastructure.logging import get_logger
@@ -9,6 +11,7 @@ from lib.datasets.paths import (
     dataset_raw_path,
     list_all_dataset_names,
 )
+from lib.datasets.source import IGNORED_FILENAMES
 
 logger = get_logger(__name__)
 
@@ -53,11 +56,56 @@ def is_active_dataset(dataset_name: str) -> bool:
     slug = slugify(dataset_name)
     return get_storage().exists(dataset_active_marker_path(slug))
 
+
+def is_archived_dataset(dataset_name: str) -> bool:
+    """An archived marker prevents automatic reactivation, regardless of stage."""
+    return get_storage().exists(dataset_archived_marker_path(dataset_name))
+
 def activate_dataset(dataset_name: str) -> None:
     """Switches a dataset to the active dataset marker file."""
     slug = slugify(dataset_name)
     marker_path = _set_dataset_marker(slug, active=True)
     logger.info(f"Activated dataset: {slug} (created {marker_path})")
+
+
+def latest_dataset_edit(dataset_name: str) -> float | None:
+    """Latest source-file edit, including the active marker but not bookkeeping.
+
+    Unlike ingestion, activity includes non-ingestible documents (e.g. images).
+    Parsed files and insights live outside the raw dataset directory.
+    """
+    storage = get_storage()
+    ignored = IGNORED_FILENAMES - {ACTIVE_MARKER}
+    edits = [
+        mtime
+        for name, mtime in storage.list_with_mtime(dataset_raw_path(dataset_name), recursive=True)
+        if name.rsplit("/", 1)[-1] not in ignored
+        and not any(part.startswith(".") for part in name.split("/"))
+    ]
+    return max(edits, default=None)
+
+
+def update_dataset_inactivity(dataset_name: str, *, months: int, now: float | None = None) -> None:
+    """Expire inactive datasets without ever automatically reactivating an archive."""
+    if is_archived_dataset(dataset_name):
+        archive_dataset(dataset_name)
+        return
+    now = time.time() if now is None else now
+    today = datetime.fromtimestamp(now, timezone.utc)
+    month_index = today.year * 12 + today.month - 1 - months
+    year, month = divmod(month_index, 12)
+    month += 1
+    cutoff = today.replace(
+        year=year, month=month,
+        day=min(today.day, calendar.monthrange(year, month)[1]),
+    ).timestamp()
+    latest = latest_dataset_edit(dataset_name)
+    if is_active_dataset(dataset_name):
+        if latest is None or latest <= cutoff:
+            archive_dataset(dataset_name)
+        return
+    archive_dataset(dataset_name)
+
 
 def archive_dataset(dataset_name: Optional[str] = None, age_days: Optional[int] = None) -> None:
     """

@@ -224,6 +224,8 @@ async def test_failure_continues_and_transitively_skips_dependants(
 
 @pytest.mark.asyncio
 async def test_cross_domain_failure_skips_all_consumers(mock_env, mocker):
+    mocker.patch("skills.bulk_refresh.datasets.DealumAdapter.is_configured", return_value=True)
+    mocker.patch("skills.bulk_refresh.datasets.DealumAdapter.list_applications", return_value=[])
     calls = []
 
     async def fake_sync(datasets, raise_on_error=False):
@@ -274,6 +276,8 @@ async def test_cross_domain_failure_skips_all_consumers(mock_env, mocker):
 
 @pytest.mark.asyncio
 async def test_strict_scope_uses_cached_cross_domain_dependency(mock_env, mocker):
+    mocker.patch("skills.bulk_refresh.datasets.DealumAdapter.is_configured", return_value=True)
+    mocker.patch("skills.bulk_refresh.datasets.DealumAdapter.list_applications", return_value=[])
     calls = []
 
     async def fake_sync(datasets, raise_on_error=False):
@@ -376,6 +380,6 @@ async def test_independent_jobs_run_concurrently(mock_env, mocker):
         clear=True,
     )
 
-    await bulk_refresh_module.bulk_refresh(datasets="members")
+    await bulk_refresh_module.bulk_refresh(datasets="members", skills="all")
 
     assert maximum_active == 2

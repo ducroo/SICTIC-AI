@@ -6,7 +6,7 @@ from lib.infrastructure.logging import get_logger
 from skills.bulk_refresh.bulk_refresh import bulk_refresh
 
 logger = get_logger(__name__)
-app = typer.Typer(help="Automatically refreshes caches and profiles for all SICTIC members and startups in bulk.")
+app = typer.Typer(help="Update dataset states and incrementally refresh stage-mandatory or selected skills.")
 
 @app.command()
 def main(
@@ -16,6 +16,7 @@ def main(
         "-d",
         help=(
             "Comma-separated source datasets, or 'all'. "
+            "Named missing startups are created only for always-active Dealum stages. "
             "Defaults to active startup and community datasets, or all when --exclude is supplied."
         ),
     ),
@@ -25,6 +26,7 @@ def main(
         "-s",
         help=(
             "Comma-separated root skills, or 'all'. "
+            "Defaults to mandatory skills for each dataset's stage. "
             "Required dependencies are included automatically."
         ),
     ),

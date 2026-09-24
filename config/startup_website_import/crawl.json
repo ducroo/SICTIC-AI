@@ -1,0 +1,8 @@
+{
+  "depth": 1,
+  "max_pages": 50,
+  "include_pdfs": true,
+  "max_pdfs": 20,
+  "max_pdf_mb": 25,
+  "respect_robots": true
+}
