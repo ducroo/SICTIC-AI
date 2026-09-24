@@ -36,7 +36,7 @@ def _settings(*, approve_all: bool = False) -> dict:
 
 def test_inactive_rules_raise_open_questions_never_judgments():
     findings = assess_lender_angle(_term_sheet_extraction(), _settings(), as_of=AS_OF)
-    assert {f["rule"] for f in findings} == set(_settings()["rules"]) - {"member_count_n", "valuation_grid_multiples_of_cap"}
+    assert {f["rule"] for f in findings} == set(_settings()["rules"]) - set(_settings()["inputs_not_rules"])
     for finding in findings:
         assert finding["status"] in {STATUS_OPEN_QUESTION, STATUS_NOT_EVALUATED}, finding
         assert finding["active"] is False

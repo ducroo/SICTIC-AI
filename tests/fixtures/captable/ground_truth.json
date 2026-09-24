@@ -328,6 +328,26 @@
       "discount_schedule_expected_above_months": "flag (24-month term, no discount schedule)",
       "qefr_threshold_minimum_multiple_of_aggregate_loan": "pass (3,000,000 >= 1x the 500,000 aggregate)",
       "_as_of": "2026-08-15 (the expected first closing; the 24-month term is measured from it)"
+    },
+    "question_2_expectations": {
+      "_note": "cla_review slice 2 on the fixture: the term sheet next to synthetic_cla.md (executed, 2 lenders, cap 8M, 20%, 5%, MFN). Deterministic; tests/skills/test_cla_review_context.py.",
+      "_as_of": "2026-08-15",
+      "ticket_default": "500,000 aggregate / member_count_n 5 = 100,000, labelled assumption (never the lead's 150,000 / N)",
+      "other_new_lenders": 400000,
+      "round_investment": "3,000,000 = qefr_min_raise, labelled assumption",
+      "crossover_valuation": "15,000,000 = cap 12M / (1 - 20%); discount binds below, cap binds above",
+      "mfn": "no effect from the term sheet to the executed loan (its cap is lower and interest higher); the executed loan is more favourable (lower cap, higher interest) and the term sheet has no MFN",
+      "identical_terms": "the term sheet forms a new group (different cap, interest, maturity, QEFR)",
+      "ten_twenty_before": {
+        "max_lenders_on_identical_terms": 2,
+        "total_lenders_all_terms": 2
+      },
+      "ten_twenty_after": {
+        "max_lenders_on_identical_terms": 6,
+        "total_lenders_all_terms": 8,
+        "note": "lead investor + 5 scenario members on the term sheet's terms"
+      },
+      "stamp_duty": "CHF: computed on 3,000,000 new money plus every converting balance"
     }
   }
 }

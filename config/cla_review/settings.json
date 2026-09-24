@@ -150,10 +150,30 @@
     "valuation_grid_multiples_of_cap": {
       "value": [
         0.5,
-        3
+        0.75,
+        1.0,
+        1.5,
+        2.0,
+        3.0
       ],
-      "unit": "multiple",
-      "source": "for the cap-versus-discount crossover; uncapped loans need an explicit grid",
+      "unit": "multiple of the valuation cap",
+      "source": "for the cap-versus-discount crossover; the pre-money valuations of the conversion table",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "valuation_grid_absolute": {
+      "value": null,
+      "unit": "pre-money valuations in the term sheet currency",
+      "source": "explicit grid for an uncapped term sheet; null omits the conversion table when no cap exists",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "conversion_round_method": {
+      "value": "pre_money",
+      "unit": "method name of lib.captable.model.convert_in_round",
+      "source": "one method in the member's conversion table; captable shows all three",
       "status": "placeholder",
       "effective_date": null,
       "active": false
@@ -161,6 +181,8 @@
   },
   "inputs_not_rules": [
     "member_count_n",
-    "valuation_grid_multiples_of_cap"
+    "valuation_grid_multiples_of_cap",
+    "valuation_grid_absolute",
+    "conversion_round_method"
   ]
 }
