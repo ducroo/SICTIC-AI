@@ -2,53 +2,581 @@
   "identification": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["dataset", "source_path", "selection", "document_match", "concerns", "paths_for_alternative_candidates", "selection_reason"],
+    "required": [
+      "dataset",
+      "source_path",
+      "selection",
+      "document_match",
+      "concerns",
+      "paths_for_alternative_candidates",
+      "selection_reason"
+    ],
     "properties": {
-      "dataset": {"type": "string", "minLength": 1},
-      "source_path": {"type": "string", "minLength": 1},
-      "selection": {"type": "string", "enum": ["explicit", "automatic"]},
-      "document_match": {"type": "string", "enum": ["High", "Medium", "Low", "Explicit"]},
-      "concerns": {"type": "array", "items": {"type": "string", "minLength": 1}},
-      "paths_for_alternative_candidates": {"type": "array", "items": {"type": "string", "minLength": 1}},
-      "selection_reason": {"type": "string", "minLength": 1}
+      "dataset": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "selection": {
+        "type": "string",
+        "enum": [
+          "explicit",
+          "automatic"
+        ]
+      },
+      "document_match": {
+        "type": "string",
+        "enum": [
+          "High",
+          "Medium",
+          "Low",
+          "Explicit"
+        ]
+      },
+      "concerns": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "paths_for_alternative_candidates": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "selection_reason": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   },
   "assessment": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["dataset", "source_path", "as_of", "company_angle", "lender_angle"],
+    "required": [
+      "dataset",
+      "source_path",
+      "as_of",
+      "company_angle",
+      "lender_angle"
+    ],
     "properties": {
-      "dataset": {"type": "string", "minLength": 1},
-      "source_path": {"type": "string", "minLength": 1},
-      "as_of": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
-      "company_angle": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
-      "lender_angle": {"type": "array", "items": {"$ref": "#/$defs/lender_finding"}}
+      "dataset": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "as_of": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      },
+      "company_angle": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/finding"
+        }
+      },
+      "lender_angle": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/lender_finding"
+        }
+      }
     },
     "$defs": {
       "finding": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["item", "status", "severity", "detail"],
+        "required": [
+          "item",
+          "status",
+          "severity",
+          "detail"
+        ],
         "properties": {
-          "item": {"type": "string", "minLength": 1},
-          "status": {"type": "string", "minLength": 1},
-          "severity": {"type": "string", "enum": ["info", "medium", "high", "severe"]},
-          "detail": {"type": "string", "minLength": 1}
+          "item": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "medium",
+              "high",
+              "severe"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "lender_finding": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["item", "status", "severity", "detail", "rule", "rule_status", "active"],
+        "required": [
+          "item",
+          "status",
+          "severity",
+          "detail",
+          "rule",
+          "rule_status",
+          "active"
+        ],
         "properties": {
-          "item": {"type": "string", "minLength": 1},
-          "status": {"type": "string", "enum": ["flagged", "acceptable", "absent", "open_question", "not_evaluated"]},
-          "severity": {"type": "string", "enum": ["info", "medium", "high", "severe"]},
-          "detail": {"type": "string", "minLength": 1},
-          "rule": {"type": "string", "minLength": 1},
-          "rule_status": {"type": "string", "minLength": 1},
-          "active": {"type": "boolean"}
+          "item": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "flagged",
+              "acceptable",
+              "absent",
+              "open_question",
+              "not_evaluated"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "medium",
+              "high",
+              "severe"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rule_status": {
+            "type": "string",
+            "minLength": 1
+          },
+          "active": {
+            "type": "boolean"
+          }
         }
+      }
+    }
+  },
+  "conversion": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "dataset",
+      "source_path",
+      "as_of",
+      "snapshot",
+      "result"
+    ],
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "as_of": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      },
+      "snapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "path",
+          "as_of_date",
+          "detail"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "reusable",
+              "absent",
+              "stale"
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "as_of_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "result": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "as_of",
+              "inputs",
+              "assumptions",
+              "omitted",
+              "balances",
+              "crossover_valuation",
+              "scenarios",
+              "stamp_duty"
+            ],
+            "properties": {
+              "as_of": {
+                "type": "string"
+              },
+              "inputs": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "value",
+                    "source",
+                    "note"
+                  ],
+                  "properties": {
+                    "value": {},
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "evidenced",
+                        "explicit",
+                        "assumption"
+                      ]
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "assumptions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "omitted": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "calculation",
+                    "reason"
+                  ],
+                  "properties": {
+                    "calculation": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              },
+              "balances": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "crossover_valuation": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "scenarios": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "conversion_date",
+                    "pre_money",
+                    "round_price",
+                    "my_price",
+                    "binding_term",
+                    "my_shares",
+                    "my_ownership_pct",
+                    "other_new_lenders_ownership_pct",
+                    "existing_loans_ownership_pct",
+                    "new_investor_ownership_pct",
+                    "warnings"
+                  ],
+                  "properties": {
+                    "conversion_date": {
+                      "type": "string"
+                    },
+                    "pre_money": {
+                      "type": "number"
+                    },
+                    "round_price": {
+                      "type": "number"
+                    },
+                    "my_price": {
+                      "type": "number"
+                    },
+                    "binding_term": {
+                      "type": "string",
+                      "enum": [
+                        "cap",
+                        "discount",
+                        "floor"
+                      ]
+                    },
+                    "my_shares": {
+                      "type": "number"
+                    },
+                    "my_ownership_pct": {
+                      "type": "number"
+                    },
+                    "other_new_lenders_ownership_pct": {
+                      "type": "number"
+                    },
+                    "existing_loans_ownership_pct": {
+                      "type": "number"
+                    },
+                    "new_investor_ownership_pct": {
+                      "type": "number"
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "stamp_duty": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "cumulative_paid_in_before",
+                      "round_contribution",
+                      "duty",
+                      "note"
+                    ],
+                    "properties": {
+                      "cumulative_paid_in_before": {
+                        "type": "number"
+                      },
+                      "round_contribution": {
+                        "type": "number"
+                      },
+                      "duty": {
+                        "type": "number"
+                      },
+                      "note": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "loan-context": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "dataset",
+      "source_path",
+      "as_of",
+      "snapshot",
+      "result"
+    ],
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "minLength": 1
+      },
+      "source_path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "as_of": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      },
+      "snapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "path",
+          "as_of_date",
+          "detail"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "reusable",
+              "absent",
+              "stale"
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "as_of_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "result": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "as_of",
+              "executed_count",
+              "comparison",
+              "mfn",
+              "identical_terms",
+              "ten_twenty",
+              "maturities"
+            ],
+            "properties": {
+              "as_of": {
+                "type": "string"
+              },
+              "executed_count": {
+                "type": "integer"
+              },
+              "comparison": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "document",
+                    "role",
+                    "lenders"
+                  ]
+                }
+              },
+              "mfn": {
+                "type": "object",
+                "required": [
+                  "term_sheet_has_mfn",
+                  "existing_loans_with_mfn",
+                  "term_sheet_more_favourable_than",
+                  "existing_more_favourable_than_term_sheet",
+                  "readings"
+                ]
+              },
+              "identical_terms": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "joins_existing_group",
+                  "documents"
+                ],
+                "properties": {
+                  "joins_existing_group": {
+                    "type": "boolean"
+                  },
+                  "documents": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "ten_twenty": {
+                "type": "object",
+                "required": [
+                  "member_count_n",
+                  "before",
+                  "after",
+                  "term_sheet_group_lenders_after",
+                  "note"
+                ]
+              },
+              "maturities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "document",
+                    "maturity_date",
+                    "role"
+                  ]
+                }
+              }
+            }
+          }
+        ]
       }
     }
   }

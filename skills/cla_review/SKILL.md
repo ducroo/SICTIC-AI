@@ -22,12 +22,16 @@ configuration key, so a new ticket replaces the generated result for that
 document. `fresh` bypasses generated reuse without deleting files or
 overriding manual inputs.
 
-**Slices:** slice 0 (contract, rules, references, fixture) and slice 1
-(question 1: identify, extract, company- and lender-angle assessment,
-deterministic report) are built; the audits against the SECA term sheets,
-the conversion, the existing loans, the SHA context and the synthesis are
-listed in the report as pending. The slices are defined in
+**Slices:** slice 0 (contract, rules, references, fixture), slice 1
+(question 1: identify, extract, company- and lender-angle assessment) and
+slice 2 (question 2, deterministic part: my conversion, the existing loans,
+10/20 before and after) are built; the audits against the SECA term sheets,
+the SHA context and the synthesis are listed in the report as pending. The
+slices are defined in
 [docs/cla-review-design.md](../../docs/cla-review-design.md#7-slices).
+
+JSON intermediates per document: `identification`, `extraction`,
+`assessment`, `conversion`, `loan-context`.
 
 Artifact identity is the slugified full relative path of the document, so
 equal basenames in different folders stay distinct. The automatic
@@ -66,17 +70,29 @@ generated reuse only, failures are never saved. `ticket` is part of the
 report key so a new ticket regenerates the report for the same document
 without regenerating the extraction.
 
-Later slices consume the consolidated `captable_build` insight through
-`lib.captable.insights.select_consolidated`; it is never generated
-implicitly and the registry declares no prerequisite.
+Question 2 reads the consolidated `captable_build` snapshot through
+`lib.captable.insights.select_consolidated`; it is never generated here and
+the registry declares no prerequisite. Its state is part of the conversion
+and loan-context keys: `reusable` (content keyed), `absent` or `stale`.
+`lib.cla_review.conversion` resolves and labels every input before any
+number (ticket: given, else the aggregate amount divided by the configured
+member count as a stated assumption; round size: the qualified-financing
+minimum; denominator, interest, currency, nominal value, valuation grid
+from the cap or `valuation_grid_absolute`), omits a calculation whose
+input is missing with the reason, and prices the ticket at every grid
+point and conversion date through `lib.captable.model` next to the existing
+loans (`lib.captable.notes`) and the other new lenders. `lib.cla_review.loans`
+puts the term sheet next to every executed loan, reads the MFN effect both
+ways, checks identical-terms membership and counts the 10/20 rules before
+and after N members through `aggregate_clas` on a synthetic executed copy.
 
 ## Side effects and failure behavior
 
 Preparation may import, convert and index documents. The review calls models
 and saves intermediates and the report; it sends nothing. An absent or stale
-cap-table snapshot yields insufficient-evidence findings for question 2;
-malformed artifacts, failed path resolution and technical audit failures
-remain errors. No plausible term sheet, an unresolvable path or an extraction
+cap-table snapshot yields an insufficient-evidence paragraph for question 2
+and the run completes; a malformed snapshot, failed path resolution and
+technical failures remain errors. No plausible term sheet, an unresolvable path or an extraction
 failure stops the run without saving a partial artifact. The report aids human
 review and is not legal advice.
 

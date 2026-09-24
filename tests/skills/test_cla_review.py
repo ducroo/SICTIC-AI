@@ -303,3 +303,82 @@ async def test_unresolvable_document_path_fails(mock_env, monkeypatch):
 async def test_ticket_must_be_positive():
     with pytest.raises(ValueError, match="positive"):
         await cla_review("acme", ticket=0)
+
+
+# --- slice 2: question 2 on the consolidated snapshot ---------------------------
+
+def _executed_fixture_cla(dataset: str) -> dict:
+    from tests.skills.test_captable_build import _complete_cla
+
+    truth = GROUND_TRUTH["cla"]
+    overrides = {field: {"value": truth[field], "quote": "q" if truth[field] is not None else None} for field in (
+        "principal_total", "principal_currency", "interest_mode", "interest_rate_pct", "interest_day_count",
+        "interest_compounding", "execution_date", "maturity_date", "valuation_cap", "discount_pct", "valuation_floor",
+        "qefr_min_raise", "mfn_clause", "pro_rata_rights", "denominator_basis", "subordinated", "subordination_scope")}
+    overrides["lenders"] = [{"name": l["name"], "kind": l["kind"], "domicile": l["domicile"],
+                             "principal_amount": l["principal_amount"], "quote": "q"} for l in truth["lenders"]]
+    return _complete_cla(dataset=dataset, document=truth["document"], status="executed", **overrides)
+
+
+def _write_consolidated(dataset: str, *, model: str = "manual", broken: bool = False) -> InsightFile:
+    from tests.skill_harness.conftest import _captable_extraction
+    from tests.skills.test_captable_build import _consolidated_artifact
+
+    artifact = _consolidated_artifact(dataset, captable=_captable_extraction("captable.md"), loans=[_executed_fixture_cla(dataset)])
+    if broken:
+        del artifact["stakeholders"]
+    insight = InsightFile(dataset, "captable_build", model, identifier="consolidated", subdir=True, extension="json")
+    insight.save(json.dumps(artifact))
+    return insight
+
+
+@pytest.mark.asyncio
+async def test_reusable_snapshot_yields_question_2(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    _patched(monkeypatch)
+    _write_consolidated("acme")
+
+    [report] = await cla_review("acme", document="legal/a/ts.md", ticket=25000)
+
+    content = report.content()
+    assert "## Question 2 — the terms in this company" in content
+    assert "Insufficient evidence" not in content
+    assert "### Inputs, resolved before any number" in content
+    assert "| ticket | 25000.0 | explicit |" in content
+    assert "Cap and discount cross at a pre-money valuation of 15,000,000" in content
+    assert "| synthetic_cla.md | executed loan | Petra Muster, Bruno Muster |" in content
+    assert "### 10/20 non-bank rules" in content and "After 5 members join on these terms | 6 | within | 8 | within" in content
+    assert "My conversion on this cap table" not in content  # no longer pending
+    conversion = json.loads(_intermediate("acme", "legal-a-ts-conversion").content())
+    assert conversion["snapshot"]["state"] == "reusable" and conversion["result"]["scenarios"]
+    loans = json.loads(_intermediate("acme", "legal-a-ts-loan-context").content())
+    assert loans["result"]["ten_twenty"]["after"]["total_lenders_all_terms"] == 8
+
+
+@pytest.mark.asyncio
+async def test_absent_and_stale_snapshots_are_insufficient_evidence_not_errors(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    _patched(monkeypatch)
+
+    [absent] = await cla_review("acme", document="legal/a/ts.md")
+    assert "**Insufficient evidence (absent cap-table snapshot).**" in absent.content()
+    assert json.loads(_intermediate("acme", "legal-a-ts-conversion").content())["result"] is None
+
+    _write_consolidated("acme", model=llm_model())  # generated, but no reusable upstream chain
+    [stale] = await cla_review("acme", document="legal/a/ts.md")
+    assert "**Insufficient evidence (stale cap-table snapshot).**" in stale.content()
+    assert "run captable_build" in stale.content()
+
+    _write_consolidated("acme")  # a manual snapshot wins and is reusable
+    [reusable] = await cla_review("acme", document="legal/a/ts.md")
+    assert "Insufficient evidence" not in reusable.content()
+
+
+@pytest.mark.asyncio
+async def test_malformed_snapshot_is_an_error(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    _patched(monkeypatch)
+    _write_consolidated("acme", broken=True)
+    with pytest.raises(ValueError, match="stakeholders"):
+        await cla_review("acme", document="legal/a/ts.md")
+    assert not _intermediate("acme", "legal-a-ts-conversion").exists()

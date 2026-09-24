@@ -1,12 +1,14 @@
 """Lender-side review of one convertible-loan term sheet.
 
-Question 1 of docs/cla-review-design.md (slice 1): identify the term sheet,
-extract it with the shared ``captable_build`` CLA checklist, judge it from
-the company's angle (``assess_cla``) and from the lender's angle
-(``lib.cla_review.assessment``), and render a deterministic report. The
-audits against the SECA term sheets, the member's conversion, the existing
-loans and the SHA context (slices 2 and 3) are listed in the report as
-pending.
+Question 1 (slice 1): identify the term sheet, extract it with the shared
+``captable_build`` CLA checklist, judge it from the company's angle
+(``assess_cla``) and from the lender's angle (``lib.cla_review.assessment``).
+Question 2, deterministic part (slice 2): the member's conversion and the
+existing loans on the consolidated ``captable_build`` snapshot, read through
+``select_consolidated`` and never generated here; an absent or stale
+snapshot is insufficient evidence, a malformed one an error. The audits
+against the SECA term sheets, the SHA context and the synthesis (slice 3)
+are listed in the report as pending.
 """
 from __future__ import annotations
 
@@ -17,10 +19,12 @@ from typing import Any
 from lib.captable.assessment import assess_cla
 from lib.captable.cla_extraction import extract_cla
 from lib.captable.cla_terms import build_cla_schema
-from lib.captable.insights import configured_build_insight, read_build_insight
+from lib.captable.insights import ConsolidatedUnavailable, build_insight, configured_build_insight, read_build_insight, select_consolidated
 from lib.captable.render_markdown import _table as markdown_table
 from lib.captable.schema import build_artifact_schema
 from lib.cla_review.assessment import STATUS_OPEN_QUESTION, assess_lender_angle
+from lib.cla_review.conversion import my_conversion
+from lib.cla_review.loans import loan_context
 from lib.datasets.documents import resolve_document_path
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, dataset_parsed_path
@@ -39,7 +43,7 @@ from skills.dataset_chat.dataset_chat import dataset_chat_json
 logger = get_logger(__name__)
 
 SKILL_NAME = "cla_review"
-OUTPUT_SCHEMA_VERSION = 1
+OUTPUT_SCHEMA_VERSION = 2
 RULE_FIELDS = ("value", "unit", "source", "status", "effective_date", "active")
 APPROVED_STATUS = "approved"
 _IDENTIFICATION_SECTIONS = (
@@ -52,11 +56,10 @@ _IDENTIFICATION_SECTIONS = (
 _EXTRACTION_SECTIONS = ("cla_extraction_prompt", "cla_extraction_base_schema", "cla_terms")
 PENDING = (
     "Audit against the SECA CLA term sheets (lender-perspective checklists)",
-    "My conversion on this cap table (cap, discount, floor over a valuation range)",
-    "The existing loans: terms compared, MFN, identical-terms groups, 10/20 non-bank rules before and after N members",
     "The SHA and articles: can the conversion be executed, what accession commits me to",
     "Synthesis of material findings",
 )
+_SNAPSHOT_HINT = "run captable_build for this startup, then re-run cla_review"
 
 
 # --- configuration -------------------------------------------------------------
@@ -302,10 +305,139 @@ def _assess(dataset: str, source_path: str, extraction: InsightFile, config: dic
     return _save_json(insight, data, schema, "cla_review assessment")
 
 
+# --- 5. and 6. question 2 on the consolidated snapshot -------------------------
+
+def _snapshot(dataset: str) -> tuple[dict[str, Any], InsightFile | None, dict[str, Any] | None]:
+    """The consolidated captable_build snapshot as (state, insight, data), never generated here.
+
+    ``absent`` and ``stale`` are insufficient evidence; a malformed snapshot
+    (validation error) or any other technical failure propagates.
+    """
+    if build_insight(dataset, "consolidated").find(selection="any") is None:
+        return {"state": "absent", "path": None, "as_of_date": None,
+                "detail": f"No consolidated cap-table insight exists for this startup; {_SNAPSHOT_HINT}."}, None, None
+    try:
+        insight = select_consolidated(dataset)
+    except ConsolidatedUnavailable as error:
+        return {"state": "stale", "path": None, "as_of_date": None,
+                "detail": f"The consolidated cap-table insight is not reusable ({error}); {_SNAPSHOT_HINT}."}, None, None
+    data = read_build_insight(insight)
+    return {"state": "reusable", "path": insight.path, "as_of_date": data.get("as_of_date"),
+            "detail": f"Consolidated snapshot {insight.path} as of {data.get('as_of_date')}."}, insight, data
+
+
+def _question_2(
+    dataset: str,
+    source_path: str,
+    extraction: InsightFile,
+    config: dict[str, Any],
+    *,
+    ticket: float | None,
+    fresh: bool,
+) -> tuple[InsightFile, InsightFile]:
+    """The conversion and loan-context artifacts; both carry the snapshot state in their key."""
+    settings = config["settings"]
+    as_of = date.today()
+    state, snapshot_insight, snapshot = _snapshot(dataset)
+    snapshot_key = snapshot_insight.content() if snapshot_insight is not None else state
+    terms = _read_json(extraction, _extraction_schema(), "cla_review extraction")
+    artifacts = []
+    for stage, compute in (("conversion", my_conversion), ("loan-context", loan_context)):
+        key = config_cache_key(OUTPUT_SCHEMA_VERSION, settings, extraction.content(), snapshot_key,
+                               {"ticket": ticket}, str(as_of))
+        insight = _intermediate(dataset, f"{document_slug(source_path)}-{stage}", key)
+        schema = config["artifact_schemas"][stage]
+        if existing := _reusable(insight, fresh):
+            _read_json(existing, schema, f"cla_review {stage}")
+            artifacts.append(existing)
+            continue
+        data = {
+            "dataset": dataset, "source_path": source_path, "as_of": str(as_of), "snapshot": state,
+            "result": compute(terms, snapshot, settings, ticket=ticket, as_of=as_of) if snapshot is not None else None,
+        }
+        artifacts.append(_save_json(insight, data, schema, f"cla_review {stage}"))
+    return artifacts[0], artifacts[1]
+
+
 # --- 8. report (question 1) ----------------------------------------------------
 
 def _absence(value: Any) -> bool:
     return value is None or value is False or value == "unstated" or value == []
+
+
+def _money(value: Any) -> str:
+    return f"{value:,.0f}" if isinstance(value, (int, float)) else "—"
+
+
+def _plain(value: Any) -> Any:
+    """Table-friendly rendering of a resolved input: no JSON quotes in Markdown cells."""
+    if isinstance(value, dict):
+        return "; ".join(f"{key} {_plain(item)}" for key, item in value.items())
+    if isinstance(value, list):
+        return ", ".join(str(_plain(item)) for item in value)
+    if value is None:
+        return "none"
+    return value
+
+
+def _render_question_2(conversion: dict[str, Any], loans: dict[str, Any]) -> list[str]:
+    state = conversion["snapshot"]
+    parts = ["## Question 2 — the terms in this company", ""]
+    if state["state"] != "reusable":
+        parts += [f"**Insufficient evidence ({state['state']} cap-table snapshot).** {state['detail']}", ""]
+        return parts
+    result, context = conversion["result"], loans["result"]
+    parts += [f"Cap-table snapshot: `{state['path']}` as of {state['as_of_date']}.", "",
+              "### Inputs, resolved before any number", "",
+              markdown_table(("Input", "Value", "Source", "Note"), [
+                  (name, _plain(item["value"]), item["source"], item["note"]) for name, item in result["inputs"].items()]), ""]
+    if result["assumptions"]:
+        parts += ["Assumptions applied:", "", "\n".join(f"- {text}" for text in result["assumptions"]), ""]
+    if result["omitted"]:
+        parts += ["Calculations omitted:", "", "\n".join(f"- {item['calculation']}: {item['reason']}" for item in result["omitted"]), ""]
+    parts += ["### My conversion", ""]
+    if result["crossover_valuation"] is not None:
+        parts += [f"Cap and discount cross at a pre-money valuation of {_money(result['crossover_valuation'])}: "
+                  "below it the discount sets my price, above it the cap.", ""]
+    if result["balances"]:
+        parts += ["Balance of my ticket, principal plus accrued interest: "
+                  + "; ".join(f"{label}: {_money(value)}" for label, value in result["balances"].items()), ""]
+    if result["scenarios"]:
+        parts += [markdown_table(
+            ("Conversion date", "Pre-money", "Round price", "My price", "Binding", "My shares", "My %", "Other new lenders %", "Existing loans %", "New investor %"),
+            [(r["conversion_date"], _money(r["pre_money"]), r["round_price"], r["my_price"], r["binding_term"], _money(r["my_shares"]),
+              f"{r['my_ownership_pct']:.2f}", f"{r['other_new_lenders_ownership_pct']:.2f}", f"{r['existing_loans_ownership_pct']:.2f}",
+              f"{r['new_investor_ownership_pct']:.2f}") for r in result["scenarios"]]), ""]
+        warnings = sorted({w for r in result["scenarios"] for w in r["warnings"]})
+        if warnings:
+            parts += ["Warnings:", "", "\n".join(f"- {w}" for w in warnings), ""]
+    if result["stamp_duty"]:
+        duty = result["stamp_duty"]
+        parts += [f"Stamp duty on the round: {_money(duty['duty'])} CHF on a contribution of {_money(duty['round_contribution'])} "
+                  f"(paid in before: {_money(duty['cumulative_paid_in_before'])}). {duty['note']}.", ""]
+    parts += ["### The existing loans", "",
+              markdown_table(("Document", "Role", "Lenders", "Principal", "Currency", "Cap", "Discount %", "Floor", "Denominator", "Maturity", "Interest", "Subordinated", "MFN", "Pro-rata"),
+                             [(row["document"], row["role"], ", ".join(n for n in row["lenders"] if n), _money(row["principal_total"]), row["principal_currency"],
+                               _money(row["valuation_cap"]), row["discount_pct"], _money(row["valuation_floor"]), row["denominator_basis"], row["maturity_date"],
+                               f"{row['interest_mode']} {row['interest_rate_pct'] if row['interest_rate_pct'] is not None else ''}".strip(),
+                               row["subordinated"], row["mfn_clause"], row["pro_rata_rights"]) for row in context["comparison"]]), "",
+              "Most-favoured-nation reading:", "", "\n".join(f"- {text}" for text in context["mfn"]["readings"]), "",
+              ("The term sheet joins the identical-terms group of " + ", ".join(context["identical_terms"]["documents"]))
+              if context["identical_terms"]["joins_existing_group"] else "The term sheet forms a new identical-terms group.", "",
+              "### 10/20 non-bank rules", "",
+              markdown_table(("", "Lenders on identical terms (max group)", "10 rule", "All lenders", "20 rule"), [
+                  ("Today", context["ten_twenty"]["before"]["max_lenders_on_identical_terms"], context["ten_twenty"]["before"]["ten_rule"],
+                   context["ten_twenty"]["before"]["total_lenders_all_terms"], context["ten_twenty"]["before"]["twenty_rule"]),
+                  (f"After {context['ten_twenty']['member_count_n']} members join on these terms",
+                   context["ten_twenty"]["after"]["max_lenders_on_identical_terms"], context["ten_twenty"]["after"]["ten_rule"],
+                   context["ten_twenty"]["after"]["total_lenders_all_terms"], context["ten_twenty"]["after"]["twenty_rule"])]), "",
+              context["ten_twenty"]["note"], ""]
+    caveats = context["ten_twenty"]["after"].get("caveats") or []
+    if caveats:
+        parts += ["\n".join(f"- {c}" for c in caveats), ""]
+    parts += ["### Maturities", "",
+              markdown_table(("Document", "Role", "Maturity"), [(m["document"], m["role"], m["maturity_date"]) for m in context["maturities"]]), ""]
+    return parts
 
 
 def render_report(
@@ -313,6 +445,8 @@ def render_report(
     identification: dict[str, Any],
     extraction: dict[str, Any],
     assessment: dict[str, Any],
+    conversion: dict[str, Any],
+    loans: dict[str, Any],
     *,
     ticket: float | None,
     model: str,
@@ -347,23 +481,25 @@ def render_report(
         "",
         "\n".join(f"- {concern}" for concern in concerns),
         "",
-        "## Lenders named",
+        "## Question 1 — the terms themselves",
+        "",
+        "### Lenders named",
         "",
         markdown_table(("Lender", "Kind", "Domicile", "Amount"), lenders_rows) if lenders_rows else "No lender named.",
         "",
-        "## Terms with source quotes",
+        "### Terms with source quotes",
         "",
         markdown_table(("Term", "Value", "Quote"), terms_rows),
         "",
-        "## Absent clauses",
+        "### Absent clauses",
         "",
         markdown_table(("Term", "Sections scanned"), absent_rows) if absent_rows else "No absent clause recorded.",
         "",
-        "## Company-angle assessment (captable_build rules)",
+        "### Company-angle assessment (captable_build rules)",
         "",
         markdown_table(("Item", "Status", "Severity", "Detail"), company_rows),
         "",
-        "## Lender-angle assessment",
+        "### Lender-angle assessment",
         "",
         f"{judged} rule(s) approved and judging; {open_questions} open question(s) from rules awaiting approval "
         "(no judgment is issued on an unapproved threshold).",
@@ -372,7 +508,8 @@ def render_report(
         "",
     ]
     if comments:
-        parts += ["## Unusual valuation and conversion provisions (verbatim)", "", comments, ""]
+        parts += ["### Unusual valuation and conversion provisions (verbatim)", "", comments, ""]
+    parts += _render_question_2(conversion, loans)
     parts += [
         "## Not yet covered by this report",
         "",
@@ -425,11 +562,12 @@ async def cla_review(
 
     extraction = await _extract(dataset, source_path, identification, fresh=fresh)
     assessment = _assess(dataset, source_path, extraction, config, fresh=fresh)
+    conversion, loans = _question_2(dataset, source_path, extraction, config, ticket=ticket, fresh=fresh)
     captable_config = load_repository_config("captable_build")
     report.config_key = config_cache_key(
         OUTPUT_SCHEMA_VERSION, config, {name: captable_config[name] for name in _EXTRACTION_SECTIONS},
         captable_config["assessment_rules"], repository["structured_output"], {"ticket": ticket},
-        identification.content(), extraction.content(), assessment.content(),
+        identification.content(), extraction.content(), assessment.content(), conversion.content(), loans.content(),
     )
     if not fresh and (existing := report.find(selection="reusable")):
         logger.info("[%s] Using cached CLA review %s", dataset, existing.path)
@@ -439,6 +577,8 @@ async def cla_review(
         _read_json(identification, config["artifact_schemas"]["identification"], "cla_review identification"),
         _read_json(extraction, _extraction_schema(), "cla_review extraction"),
         _read_json(assessment, config["artifact_schemas"]["assessment"], "cla_review assessment"),
+        _read_json(conversion, config["artifact_schemas"]["conversion"], "cla_review conversion"),
+        _read_json(loans, config["artifact_schemas"]["loan-context"], "cla_review loan-context"),
         ticket=ticket, model=llm_model(),
     ))
     logger.info("[%s] CLA review saved to %s", dataset, report.path)
