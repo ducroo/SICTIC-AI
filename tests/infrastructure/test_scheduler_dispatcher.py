@@ -66,39 +66,205 @@ async def test_release_wakes_dispatcher_without_waiting_for_poll(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_dispatcher_failure_unblocks_waiters_and_cleans_on_exit(tmp_path, mocker):
-    scheduler = make_scheduler(tmp_path / "scheduler.json")
+@pytest.mark.parametrize("failures", [1, 2, 3])
+async def test_io_retries_preserve_running_heartbeat(tmp_path, mocker, failures):
+    scheduler = make_scheduler(tmp_path / "scheduler.json", lease_max_age=0.6)
     original = scheduler._dispatch_transaction
-    fail_next = threading.Event()
-
-    def transaction(*args):
-        if fail_next.is_set():
-            fail_next.clear()
-            raise OSError("scheduler storage unavailable")
-        return original(*args)
-
-    mocker.patch.object(scheduler, "_dispatch_transaction", side_effect=transaction)
-    holder = scheduler.slot("model", descriptor="ollama/test")
-    await holder.__aenter__()
+    attempts = 0
+    release = asyncio.Event()
+    entered = asyncio.Event()
 
     async def waiting():
         async with scheduler.slot("model", descriptor="ollama/test"):
-            pytest.fail("No capacity should be granted")
+            entered.set()
+            await release.wait()
 
-    task = asyncio.create_task(waiting())
-    await eventually(lambda: bool(scheduler.snapshot()["requests"]["model"]))
-    fail_next.set()
-    with pytest.raises(OSError, match="storage unavailable"):
-        await asyncio.wait_for(task, timeout=2)
-    # A dispatcher error must not release a still-running operation's slot.
-    assert len(scheduler.snapshot()["leases"]["model"]) == 1
-    with pytest.raises(OSError, match="storage unavailable"):
-        await holder.__aexit__(None, None, None)
+    async with scheduler.slot("model", descriptor="ollama/test"):
+        def transaction(*args):
+            nonlocal attempts
+            attempts += 1
+            if attempts <= failures:
+                raise OSError("scheduler storage unavailable")
+            return original(*args)
+
+        mocker.patch.object(scheduler, "_dispatch_transaction", side_effect=transaction)
+        task = asyncio.create_task(waiting())
+        try:
+            if failures == 3:
+                with pytest.raises(OSError, match="storage unavailable"):
+                    await asyncio.wait_for(task, timeout=2)
+                # A fresh waiter must still respect the original running job.
+                task = asyncio.create_task(waiting())
+            await eventually(lambda: attempts > failures)
+            await asyncio.sleep(0.7)  # Longer than the original lease lifetime.
+            assert len(scheduler.snapshot()["leases"]["model"]) == 1
+            assert not entered.is_set()
+        except BaseException:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            raise
+    release.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert entered.is_set()
     assert not any(scheduler.snapshot()["leases"].values())
     assert not any(scheduler.snapshot()["requests"].values())
-    # The shared instance remains usable after the failed dispatcher exits.
+
+
+@pytest.mark.asyncio
+async def test_three_failed_attempts_fail_waiter_before_storage_recovers(tmp_path, mocker):
+    scheduler = make_scheduler(tmp_path / "scheduler.json")
+    original = scheduler._dispatch_transaction
+    unavailable = threading.Event()
+    unavailable.set()
+    attempts = 0
+
+    def transaction(*args):
+        nonlocal attempts
+        if unavailable.is_set():
+            attempts += 1
+            raise OSError("storage offline")
+        return original(*args)
+
+    mocker.patch.object(scheduler, "_dispatch_transaction", side_effect=transaction)
+    try:
+        with pytest.raises(OSError, match="storage offline"):
+            async with scheduler.slot("model", descriptor="ollama/test"):
+                pytest.fail("Unavailable storage must prevent execution")
+        assert attempts == 3
+        assert scheduler._slots  # Retained for cleanup, not orphaned in shared state.
+    finally:
+        unavailable.clear()
+    await eventually(lambda: scheduler._dispatcher is None)
+    assert not any(scheduler.snapshot()["requests"].values())
     async with scheduler.slot("model", descriptor="ollama/test"):
         pass
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("held", [False, True])
+async def test_retry_after_committed_write_does_not_duplicate_request(tmp_path, mocker, held):
+    scheduler = make_scheduler(tmp_path / "scheduler.json")
+    holder = scheduler.slot("model", descriptor="ollama/test") if held else None
+    if holder:
+        await holder.__aenter__()
+    original = scheduler._write_state
+    failures = 0
+
+    def write(state):
+        nonlocal failures
+        original(state)
+        if failures == 0:
+            failures += 1
+            raise OSError("fsync failed after publication")
+
+    mocker.patch.object(scheduler, "_write_state", side_effect=write)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def operation():
+        async with scheduler.slot("model", descriptor="ollama/test"):
+            entered.set()
+            await release.wait()
+
+    task = asyncio.create_task(operation())
+    try:
+        await eventually(lambda: failures == 1)
+        await asyncio.sleep(0.15)
+        state = scheduler.snapshot()
+        assert len(state["leases"]["model"]) == 1
+        assert len(state["requests"]["model"]) == int(held)
+        if holder:
+            await holder.__aexit__(None, None, None)
+            holder = None
+        await asyncio.wait_for(entered.wait(), timeout=2)
+    finally:
+        release.set()
+        if holder:
+            await holder.__aexit__(None, None, None)
+        await asyncio.wait_for(task, timeout=2)
+    assert not any(scheduler.snapshot()["requests"].values())
+    assert not any(scheduler.snapshot()["leases"].values())
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_io_retry_retains_cleanup(tmp_path, mocker):
+    scheduler = make_scheduler(tmp_path / "scheduler.json")
+    original = scheduler._dispatch_transaction
+    failed = threading.Event()
+    recover = threading.Event()
+
+    def transaction(*args):
+        if not recover.is_set():
+            failed.set()
+            raise OSError("storage offline")
+        return original(*args)
+
+    mocker.patch.object(scheduler, "_dispatch_transaction", side_effect=transaction)
+
+    async def operation():
+        async with scheduler.slot("model", descriptor="ollama/test"):
+            pytest.fail("Cancelled operation must not start")
+
+    task = asyncio.create_task(operation())
+    try:
+        await eventually(failed.is_set)
+        task.cancel()
+        recover.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=2)
+    finally:
+        recover.set()
+    await eventually(lambda: scheduler._dispatcher is None)
+    assert not any(scheduler.snapshot()["requests"].values())
+    assert not any(scheduler.snapshot()["leases"].values())
+
+
+@pytest.mark.asyncio
+async def test_failed_release_remains_tracked_until_storage_recovers(tmp_path, mocker):
+    scheduler = make_scheduler(tmp_path / "scheduler.json")
+    holder = scheduler.slot("model", descriptor="ollama/test", affinity_key="prefix")
+    await holder.__aenter__()
+    original = scheduler._dispatch_transaction
+    unavailable = threading.Event()
+    unavailable.set()
+
+    def transaction(*args):
+        if unavailable.is_set():
+            raise OSError("storage offline during release")
+        return original(*args)
+
+    mocker.patch.object(scheduler, "_dispatch_transaction", side_effect=transaction)
+    try:
+        with pytest.raises(OSError, match="during release"):
+            await asyncio.wait_for(holder.__aexit__(None, None, None), timeout=2)
+        assert scheduler._slots
+    finally:
+        unavailable.clear()
+    await eventually(lambda: scheduler._dispatcher is None)
+    state = scheduler.snapshot()
+    assert not any(state["leases"].values())
+    assert state["exclusive_affinity"] is None
+
+
+@pytest.mark.asyncio
+async def test_non_io_failure_is_not_retried(tmp_path, mocker):
+    scheduler = make_scheduler(tmp_path / "scheduler.json")
+    original = scheduler._dispatch_transaction
+    attempts = 0
+
+    def transaction(*args):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ValueError("invalid scheduler state")
+        return original(*args)
+
+    mocker.patch.object(scheduler, "_dispatch_transaction", side_effect=transaction)
+    with pytest.raises(ValueError, match="invalid scheduler state"):
+        async with scheduler.slot("model", descriptor="ollama/test"):
+            pytest.fail("Non-I/O failures must propagate")
+    assert attempts == 2  # One failed dispatch and the retained cleanup fallback.
+    assert scheduler._dispatcher is None
 
 
 @pytest.mark.asyncio

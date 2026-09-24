@@ -476,6 +476,11 @@ batches registrations, releases and heartbeats under one shared-state lock;
 arrivals and completions wake it immediately. While requests wait, it polls
 at the configured interval for capacity changes in other processes. With only
 running work it wakes for heartbeats; with no work it exits and restarts on demand.
+Scheduler-state I/O failures allow three consecutive attempts before failing waiting
+callers. Running jobs remain tracked, and the dispatcher continues heartbeat and
+cleanup attempts. Retried registrations are idempotent even if an earlier write
+was published before reporting an error. Persistent storage outages can still
+exceed the shared lease lifetime; retries do not change lease-expiry policy.
 
 Scheduler waiting and provider request timeouts are separate.
 Use the shared transient-error retry mechanism and keep provider

@@ -470,8 +470,17 @@ class Scheduler:
                 self._policy.remove_request(
                     state, resource=request.resource, request_id=request.request_id,
                 )
+            existing_ids = {
+                item["request_id"]
+                for pools in (state["requests"], state["leases"])
+                for pool in pools.values() for item in pool
+            }
             for request in additions:
-                state["requests"][request.resource].append(asdict(request))
+                # A write can succeed before fsync/unlock reports an I/O error.
+                # Retrying must not duplicate a queued or already granted request.
+                if request.request_id not in existing_ids:
+                    state["requests"][request.resource].append(asdict(request))
+                    existing_ids.add(request.request_id)
             arrival_counts = self._counts(state)
             arrival_active = self._active_local_descriptors(state)
             if heartbeat:
@@ -511,6 +520,7 @@ class Scheduler:
         """The only polling/heartbeat loop, independent of callers' event loops."""
         heartbeat_interval = max(0.01, self.lease_max_age / 3)
         next_heartbeat = time.monotonic() + heartbeat_interval
+        io_failures = 0
         try:
             while True:
                 with self._condition:
@@ -530,11 +540,29 @@ class Scheduler:
                                  if not entry.registered and not entry.closing]
                     heartbeat = now >= next_heartbeat
 
-                result = self._dispatch_transaction(
-                    [entry.request for entry in additions],
-                    [(entry.request, entry.succeeded) for entry in finished],
-                    {entry.request.request_id for entry in entries}, heartbeat,
-                )
+                try:
+                    result = self._dispatch_transaction(
+                        [entry.request for entry in additions],
+                        [(entry.request, entry.succeeded) for entry in finished],
+                        {entry.request.request_id for entry in entries}, heartbeat,
+                    )
+                except OSError as error:
+                    io_failures += 1
+                    logger.warning("Scheduler I/O attempt %d failed: %s", io_failures, error)
+                    if io_failures >= 3:
+                        with self._condition:
+                            for entry in entries:
+                                if entry.lease is None or entry.closing:
+                                    entry.closing = True
+                                    if not entry.granted.done():
+                                        entry.granted.set_exception(error)
+                                    if not entry.released.done():
+                                        entry.released.set_exception(error)
+                    # Keep running leases and pending cleanup owned by this loop.
+                    # No grants are delivered until shared state is usable again.
+                    time.sleep(min(self.poll_interval, heartbeat_interval))
+                    continue
+                io_failures = 0
                 if heartbeat:
                     next_heartbeat = time.monotonic() + heartbeat_interval
                 with self._condition:
@@ -564,7 +592,8 @@ class Scheduler:
                             ))
                         elif not entry.granted.done():
                             entry.granted.cancel()
-                        entry.released.set_result(None)
+                        if not entry.released.done():
+                            entry.released.set_result(None)
                     if not self._slots:
                         self._dispatcher = None
                         return
@@ -584,7 +613,8 @@ class Scheduler:
                 for entry in entries:
                     if not entry.granted.done():
                         entry.granted.set_exception(error)
-                    entry.released.set_exception(error)
+                    if not entry.released.done():
+                        entry.released.set_exception(error)
 
     def snapshot(self) -> dict:
         """Return cleaned scheduler state for diagnostics and tests."""
@@ -756,11 +786,14 @@ class Scheduler:
             try:
                 await asyncio.shield(asyncio.wrap_future(entry.released))
             except Exception:
-                # A failed dispatcher cannot service cleanup. Release only
-                # when this caller exits, never while its operation is running.
-                await asyncio.to_thread(
-                    self._dispatch_transaction, [], [(request, succeeded)], set(), False,
-                )
+                # I/O failures leave cleanup with the dispatcher. Only a fatal
+                # dispatcher exit needs this fallback once the caller exits.
+                with self._condition:
+                    tracked = request.request_id in self._slots
+                if not tracked:
+                    await asyncio.to_thread(
+                        self._dispatch_transaction, [], [(request, succeeded)], set(), False,
+                    )
                 raise
 
 
