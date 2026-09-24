@@ -5,7 +5,8 @@ import json
 from datetime import date, datetime
 from typing import Any
 
-from lib.captable.model import Note, convert_in_round, loan_balance, stamp_duty
+from lib.captable.model import convert_in_round, stamp_duty
+from lib.captable.notes import existing_shares, normalize_currency, notes_from_snapshot, notes_in_currency
 from lib.captable.rubric import apply_rubric, ownership_by_role, founder_ownership_pct
 from lib.captable.data import data_fingerprint, TOOL_VERSION
 from lib.captable.insights import select_consolidated, read_build_insight
@@ -38,42 +39,12 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
-def _existing_shares(snapshot: dict[str, Any]) -> dict[str, float]:
-    """Pre-round fully-diluted shares per holder (treasury excluded).
-
-    Pool/reserved positions still dilute, but they are not shareholders —
-    label them so scenario ownership tables don't list them beside people.
-    """
-    shares: dict[str, float] = {}
-    for stakeholder in snapshot.get("stakeholders", []):
-        if stakeholder.get("kind") == "treasury":
-            continue
-        diluted = stakeholder.get("diluted_count")
-        if diluted is None:
-            diluted = sum(
-                h.get("count") or 0.0
-                for h in stakeholder.get("holdings", [])
-            )
-        if diluted:
-            name = stakeholder.get("name", "unknown")
-            if stakeholder.get("kind") in ("pool", "authorized_capital"):
-                name = f"[reserved pool] {name}"
-            shares[name] = diluted
-    return shares
-
-
-def _normalize_currency(value: Any) -> str | None:
-    if isinstance(value, str) and value.strip():
-        return value.strip().upper()
-    return None
-
-
 def parse_fx_rates(entries: list[str] | None) -> dict[str, float]:
     """Parse ``CUR=RATE`` entries: units of the scenario currency per 1 CUR."""
     rates: dict[str, float] = {}
     for entry in entries or []:
         code, separator, rate = str(entry).partition("=")
-        currency = _normalize_currency(code)
+        currency = normalize_currency(code)
         if not separator or not currency:
             raise ValueError(
                 f"FX rate must look like USD=0.88, got {entry!r}."
@@ -90,157 +61,6 @@ def parse_fx_rates(entries: list[str] | None) -> dict[str, float]:
             )
         rates[currency] = value
     return rates
-
-
-def _notes_in_currency(
-    notes: list[Note], target: str, fx_rates: dict[str, float]
-) -> tuple[list[Note], list[Note], list[str]]:
-    """Express every note in ``target``; notes without a rate are set aside.
-
-    Balances, caps and floors are money amounts in the loan currency, so
-    all three convert at the same rate. Mixing currencies without
-    conversion would misstate dilution, so unconvertible notes are never
-    silently summed with the rest.
-    """
-    converted: list[Note] = []
-    unconverted: list[Note] = []
-    assumptions: list[str] = []
-    for note in notes:
-        if note.currency is None:
-            assumptions.append(
-                f"{note.label}: loan currency unstated; {target} assumed."
-            )
-            converted.append(note)
-        elif note.currency == target:
-            converted.append(note)
-        elif note.currency in fx_rates:
-            rate = fx_rates[note.currency]
-            converted.append(
-                Note(
-                    label=note.label,
-                    balance=note.balance * rate,
-                    cap=note.cap * rate if note.cap else note.cap,
-                    discount_pct=note.discount_pct,
-                    floor=note.floor * rate if note.floor else note.floor,
-                    currency=target,
-                    denominator_shares=note.denominator_shares,
-                )
-            )
-            assumptions.append(
-                f"{note.label}: {note.currency} balance, cap and floor "
-                f"converted to {target} at the supplied rate "
-                f"{rate} {target} per 1 {note.currency}."
-            )
-        else:
-            unconverted.append(note)
-    return converted, unconverted, assumptions
-
-
-def _notes_from_snapshot(
-    snapshot: dict[str, Any], valuation_date: date
-) -> tuple[list[Note], list[str]]:
-    notes: list[Note] = []
-    assumptions: list[str] = []
-    for cla in snapshot.get("convertibles", []):
-        if cla.get("status") != "executed":
-            continue
-        principal = _value(cla.get("principal_total"))
-        if not principal:
-            continue
-        rate = _value(cla.get("interest_rate_pct")) or 0.0
-        if _value(cla.get("interest_mode")) == "safe_harbor_capped":
-            safe_harbor = _value(cla.get("interest_safe_harbor_rate_pct"))
-            if safe_harbor is not None and safe_harbor < rate:
-                assumptions.append(
-                    f"{cla.get('document')}: interest is the LOWER of the "
-                    f"stated {rate}% and the tax safe-harbor rate; computed "
-                    f"with the document's safe-harbor figure ({safe_harbor}%)."
-                    " The safe-harbor rate is set yearly — verify the "
-                    "currently applicable ESTV rate."
-                )
-                rate = safe_harbor
-            elif safe_harbor is None:
-                assumptions.append(
-                    f"{cla.get('document')}: interest is capped at the tax "
-                    f"safe-harbor rate, which the document does not quantify;"
-                    f" computed with the stated {rate}% ceiling, which likely"
-                    " OVERSTATES the balance — obtain the applicable ESTV "
-                    "safe-harbor rate."
-                )
-        day_count = _value(cla.get("interest_day_count"))
-        if day_count in (None, "unstated"):
-            day_count = "act/365"
-            assumptions.append(
-                f"{cla.get('document')}: day count unstated; act/365 assumed."
-            )
-        compounding = _value(cla.get("interest_compounding"))
-        if compounding in (None, "unstated"):
-            compounding = "simple"
-            assumptions.append(
-                f"{cla.get('document')}: compounding unstated; simple assumed."
-            )
-        elif compounding == "compound_other":
-            assumptions.append(
-                f"{cla.get('document')}: non-annual compounding stated; "
-                "computed as ANNUAL compounding (approximation, slightly "
-                "understates the balance)."
-            )
-        start = _parse_date(_value(cla.get("execution_date")))
-        if start is None:
-            start = valuation_date
-            assumptions.append(
-                f"{cla.get('document')}: execution date unparseable; "
-                "no interest accrued in the scenarios."
-            )
-        elif start > valuation_date:
-            start = valuation_date
-            assumptions.append(
-                f"{cla.get('document')}: execution date "
-                f"{_value(cla.get('execution_date'))!r} lies after the "
-                "valuation date (typo/OCR?); no interest accrued."
-            )
-        balance = loan_balance(
-            float(principal),
-            float(rate),
-            start,
-            valuation_date,
-            day_count=day_count,
-            compounding="compound_annual"
-            if str(compounding).startswith("compound")
-            else "simple",
-        )
-        basis = _value(cla.get("denominator_basis"))
-        denominator = None
-        if basis == "issued_and_outstanding":
-            denominator = sum(
-                h.get("count") or 0.0
-                for holder in snapshot.get("stakeholders", [])
-                if holder.get("kind") not in ("treasury", "pool", "authorized_capital")
-                for h in holder.get("holdings", [])
-            )
-            if denominator <= 0:
-                raise ValueError(f"{cla.get('document')}: no issued and outstanding shares for conversion.")
-        elif basis not in (None, "unstated", "fully_diluted"):
-            raise ValueError(f"Unsupported conversion denominator: {basis!r}")
-        elif basis in (None, "unstated") and (
-            _value(cla.get("valuation_cap")) or _value(cla.get("valuation_floor"))
-        ):
-            assumptions.append(f"{cla.get('document')}: cap/floor denominator unstated; pre-round fully diluted shares assumed.")
-        notes.append(
-            Note(
-                label=f"lenders of {cla.get('document')}",
-                balance=balance,
-                cap=_value(cla.get("valuation_cap")),
-                discount_pct=_value(cla.get("discount_pct")),
-                floor=_value(cla.get("valuation_floor")),
-                denominator_shares=denominator,
-                currency=_normalize_currency(
-                    _value(cla.get("principal_currency"))
-                    or _value(cla.get("currency"))
-                ),
-            )
-        )
-    return notes, assumptions
 
 
 def build_scenarios(
@@ -268,16 +88,16 @@ def build_scenarios(
         f"{valuation_date}; the snapshot itself describes the company as "
         f"of {snapshot.get('as_of_date', 'unknown')}."
     ]
-    notes, note_assumptions = _notes_from_snapshot(snapshot, valuation_date)
+    notes, note_assumptions = notes_from_snapshot(snapshot, valuation_date)
     assumptions += note_assumptions
 
     fx_rates = {
-        _normalize_currency(code): float(rate)
+        normalize_currency(code): float(rate)
         for code, rate in (fx_rates or {}).items()
     }
     stated_currencies = sorted({n.currency for n in notes if n.currency})
     if currency:
-        target_currency = _normalize_currency(currency)
+        target_currency = normalize_currency(currency)
     elif len(stated_currencies) == 1:
         target_currency = stated_currencies[0]
     else:
@@ -293,7 +113,7 @@ def build_scenarios(
             assumptions.append(
                 "No loan currency stated; CHF assumed for every figure."
             )
-    scenario_notes, unconverted, fx_assumptions = _notes_in_currency(
+    scenario_notes, unconverted, fx_assumptions = notes_in_currency(
         notes, target_currency, fx_rates
     )
     assumptions += fx_assumptions
@@ -326,7 +146,7 @@ def build_scenarios(
         minimum = _value(cla.get("qefr_min_raise"))
         if cla.get("status") != "executed" or not minimum:
             continue
-        loan_currency = _normalize_currency(
+        loan_currency = normalize_currency(
             _value(cla.get("principal_currency")) or _value(cla.get("currency"))
         )
         if loan_currency in (None, target_currency):
@@ -362,7 +182,7 @@ def build_scenarios(
             else f"Hypothetical round size set to {settings['fallback_investment_pct']:g}% of pre-money."
         )
 
-    existing = _existing_shares(snapshot)
+    existing = existing_shares(snapshot)
 
     # A fixed maturity conversion price governs conversion AFTER maturity;
     # the discount/cap scenario prices apply to round conversions only.
@@ -388,7 +208,7 @@ def build_scenarios(
             {
                 "document": cla.get("document"),
                 # all three figures are in the LOAN's currency, unconverted
-                "currency": _normalize_currency(
+                "currency": normalize_currency(
                     _value(cla.get("principal_currency"))
                     or _value(cla.get("currency"))
                 ),

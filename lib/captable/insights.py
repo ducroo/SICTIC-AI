@@ -44,6 +44,10 @@ def configured_build_insight(dataset: str, identifier: str, *inputs: InsightFile
     return build_insight(dataset, identifier, key)
 
 
+class ConsolidatedUnavailable(ValueError):
+    """No reusable consolidated snapshot: absent or stale, as opposed to malformed."""
+
+
 def select_consolidated(dataset: str) -> InsightFile:
     """Read reusable consolidated data and dependencies without generating anything."""
     preferred = build_insight(dataset, "consolidated").find(selection="any")
@@ -54,7 +58,7 @@ def select_consolidated(dataset: str) -> InsightFile:
     def select(identifier: str, *inputs: InsightFile) -> InsightFile:
         insight = configured_build_insight(dataset, identifier, *inputs).find(selection="reusable")
         if insight is None:
-            raise ValueError(f"No consolidated cap-table insight with reusable {identifier} for {dataset!r}; run captable_build first.")
+            raise ConsolidatedUnavailable(f"No consolidated cap-table insight with reusable {identifier} for {dataset!r}; run captable_build first.")
         read_build_insight(insight)
         return insight
 
