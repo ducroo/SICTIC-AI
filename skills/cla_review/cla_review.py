@@ -377,6 +377,8 @@ def _plain(value: Any) -> Any:
         return ", ".join(str(_plain(item)) for item in value)
     if value is None:
         return "none"
+    if isinstance(value, float) and value.is_integer():
+        return _money(value)
     return value
 
 

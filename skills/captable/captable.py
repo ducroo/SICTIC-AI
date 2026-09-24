@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Any
 
 from lib.captable.model import convert_in_round, stamp_duty
-from lib.captable.notes import existing_shares, normalize_currency, notes_from_snapshot, notes_in_currency
+from lib.captable.notes import _parse_date, _value, existing_shares, normalize_currency, notes_from_snapshot, notes_in_currency
 from lib.captable.rubric import apply_rubric, ownership_by_role, founder_ownership_pct
 from lib.captable.data import data_fingerprint, TOOL_VERSION
 from lib.captable.insights import select_consolidated, read_build_insight
@@ -18,25 +18,6 @@ from lib.insights import InsightFile
 from lib.model_config import llm_model
 
 logger = get_logger(__name__)
-
-
-def _value(entry: Any) -> Any:
-    if isinstance(entry, dict) and "value" in entry:
-        return entry["value"]
-    return entry
-
-
-def _parse_date(value: Any) -> date | None:
-    from lib.captable.data import normalize_iso_date
-
-    value = normalize_iso_date(value) if isinstance(value, str) else value
-    if isinstance(value, str):
-        for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-            try:
-                return datetime.strptime(value, fmt).date()
-            except ValueError:
-                continue
-    return None
 
 
 def parse_fx_rates(entries: list[str] | None) -> dict[str, float]:

@@ -97,12 +97,15 @@ def resolve_inputs(
     else:
         inputs["other_new_lenders"] = _input(None, ASSUMPTION, "unknown without an aggregate amount; not modelled")
 
-    round_investment = v("qefr_min_raise")
+    new_money, raise_threshold = v("qefr_min_new_money"), v("qefr_min_raise")
+    round_investment = new_money if new_money is not None else raise_threshold
     inputs["round_investment"] = _input(
         float(round_investment) if round_investment is not None else None,
         ASSUMPTION,
-        "the qualified-financing minimum taken as the size of the next round" if round_investment is not None
-        else "no qualified-financing threshold stated",
+        "the qualified-financing minimum of NEW money taken as the size of the next round" if new_money is not None
+        else ("the qualified-financing threshold taken as the size of the next round; if that threshold counts the "
+              "converting loans, new money is smaller and the new investor's share and the stamp duty are overstated")
+        if raise_threshold is not None else "no qualified-financing threshold stated",
     )
     if round_investment is None:
         omitted.append({"calculation": "my conversion", "reason": "no round size: the term sheet states no qualified-financing threshold"})
@@ -253,8 +256,8 @@ def my_conversion(
             "cumulative_paid_in_before": round(paid_in, 2),
             "round_contribution": round(round_investment + converting, 2),
             "duty": round(stamp_duty(paid_in, round_investment + converting), 2),
-            "note": "1% issuance stamp duty above the CHF 1M lifetime exemption on the new money plus every converting balance; "
-                    "the company pays it, so it dilutes nobody but reduces the proceeds",
+            "note": "1% issuance stamp duty above the CHF 1M lifetime exemption on the new money plus every converting balance "
+                    "at the run date; the company pays it, so it dilutes nobody but reduces the proceeds",
         }
     else:
         result["omitted"].append({"calculation": "stamp duty", "reason": f"only computed for CHF; the term sheet is in {currency}"})

@@ -321,6 +321,8 @@ def _executed_fixture_cla(dataset: str) -> dict:
 
 
 def _write_consolidated(dataset: str, *, model: str = "manual", broken: bool = False) -> InsightFile:
+    """A valid consolidated snapshot: the smoke conftest's cap table (1,000,000 fully diluted) plus the fixture's executed CLA;
+    the figures asserted below (share counts, 10/20 counts) follow from those two fixtures."""
     from tests.skill_harness.conftest import _captable_extraction
     from tests.skills.test_captable_build import _consolidated_artifact
 
@@ -344,7 +346,7 @@ async def test_reusable_snapshot_yields_question_2(mock_env, monkeypatch):
     assert "## Question 2 — the terms in this company" in content
     assert "Insufficient evidence" not in content
     assert "### Inputs, resolved before any number" in content
-    assert "| ticket | 25000.0 | explicit |" in content
+    assert "| ticket | 25,000 | explicit |" in content
     assert "Cap and discount cross at a pre-money valuation of 15,000,000" in content
     assert "| synthetic_cla.md | executed loan | Petra Muster, Bruno Muster |" in content
     assert "### 10/20 non-bank rules" in content and "After 5 members join on these terms | 6 | within | 8 | within" in content
