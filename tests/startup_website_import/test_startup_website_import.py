@@ -96,7 +96,6 @@ def test_startup_website_import_crawls_pages_pdfs_and_link_manifest(mock_env):
         }
     )
     storage = get_storage()
-    storage.write_text("storage/startups/example/datasets/website/stale.md", "old")
 
     result = startup_website_import(
         "Example",
@@ -111,7 +110,6 @@ def test_startup_website_import_crawls_pages_pdfs_and_link_manifest(mock_env):
     assert result.linkedin_urls_found == 3
     assert result.failed_pages == 1
     assert not storage.exists("storage/startups/example/datasets/__active_dataset__.md")
-    assert not storage.exists("storage/startups/example/datasets/website/stale.md")
     assert not storage.exists("cache/startup_website_import/example/website")
     assert storage.exists("storage/startups/example/datasets/website/index.md")
     assert storage.exists("storage/startups/example/datasets/website/about.md")
@@ -190,7 +188,7 @@ def test_startup_website_import_can_disable_pdfs_and_depth(mock_env):
     assert not storage.exists("storage/startups/example/datasets/website/pdfs/deck.pdf")
 
 
-def test_startup_website_import_preserves_existing_website_when_no_pages_saved(mock_env):
+def test_startup_website_import_preserves_other_sources_when_no_pages_saved(mock_env):
     session = FakeSession(
         {
             "https://example.com/robots.txt": FakeResponse(
@@ -201,7 +199,7 @@ def test_startup_website_import_preserves_existing_website_when_no_pages_saved(m
         }
     )
     storage = get_storage()
-    storage.write_text("storage/startups/example/datasets/website/stale.md", "old")
+    storage.write_text("storage/startups/example/datasets/data-room/existing.md", "old")
 
     with pytest.raises(InfrastructureError, match="saved no HTML pages") as caught:
         startup_website_import(
@@ -214,8 +212,101 @@ def test_startup_website_import_preserves_existing_website_when_no_pages_saved(m
     assert isinstance(caught.value, RuntimeError)
     assert caught.value.provider == "website"
     assert caught.value.kind == InfrastructureErrorKind.SERVICE_UNAVAILABLE
-    assert storage.read_text("storage/startups/example/datasets/website/stale.md") == "old"
+    assert storage.read_text("storage/startups/example/datasets/data-room/existing.md") == "old"
     assert not storage.exists("cache/startup_website_import/example/website")
+
+
+@pytest.mark.parametrize("url", [None, "https://example.com", "https://different.example"])
+def test_existing_snapshot_never_scraped_again(mock_env, url):
+    storage = get_storage()
+    path = "storage/startups/example/datasets/website/index.md"
+    storage.write_text(path, "Original snapshot")
+    before = storage.mtime(path)
+    session = FakeSession({})
+    result = startup_website_import("Example", url, session=session, storage=storage)
+    assert result.skipped_reason == "Website already imported"
+    assert result.pages_saved == 0
+    assert session.requested == []
+    assert storage.read_text(path) == "Original snapshot"
+    assert storage.mtime(path) == before
+
+
+def test_optional_url_uses_documented_website_then_reuses_snapshot(mock_env):
+    storage = get_storage()
+    storage.write_text("storage/startups/example/datasets/application.md", "Website: https://example.com")
+    session = FakeSession({"https://example.com/": FakeResponse("<h1>Example</h1>")})
+    result = startup_website_import("Example", session=session, respect_robots=False)
+    assert result.pages_saved == 1
+    assert session.requested == ["https://example.com/"]
+    second = startup_website_import("Example", session=session, respect_robots=False)
+    assert second.skipped_reason == "Website already imported"
+    assert session.requested == ["https://example.com/"]
+
+
+def test_missing_or_ambiguous_url_does_not_guess(mock_env):
+    storage = get_storage()
+    session = FakeSession({})
+    result = startup_website_import("Example", session=session)
+    assert result.skipped_reason == "No unambiguous documented website"
+    storage.write_text("storage/startups/example/datasets/application.md",
+                       "Website: https://one.example\nWebsite: https://two.example")
+    result = startup_website_import("Example", session=session)
+    assert result.skipped_reason == "No unambiguous documented website"
+    assert session.requested == []
+
+
+def test_cli_accepts_startup_without_url_and_reports_skip(mock_env):
+    from typer.testing import CliRunner
+    from skills.startup_website_import.__main__ import app
+    get_storage().write_text("storage/startups/example/datasets/website/index.md", "Saved page")
+    result = CliRunner().invoke(app, ["Example"])
+    assert result.exit_code == 0
+    assert "Website already imported" in result.output
+
+
+def test_snapshot_check_precedes_url_resolution_and_option_validation(mock_env, mocker):
+    storage = get_storage()
+    storage.write_text("storage/startups/example/datasets/website/index.md", "Saved")
+    config = mocker.patch("skills.startup_website_import.startup_website_import.load_repository_config")
+    result = startup_website_import("Example", "invalid", depth=-1, max_pages=0)
+    assert result.skipped_reason == "Website already imported"
+    config.assert_not_called()
+
+
+def test_concurrent_calls_only_scrape_once(mock_env):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+    started, release = Event(), Event()
+
+    class BlockingSession(FakeSession):
+        def get(self, url, **kwargs):
+            started.set()
+            assert release.wait(5)
+            return super().get(url, **kwargs)
+
+    session = BlockingSession({"https://example.com/": FakeResponse("<h1>Example</h1>")})
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(startup_website_import, "Example", "https://example.com",
+                                session=session, respect_robots=False)
+        assert started.wait(5)
+        second = executor.submit(startup_website_import, "Example", "https://example.com",
+                                 session=session, respect_robots=False)
+        release.set()
+        assert first.result().pages_saved == 1
+        assert second.result().skipped_reason == "Website already imported"
+    assert session.requested == ["https://example.com/"]
+
+
+def test_failed_publication_leaves_no_partial_snapshot_and_can_retry(mock_env, mocker):
+    import importlib
+    module = importlib.import_module("skills.startup_website_import.startup_website_import")
+    session = FakeSession({"https://example.com/": FakeResponse("<h1>Example</h1>")})
+    publish = mocker.patch.object(module, "replace_directory_snapshot", side_effect=OSError("disk error"))
+    with pytest.raises(OSError, match="disk error"):
+        startup_website_import("Example", "https://example.com", session=session, respect_robots=False)
+    assert not get_storage().exists("storage/startups/example/datasets/website")
+    mocker.stop(publish)
+    assert startup_website_import("Example", "https://example.com", session=session, respect_robots=False).pages_saved == 1
 
 
 def test_startup_website_import_keeps_colliding_paths_distinct(mock_env):

@@ -263,6 +263,51 @@ def test_dealum_stage_and_operational_dates_do_not_change_snapshot(
     assert manifest["step"] == "Under review"
 
 
+def test_unchanged_dealum_sources_are_not_replaced(mock_env, mocker):
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    storage = get_storage()
+    source = "storage/startups/avientus/datasets/dealum/documents/financialplan.xlsx"
+    storage.set_mtime(first.application_path, 1_000_000_000)
+    storage.set_mtime(source, 1_000_000_001)
+    from pathlib import Path
+    before = Path(storage.local_path(source)).stat().st_ino
+    before_ctime = Path(storage.local_path(source)).stat().st_ctime_ns
+    swap = mocker.patch("lib.startups.dealum.importing._replace_directory_snapshot")
+    import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    assert storage.mtime(first.application_path) == 1_000_000_000
+    assert storage.mtime(source) == 1_000_000_001
+    assert Path(storage.local_path(source)).stat().st_ino == before
+    assert Path(storage.local_path(source)).stat().st_ctime_ns == before_ctime
+    swap.assert_not_called()
+
+
+def test_partial_dealum_update_reuses_unchanged_attachments(mock_env):
+    from pathlib import Path
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    storage = get_storage()
+    source = "storage/startups/avientus/datasets/dealum/documents/financialplan.xlsx"
+    storage.set_mtime(source, 1_000_000_001)
+    before_inode = Path(storage.local_path(source)).stat().st_ino
+    old_application = storage.read_text(first.application_path)
+    changed = {**APPLICATION, "answers": {**APPLICATION["answers"], "description": "New substantive business evidence"}}
+    result = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(changed))
+    assert result.changed
+    assert storage.read_text(result.application_path) != old_application
+    assert storage.mtime(source) == 1_000_000_001
+    assert Path(storage.local_path(source)).stat().st_ino == before_inode
+
+
+def test_bulk_session_reuses_import_without_changing_direct_import_behavior(mock_env):
+    from lib.startups.dealum.session import dealum_session
+    adapter = FakeDealumAdapter()
+    with dealum_session():
+        first = import_startup_from_dealum("Avientus", adapter=adapter, activate=False)
+        second = import_startup_from_dealum("Avientus", adapter=adapter, activate=False)
+        assert first is second
+    third = import_startup_from_dealum("Avientus", adapter=adapter, activate=False)
+    assert third is not first
+
+
 def test_dealum_rotated_attachment_url_does_not_change_snapshot(
     mock_env,
 ):

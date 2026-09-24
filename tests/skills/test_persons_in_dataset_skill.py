@@ -251,7 +251,7 @@ async def test_unexpected_profile_error_still_prevents_save(discovery):
 async def test_documented_website_import_uses_existing_skill(discovery):
     discovery.website_from_evidence.return_value = "https://acme.example"
     await discovery.persons_in_dataset("acme")
-    discovery.startup_website_import.assert_called_once_with("acme", "https://acme.example", depth=2, max_pages=30, include_pdfs=False)
+    discovery.startup_website_import.assert_called_once_with("acme", "https://acme.example")
     assert discovery._scan.call_count == 2
 
 

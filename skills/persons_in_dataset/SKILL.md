@@ -49,10 +49,10 @@ Existing manual rosters are not migrated, deleted or automatically regenerated.
    or page count. Keep the top `ner_max_candidates` (default 30); ties sort by
    name and canonical identifier. Explicit LinkedIn IDs and email candidates
    survive independently. The extractor itself still returns the full inventory.
-5. Select an unambiguous website documented in the dataset. If no website
-   snapshot exists, use the existing website-import skill with configured crawl
-   limits and no PDFs, then synchronize and scan the resulting source material.
-   Existing website snapshots are reused. Missing/ambiguous URLs are logged.
+5. Select an unambiguous website documented in the dataset. Call the canonical
+   website-import skill, which owns the one-time snapshot guard and shared crawl
+   configuration (including PDFs), then synchronize and scan newly acquired source material.
+   Existing website snapshots are reused even for explicit URL calls. Missing/ambiguous URLs are logged.
    Names from imported `website/` sources survive the NER cutoff. Cached profiles
    and company-wide LinkedIn search discoveries are also independent of the cutoff.
 6. Make one company-wide query through the LinkedIn module and shared Apify-backed

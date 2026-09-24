@@ -36,6 +36,7 @@ from lib.startups.dealum import (
     reconcile_dealum_startup,
 )
 from lib.storage import get_storage
+from lib.startups.dealum.session import list_applications
 
 logger = get_logger(__name__)
 
@@ -613,7 +614,7 @@ async def submission_ready(
     try:
         applications = await _retry(
             "Dealum application discovery",
-            adapter.list_applications,
+            lambda: list_applications(adapter),
         )
     except Exception as error:
         failure = SubmissionReadyResult(

@@ -19,6 +19,8 @@ are timestamped.
 
 Select only Application and Under review. Named requests force a Dealum import;
 automatic batches apply the six-hour per-startup gate and run sequentially.
+Within bulk refresh, reuse that run's application snapshot and successful import
+instead of acquiring the same submission twice. Standalone named calls still import.
 Import preserves the prior snapshot until attachments have downloaded.
 Synchronize before the checklist audit. No profile skill is a registry prerequisite.
 

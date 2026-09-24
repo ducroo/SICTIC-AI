@@ -1,5 +1,7 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
+from lib.startups.dealum.stages import PITCHED_STAGE, RESEARCH_STAGES
+from skills.startup_website_import.startup_website_import import startup_website_import
 
 from skills.captable.captable import captable
 from skills.captable_build.captable_build import captable_build
@@ -19,7 +21,7 @@ from skills.team_profile.team_profile import team_profile
 from skills.team_profile_revised.team_profile_revised import team_profile_revised
 
 
-SkillCallable = Callable[[str], Awaitable[object]]
+SkillCallable = Callable[[str], object]
 
 
 @dataclass(frozen=True)
@@ -27,21 +29,33 @@ class SkillSpec:
     func: SkillCallable
     domains: frozenset[str]
     depends_on: tuple[str, ...] = ()
+    # "*" means every resolved stage; None means positively absent from Dealum.
+    mandatory_stages: frozenset[str | None] = frozenset()
+    prepares_sources: bool = False
 
 
 SKILL_REGISTRY = {
+    "startup-website-import": SkillSpec(
+        func=startup_website_import,
+        domains=frozenset({"startups"}),
+        mandatory_stages=RESEARCH_STAGES,
+        prepares_sources=True,
+    ),
     "startup-profile": SkillSpec(
         func=startup_profile,
         domains=frozenset({"startups"}),
+        mandatory_stages=frozenset({"*"}),
     ),
     "persons-in-dataset": SkillSpec(
         func=persons_in_dataset,
         domains=frozenset({"startups", "community"}),
+        mandatory_stages=frozenset({"*"}),
     ),
     "person-profile": SkillSpec(
         func=person_profile,
         domains=frozenset({"startups", "community"}),
         depends_on=("persons-in-dataset",),
+        mandatory_stages=frozenset({PITCHED_STAGE, None}),
     ),
     "team-profile": SkillSpec(
         func=team_profile,
@@ -57,6 +71,7 @@ SKILL_REGISTRY = {
         func=startup_traction,
         domains=frozenset({"startups"}),
         depends_on=("startup-profile",),
+        mandatory_stages=frozenset({PITCHED_STAGE, None}),
     ),
     "dd-checks": SkillSpec(
         func=dd_checks,
@@ -84,6 +99,7 @@ SKILL_REGISTRY = {
     "submission-ready": SkillSpec(
         func=submission_ready,
         domains=frozenset({"startups"}),
+        mandatory_stages=frozenset({"Under Review"}),
     ),
     "investor-profile": SkillSpec(
         func=investor_profile,
