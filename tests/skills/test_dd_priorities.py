@@ -50,9 +50,45 @@ async def test_dd_priorities_synthesizes_saved_dd_checks_report(
     path = insight.path
 
     assert path.startswith("storage/startups/avientus/insights/dd-priorities-")
+    # A manual report has no most-important-findings section and is used completely.
     assert "Cash is unverified" in prompts[0]
-    assert "up to eight" in prompts[0]
+    assert "up to five" in prompts[0]
     assert "Unverified liquidity" in get_storage().read_text(path)
+
+
+@pytest.mark.asyncio
+async def test_dd_priorities_uses_only_most_important_findings(
+    mock_env,
+    monkeypatch,
+):
+    _create_startup_dataset("avientus")
+    InsightFile("avientus", "dd_checks", "manual").save(
+        "# M&A Due Diligence Checks for Avientus\n\n"
+        "**Industry type:** software\n\n"
+        "## Most important findings\n\n"
+        "| Importance | No | Check | Status |\n"
+        "|---|---|---|---|\n"
+        "| 9 | 4.1.3 | Cash Position | Critical |\n\n"
+        "## Chapter: 1_elevator\n\n"
+        "| No | Check | Status | Importance |\n"
+        "|---|---|---|---|\n"
+        "| 1.1.1 | Pitch deck | Fine | 2 |\n"
+    )
+    prompts = []
+
+    async def fake_llm_chat(prompt):
+        prompts.append(prompt)
+        return "## 1. Unverified liquidity"
+
+    monkeypatch.setattr(
+        "skills.dd_priorities.dd_priorities.generate_markdown",
+        fake_llm_chat,
+    )
+
+    await dd_priorities("Avientus")
+
+    assert "| 9 | 4.1.3 | Cash Position | Critical |" in prompts[0]
+    assert "Pitch deck" not in prompts[0]
 
 
 @pytest.mark.asyncio

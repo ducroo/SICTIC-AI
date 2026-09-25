@@ -1,11 +1,11 @@
 ---
 name: dd_priorities
-description: Synthesize a saved DD checklist report into up to eight decision-relevant priorities. Use after dd_checks when the most material concerns and follow-up actions are needed.
+description: Merge the most important findings of a saved DD checklist report into up to five decision-relevant priorities, including risks that grow when findings occur together. Use after dd_checks when the most material concerns and follow-up actions are needed.
 ---
 
 # DD priorities
 
-Prioritize the concerns and evidence gaps in an existing DD report.
+Prioritize the most important concerns and evidence gaps in an existing DD report.
 
 ## Inputs and outputs
 
@@ -18,12 +18,20 @@ Resolve the canonical startup slug and read the preferred stored `dd_checks`
 report with `find(selection="any")`. Input selection does not establish freshness.
 The registry declares `dd-checks`; direct calls never rerun it.
 
-Read the report before checking manual-first output reuse. The cache covers
-indexed startup revisions, effective synthesis instructions and the actual report
-content. On a miss, send the complete report to `generate_markdown`.
+Take the report's most important findings through
+`dd_checks.most_important_findings`. These are the checks with the highest
+importance, sorted by it. A report without that section, such as a manual one,
+is used completely.
 
-The prompt asks for up to eight distinct concerns with supporting checklist IDs,
-citations and follow-ups. These semantic requirements are not mechanically verified.
+Read the report before checking manual-first output reuse. The cache covers
+indexed startup revisions, effective synthesis instructions and the selected
+findings. On a miss, send the findings to `generate_markdown`.
+
+The prompt asks for up to five distinct priorities: merge findings about the
+same issue, name combinations that make a risk larger, and order the result by
+importance for the investment decision. Each priority keeps supporting check
+IDs, citations and follow-ups. These semantic requirements are not
+mechanically verified.
 
 ## Side effects and failure behavior
 

@@ -255,8 +255,10 @@ result and a nonempty error; no domain status is synthesized. Old audit formats
 are unsupported and require regeneration or replacement. Use
 `validate_audit_document(..., require_complete=True)` before final output, and
 `json_to_markdown_table` for tables whose columns follow schema properties and
-titles. The full stored audit is checked by the same `validate_json_schema`
-helper used by generation, using the envelope schema in `config/batch_audit/`
+titles. `ranked_checks_to_markdown_table` lists successful checks from several
+audits in one such table, sorted by a numeric result field such as an
+importance score and limited by a minimum value and a count. The full stored
+audit is checked by the same `validate_json_schema` helper used by generation, using the envelope schema in `config/batch_audit/`
 and the embedded assessment schema. Reuse and final output require null errors
 through that schema; there is no separate error-scanning validator. Generated
 results are not revalidated before saving. Structural
