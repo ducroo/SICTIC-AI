@@ -158,6 +158,11 @@ def skill_fixture_storage(monkeypatch, tmp_path) -> SkillHarnessFixtures:
         "| 4.1.3 | Cash Position | Not Found | Current cash is not verified. | "
         "Can cash be verified? |\n"
     )
+    InsightFile(fixtures.startup, "jury_rating", "manual").save(
+        "# Synthetic saved rating report\n\n"
+        "| Check | Status | Evidence |\n|---|---|---|\n"
+        "| synthetic-check | Found | Synthetic evidence excerpt |\n"
+    )
     get_storage().write_text(
         "storage/community/sictic-members/datasets/track-record/jane-doe.md",
         "Invested in fixture startups.",
@@ -242,6 +247,23 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
                 "rationale": "Complete.",
                 "eligibility_concerns": [],
                 "missing_or_inconsistent_information": [],
+            }
+        elif "sections" in properties:
+            result = {
+                "sections": [
+                    {
+                        "name": name,
+                        "summary": f"Synthetic summary for {name}.",
+                        "jury_questions": [],
+                        "evidence": ["Synthetic evidence excerpt"],
+                    }
+                    for name in (
+                        "Team",
+                        "Business opportunity",
+                        "Product",
+                        "Documentation",
+                    )
+                ]
             }
         else:
             raise AssertionError("Unexpected generated JSON schema")
@@ -348,6 +370,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     dd_priorities_mod = importlib.import_module(
         "skills.dd_priorities.dd_priorities"
     )
+    jury_priorities_mod = importlib.import_module(
+        "skills.jury_priorities.jury_priorities"
+    )
     deep_dive_invitation_mod = importlib.import_module(
         "skills.deep_dive_invitation.deep_dive_invitation"
     )
@@ -423,6 +448,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "generate_markdown",
         fake_llm_chat,
     )
+    monkeypatch.setattr(jury_priorities_mod, "generate_json", fake_generate_json)
     monkeypatch.setattr(sha_review_mod, "generate_json", fake_generate_json)
     monkeypatch.setattr(sha_review_mod, "generate_markdown", fake_llm_chat)
     monkeypatch.setattr(

@@ -70,6 +70,7 @@ def test_insight_skill_apis_declare_uniform_result_contract():
         "captable": "skills.captable.captable",
         "dd_checks": "skills.dd_checks.dd_checks",
         "dd_priorities": "skills.dd_priorities.dd_priorities",
+        "jury_priorities": "skills.jury_priorities.jury_priorities",
         "deep_dive_invitation": "skills.deep_dive_invitation.deep_dive_invitation",
         "expert_search": "skills.expert_search.expert_search",
         "investor_profile": "skills.investor_profile.investor_profile",
