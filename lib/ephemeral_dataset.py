@@ -3,6 +3,7 @@ from typing import List
 
 from lib.datasets.ingestion import sync_datasets
 from lib.infrastructure.qdrant import QdrantAdapter
+from lib.infrastructure.vector_store import get_vector_store, vector_store_backend
 from lib.infrastructure.logging import get_logger
 from lib.storage import get_storage
 from lib.datasets.paths import dataset_location_for_domain
@@ -25,8 +26,11 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     # 1. Cleanup previous run
     logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")
     try:
-        qdrant = QdrantAdapter(temp_name)
-        qdrant.delete_dataset()
+        if vector_store_backend() != "qdrant":
+            store = get_vector_store(temp_name)
+        else:
+            store = QdrantAdapter(temp_name)
+        store.delete_dataset()
     except Exception as e:
         logger.debug(f"Could not delete dataset index during cleanup: {e}")
     storage.rmtree(raw_dataset_rel)

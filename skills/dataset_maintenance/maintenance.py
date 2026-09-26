@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 from lib.infrastructure.qdrant import QdrantAdapter, QdrantAdmin
+from lib.infrastructure.vector_store import (
+    get_vector_store,
+    get_vector_store_admin,
+    vector_store_backend,
+)
 from lib.datasets.manifest import IngestionManifest
 from lib.infrastructure.logging import get_logger
 from lib.model_config import embedding_model
@@ -58,6 +63,14 @@ def _reset_manifest_index_state(
         manifest.indexed_dataset_revision = ""
         manifest.save()
     return documents_reset
+
+
+def _index_adapter(dataset: str, embeddings_model: str | None = None):
+    if vector_store_backend() != "qdrant":
+        return get_vector_store(dataset, embeddings_model=embeddings_model)
+    if embeddings_model is not None:
+        return QdrantAdapter(dataset, embeddings_model=embeddings_model)
+    return QdrantAdapter(dataset)
 
 
 @dataclass(frozen=True)
@@ -145,6 +158,9 @@ def delete_dataset_index(
             "Must provide either a dataset or an embeddings target to delete."
         )
 
+    if vector_store_backend() != "qdrant":
+        return _delete_saas_dataset_index(dataset, embeddings)
+
     admin = QdrantAdmin()
     all_collections = admin.list_collections()
     deleted = []
@@ -196,6 +212,39 @@ def delete_dataset_index(
     return deleted
 
 
+def _delete_saas_dataset_index(
+    dataset: Optional[str],
+    embeddings: Optional[str],
+) -> list[str]:
+    admin = get_vector_store_admin()
+    deleted: list[str] = []
+    if dataset and not embeddings:
+        dataset_slug = slugify(dataset)
+        adapter = _index_adapter(dataset_slug)
+        collection = adapter.collection_name
+        if adapter.delete_dataset():
+            deleted.append(collection)
+        storage = get_storage()
+        parsed_path = dataset_parsed_path(dataset_slug)
+        if storage.exists(parsed_path):
+            storage.rmtree(parsed_path)
+        return deleted
+    if dataset and embeddings:
+        dataset_slug = slugify(dataset)
+        adapter = _index_adapter(dataset_slug, embeddings)
+        if adapter.delete_dataset():
+            deleted.append(adapter.collection_name)
+        _reset_manifest_index_state(dataset_slug, embeddings=embeddings)
+        return deleted
+    collection = _index_adapter("dataset-maintenance", embeddings).collection_name
+    if collection in admin.list_collections():
+        admin.delete_collection(collection)
+        deleted.append(collection)
+        for dataset_name in list_all_dataset_names():
+            _reset_manifest_index_state(dataset_name, embeddings=embeddings)
+    return deleted
+
+
 def rebuild_dataset_index(
     dataset: str,
 ) -> IndexRebuild:
@@ -204,12 +253,12 @@ def rebuild_dataset_index(
         raise ValueError("Must provide --dataset/-d.")
 
     dataset_slug = slugify(dataset)
-    adapter = QdrantAdapter(dataset_slug)
+    adapter = _index_adapter(dataset_slug)
     collection = adapter.collection_name
     collection_deleted = adapter.delete_dataset()
     if collection_deleted:
         logger.info(
-            "Deleted dataset %s from shared Qdrant collection %s for rebuild.",
+            "Deleted dataset %s from collection %s for rebuild.",
             dataset_slug,
             collection,
         )

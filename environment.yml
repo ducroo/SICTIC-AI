@@ -25,6 +25,9 @@ dependencies:
   - spacy
   - typer<0.25
   - xlrd
+  # Optional SaaS backends (DOCUMENT_PARSER=llamaparse / VECTOR_STORE=firestore).  # pragma: allowlist secret
+  - google-cloud-firestore  # pragma: allowlist secret
+  - google-auth
 
   # LLM access
   - litellm>=1.97.0
@@ -52,5 +55,6 @@ dependencies:
   # conda-forge across all supported platforms.
   - pip:
       - apify-client
+      - 'llama-cloud>=2.8'  # pragma: allowlist secret
       - 'ocrmac>=1,<2; platform_system == "Darwin"'
       - 'onnxruntime; platform_system != "Darwin"'
