@@ -425,9 +425,10 @@ repairs unambiguous JSON syntax; `validate_json_schema` checks the contract
 without modifying data; an optional `Review` reviewer checks business rules.
 Reviewers receive schema-valid data, and generation validates their returned
 payload again. The provider response format omits unsupported `if`/`then`/`else`
-keywords; the prompt and local validator retain the full schema, including
-those conditional checks. Put nonblank-text constraints and structural field dependencies
-in schemas. Perform business review once within generation; afterwards only
+keywords and regular-expression `pattern` keywords, which local Ollama models
+reject or stall on; the prompt and local validator retain the full schema,
+including those checks. Put nonblank-text constraints and structural field
+dependencies in schemas. Perform business review once within generation; afterwards only
 convert or render the accepted result. Keep adapter `None` handling for absent
 evidence. Standalone text parsers use the same repair, validation and business
 review sequence explicitly.
