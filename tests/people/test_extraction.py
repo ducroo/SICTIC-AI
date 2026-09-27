@@ -17,7 +17,7 @@ class FakeNER:
             yield SimpleNamespace(ents=entities), chunk
 
 
-def test_document_weight_divides_one_between_names_not_occurrences_or_contacts():
+def test_document_weight_divides_one_between_identities_not_occurrences():
     shared = build_chunk("Jane Doe and Ann Advisor", "shared.md", 1, 0)
     repeated = build_chunk("Jane Doe again", "shared.md", 2, 0)
     dedicated = build_chunk("Ann Advisor", "ann.md", 1, 0)
@@ -25,7 +25,7 @@ def test_document_weight_divides_one_between_names_not_occurrences_or_contacts()
     ann = Person(full_name="Ann Advisor", mentions=[shared, dedicated])
     email = Person(email_addresses=["hello@example.com"], mentions=[shared])
     ranked = rank_people_by_document_weight([jane, ann, email])
-    assert ranked == [(ann, 1.5), (jane, 0.5)]
+    assert ranked == [(ann, 1 + 1/3), (email, 1/3), (jane, 1/3)]
     assert ranked[0][0] is ann
     assert jane.mentions == [shared, repeated, shared]
 
@@ -106,3 +106,11 @@ def test_spacy_multilingual_model_extracts_documented_people():
     found = {person.full_name for person in people}
     expected = {name for _, _, name in examples}
     assert expected <= found, (expected - found, found)
+
+
+def test_email_only_weight_sums_documents_without_counting_repeat_mentions():
+    shared = build_chunk("a@example.com b@example.com", "website/team.md", 1, 0)
+    dedicated = build_chunk("a@example.com", "application.md", 1, 0)
+    a = Person(email_addresses=["a@example.com"], mentions=[shared, shared, dedicated])
+    b = Person(email_addresses=["b@example.com"], mentions=[shared])
+    assert rank_people_by_document_weight([b, a]) == [(a, 1.5), (b, 0.5)]

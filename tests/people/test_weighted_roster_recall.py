@@ -16,8 +16,7 @@ from lib.datasets.models import Chunk
 from lib.people.discovery import manual_persons_in_dataset
 from lib.people.model import Person
 from lib.storage import reset_storage_singleton
-from skills.persons_in_dataset.persons_in_dataset import _shortlist_ner_people
-from skills.persons_in_dataset.reconciliation import reconcile_people
+from skills.persons_in_dataset.reconciliation import reconcile_people, _prepare_prompt
 
 
 @pytest.mark.asyncio
@@ -41,9 +40,9 @@ async def test_weighted_roster_covers_manual_reference(dataset, monkeypatch):
     people = [Person(**{**row, "mentions": [Chunk(**c) for c in row["mentions"]],
                         "dossier": [Chunk(**c) for c in row["dossier"]]}) for row in evidence["people"]]
     config = json.loads((root / "config/persons_in_dataset/discovery.json").read_text())
-    shortlisted = _shortlist_ner_people(people, config["ner_max_candidates"])
+    _, shortlisted = _prepare_prompt(people, [Chunk(**c) for c in evidence["team_chunks"]], startup_context=evidence["startup_context"], company_names=[dataset], config=config)
     started = time.monotonic()
-    accepted = await reconcile_people(shortlisted, [Chunk(**c) for c in evidence["team_chunks"]],
+    accepted = await reconcile_people(people, [Chunk(**c) for c in evidence["team_chunks"]],
         startup_context=evidence["startup_context"], company_names=[dataset], config=config)
     elapsed = time.monotonic() - started
     monkeypatch.setenv("LOCAL_STORAGE_PATH", os.environ["SICTIC_DISCOVERY_BENCHMARK_STORAGE"])
