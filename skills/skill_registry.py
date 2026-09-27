@@ -55,7 +55,6 @@ SKILL_REGISTRY = {
         func=person_profile,
         domains=frozenset({"startups", "community"}),
         depends_on=("persons-in-dataset",),
-        mandatory_stages=frozenset({PITCHED_STAGE, None}),
     ),
     "team-profile": SkillSpec(
         func=team_profile,

@@ -24,8 +24,7 @@ from lib.people.extraction import merge_person
 from lib.people.model import Person
 from lib.insights import InsightFile
 from lib.storage import get_storage, reset_storage_singleton
-from skills.persons_in_dataset.reconciliation import _prepare_prompts
-from skills.persons_in_dataset.persons_in_dataset import _shortlist_ner_people
+from skills.persons_in_dataset.reconciliation import _prepare_prompt
 
 
 DATASETS = ["avientus", "ovomind", "proud-technology", "herosupport", "scanvio", "miraex"]
@@ -49,10 +48,8 @@ def test_local_discovery_recall_and_profile_size(dataset, monkeypatch):
         text = " ".join(chunk.text for chunk in chunks).casefold()
         reference = [person for person in manual_persons_in_dataset(dataset) or [] if person.full_name and person.full_name.casefold() in text]
         recovered = [person for person in reference if person.find_best_match(people) is not None]
-        shortlisted = _shortlist_ner_people(people, config["ner_max_candidates"])
         for person in LinkedInResolver(dataset).get_cached_persons():
             merge_person(people, person)
-            merge_person(shortlisted, person)
         profiles = LinkedInProfileStore(get_storage(), f"{dataset_location(dataset).raw_rel}/linkedin").load_all()
         raw_size = sum(len(json.dumps(profile)) for profile in profiles.values())
         compact_size = sum(len(json.dumps(condense_profile(Person(linkedin_id=identifier, linkedin_profile=profile), company_names=[dataset], description_chars=config["linkedin_description_chars"]))) for identifier, profile in profiles.items())
@@ -64,9 +61,9 @@ def test_local_discovery_recall_and_profile_size(dataset, monkeypatch):
         context = profile.content() if profile else dataset
         error = None
         try:
-            prompts = _prepare_prompts(shortlisted, team_chunks, startup_context=context, company_names=[dataset], config=config)
+            prompt, shortlisted = _prepare_prompt(people, team_chunks, startup_context=context, company_names=[dataset], config=config)
         except ValueError as exc:
-            prompts = []
+            prompt, shortlisted = "", []
             error = str(exc)
         report = {
             "dataset": dataset, "chunks": len(chunks), "candidates": len(people),
@@ -75,7 +72,7 @@ def test_local_discovery_recall_and_profile_size(dataset, monkeypatch):
             "reference_names_recovered": [p.full_name for p in recovered],
             "reference_names_missed": [p.full_name for p in reference if p not in recovered],
             "raw_linkedin_chars": raw_size, "compact_linkedin_chars": compact_size,
-            "prompt_batches": len(prompts), "prompt_chars": sum(map(len, prompts)),
+            "prompt_batches": int(bool(prompt)), "prompt_chars": len(prompt),
             "preflight_error": error, "seconds": round(time.monotonic() - started, 2),
             "named_candidates_without_id": sum(bool(p.full_name) and not p.linkedin_id for p in people),
         }
@@ -90,7 +87,7 @@ def test_local_discovery_recall_and_profile_size(dataset, monkeypatch):
                 "startup_context": context,
             }, ensure_ascii=False))
         print(json.dumps(report, ensure_ascii=False))
-        print(f"Reconciliation preflight: {len(prompts)} batches, {sum(map(len, prompts))} total characters")
+        print(f"Reconciliation preflight: {int(bool(prompt))} batches, {len(prompt)} total characters")
         assert chunks and people
         if reference:
             assert recovered

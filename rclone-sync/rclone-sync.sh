@@ -73,11 +73,15 @@ printf '%s\n' "$$" > "$LOCK_DIR/pid"
 TIMESTAMP="$(date '+%Y%m%d-%H%M%S')"
 LOG_FILE="$LOG_DIR/$TIMESTAMP-$MODE.log"
 
-# Keep one continuous operational log and one immutable log per invocation.
-# Plain file descriptors work in restricted agent environments where Bash
-# process substitution through /dev/fd is unavailable.
+# Stream to the terminal and both logs without relying on /dev/fd process
+# substitution, which is unavailable in some restricted environments.
 exec 3>&1 4>&2
-exec >"$LOG_FILE" 2>&1
+: >"$LOG_FILE"
+OUTPUT_PIPE="$LOCK_DIR/output"
+mkfifo "$OUTPUT_PIPE"
+tee -a "$LOG_FILE" "$CENTRAL_LOG" <"$OUTPUT_PIPE" >&3 &
+LOGGER_PID=$!
+exec >"$OUTPUT_PIPE" 2>&1
 echo "===== rclone $MODE started $(date '+%Y-%m-%d %H:%M:%S %Z') ====="
 echo "local=$LOCAL_ROOT remote=$REMOTE_ROOT pid=$$"
 
@@ -92,12 +96,18 @@ finish() {
     echo "===== rclone $MODE $outcome $(date '+%Y-%m-%d %H:%M:%S %Z') ====="
     echo "central log: $CENTRAL_LOG"
     echo "run log: $LOG_FILE"
+    # Close the pipe's writer and drain tee before releasing the run lock.
+    exec 1>&3 2>&4
+    wait "$LOGGER_PID"
+    logger_status=$?
+    if [ "$logger_status" -ne 0 ] && [ "$exit_code" -eq 0 ]; then
+        exit_code=$logger_status
+    fi
+    rm -f "$OUTPUT_PIPE"
     rm -f "$LOCK_DIR/pid"
     rmdir "$LOCK_DIR" 2>/dev/null || true
-    cat "$LOG_FILE" >> "$CENTRAL_LOG"
-    cat "$LOG_FILE" >&3
     exec 3>&- 4>&-
-    return "$exit_code"
+    exit "$exit_code"
 }
 trap finish EXIT
 trap 'exit 130' INT TERM HUP

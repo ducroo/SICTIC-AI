@@ -55,6 +55,30 @@ LinkedIn-cache resolution uses the stricter `find_cached_person` policy and
 preserves explicit ID boundaries. Do not substitute general matching for it.
 Preserve existing thresholds and workflow-specific rules for supplied contacts.
 
+For merger comparisons, `Person.merge_all` exposes the existing incremental
+consolidation (also used by extraction's `merge_person`). `Person.merge_all_alternative` is an
+experimental alternative, not used by production workflows: stable groups of
+LinkedIn IDs, names with emails, email-only records, then others; exact ID lookup;
+email-only records merge directly into the first target with an exact email match,
+including when multiple targets match. Other records use email-restricted fuzzy selection;
+strictly greater than 85 using token-sort similarity. It compares full names with
+full names and derived LinkedIn/email names in both directions, never two derived
+names. Different explicit IDs remain separate, and ties retain target order.
+Experimental matching normalizes Unicode with NFKC, case folding and punctuation/
+spacing cleanup, preserving non-Latin letters. This does not change canonical
+identifiers or filename normalization.
+Both routines mutate retained objects; compare independent deep copies of one
+candidate list. `PersonExtractor.extract_candidates` supplies unmerged local
+candidates for this purpose; normal `extract` retains its sparse-email behavior.
+Run `SICTIC_PERSON_MERGE_BENCHMARK=1` with
+`python -m pytest -s tests/people/test_person_merge_comparison.py` for a synthetic
+comparison. Set `SICTIC_PERSON_MERGE_DATASET` for a local parsed dataset and
+`SICTIC_PERSON_MERGE_REPORT` for a JSON report with timing, counts and identity/evidence
+signatures. Local datasets also require `SICTIC_DISCOVERY_BENCHMARK_STORAGE` and
+`SICTIC_DISCOVERY_BENCHMARK_RUNTIME` pointing to their storage roots (pytest's
+default storage is isolated). This compares merger policies, not end-to-end
+discovery runtime.
+
 ### Authoritative roster and table parsing
 
 The [persons_in_dataset skill](../persons_in_dataset/SKILL.md) owns discovery
