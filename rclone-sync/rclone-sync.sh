@@ -107,7 +107,7 @@ finish() {
     rm -f "$LOCK_DIR/pid"
     rmdir "$LOCK_DIR" 2>/dev/null || true
     exec 3>&- 4>&-
-    return "$exit_code"
+    exit "$exit_code"
 }
 trap finish EXIT
 trap 'exit 130' INT TERM HUP

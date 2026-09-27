@@ -2,8 +2,43 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("rclone_status", [0, 17])
+def test_sync_reports_logger_failure_and_preserves_rclone_failure(tmp_path, rclone_status):
+    local_root = tmp_path / "storage"
+    local_root.mkdir()
+    (local_root / "RCLONE_TEST").touch()
+    fake = tmp_path / "rclone"
+    fake.write_text(f"#!/bin/sh\necho sync-output\nexit {rclone_status}\n")
+    fake.chmod(0o755)
+    # A directory cannot be opened as a log, even when tests run as root.
+    central = tmp_path / "central.log"
+    central.mkdir()
+    config = tmp_path / "config.env"
+    config.write_text(
+        f"RCLONE_BIN={fake}\nRCLONE_LOCAL_ROOT={local_root}\n"
+        "RCLONE_REMOTE_ROOT=gdrive:test\n"
+        f"RCLONE_WORK_DIR={tmp_path / 'state'}\n"
+        f"RCLONE_RUN_LOG_DIR={tmp_path / 'logs'}\n"
+        f"RCLONE_CENTRAL_LOG={central}\n"
+        f"RCLONE_LOCK_DIR={tmp_path / 'lock'}\n"
+    )
+    result = subprocess.run(
+        [str(REPO_ROOT / "rclone-sync/rclone-sync.sh"), "sync"],
+        capture_output=True, text=True, timeout=5,
+        env={**os.environ, "SICTIC_RCLONE_CONFIG": str(config)},
+    )
+    assert result.returncode != 0
+    if rclone_status:
+        assert result.returncode == rclone_status
+    assert str(central) in result.stderr
+    assert "sync-output" in next((tmp_path / "logs").glob("*.log")).read_text()
+    assert not (tmp_path / "lock").exists()
 
 
 def _fake_rclone(tmp_path: Path) -> Path:
