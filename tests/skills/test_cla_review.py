@@ -425,6 +425,19 @@ def _audit(dataset: str, docslug: str, title: str) -> InsightFile:
     return InsightFile(dataset, "batch_audit", llm_model(), identifier=f"cla_review-{docslug}-{title}", subdir=True, extension="json")
 
 
+def _seeded() -> dict[str, dict[str, object]]:
+    """Titles and check counts per audit group, read from the configured checklists (never hardcoded)."""
+    from lib.batch_audit.checklist import parse_checklist
+
+    config = _config()
+    groups = {}
+    for group, folder, _section, _placeholder in module.AUDIT_GROUPS:
+        parsed = [parse_checklist(markdown) for markdown in config[folder].values()]
+        groups[group] = {"titles": [c.title for c in parsed],
+                         "checks": sum(len(ch.checks) for c in parsed for ch in c.chapters)}
+    return groups
+
+
 def test_seeded_checklists_parse_with_unique_titles_and_keywords():
     from lib.batch_audit.checklist import parse_checklist
 
@@ -439,7 +452,7 @@ def test_seeded_checklists_parse_with_unique_titles_and_keywords():
                 for check in chapter.checks:
                     assert check.keywords, f"{key} {check.number} {check.name} has no keywords"
                     assert check.description.endswith(("?", ".")), f"{key} {check.number}"
-    assert len(titles) == len(set(titles)) == 5, "audit identifiers are keyed on the checklist title"
+    assert len(titles) == len(set(titles)), "audit identifiers are keyed on the checklist title"
     assert config["settings"]["checklists_provenance"]["status"] == "provisional"
 
 
@@ -474,15 +487,18 @@ async def test_audits_carry_the_document_identity_and_feed_the_report(mock_env, 
     checks_after_first = calls["checks"]
     [second] = await cla_review("acme", document="legal/b/ts.md")
 
-    assert checks_after_first == 41 and calls["checks"] == 82  # 34 reference checks + 7 executability checks per document
+    seeded = _seeded()
+    per_document = sum(group["checks"] for group in seeded.values())
+    titles = [title for group in seeded.values() for title in group["titles"]]
+    assert checks_after_first == per_document and calls["checks"] == 2 * per_document
     for docslug in ("legal-a-ts", "legal-b-ts"):
-        for title in ("1 Economics and Conversion", "5 SHA and Articles Executability"):
+        for title in titles:
             audit = _audit("acme", docslug, title)
             assert audit.exists() and "/batch-audit/" in audit.path
             assert json.loads(audit.content())["skill"] == f"cla_review-{docslug}"
-    assert _audit("acme", "legal-a-ts", "1 Economics and Conversion").path != _audit("acme", "legal-b-ts", "1 Economics and Conversion").path
+    assert _audit("acme", "legal-a-ts", titles[0]).path != _audit("acme", "legal-b-ts", titles[0]).path
     content = first.content()
-    assert "### 1 Economics and Conversion" in content and "### 5 SHA and Articles Executability" in content
+    assert all(f"### {title}" in content for title in titles)
     assert "## The SHA and articles: can the conversion be executed" in content
     assert "| 1.1.1 |" in content and "balanced" in content
     assert "Originating path: legal/a/ts.md" in calls["prefixes"][0]
@@ -545,10 +561,11 @@ async def test_unclear_executability_reaches_the_report_and_the_synthesis(mock_e
     [report] = await cla_review("acme", document="legal/a/ts.md")
 
     content = report.content()
-    assert "| 5.1.1 |" in content and "Obtain the SHA." in content
+    assert "Obtain the SHA." in content
     [prompt] = calls["prompts"]
-    assert "### EXECUTABILITY AUDIT: sha_and_articles_executability" in prompt
-    assert "### AUDIT AGAINST THE SECA REFERENCE: tax_and_syndicate" in prompt
+    config = _config()
+    assert all(f"### EXECUTABILITY AUDIT: {key}" in prompt for key in config["executability_checklists"])
+    assert all(f"### AUDIT AGAINST THE SECA REFERENCE: {key}" in prompt for key in config["checklists"])
     assert "### ASSESSMENTS (company angle, lender angle)" in prompt and '"open_question"' in prompt
     assert "### QUESTION 2 (conversion, existing loans)" in prompt and '"absent"' in prompt
     assert "never a verdict" in prompt
@@ -569,7 +586,9 @@ async def test_executability_prefix_lists_the_assumptions_and_known_constitution
     await cla_review("acme", document="legal/a/ts.md")
 
     executability = [p for p in calls["prefixes"] if "CONVERSION ASSUMPTIONS OF THE TERM SHEET" in p]
-    assert len(executability) == 7 and len(calls["prefixes"]) == 41
+    seeded = _seeded()
+    assert len(executability) == seeded["executability"]["checks"]
+    assert len(calls["prefixes"]) == seeded["executability"]["checks"] + seeded["reference"]["checks"]
     prefix = executability[0]
     assert "- conversion_capital_sources: conditional_capital, consents;" in prefix
     assert "- sha_accession_required: True;" in prefix

@@ -118,9 +118,9 @@ cap-table snapshot yields an insufficient-evidence paragraph for question 2
 and the run completes; a malformed snapshot, failed path resolution and
 technical failures remain errors. No plausible term sheet, an unresolvable path, an extraction
 failure or a failed audit check stops the run without saving a partial report. A
-run costs one model call per check (41 with the seeded checklists), each
-carrying the term sheet and the reference in its prefix, plus at most one
-ranking and one synthesis. The report aids human review and is not legal
+run costs one model call per check, each carrying the term sheet and the
+reference in its prefix, plus at most one ranking and one synthesis; the
+checks of every checklist run concurrently. The report aids human review and is not legal
 advice.
 
 ## Usage

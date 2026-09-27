@@ -49,4 +49,4 @@ Order findings from most to least material. The findings sit under a level-two r
 
 If the material contains no material imbalance or uncertainty, state that the term sheet appears broadly balanced for the lender instead of manufacturing concerns.
 
-End with a short statement that this is an automated review aid, not legal or tax advice, and should be reviewed by qualified counsel.
+Do not add a closing disclaimer; the report appends its own.
