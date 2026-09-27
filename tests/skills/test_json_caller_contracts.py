@@ -103,3 +103,25 @@ def test_provider_schema_preserves_named_fields_and_literal_objects():
     assert sent['properties']['then']['const'] == {'if': 'literal'}
     assert sent['$defs']['else']['items'] == {'type': 'string'}
     assert schema == original
+
+
+def test_provider_schema_omits_patterns_that_local_validation_keeps():
+    from copy import deepcopy
+    from lib.infrastructure.ai_text_generation.json import (
+        json_schema_response_format,
+        validate_json_schema,
+    )
+
+    schema = {'type': 'object', 'properties': {
+        'rationale': {'type': 'string', 'minLength': 1, 'pattern': '\\S'},
+        'pattern': {'type': 'string', 'const': 'literal'},
+        'sources': {'type': 'array', 'items': {'type': 'string', 'pattern': '\\S'}},
+    }, 'required': ['rationale']}
+    original = deepcopy(schema)
+    sent = json_schema_response_format(schema)['json_schema']['schema']
+    assert sent['properties']['rationale'] == {'type': 'string', 'minLength': 1}
+    assert sent['properties']['pattern'] == {'type': 'string', 'const': 'literal'}
+    assert sent['properties']['sources']['items'] == {'type': 'string'}
+    assert schema == original
+    with pytest.raises(ValueError, match=r"at \$\.rationale"):
+        validate_json_schema({'rationale': '   '}, schema)
