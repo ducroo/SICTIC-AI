@@ -162,7 +162,7 @@ def _patched(monkeypatch, *, selected: str | None = None, extraction_error: Exce
     async def fake_synthesis(prompt, *_args, **_kwargs):
         calls["synthesis"] += 1
         calls["prompts"].append(prompt)
-        return "## 1. Fixture finding\n\n**Finding:** synthesized from the audits."
+        return "### 1. Fixture finding\n\n**Finding:** synthesized from the audits."
 
     monkeypatch.setattr(module, "generate_json", fake_rank)
     monkeypatch.setattr(module, "generate_markdown", fake_synthesis)
