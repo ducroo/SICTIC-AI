@@ -269,8 +269,8 @@ def test_mandatory_skills_are_selected_per_dataset_with_domain_restrictions():
     selected = bulk._planned_nodes(scope, None, bulk._dependency_graph(scope, nodes))
     assert {skill for name, skill in selected if name == "review"} == {"startup-profile", "persons-in-dataset", "submission-ready"}
     assert {skill for name, skill in selected if name == "jury"} == {"startup-profile", "persons-in-dataset", "startup-website-import"}
-    assert {skill for name, skill in selected if name == "pitched"} == {"startup-profile", "persons-in-dataset", "person-profile", "startup-traction", "startup-website-import"}
-    assert {skill for name, skill in selected if name == "local"} == {"startup-profile", "persons-in-dataset", "person-profile", "startup-traction"}
+    assert {skill for name, skill in selected if name == "pitched"} == {"startup-profile", "persons-in-dataset", "startup-traction", "startup-website-import"}
+    assert {skill for name, skill in selected if name == "local"} == {"startup-profile", "persons-in-dataset", "startup-traction"}
     assert {skill for name, skill in selected if name == "members"} == {"persons-in-dataset"}
 
 

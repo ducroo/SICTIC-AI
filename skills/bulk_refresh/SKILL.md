@@ -82,7 +82,10 @@ wildcard declarations also apply to supported community datasets.
 | `startup-profile`, `persons-in-dataset` | All supported datasets |
 | `submission-ready` | `Under Review` |
 | `startup-website-import` | `Jury`, jury reserves, `Pitching`, `Pitched @ SICTIC` |
-| `startup-traction`, `person-profile` | `Pitched @ SICTIC`, absent from Dealum |
+| `startup-traction` | `Pitched @ SICTIC`, absent from Dealum |
+
+`person-profile` is not mandatory at any stage. It remains available through
+explicit skill selection, `--skills all`, or as a prerequisite of a selected skill.
 
 `jury-review` and company research are future skills, not executable placeholders.
 Add their stage declarations when implementing them. Mandatory means invoke with
