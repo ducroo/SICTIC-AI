@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from lib.batch_audit import engine
 from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location_for_domain
 from lib.infrastructure.configuration import load_repository_config
@@ -125,8 +126,10 @@ def _install(name: str, documents: dict[str, str]) -> None:
     manifest.save()
 
 
-def _patched(monkeypatch, *, selected: str | None = None, extraction_error: Exception | None = None) -> dict:
-    calls = {"extract": 0, "identify": 0}
+def _patched(monkeypatch, *, selected: str | None = None, extraction_error: Exception | None = None,
+             documentation_form: str | None = "seca_short_form", audit_status: str = "balanced", audit_error: str | None = None) -> dict:
+    """Fake every model boundary; ``batch_audit`` itself runs for real on a faked check engine."""
+    calls = {"extract": 0, "identify": 0, "rank": 0, "checks": 0, "synthesis": 0, "prompts": [], "prefixes": []}
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")  # reusable selection ranks models
 
     async def fake_ensure(startup, **_kwargs):
@@ -139,7 +142,31 @@ def _patched(monkeypatch, *, selected: str | None = None, extraction_error: Exce
         calls["extract"] += 1
         if extraction_error is not None:
             raise extraction_error
-        return {**copy.deepcopy(_term_sheet_extraction()), "dataset": dataset, "document": filename}
+        extraction = {**copy.deepcopy(_term_sheet_extraction()), "dataset": dataset, "document": filename}
+        extraction["documentation_form"] = {"value": documentation_form, "quote": "based on the SECA model" if documentation_form else None}
+        return extraction
+
+    async def fake_rank(prompt, schema, reviewer=None):
+        calls["rank"] += 1
+        keys = schema["properties"]["rankings"]["items"]["properties"]["template_key"]["enum"]
+        return {"rankings": [{"template_key": key, "rationale_for_rank": f"Fixture rank for {key}."} for key in reversed(keys)]}
+
+    async def fake_check(**kwargs):
+        calls["checks"] += 1
+        calls["prefixes"].append(kwargs["cacheable_prompt_prefix"])
+        if audit_error is not None:
+            raise RuntimeError(audit_error)
+        return {"status": audit_status, "rationale": "Fixture rationale.", "source_documents": ["legal/a/ts.md"],
+                "proposed_next_steps_and_questions": [] if audit_status == "balanced" else ["Obtain the SHA."]}
+
+    async def fake_synthesis(prompt, *_args, **_kwargs):
+        calls["synthesis"] += 1
+        calls["prompts"].append(prompt)
+        return "## 1. Fixture finding\n\n**Finding:** synthesized from the audits."
+
+    monkeypatch.setattr(module, "generate_json", fake_rank)
+    monkeypatch.setattr(module, "generate_markdown", fake_synthesis)
+    monkeypatch.setattr(engine, "dataset_chat_json", fake_check)
 
     async def fake_identify(**_kwargs):
         calls["identify"] += 1
@@ -168,7 +195,7 @@ async def test_explicit_document_review_writes_report_and_intermediates(mock_env
 
     [report] = await cla_review("acme", document="legal/a/term-sheet.md", ticket=25000)
 
-    assert calls == {"extract": 1, "identify": 0}
+    assert (calls["extract"], calls["identify"], calls["rank"], calls["synthesis"]) == (1, 0, 0, 1)
     assert report.filename.startswith("cla-review-acme-legal-a-term-sheet-") and report.filename.endswith(".md")
     assert "/cla-review/" not in report.path
     for stage in ("identification", "extraction", "assessment"):
@@ -186,7 +213,9 @@ async def test_explicit_document_review_writes_report_and_intermediates(mock_env
     assert "## Absent clauses" in content and "maturity_conversion_present" in content
     assert "## Company-angle assessment" in content
     assert "0 rule(s) approved and judging" in content and "open_question" in content
-    assert "## Not yet covered by this report" in content
+    assert "## Audit against the SECA reference term sheet" in content
+    assert "## Synthesis of material findings" in content and "Fixture finding" in content
+    assert "Not yet covered" not in content
     assert "not legal advice" in content
 
 
@@ -384,3 +413,195 @@ async def test_malformed_snapshot_is_an_error(mock_env, monkeypatch):
     with pytest.raises(ValueError, match="stakeholders"):
         await cla_review("acme", document="legal/a/ts.md")
     assert not _intermediate("acme", "legal-a-ts-conversion").exists()
+
+
+# --- slice 3: audits, reference, synthesis ---------------------------------------
+
+def _config() -> dict:
+    return load_repository_config("cla_review")
+
+
+def _audit(dataset: str, docslug: str, title: str) -> InsightFile:
+    return InsightFile(dataset, "batch_audit", llm_model(), identifier=f"cla_review-{docslug}-{title}", subdir=True, extension="json")
+
+
+def test_seeded_checklists_parse_with_unique_titles_and_keywords():
+    from lib.batch_audit.checklist import parse_checklist
+
+    config = _config()
+    titles = []
+    for _group, folder, _section, _placeholder in module.AUDIT_GROUPS:
+        assert config[folder], folder
+        for key, markdown in config[folder].items():
+            checklist = parse_checklist(markdown)
+            titles.append(checklist.title)
+            for chapter in checklist.chapters:
+                for check in chapter.checks:
+                    assert check.keywords, f"{key} {check.number} {check.name} has no keywords"
+                    assert check.description.endswith(("?", ".")), f"{key} {check.number}"
+    assert len(titles) == len(set(titles)) == 5, "audit identifiers are keyed on the checklist title"
+    assert config["settings"]["checklists_provenance"]["status"] == "provisional"
+
+
+def test_instruction_files_carry_their_placeholders_once():
+    config = _config()
+    for _group, _folder, section, placeholder in module.AUDIT_GROUPS:
+        for marker in (module._TERM_SHEET_PLACEHOLDER, placeholder):
+            assert config[section].count(marker) == 1, (section, marker)
+        assert "not operative provisions" in config[section] or "not with a template" in config[section]
+    assert config["audit_response_schema"]["properties"]["status"]["enum"] == ["unclear", "too weak", "balanced", "too strong"]
+    assert "{{startup}}" in config["summary_instructions"]
+    assert "`open_question`" in config["summary_instructions"] and "never a verdict" in config["summary_instructions"]
+
+
+def test_documentation_forms_map_to_configured_references():
+    config = _config()
+    mapping = module._form_references(config, load_reference_term_sheets(config))
+    assert mapping == {
+        "seca_short_form": "seca_cla_term_sheet_short_form_february_2025",
+        "seca_long_form": "seca_cla_term_sheet_long_form_february_2025",
+    }
+    with pytest.raises(ValueError, match="unknown reference"):
+        module._form_references({"settings": {"documentation_form_references": {"seca_short_form": "nope"}}}, {"x": "y"})
+
+
+@pytest.mark.asyncio
+async def test_audits_carry_the_document_identity_and_feed_the_report(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET, "legal/b/ts.md": TERM_SHEET.replace("CHF 12,000,000", "CHF 9,000,000")})
+    calls = _patched(monkeypatch)
+
+    [first] = await cla_review("acme", document="legal/a/ts.md")
+    checks_after_first = calls["checks"]
+    [second] = await cla_review("acme", document="legal/b/ts.md")
+
+    assert checks_after_first == 41 and calls["checks"] == 82  # 34 reference checks + 7 executability checks per document
+    for docslug in ("legal-a-ts", "legal-b-ts"):
+        for title in ("1 Economics and Conversion", "5 SHA and Articles Executability"):
+            audit = _audit("acme", docslug, title)
+            assert audit.exists() and "/batch-audit/" in audit.path
+            assert json.loads(audit.content())["skill"] == f"cla_review-{docslug}"
+    assert _audit("acme", "legal-a-ts", "1 Economics and Conversion").path != _audit("acme", "legal-b-ts", "1 Economics and Conversion").path
+    content = first.content()
+    assert "### 1 Economics and Conversion" in content and "### 5 SHA and Articles Executability" in content
+    assert "## The SHA and articles: can the conversion be executed" in content
+    assert "| 1.1.1 |" in content and "balanced" in content
+    assert "Originating path: legal/a/ts.md" in calls["prefixes"][0]
+    assert "Reference key: seca_cla_term_sheet_short_form_february_2025" in calls["prefixes"][0]
+    assert second.path != first.path
+
+
+@pytest.mark.asyncio
+async def test_stated_documentation_form_skips_the_ranking(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    calls = _patched(monkeypatch, documentation_form="seca_long_form")
+
+    [report] = await cla_review("acme", document="legal/a/ts.md")
+
+    assert calls["rank"] == 0
+    reference = json.loads(_intermediate("acme", "legal-a-ts-reference").content())
+    assert reference["selection"] == "stated" and reference["reference_key"] == "seca_cla_term_sheet_long_form_february_2025"
+    assert reference["rankings"] == [] and "seca_long_form" in reference["reason"]
+    assert "**Reference term sheet:** `seca_cla_term_sheet_long_form_february_2025` (stated:" in report.content()
+
+
+@pytest.mark.asyncio
+async def test_unstated_documentation_form_ranks_the_references(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    calls = _patched(monkeypatch, documentation_form="unstated")
+
+    await cla_review("acme", document="legal/a/ts.md")
+    await cla_review("acme", document="legal/a/ts.md")
+
+    assert calls["rank"] == 1  # the reference artifact is reused
+    reference = json.loads(_intermediate("acme", "legal-a-ts-reference").content())
+    assert reference["selection"] == "ranked" and len(reference["rankings"]) == 2
+    assert reference["reference_key"] == reference["rankings"][0]["template_key"]
+    assert "ranked by the model" in reference["reason"]
+
+
+@pytest.mark.asyncio
+async def test_bespoke_documentation_form_ranks_too(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    calls = _patched(monkeypatch, documentation_form="bespoke")
+    await cla_review("acme", document="legal/a/ts.md")
+    assert calls["rank"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_failed_check_blocks_the_report(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    calls = _patched(monkeypatch, audit_error="model down")
+    with pytest.raises(ValueError, match="error"):
+        await cla_review("acme", document="legal/a/ts.md")
+    assert calls["synthesis"] == 0
+    assert not InsightFile("acme", "cla_review", llm_model(), identifier="acme-legal-a-ts").exists()
+
+
+@pytest.mark.asyncio
+async def test_unclear_executability_reaches_the_report_and_the_synthesis(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    calls = _patched(monkeypatch, audit_status="unclear")
+
+    [report] = await cla_review("acme", document="legal/a/ts.md")
+
+    content = report.content()
+    assert "| 5.1.1 |" in content and "Obtain the SHA." in content
+    [prompt] = calls["prompts"]
+    assert "### EXECUTABILITY AUDIT: sha_and_articles_executability" in prompt
+    assert "### AUDIT AGAINST THE SECA REFERENCE: tax_and_syndicate" in prompt
+    assert "### ASSESSMENTS (company angle, lender angle)" in prompt and '"open_question"' in prompt
+    assert "### QUESTION 2 (conversion, existing loans)" in prompt and '"absent"' in prompt
+    assert "never a verdict" in prompt
+    assert prompt.index("CONTENT END") < prompt.index("AUTHORITATIVE SUMMARY INSTRUCTIONS")
+
+
+@pytest.mark.asyncio
+async def test_executability_prefix_lists_the_assumptions_and_known_constitutional_documents(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET, "legal/articles.md": "# Articles", "legal/sha.md": "# SHA"})
+    calls = _patched(monkeypatch)
+    classification = InsightFile("acme", "captable_build", "manual", identifier="classification", subdir=True, extension="json")
+    classification.save(json.dumps({"dataset": "acme", "documents": [
+        {"filename": "legal/a/ts.md", "document_class": "cla_term_sheet", "confidence": 90, "as_of_date": "2026-07-15", "language": "en", "rationale": "draft"},
+        {"filename": "legal/articles.md", "document_class": "articles_of_association", "confidence": 95, "as_of_date": "2026-01-15", "language": "en", "rationale": "articles"},
+        {"filename": "legal/sha.md", "document_class": "sha_or_priced_term_sheet", "confidence": 95, "as_of_date": "2026-01-15", "language": "en", "rationale": "sha"},
+    ]}))
+
+    await cla_review("acme", document="legal/a/ts.md")
+
+    executability = [p for p in calls["prefixes"] if "CONVERSION ASSUMPTIONS OF THE TERM SHEET" in p]
+    assert len(executability) == 7 and len(calls["prefixes"]) == 41
+    prefix = executability[0]
+    assert "- conversion_capital_sources: conditional_capital, consents;" in prefix
+    assert "- sha_accession_required: True;" in prefix
+    assert "- denominator_basis: not stated;" in prefix
+    assert "- legal/articles.md (articles_of_association)" in prefix and "- legal/sha.md (sha_or_priced_term_sheet)" in prefix
+    assert "legal/a/ts.md (cla_term_sheet)" not in prefix
+    assert "Reference key:" not in prefix
+
+
+@pytest.mark.asyncio
+async def test_fresh_regenerates_the_report_but_batch_audit_keeps_its_audits(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    calls = _patched(monkeypatch)
+    await cla_review("acme", document="legal/a/ts.md")
+    checks = calls["checks"]
+    [report] = await cla_review("acme", document="legal/a/ts.md", fresh=True)
+    assert calls["checks"] == checks and calls["synthesis"] == 2 and report.exists()
+
+
+@pytest.mark.asyncio
+async def test_missing_checklist_folder_fails_loudly(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    _patched(monkeypatch)
+    real = module.load_repository_config
+
+    def without_executability(*sections):
+        config = real(*sections)
+        if not sections:
+            config = dict(config)
+            config["cla_review"] = {k: v for k, v in config["cla_review"].items() if k != "executability_checklists"}
+        return config
+
+    monkeypatch.setattr(module, "load_repository_config", without_executability)
+    with pytest.raises(ValueError, match="executability_checklists"):
+        await cla_review("acme", document="legal/a/ts.md")

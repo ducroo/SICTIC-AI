@@ -435,6 +435,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         return _complete_cla(dataset=dataset_name, document=filename, status="term_sheet")
 
     monkeypatch.setattr(cla_review_mod, "extract_cla", fake_extract_cla)
+    monkeypatch.setattr(cla_review_mod, "generate_json", fake_generate_json)
+    monkeypatch.setattr(cla_review_mod, "generate_markdown", fake_llm_chat)
     monkeypatch.setattr(sha_review_mod, "generate_markdown", fake_llm_chat)
     monkeypatch.setattr(
         batch_audit_engine_mod,

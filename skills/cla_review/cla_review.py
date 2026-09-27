@@ -6,16 +6,23 @@ Question 1 (slice 1): identify the term sheet, extract it with the shared
 Question 2, deterministic part (slice 2): the member's conversion and the
 existing loans on the consolidated ``captable_build`` snapshot, read through
 ``select_consolidated`` and never generated here; an absent or stale
-snapshot is insufficient evidence, a malformed one an error. The audits
-against the SECA term sheets, the SHA context and the synthesis (slice 3)
-are listed in the report as pending.
+snapshot is insufficient evidence, a malformed one an error. Slice 3 adds
+the audits against the selected SECA reference term sheet and against the
+company's own SHA, articles and registers (``batch_audit`` with the
+lender-perspective checklists in ``config/cla_review/``), and the synthesis
+of everything above into material findings.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date
+from functools import partial
 from typing import Any
 
+from lib.batch_audit import batch_audit
+from lib.batch_audit.rendering import json_to_markdown_table
+from lib.batch_audit.schema import validate_audit_document
 from lib.captable.assessment import assess_cla
 from lib.captable.cla_extraction import extract_cla
 from lib.captable.cla_terms import build_cla_schema
@@ -29,8 +36,8 @@ from lib.datasets.documents import resolve_document_path
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, dataset_parsed_path
 from lib.datasets.source import parsed_filepath
-from lib.infrastructure.ai_text_generation import Review
-from lib.infrastructure.ai_text_generation.json import validate_json_schema
+from lib.infrastructure.ai_text_generation import Review, generate_json, generate_markdown
+from lib.infrastructure.ai_text_generation.json import copy_schema, validate_json_schema
 from lib.infrastructure.configuration import config_cache_key, load_repository_config
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile
@@ -43,7 +50,7 @@ from skills.dataset_chat.dataset_chat import dataset_chat_json
 logger = get_logger(__name__)
 
 SKILL_NAME = "cla_review"
-OUTPUT_SCHEMA_VERSION = 2
+OUTPUT_SCHEMA_VERSION = 3
 RULE_FIELDS = ("value", "unit", "source", "status", "effective_date", "active")
 APPROVED_STATUS = "approved"
 _IDENTIFICATION_SECTIONS = (
@@ -54,10 +61,23 @@ _IDENTIFICATION_SECTIONS = (
     "document_path_resolution",
 )
 _EXTRACTION_SECTIONS = ("cla_extraction_prompt", "cla_extraction_base_schema", "cla_terms")
-PENDING = (
-    "Audit against the SECA CLA term sheets (lender-perspective checklists)",
-    "The SHA and articles: can the conversion be executed, what accession commits me to",
-    "Synthesis of material findings",
+_RANKING_SECTIONS = ("template_ranking_prompt", "template_ranking_response_schema")
+# (report section, config folder, instructions section, placeholder of the second context block)
+AUDIT_GROUPS = (
+    ("reference", "checklists", "audit_instructions", "{{reference_term_sheet}}"),
+    ("executability", "executability_checklists", "executability_instructions", "{{conversion_assumptions}}"),
+)
+_TERM_SHEET_PLACEHOLDER = "{{term_sheet_under_review}}"
+# Extraction fields the executability audit hands over as the term sheet's conversion assumptions.
+_EXECUTABILITY_FIELDS = (
+    "conversion_capital_sources", "shareholder_consents_referenced", "pre_emption_reduction",
+    "conversion_share_class", "sha_accession_required", "accession_of_further_investors",
+    "investor_majority", "valuation_cap", "denominator_basis", "aggregate_amount_max",
+)
+# captable_build document classes the executability audit points at when a classification exists.
+_CONSTITUTIONAL_CLASSES = (
+    "sha_or_priced_term_sheet", "articles_of_association", "commercial_register_extract",
+    "share_register", "syndicate_agreement",
 )
 _SNAPSHOT_HINT = "run captable_build for this startup, then re-run cla_review"
 
@@ -176,6 +196,7 @@ def _classification_context(dataset: str) -> dict[str, Any] | None:
     return {
         "path": insight.path,
         "content": insight.content(),
+        "documents": documents,
         "term_sheets": [d["filename"] for d in documents if d["document_class"] == "cla_term_sheet"],
         "executed": [d["filename"] for d in documents if d["document_class"] == "cla_executed"],
     }
@@ -359,7 +380,168 @@ def _question_2(
     return artifacts[0], artifacts[1]
 
 
-# --- 8. report (question 1) ----------------------------------------------------
+# --- 4. the SECA reference ------------------------------------------------------
+
+def _form_references(config: dict[str, Any], references: dict[str, str]) -> dict[str, str]:
+    """documentation_form values that select a reference without a ranking call."""
+    mapping = config["settings"].get("documentation_form_references")
+    if not isinstance(mapping, dict):
+        raise ValueError("cla_review.settings.documentation_form_references must be an object.")
+    selected = {form: key for form, key in mapping.items() if not form.startswith("_")}
+    for form, key in selected.items():
+        if key not in references:
+            raise ValueError(f"cla_review.settings.documentation_form_references maps {form!r} to unknown reference {key!r}.")
+    return selected
+
+
+def _ranking_schema(base_schema: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+    schema = copy_schema(base_schema)
+    try:
+        rankings = schema["properties"]["rankings"]
+        rankings["items"]["properties"]["template_key"]["enum"] = keys
+    except (KeyError, TypeError) as error:
+        raise ValueError("cla_review.template_ranking_response_schema must define properties.rankings.items.properties.template_key.") from error
+    rankings["minItems"] = rankings["maxItems"] = len(keys)
+    return schema
+
+
+def _ranking_prompt(text: str, references: dict[str, str], instructions: str) -> str:
+    contexts = [f"### TERM SHEET UNDER REVIEW — CONTENT START\n\n{text}\n\n### TERM SHEET UNDER REVIEW — CONTENT END"]
+    contexts += [f"### REFERENCE TERM SHEET — CONTENT START\n\nTemplate key: {key}\n\n{reference}\n\n### REFERENCE TERM SHEET — CONTENT END"
+                 for key, reference in references.items()]
+    return "\n\n".join([instructions, *contexts, "### AUTHORITATIVE RANKING INSTRUCTIONS\n\n" + instructions])
+
+
+def _review_ranking(output: dict | list, keys: list[str]) -> Review[dict | list]:
+    returned = [item["template_key"] for item in output["rankings"]]
+    problems = []
+    if len(set(returned)) != len(returned):
+        problems.append("Reference ranking contains duplicate template keys")
+    if set(returned) != set(keys):
+        problems.append("Reference ranking must include every configured reference term sheet")
+    return Review(output, tuple(problems))
+
+
+async def _rank_references(text: str, references: dict[str, str], config: dict[str, Any]) -> list[dict[str, str]]:
+    keys = sorted(references)
+    result = await generate_json(
+        _ranking_prompt(text, {key: references[key] for key in keys}, config["template_ranking_prompt"]),
+        _ranking_schema(config["template_ranking_response_schema"], keys),
+        reviewer=partial(_review_ranking, keys=keys),
+    )
+    return [dict(item) for item in result["rankings"]]
+
+
+async def _select_reference(dataset: str, source_path: str, extraction: InsightFile, config: dict[str, Any], *, fresh: bool) -> InsightFile:
+    """The SECA reference to audit against: stated by the term sheet, else ranked by the model."""
+    references = load_reference_term_sheets(config)
+    mapping = _form_references(config, references)
+    key = config_cache_key(OUTPUT_SCHEMA_VERSION, {name: config[name] for name in _RANKING_SECTIONS}, mapping, references,
+                           extraction.content())
+    insight = _intermediate(dataset, f"{document_slug(source_path)}-reference", key)
+    schema = config["artifact_schemas"]["reference"]
+    if existing := _reusable(insight, fresh):
+        _read_json(existing, schema, "cla_review reference")
+        return existing
+    terms = _read_json(extraction, _extraction_schema(), "cla_review extraction")
+    entry = terms.get("documentation_form") or {}
+    form = entry.get("value") or "unstated"
+    data = {"dataset": dataset, "source_path": source_path, "documentation_form": form}
+    if form in mapping:
+        data.update(selection="stated", reference_key=mapping[form], rankings=[],
+                    reason=f"The term sheet names the {form} documentation: {entry.get('quote') or 'no quote recorded'}.")
+    else:
+        rankings = await _rank_references(_document_text(dataset, source_path), references, config)
+        data.update(selection="ranked", reference_key=rankings[0]["template_key"], rankings=rankings,
+                    reason=f"documentation_form is {form}; ranked by the model: {rankings[0]['rationale_for_rank']}")
+    return _save_json(insight, data, schema, "cla_review reference")
+
+
+# --- 4. and 7. audits ------------------------------------------------------------
+
+def _fill(template: str, section: str, replacements: dict[str, str]) -> str:
+    for placeholder in replacements:
+        if template.count(placeholder) != 1:
+            raise ValueError(f"cla_review.{section} must contain {placeholder} once.")
+    for placeholder, value in replacements.items():
+        template = template.replace(placeholder, value)
+    return template
+
+
+def _conversion_assumptions(dataset: str, terms: dict[str, Any]) -> str:
+    """What the term sheet relies on for its conversion, as extracted, plus the constitutional documents known to captable_build."""
+    lines = ["Extracted from the term sheet (value; quote):", ""]
+    for field in _EXECUTABILITY_FIELDS:
+        entry = terms.get(field)
+        if not isinstance(entry, dict):
+            continue
+        value = entry.get("value")
+        rendered = "not stated" if _absence(value) else (", ".join(value) if isinstance(value, list) else str(value))
+        lines.append(f"- {field}: {rendered}; {entry.get('quote') or 'no quote'}")
+    classification = _classification_context(dataset)
+    lines += ["", "Constitutional documents identified by captable_build (search these first):", ""]
+    if classification is None:
+        lines.append("- none: no captable_build classification exists for this startup; rely on retrieval.")
+    else:
+        found = [f"- {d['filename']} ({d['document_class']})" for d in classification["documents"]
+                 if d["document_class"] in _CONSTITUTIONAL_CLASSES]
+        lines += found or ["- none classified as SHA, articles, register extract, share register or syndicate agreement."]
+    return "\n".join(lines)
+
+
+async def _run_audits(dataset: str, source_path: str, extraction: InsightFile, reference: InsightFile, config: dict[str, Any]) -> list[tuple[str, str, InsightFile]]:
+    """Every configured checklist, audited against the selected reference or the company's own documents.
+
+    ``batch_audit`` owns the audit artifacts and their reuse; the document
+    identity enters the identifier through ``skill_name``. Returns
+    (group, checklist key, insight) in a stable order; each audit is complete.
+    """
+    text = _document_text(dataset, source_path)
+    terms = _read_json(extraction, _extraction_schema(), "cla_review extraction")
+    references = load_reference_term_sheets(config)
+    reference_key = _read_json(reference, config["artifact_schemas"]["reference"], "cla_review reference")["reference_key"]
+    term_sheet_context = f"Originating path: {source_path}\n\n{text}"
+    second_context = {
+        "{{reference_term_sheet}}": f"Reference key: {reference_key}\n\n{references[reference_key]}",
+        "{{conversion_assumptions}}": _conversion_assumptions(dataset, terms),
+    }
+    for _group, folder, _section, _placeholder in AUDIT_GROUPS:
+        if not isinstance(config.get(folder), dict) or not config[folder]:
+            raise ValueError(f"cla_review.{folder} must contain at least one checklist.")
+    jobs: list[tuple[str, str, Any]] = []
+    for group, folder, section, placeholder in AUDIT_GROUPS:
+        checklists = config[folder]
+        instructions = _fill(config[section], section, {_TERM_SHEET_PLACEHOLDER: term_sheet_context, placeholder: second_context[placeholder]})
+        for key in sorted(checklists):
+            jobs.append((group, key, batch_audit(
+                dataset_name=dataset, checklist_markdown=checklists[key],
+                skill_name=f"{SKILL_NAME}-{document_slug(source_path)}",
+                llm_instructions=instructions, response_schema=config["audit_response_schema"],
+            )))
+    results = await asyncio.gather(*(job[2] for job in jobs))
+    audits = []
+    for (group, key, _), insight in zip(jobs, results):
+        validate_audit_document(json.loads(insight.content()), require_complete=True)
+        audits.append((group, key, insight))
+    return audits
+
+
+# --- 8. synthesis -----------------------------------------------------------------
+
+def _synthesis_prompt(dataset: str, config: dict[str, Any], audits: list[tuple[str, str, InsightFile]],
+                      assessment: dict[str, Any], conversion: dict[str, Any], loans: dict[str, Any]) -> str:
+    blocks = []
+    for group, key, insight in audits:
+        label = "AUDIT AGAINST THE SECA REFERENCE" if group == "reference" else "EXECUTABILITY AUDIT"
+        blocks.append(f"### {label}: {key}\n\n{insight.content()}")
+    blocks.append("### ASSESSMENTS (company angle, lender angle)\n\n" + json.dumps(assessment, ensure_ascii=False, indent=2))
+    blocks.append("### QUESTION 2 (conversion, existing loans)\n\n" + json.dumps({"conversion": conversion, "loans": loans}, ensure_ascii=False, indent=2))
+    instructions = config["summary_instructions"].replace("{{startup}}", dataset)
+    return ("### COMBINED REVIEW MATERIAL — CONTENT START\n\n" + "\n\n".join(blocks)
+            + "\n\n### COMBINED REVIEW MATERIAL — CONTENT END\n\n### AUTHORITATIVE SUMMARY INSTRUCTIONS\n\n" + instructions)
+
+
+# --- 8. report -------------------------------------------------------------------
 
 def _absence(value: Any) -> bool:
     return value is None or value is False or value == "unstated" or value == []
@@ -442,6 +624,22 @@ def _render_question_2(conversion: dict[str, Any], loans: dict[str, Any]) -> lis
     return parts
 
 
+def _render_audits(audits: list[tuple[str, str, InsightFile]]) -> list[str]:
+    headings = {
+        "reference": "## Audit against the SECA reference term sheet",
+        "executability": "## The SHA and articles: can the conversion be executed, what accession commits me to",
+    }
+    parts: list[str] = []
+    for group, _folder, _section, _placeholder in AUDIT_GROUPS:
+        parts += [headings[group], ""]
+        for audit_group, key, insight in audits:
+            if audit_group != group:
+                continue
+            title = json.loads(insight.content())["checklist_title"]
+            parts += [f"### {title}", "", f"Checklist `{key}`, audit `{insight.path}`.", "", json_to_markdown_table(insight), ""]
+    return parts
+
+
 def render_report(
     dataset: str,
     identification: dict[str, Any],
@@ -449,6 +647,9 @@ def render_report(
     assessment: dict[str, Any],
     conversion: dict[str, Any],
     loans: dict[str, Any],
+    reference: dict[str, Any],
+    audits: list[tuple[str, str, InsightFile]],
+    synthesis: str,
     *,
     ticket: float | None,
     model: str,
@@ -477,6 +678,7 @@ def render_report(
         f"- **Status of the document:** {extraction.get('status')} — {extraction.get('status_evidence') or 'no status evidence'}",
         f"- **Ticket:** {f'{ticket:,.0f} {extraction.get('principal_currency', {}).get('value') or ''}'.strip() if ticket is not None else 'not supplied (used from slice 2 on)'}",
         f"- **As of:** {assessment['as_of']}",
+        f"- **Reference term sheet:** `{reference['reference_key']}` ({reference['selection']}: {reference['reason']})",
         f"- **Model:** {model}",
         "",
         "## Document-selection concerns",
@@ -512,10 +714,11 @@ def render_report(
     if comments:
         parts += ["### Unusual valuation and conversion provisions (verbatim)", "", comments, ""]
     parts += _render_question_2(conversion, loans)
+    parts += _render_audits(audits)
     parts += [
-        "## Not yet covered by this report",
+        "## Synthesis of material findings",
         "",
-        "\n".join(f"- {item}" for item in PENDING),
+        synthesis.strip(),
         "",
         "---",
         "",
@@ -536,9 +739,13 @@ async def cla_review(
 ) -> list[InsightFile]:
     """Review one CLA term sheet of a startup from the lender's side.
 
-    Returns the Markdown report as the only element; JSON intermediates
-    (identification, extraction, assessment) live under ``insights/cla-review/``
-    and carry the document identity in their identifier.
+    Returns the Markdown report as the only element. JSON intermediates
+    (identification, extraction, assessment, conversion, loan-context,
+    reference) live under ``insights/cla-review/``; the audits live under
+    ``insights/batch-audit/`` because ``batch_audit`` owns them. Every
+    intermediate carries the document identity in its identifier.
+    ``fresh`` regenerates the cla_review intermediates and the report; the
+    audits are reused by ``batch_audit`` on their own configuration key.
     """
     if ticket is not None and ticket <= 0:
         raise ValueError("--ticket must be a positive amount.")
@@ -565,22 +772,29 @@ async def cla_review(
     extraction = await _extract(dataset, source_path, identification, fresh=fresh)
     assessment = _assess(dataset, source_path, extraction, config, fresh=fresh)
     conversion, loans = _question_2(dataset, source_path, extraction, config, ticket=ticket, fresh=fresh)
+    reference = await _select_reference(dataset, source_path, extraction, config, fresh=fresh)
+    audits = await _run_audits(dataset, source_path, extraction, reference, config)
     captable_config = load_repository_config("captable_build")
     report.config_key = config_cache_key(
         OUTPUT_SCHEMA_VERSION, config, {name: captable_config[name] for name in _EXTRACTION_SECTIONS},
         captable_config["assessment_rules"], repository["structured_output"], {"ticket": ticket},
         identification.content(), extraction.content(), assessment.content(), conversion.content(), loans.content(),
+        reference.content(), *(insight.content() for _group, _key, insight in audits),
     )
     if not fresh and (existing := report.find(selection="reusable")):
         logger.info("[%s] Using cached CLA review %s", dataset, existing.path)
         return [existing]
+    assessment_data = _read_json(assessment, config["artifact_schemas"]["assessment"], "cla_review assessment")
+    conversion_data = _read_json(conversion, config["artifact_schemas"]["conversion"], "cla_review conversion")
+    loans_data = _read_json(loans, config["artifact_schemas"]["loan-context"], "cla_review loan-context")
+    synthesis = await generate_markdown(_synthesis_prompt(dataset, config, audits, assessment_data, conversion_data, loans_data))
     report.save(render_report(
         dataset,
         _read_json(identification, config["artifact_schemas"]["identification"], "cla_review identification"),
         _read_json(extraction, _extraction_schema(), "cla_review extraction"),
-        _read_json(assessment, config["artifact_schemas"]["assessment"], "cla_review assessment"),
-        _read_json(conversion, config["artifact_schemas"]["conversion"], "cla_review conversion"),
-        _read_json(loans, config["artifact_schemas"]["loan-context"], "cla_review loan-context"),
+        assessment_data, conversion_data, loans_data,
+        _read_json(reference, config["artifact_schemas"]["reference"], "cla_review reference"),
+        audits, synthesis,
         ticket=ticket, model=llm_model(),
     ))
     logger.info("[%s] CLA review saved to %s", dataset, report.path)
