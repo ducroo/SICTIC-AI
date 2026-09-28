@@ -248,6 +248,15 @@ async def _dd_priorities(args: List[str]) -> str:
     return _format_result(await dd_priorities(ns.startup))
 
 
+async def _pitch_deck_review(args: List[str]) -> str:
+    parser = _parser("/pitch_deck_review")
+    parser.add_argument("dataset")
+    ns = parser.parse_args(args)
+    from skills.pitch_deck_review.pitch_deck_review import pitch_deck_review
+
+    return _format_result(await pitch_deck_review(ns.dataset))
+
+
 async def _sha_review(args: List[str]) -> str:
     parser = _parser("/sha_review")
     parser.add_argument("dataset", metavar="startup")
@@ -354,6 +363,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         ),
         HarnessCommand("/dd_checks", "/dd_checks <startup>", "Run due-diligence checks.", _dd_checks),
         HarnessCommand("/dd_priorities", "/dd_priorities <startup>", "Prioritize an existing DD checks report.", _dd_priorities),
+        HarnessCommand("/pitch_deck_review", "/pitch_deck_review <dataset>", "Review a pitch deck against the published SICTIC criteria.", _pitch_deck_review),
         HarnessCommand("/sha_review", "/sha_review <startup>", "Review a startup Shareholders' Agreement.", _sha_review),
         HarnessCommand("/captable_build", "/captable_build <startup> [--fresh]", "Build consolidated cap-table/CLA JSON.", _captable_build),
         HarnessCommand("/captable", "/captable <startup> [--pre-money x] [--investment y] [--fx-rate CUR=RATE ...]", "Capitalization data, scenarios and commentary as Markdown.", _captable),
