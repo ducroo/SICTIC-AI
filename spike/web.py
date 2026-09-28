@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
+import time
+import uuid
 from dataclasses import asdict, dataclass
 from html import escape
 from pathlib import Path
@@ -11,6 +14,7 @@ from aiohttp import web
 from lib.infrastructure.logging import get_logger
 from spike.runtime import (
     SpikeStatus,
+    check_pitch_deck_upload,
     parse_skill_call,
     review_pitch_deck_upload,
     run_demo,
@@ -31,7 +35,16 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
     "sictic-logo.svg": "image/svg+xml",
     "safe-swiss-cloud-logo.svg": "image/svg+xml",
+    "review.js": "text/javascript",
 }
+
+REVIEW_STEPS = (
+    ("receive", "Receive the deck"),
+    ("extract", "Extract the text"),
+    ("review", "Review the deck"),
+    ("report", "Prepare the report"),
+)
+WORKING_MESSAGE = "We're working on your deck."
 
 _STATUS_CLASS = {
     "Fine": "status-fine",
@@ -206,6 +219,35 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
       cursor: pointer;
     }}
     button:hover {{ background: #a41c2b; }}
+    button:disabled {{
+      background: #607382;
+      cursor: not-allowed;
+    }}
+    .working {{
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }}
+    .steps {{
+      list-style: none;
+      margin: 0.75rem 0 0;
+      padding: 0;
+    }}
+    .steps li {{
+      padding: 0.35rem 0 0.35rem 0.8rem;
+      border-left: 3px solid var(--line);
+      color: var(--muted);
+    }}
+    .steps li.current {{
+      border-left-color: var(--red);
+      color: var(--ink);
+      font-weight: 600;
+    }}
+    .steps li.done {{
+      border-left-color: #0b6e4f;
+      color: #0b6e4f;
+    }}
+    .elapsed {{ color: var(--muted); margin: 0.4rem 0 0; }}
     .error {{ color: var(--red); font-weight: 600; }}
     .report {{ margin-top: 2rem; }}
     .report h2 {{ margin-top: 0; }}
@@ -231,7 +273,12 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
       gap: 0.9rem;
       color: var(--muted);
     }}
-    .sponsor img {{ height: 36px; width: auto; display: block; }}
+    .sponsor-logo {{
+      background: #4b5563;
+      padding: 0.45rem 0.7rem;
+      line-height: 0;
+    }}
+    .sponsor-logo img {{ height: 32px; width: auto; display: block; }}
     @media (max-width: 640px) {{
       h1 {{ font-size: 1.6rem; }}
       button {{ width: 100%; }}
@@ -257,17 +304,28 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
       <input id="deck" name="deck" type="file" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
       <p class="hint">PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.</p>
       <button type="submit">Review this deck</button>
+      <div id="working" class="working" hidden>
+        <p id="working-message">{WORKING_MESSAGE}</p>
+        <p id="elapsed" class="elapsed">Elapsed 0:00</p>
+        <ol class="steps">
+          <li data-step="receive">1. Receive the deck</li>
+          <li data-step="extract">2. Extract the text</li>
+          <li data-step="review">3. Review the deck</li>
+          <li data-step="report">4. Prepare the report</li>
+        </ol>
+      </div>
     </form>
-    {report_html}
+    <div id="report">{report_html}</div>
   </main>
   <footer>
     <div class="sponsor">
       <span>Hosting sponsored by Safe Swiss Cloud</span>
-      <a href="https://safeswisscloud.com/">
+      <a class="sponsor-logo" href="https://safeswisscloud.com/">
         <img src="/static/safe-swiss-cloud-logo.svg" alt="Safe Swiss Cloud">
       </a>
     </div>
   </footer>
+  <script src="/static/review.js"></script>
 </body>
 </html>
 """
@@ -344,12 +402,121 @@ async def handle_static(request: web.Request) -> web.Response:
     return web.Response(body=path.read_bytes(), content_type=content_type)
 
 
-async def handle_review(request: web.Request) -> web.Response:
-    post = await request.post()
+class ReviewJob:
+    def __init__(self, job_id: str, filename: str) -> None:
+        self.id = job_id
+        self.filename = filename
+        self.step = "receive"
+        self.started = time.monotonic()
+        self.done = False
+        self.error = ""
+        self.report = ""
+        self.status = 200
+
+
+_jobs: dict[str, ReviewJob] = {}
+
+
+def _job_status(job: ReviewJob) -> dict:
+    keys = [key for key, _label in REVIEW_STEPS]
+    if job.done and not job.error:
+        index = len(keys)
+    else:
+        index = keys.index(job.step) if job.step in keys else 0
+    steps = []
+    for position, (key, label) in enumerate(REVIEW_STEPS):
+        if job.done and not job.error:
+            state = "done"
+        elif position < index:
+            state = "done"
+        elif position == index:
+            state = "current"
+        else:
+            state = "waiting"
+        steps.append({"id": key, "label": label, "state": state})
+    body = {
+        "job_id": job.id,
+        "message": WORKING_MESSAGE,
+        "step": "report" if job.done and not job.error else job.step,
+        "steps": steps,
+        "elapsed_seconds": max(0, int(time.monotonic() - job.started)),
+        "done": job.done,
+        "error": job.error,
+    }
+    if job.done and not job.error:
+        body["report_html"] = (
+            f'<section class="report"><h2>Review of {escape(job.filename)}</h2>'
+            f"{render_report(job.report)}</section>"
+        )
+    return body
+
+
+def _prune_jobs() -> None:
+    cutoff = time.monotonic() - 7200
+    for key, job in list(_jobs.items()):
+        if job.started < cutoff:
+            del _jobs[key]
+
+
+def _upload_file(post) -> tuple[str, bytes]:
     upload = post.get("deck")
     filename = Path(getattr(upload, "filename", "") or "").name
     file_obj = getattr(upload, "file", None)
     payload = file_obj.read() if file_obj is not None else b""
+    return filename, payload
+
+
+async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
+    def on_progress(step: str) -> None:
+        job.step = step
+
+    try:
+        job.report = await review_pitch_deck_upload(
+            filename=filename,
+            payload=payload,
+            on_progress=on_progress,
+        )
+        job.step = "report"
+        job.done = True
+    except ValueError as error:
+        job.error = str(error)
+        job.status = 400
+        job.done = True
+    except Exception as error:
+        logger.exception("Pitch deck review failed.")
+        job.error = str(error)
+        job.status = 500
+        job.done = True
+
+
+async def handle_review_start(request: web.Request) -> web.Response:
+    filename, payload = _upload_file(await request.post())
+    if not filename or not payload:
+        return web.json_response(
+            {"error": "Choose a PDF or PowerPoint pitch deck."},
+            status=400,
+        )
+    try:
+        check_pitch_deck_upload(filename, payload)
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    _prune_jobs()
+    job = ReviewJob(uuid.uuid4().hex, filename)
+    _jobs[job.id] = job
+    asyncio.create_task(_finish_job(job, filename, payload))
+    return web.json_response(_job_status(job))
+
+
+async def handle_review_status(request: web.Request) -> web.Response:
+    job = _jobs.get(request.match_info["job_id"])
+    if job is None:
+        return web.json_response({"error": "That review is no longer available."}, status=404)
+    return web.json_response(_job_status(job))
+
+
+async def handle_review(request: web.Request) -> web.Response:
+    post = await request.post()
+    filename, payload = _upload_file(post)
     if not filename or not payload:
         return web.Response(
             text=render_page(error="Choose a PDF or PowerPoint pitch deck."),
@@ -457,6 +624,8 @@ ROUTES = (
     web.get("/", handle_index),
     web.get("/static/{name}", handle_static),
     web.post("/review", handle_review),
+    web.post("/review/start", handle_review_start),
+    web.get("/review/status/{job_id}", handle_review_status),
     web.post("/demo", handle_demo),
     web.get("/healthz", handle_healthz),
     web.get("/api/status", handle_api_status),

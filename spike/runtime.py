@@ -192,8 +192,8 @@ async def run_demo(*, filename: str, payload: bytes, query: str) -> DemoResult:
     return DemoResult(dataset_name=dataset_name, hits=hits)
 
 
-async def review_pitch_deck_upload(*, filename: str, payload: bytes) -> str:
-    """Ingest one uploaded deck, review it, and remove the temporary dataset."""
+def check_pitch_deck_upload(filename: str, payload: bytes) -> str:
+    """Return a safe filename, or raise ValueError before any conversion."""
     safe_name = _safe_filename(filename)
     suffix = Path(safe_name).suffix.lower()
     if suffix not in DECK_SUFFIXES:
@@ -202,7 +202,19 @@ async def review_pitch_deck_upload(*, filename: str, payload: bytes) -> str:
         raise ValueError("The file is empty.")
     if len(payload) > MAX_DECK_BYTES:
         raise ValueError("The file is larger than 25 MB.")
+    return safe_name
+
+
+async def review_pitch_deck_upload(*, filename: str, payload: bytes, on_progress=None) -> str:
+    """Ingest one uploaded deck, review it, and remove the temporary dataset."""
+    safe_name = check_pitch_deck_upload(filename, payload)
+
+    def progress(step: str) -> None:
+        if on_progress is not None:
+            on_progress(step)
+
     dataset_name = f"pitch-deck-{uuid.uuid4().hex[:12]}"
+    progress("extract")
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / safe_name
         path.write_bytes(payload)
@@ -210,6 +222,7 @@ async def review_pitch_deck_upload(*, filename: str, payload: bytes) -> str:
     try:
         from skills.pitch_deck_review.pitch_deck_review import pitch_deck_review
 
+        progress("review")
         insights = await pitch_deck_review(dataset_name)
         if not insights:
             raise RuntimeError("The review did not produce a report.")
