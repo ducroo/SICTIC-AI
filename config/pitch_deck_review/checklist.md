@@ -116,9 +116,11 @@ Mark Critical when the deck says the round is not equity, such as a grant-only o
 
 ### Company age
 
-SICTIC requires the startup to be no more than five years old, measured from incorporation. Does the deck state the incorporation year or age?
+SICTIC requires the startup to be no more than five years old, measured from incorporation. Does the deck state the incorporation year or the age?
 
-Mark Critical when the stated age is more than five years. Mark Not Found when the year or age is absent. Mark Sufficient or Fine when the stated age is five years or less.
+A founding or incorporation year is enough. Count from that year through 2026. A year of 2021 or later is within five years. Do not mark Not Found only because the deck does not print the number of years.
+
+Mark Critical when the stated year is before 2021 or the stated age is more than five years. Mark Not Found when neither a year nor an age is present. Mark Sufficient or Fine when the year is 2021 or later, or the stated age is five years or less.
 
 **Keywords:** founded, incorporated, established, years
 
