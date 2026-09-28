@@ -370,6 +370,9 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     team_profile_revised_mod = importlib.import_module(
         "skills.team_profile_revised.team_profile_revised"
     )
+    pitch_deck_review_mod = importlib.import_module(
+        "skills.pitch_deck_review.pitch_deck_review"
+    )
     monkeypatch.setattr(
         team_profile_revised_mod, "ensure_startup_dataset", fake_ensure_startup_dataset
     )
@@ -396,6 +399,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         team_profile_revised_mod,
         dd_checks_mod,
         sha_review_mod,
+        pitch_deck_review_mod,
         submission_ready_mod,
         expert_search_mod,
         potential_investors_mod,

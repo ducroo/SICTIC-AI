@@ -10,6 +10,23 @@ from lib.datasets.paths import dataset_location_for_domain
 
 logger = get_logger(__name__)
 
+async def discard_ephemeral_dataset(temp_name: str = "temp") -> None:
+    """Remove one generated dataset, including its index and saved insights."""
+    storage = get_storage()
+    location = dataset_location_for_domain(temp_name, "generated")
+    try:
+        if vector_store_backend() != "qdrant":
+            store = get_vector_store(temp_name)
+        else:
+            store = QdrantAdapter(temp_name)
+        store.delete_dataset()
+    except Exception as error:
+        logger.debug("Could not delete dataset index during cleanup: %s", error)
+    storage.rmtree(location.raw_rel)
+    storage.rmtree(location.parsed_rel)
+    storage.rmtree(location.insights_rel)
+
+
 async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -> str:
     """
     1. Cleans up any existing ephemeral dataset from previous runs.
@@ -18,23 +35,13 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     4. Runs the ingestion pipeline to parse and embed them.
     5. Returns the dataset name (e.g., 'temp') for the skill to use.
     """
+    # 1. Cleanup previous run
+    logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")
+    await discard_ephemeral_dataset(temp_name)
     storage = get_storage()
     location = dataset_location_for_domain(temp_name, "generated")
     raw_dataset_rel = location.raw_rel
     parsed_dataset_rel = location.parsed_rel
-
-    # 1. Cleanup previous run
-    logger.info(f"Cleaning up previous ephemeral dataset '{temp_name}'...")
-    try:
-        if vector_store_backend() != "qdrant":
-            store = get_vector_store(temp_name)
-        else:
-            store = QdrantAdapter(temp_name)
-        store.delete_dataset()
-    except Exception as e:
-        logger.debug(f"Could not delete dataset index during cleanup: {e}")
-    storage.rmtree(raw_dataset_rel)
-    storage.rmtree(parsed_dataset_rel)
 
     # 2. Setup: Copy external files (absolute OS paths) into the storage tree
     storage.mkdir(raw_dataset_rel)

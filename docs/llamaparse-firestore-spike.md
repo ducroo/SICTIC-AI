@@ -83,9 +83,9 @@ docker run --rm -p 8080:8080 \
 
 Pass secrets as process environment. Do not copy a `.env` into the image. `lib.infrastructure.configuration` loads repo-root `.env` with `override=True`, so empty template keys would wipe those values. Do not put `FIREBASE_SERVICE_ACCOUNT_JSON` in a file that `sed` will rewrite.
 
-The process binds `0.0.0.0` and reads `PORT` (default 8080). Cloud Run sets `PORT`. `GET /healthz` reports parser, store, and secret presence flags. It does not call LlamaCloud or Firestore. `GET /` is a private demo form that calls `prepare_ephemeral_dataset` and `dataset_search`. There is no auth. Do not publish this port. <!-- pragma: allowlist secret -->
+The process binds `0.0.0.0` and reads `PORT` (default 8080). Cloud Run sets `PORT`. `GET /healthz` reports parser, store, and secret presence flags. It does not call LlamaCloud or Firestore. `GET /` is the pitch deck page. A PDF or PowerPoint upload is ingested with `prepare_ephemeral_dataset` and reviewed by `pitch_deck_review`. The page has no skill picker. There is no auth. Do not publish this port. <!-- pragma: allowlist secret -->
 
-Skills ship in the image as `python -m skills.<name>` with `PYTHONPATH=/app`. The page lists those modules. It does not wrap every Typer CLI.
+Skills ship in the image as `python -m skills.<name>` with `PYTHONPATH=/app`. The page does not list those modules.
 
 If `docker build` fails with overlayfs `invalid argument`, prove the process with `conda run -n sictic-env python -m pytest tests/spike/test_runtime.py` and `spike/verify.sh`.
 

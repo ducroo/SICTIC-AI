@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import os
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 from lib.infrastructure.document_parser import document_parser_backend
 from lib.infrastructure.vector_store import vector_store_backend
 from lib.datasets.search import dataset_search
-from lib.ephemeral_dataset import prepare_ephemeral_dataset
+from lib.ephemeral_dataset import discard_ephemeral_dataset, prepare_ephemeral_dataset
+from lib.infrastructure.logging import get_logger
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,12 @@ class SearchHit:
 class DemoResult:
     dataset_name: str
     hits: tuple[SearchHit, ...]
+
+
+logger = get_logger(__name__)
+
+DECK_SUFFIXES = {".pdf", ".ppt", ".pptx"}
+MAX_DECK_BYTES = 25 * 1024 * 1024
 
 
 def _repo_root() -> Path:
@@ -182,3 +190,32 @@ async def run_demo(*, filename: str, payload: bytes, query: str) -> DemoResult:
         for chunk in chunks
     )
     return DemoResult(dataset_name=dataset_name, hits=hits)
+
+
+async def review_pitch_deck_upload(*, filename: str, payload: bytes) -> str:
+    """Ingest one uploaded deck, review it, and remove the temporary dataset."""
+    safe_name = _safe_filename(filename)
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in DECK_SUFFIXES:
+        raise ValueError("Upload a PDF or PowerPoint pitch deck.")
+    if not payload.strip():
+        raise ValueError("The file is empty.")
+    if len(payload) > MAX_DECK_BYTES:
+        raise ValueError("The file is larger than 25 MB.")
+    dataset_name = f"pitch-deck-{uuid.uuid4().hex[:12]}"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / safe_name
+        path.write_bytes(payload)
+        await prepare_ephemeral_dataset([str(path)], temp_name=dataset_name)
+    try:
+        from skills.pitch_deck_review.pitch_deck_review import pitch_deck_review
+
+        insights = await pitch_deck_review(dataset_name)
+        if not insights:
+            raise RuntimeError("The review did not produce a report.")
+        return insights[0].content()
+    finally:
+        try:
+            await discard_ephemeral_dataset(dataset_name)
+        except Exception:
+            logger.exception("Failed to remove pitch-deck dataset %s", dataset_name)
