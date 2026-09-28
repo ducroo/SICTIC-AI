@@ -14,6 +14,13 @@
       ],
       "title": "Status"
     },
+    "importance": {
+      "type": "integer",
+      "description": "How much this finding matters for the investment decision, from 1 (formal only) to 10 (could stop the investment).",
+      "minimum": 1,
+      "maximum": 10,
+      "title": "Importance"
+    },
     "rationale": {
       "type": "string",
       "minLength": 1,
@@ -37,6 +44,7 @@
   },
   "required": [
     "status",
+    "importance",
     "rationale",
     "source_documents",
     "proposed_next_steps_and_questions"

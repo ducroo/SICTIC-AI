@@ -211,12 +211,15 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
             if "Assessed" in statuses
             else "Fine"
         )
-        return {
+        result = {
             "status": status,
             "rationale": "Fixture evidence",
             "source_documents": ["fixture.md"],
             "proposed_next_steps_and_questions": [],
         }
+        if "importance" in schema.get("properties", {}):
+            result["importance"] = 7
+        return result
 
     async def fake_llm_chat(*_args, **_kwargs):
         return "Fixture LLM profile."

@@ -11,8 +11,10 @@ from lib.datasets.paths import dataset_location_for_domain
 from lib.infrastructure.configuration import load_repository_config
 from lib.storage import get_storage
 from skills.dd_checks.dd_checks import (
+    audit_instructions_with_context,
     chapter_by_chapter,
     find_industry_type,
+    most_important_findings,
     parse_industry_type,
 )
 
@@ -27,6 +29,39 @@ INDUSTRY_SCHEMA = json.loads(
         / "config/dd_checks/industry_type_response_schema.json"
     ).read_text(encoding="utf-8")
 )
+
+
+def _audit_insight(checks: list[tuple[str, str, int]]) -> SimpleNamespace:
+    """Build a fake DD chapter audit from (number, name, importance) checks."""
+    audit = {
+        "schema_version": 2,
+        "skill": "dd_checks",
+        "checklist_title": "Example chapter",
+        "dataset": "example-startup",
+        "model": "ollama/test_model:1b",
+        "generated_at": "2026-09-25T00:00:00Z",
+        "response_schema": AUDIT_SCHEMA,
+        "chapters": [{
+            "number": "1.1",
+            "title": "Example chapter",
+            "checks": [
+                {
+                    "number": number,
+                    "check": name,
+                    "result": {
+                        "status": "Borderline",
+                        "importance": importance,
+                        "rationale": f"Rationale for {name}.",
+                        "source_documents": [],
+                        "proposed_next_steps_and_questions": [],
+                    },
+                    "error": None,
+                }
+                for number, name, importance in checks
+            ],
+        }],
+    }
+    return SimpleNamespace(content=lambda: json.dumps(audit))
 
 
 @pytest.mark.asyncio
@@ -232,10 +267,14 @@ async def test_dd_chapters_submit_audits_concurrently_in_output_order(
     assert started == ['"commercial checklist"', '"legal checklist"']
     release.set()
 
-    sections = await task
-    assert sections == [
+    chapters = await task
+    assert [chapter.section for chapter in chapters] == [
         '## Chapter: commercial\n\n"commercial checklist"\n',
         '## Chapter: legal\n\n"legal checklist"\n',
+    ]
+    assert [chapter.audit.content() for chapter in chapters] == [
+        '"commercial checklist"',
+        '"legal checklist"',
     ]
 
 
@@ -287,16 +326,16 @@ async def test_configured_dd_product_fallback_preserves_specialist_selection(
     monkeypatch.setattr(module, "batch_audit", audit)
     monkeypatch.setattr(module, "validate_audit_document", lambda value, **_kwargs: value)
     monkeypatch.setattr(module, "json_to_markdown_table", lambda insight: "table")
-    sections = await chapter_by_chapter(
+    chapter_audits = await chapter_by_chapter(
         "example-startup", chapters, industry, config, "Audit instructions",
     )
 
-    assert len(sections) == len(selected) == 7
+    assert len(chapter_audits) == len(selected) == 7
     product = selected[-1]
     expected = parse_checklist(config["checklists"][f"7_product_{industry}"])
     assert product == expected
     assert all(check.number.startswith("7.") for chapter in product.chapters for check in chapter.checks)
-    assert "## Chapter: 7_product" in sections[-1]
+    assert "## Chapter: 7_product" in chapter_audits[-1].section
 
 
 @pytest.mark.asyncio
@@ -322,7 +361,10 @@ async def test_dd_final_report_reuse_precedes_classification(mock_env, monkeypat
     sync = AsyncMock()
     monkeypatch.setattr(module, 'sync_datasets', sync)
     classify = AsyncMock(return_value='general')
-    chapters = AsyncMock(return_value=['## Chapter\nAccepted assessment.'])
+    chapters = AsyncMock(return_value=[module.ChapterAudit(
+        section='## Chapter\nAccepted assessment.',
+        audit=_audit_insight([('1.1.1', 'Accepted', 5)]),
+    )])
     monkeypatch.setattr(module, 'find_industry_type', classify)
     monkeypatch.setattr(module, 'chapter_by_chapter', chapters)
 
@@ -352,3 +394,88 @@ async def test_dd_final_report_reuse_precedes_classification(mock_env, monkeypat
         chapters.assert_not_awaited()
         assert second.path == (manual.path if change == 'manual' else first.path)
         assert second.content() == ('# Reviewed DD report' if change == 'manual' else first.content())
+
+
+def test_every_dd_industry_type_has_a_configured_focus(mock_env):
+    config = load_repository_config("dd_checks")
+    industry_types = {key.rsplit("_", 1)[1] for key in config["checklists"]}
+
+    assert industry_types == set(config["industry_focus"])
+    for industry_type in industry_types:
+        instructions = audit_instructions_with_context(config, industry_type)
+        assert instructions.startswith(config["audit_instructions"])
+        assert f"Industry type: {industry_type}" in instructions
+        assert instructions.endswith(config["industry_focus"][industry_type])
+
+
+def test_dd_audit_context_requires_configured_industry_focus():
+    with pytest.raises(
+        ValueError,
+        match="industry_focus requires an entry for industry type 'biology'",
+    ):
+        audit_instructions_with_context(
+            {"audit_instructions": "Assess.", "industry_focus": {"general": "Focus."}},
+            "biology",
+        )
+
+
+@pytest.mark.asyncio
+async def test_dd_report_lists_most_important_findings_before_chapters(
+    mock_env, monkeypatch,
+):
+    from unittest.mock import AsyncMock
+    from skills.dd_checks import dd_checks as module
+
+    get_storage().mkdir(
+        dataset_location_for_domain("example-startup", "startups").raw_rel
+    )
+    model = "ollama/test_model:1b"
+    monkeypatch.setenv("RANKED_LLMS", model)
+    monkeypatch.setattr(module, "llm_model", lambda: model)
+    monkeypatch.setattr(
+        "lib.startups.sources.ensure_startup_dataset",
+        AsyncMock(return_value=SimpleNamespace(dataset_slug="example-startup")),
+    )
+    monkeypatch.setattr(module, "sync_datasets", AsyncMock())
+    monkeypatch.setattr(module, "find_industry_type", AsyncMock(return_value="biology"))
+    chapters = AsyncMock(return_value=[
+        module.ChapterAudit(
+            section="## Chapter: 3_team\n\nTeam table\n",
+            audit=_audit_insight([("3.1.1", "Org chart", 3), ("3.1.2", "Founder IP", 7)]),
+        ),
+        module.ChapterAudit(
+            section="## Chapter: 7_product\n\nProduct table\n",
+            audit=_audit_insight([("7.1.1", "Clinical data", 9)]),
+        ),
+    ])
+    monkeypatch.setattr(module, "chapter_by_chapter", chapters)
+
+    [insight] = await module.dd_checks("example-startup")
+    report = insight.content()
+
+    config = load_repository_config("dd_checks")
+    assert chapters.await_args.args[4] == audit_instructions_with_context(config, "biology")
+    assert "**Industry type:** biology" in report
+    top_findings = most_important_findings(report)
+    assert top_findings is not None
+    assert (
+        report.index(top_findings)
+        < report.index("## Chapter: 3_team")
+        < report.index("## Chapter: 7_product")
+    )
+    assert top_findings.index("| 9 | 7.1.1 |") < top_findings.index("| 7 | 3.1.2 |")
+    # The configured minimum importance is 6.
+    assert "3.1.1" not in top_findings
+
+
+def test_most_important_findings_returns_only_that_section():
+    report = (
+        "# DD\n\n**Industry type:** software\n\n"
+        "## Most important findings\n\nIntroduction.\n\n| 9 | 1.1.1 |\n\n"
+        "## Chapter: 1_elevator\n\nAll checks.\n"
+    )
+
+    assert most_important_findings(report) == (
+        "## Most important findings\n\nIntroduction.\n\n| 9 | 1.1.1 |"
+    )
+    assert most_important_findings("# Reviewed DD report\n\n## Chapter: 1\n") is None
