@@ -13,15 +13,15 @@ from lib.people.model import Person, extract_email_addresses
 
 
 def rank_people_by_document_weight(people: list[Person]) -> list[tuple[Person, float]]:
-    """Rank already-merged names by sum(1 / distinct names in each document).
+    """Rank merged identities by sum(1 / distinct candidates per document).
 
     Each person counts once per document, regardless of pages or repetitions.
-    Contact-only candidates do not dilute the name weights. Preserve the supplied
-    Person objects and their evidence; identity merging remains the caller's job.
+    Names, email-only identities and LinkedIn IDs share each document. Preserve
+    the supplied Person objects and evidence; identity merging remains the caller's job.
     """
     documents: dict[str, set[int]] = defaultdict(set)
     for index, person in enumerate(people):
-        if person.full_name.strip():
+        if person.identifier:
             for chunk in person.mentions:
                 documents[chunk.document_name].add(index)
     scores: dict[int, float] = defaultdict(float)
@@ -30,21 +30,13 @@ def rank_people_by_document_weight(people: list[Person]) -> list[tuple[Person, f
         for index in members:
             scores[index] += 1 / len(members)
     ranked = [(person, scores[index]) for index, person in enumerate(people)
-              if person.full_name.strip()]
+              if person.identifier]
     return sorted(ranked, key=lambda item: (-item[1], item[0].full_name.casefold(), item[0].identifier))
 
 
 def merge_person(persons: list[Person], candidate: Person) -> None:
     """Reconcile candidates using the shared identity boundary and merge policy."""
-    existing = candidate.find_best_match(persons)
-    if existing is None:
-        persons.append(candidate)
-        return
-    existing.merge(candidate)
-    for other in list(persons):
-        if other is not existing and existing.matches(other):
-            existing.merge(other)
-            persons.remove(other)
+    Person.merge_into(persons, candidate)
 
 
 class PersonExtractor:
@@ -64,6 +56,30 @@ class PersonExtractor:
 
     def extract(self, chunks: Iterable[Chunk]) -> list[Person]:
         people: list[Person] = []
+        for local, email_candidates in self._candidate_groups(chunks, merge_local=True):
+            for person in local:
+                merge_person(people, person)
+            # Preserve the production rule: extracted emails begin as sparse records.
+            for candidate in email_candidates:
+                exact = next((person for person in people
+                              if person.email_addresses == candidate.email_addresses
+                              and not person.full_name and not person.linkedin_id), None)
+                if exact is None:
+                    people.append(candidate)
+                else:
+                    exact.merge(candidate)
+        return people
+
+    def extract_candidates(self, chunks: Iterable[Chunk]) -> list[Person]:
+        """Extract once for merger comparisons, without consolidating candidates.
+
+        Named Markdown-link associations are retained. Production extract() keeps
+        its historical local/global merging and sparse-email policy.
+        """
+        return [person for local, emails in self._candidate_groups(chunks, merge_local=False)
+                for person in [*local, *emails]]
+
+    def _candidate_groups(self, chunks: Iterable[Chunk], *, merge_local: bool):
         stream = ((chunk.text, chunk) for chunk in chunks)
         for doc, chunk in self.nlp.pipe(stream, as_tuples=True, batch_size=self.batch_size):
             names = list(dict.fromkeys(
@@ -77,19 +93,17 @@ class PersonExtractor:
                     continue
                 named = Person(full_name=label).find_best_match(local)
                 if named is not None:
-                    merge_person(local, Person(full_name=named.full_name,
-                                              linkedin_id=extract_linkedin_id(url), mentions=[chunk]))
+                    candidate = Person(full_name=named.full_name,
+                                       linkedin_id=extract_linkedin_id(url), mentions=[chunk])
+                    if merge_local:
+                        merge_person(local, candidate)
+                    else:
+                        local.append(candidate)
             for identifier in extract_linkedin_ids(chunk.text):
-                merge_person(local, Person(linkedin_id=identifier, mentions=[chunk]))
-            # Emails start as sparse candidates; the final review verifies associations.
-            for person in local:
-                merge_person(people, person)
-            for email in extract_email_addresses(chunk.text):
-                exact = next((person for person in people if person.email_addresses == [email]
-                              and not person.full_name and not person.linkedin_id), None)
-                candidate = Person(email_addresses=[email], mentions=[chunk])
-                if exact is None:
-                    people.append(candidate)
+                candidate = Person(linkedin_id=identifier, mentions=[chunk])
+                if merge_local:
+                    merge_person(local, candidate)
                 else:
-                    exact.merge(candidate)
-        return people
+                    local.append(candidate)
+            yield local, [Person(email_addresses=[email], mentions=[chunk])
+                          for email in extract_email_addresses(chunk.text)]

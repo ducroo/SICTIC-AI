@@ -51,50 +51,136 @@ async def test_one_call_uses_compact_history_and_keeps_person_evidence(reconcili
 
 
 @pytest.mark.asyncio
-async def test_budget_failure_happens_before_any_llm_call(reconciliation):
+async def test_linkedin_overflow_fails_before_any_llm_call(reconciliation, monkeypatch):
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "100")
+    monkeypatch.setattr(reconciliation, "token_counter", lambda **kwargs: 100 if "mandatory-person" in kwargs.get("text", "") else 1)
     config = load_repository_config("persons_in_dataset", "discovery")
-    config.update(max_prompt_chars=2000, max_reconciliation_calls=1, instructions="Reconcile")
-    people = [Person(full_name=f"Candidate {i}", mentions=[build_chunk("evidence " * 100, f"doc-{i}.md", 1, 0)]) for i in range(10)]
-    with pytest.raises(ValueError, match="configured maximum"):
+    people = [Person(linkedin_id="mandatory-person")]
+    with pytest.raises(ValueError, match="LinkedIn candidates exceed"):
         await reconciliation.reconcile_people(people, [], startup_context="Acme", company_names=["acme"], config=config)
     reconciliation.generate_json.assert_not_awaited()
 
 
-@pytest.mark.parametrize("returned_id", ["", "incorrect-id"])
-def test_existing_person_recovers_candidate_id_and_metadata(reconciliation, returned_id):
-    chunk = build_chunk("Jane Doe", "cv.md", 1, 0)
-    candidate = Person(full_name="Jane Doe", linkedin_id="jane-id", email_addresses=["jane@example.com"], mentions=[chunk], adhoc_data={"test": {"role": "CEO"}})
-    result = reconciliation._resolve_existing(Person(full_name="Jane Doe", linkedin_id=returned_id), [candidate])
-    assert result[0].linkedin_id == "jane-id"
-    assert result[0].email_addresses == ["jane@example.com"]
-    assert result[0].mentions == [chunk]
-    assert result[0].adhoc_data == candidate.adhoc_data
-    result[0].email_addresses.append("extra@example.com")
-    assert candidate.email_addresses == ["jane@example.com"]
+def test_one_prompt_prioritizes_linkedin_then_summed_document_weights(reconciliation, monkeypatch):
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "10000")
+    # Exact, deterministic character-sized tokens isolate the selection contract.
+    monkeypatch.setattr(reconciliation, "token_counter", lambda **kw: len(kw["text"]) if "text" in kw else len(kw["messages"][0]["content"]))
+    config = load_repository_config("persons_in_dataset", "discovery")
+    config["instructions"] = "Select people"
+    website = build_chunk("Candidates", "website/team.md", 1, 0)
+    dedicated = build_chunk("Contact", "contact.md", 1, 0)
+    email = Person(email_addresses=["weighted@example.com"], mentions=[website, dedicated])
+    weak = [Person(full_name=f"Candidate {i}", mentions=[website]) for i in range(100)]
+    linkedin = Person(linkedin_id="mandatory-id")
+    people = [*weak, email, linkedin]
+    prompt, selected = reconciliation._prepare_prompt(people, [], startup_context="Acme", company_names=["acme"], config=config)
+    assert selected[:2] == [linkedin, email]
+    assert len(selected) < len(people)
+    assert '"mandatory-id"' in prompt
+    assert people[-1] is linkedin  # caller ordering is unchanged
+    schema_overhead = reconciliation.schema_prompt_block(config["response_schema"]) + "\n\n"
+    import json
+    assert len(schema_overhead + prompt) + len(json.dumps(reconciliation.json_schema_response_format(config["response_schema"]))) <= 7500
 
 
-def test_existing_person_without_candidate_is_discarded(reconciliation):
-    assert reconciliation._resolve_existing(Person(full_name="Unknown Stranger", linkedin_id="invented-id"), [Person(full_name="Jane Doe", linkedin_id="jane-id")]) == []
+@pytest.mark.asyncio
+async def test_more_than_thirty_candidates_fit_in_one_request(reconciliation, monkeypatch):
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "262144")
+    people = [Person(full_name=f"Candidate {i}") for i in range(100)]
+    config = load_repository_config("persons_in_dataset", "discovery")
+    prompt, selected = reconciliation._prepare_prompt(people, [], startup_context="Acme", company_names=["acme"], config=config)
+    assert len(selected) == 100
+    await reconciliation.reconcile_people(people, [], startup_context="Acme", company_names=["acme"], config=config)
+    reconciliation.generate_json.assert_awaited_once()
 
 
-def test_candidate_without_id_does_not_inherit_returned_id(reconciliation):
-    result = reconciliation._resolve_existing(Person(full_name="Jane Doe", linkedin_id="invented-id"), [Person(full_name="Jane Doe")])
-    assert result[0].linkedin_id == ""
+def test_mandatory_context_overflow(reconciliation, monkeypatch):
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "1")
+    with pytest.raises(ValueError, match="Startup/team context"):
+        reconciliation._prepare_prompt([], [], startup_context="Acme", company_names=["acme"], config=load_repository_config("persons_in_dataset", "discovery"))
 
 
-def test_ambiguous_existing_retains_candidates_without_mixing_contacts(reconciliation):
+@pytest.mark.parametrize("name,email,noisy", [
+    ("Christoph Messmer", "c.messmer@ai-on.ai", "Christoph Messmer"),
+    ("Gianina Viglino-Caviezel", "g.viglino@ai-on.ai", "Gianina Viglino-CaviezelCo-Founder"),
+    ("Karim Itani", "k.itani@ai-on.ai", "Karim Itani Co-Founder"),
+])
+def test_complementary_fragments_enrich_one_clean_person(reconciliation, name, email, noisy):
+    name_chunk = build_chunk(name, "team.md", 1, 0)
+    email_chunk = build_chunk(email, "contact.md", 1, 0)
+    candidates = [Person(full_name=noisy, mentions=[name_chunk]),
+                  Person(email_addresses=[email], mentions=[email_chunk])]
+    result = reconciliation._enrich_person(Person(full_name=name, email_addresses=[email]), candidates)
+    assert result.full_name == name
+    assert result.email_addresses == [email]
+    assert {c.chunk_id for c in result.mentions} == {name_chunk.chunk_id, email_chunk.chunk_id}
+    assert candidates[0].email_addresses == []
+    assert candidates[1].full_name == ""
+    result.mentions.clear()
+    assert candidates[0].mentions == [name_chunk]
+
+
+def test_unmatched_returned_person_is_preserved(reconciliation):
+    person = Person(full_name="New Person", linkedin_id="new-id")
+    result = reconciliation._enrich_person(person, [Person(full_name="Jane Doe")])
+    assert result == person
+    assert result is not person
+
+
+def test_matching_candidate_enriches_missing_id_and_metadata(reconciliation):
+    candidate = Person(full_name="Jane Doe", linkedin_id="jane-id",
+                       adhoc_data={"test": {"role": "CEO"}})
+    result = reconciliation._enrich_person(Person(full_name="Jane Doe"), [candidate])
+    assert result.linkedin_id == "jane-id"
+    assert result.adhoc_data == candidate.adhoc_data
+    result.adhoc_data["test"]["role"] = "CTO"
+    assert candidate.adhoc_data["test"]["role"] == "CEO"
+
+
+def test_conflicting_ids_do_not_override_returned_identity(reconciliation):
     candidates = [Person(full_name="Jane Doe", linkedin_id="jane-one", email_addresses=["one@example.com"]),
                   Person(full_name="Jane Doe", linkedin_id="jane-two", email_addresses=["two@example.com"])]
-    returned = Person(full_name="Jane Doe", linkedin_id="wrong-id", email_addresses=["llm@example.com"])
-    result = reconciliation._resolve_existing(returned, candidates)
-    assert [(p.linkedin_id, p.email_addresses) for p in result] == [("jane-one", ["one@example.com"]), ("jane-two", ["two@example.com"])]
-    assert returned.linkedin_id == "wrong-id"
+    result = reconciliation._enrich_person(Person(full_name="Jane Doe", linkedin_id="returned-id"), candidates)
+    assert result.linkedin_id == "returned-id"
+    assert result.email_addresses == []
 
 
-def test_explicit_matching_id_does_not_trigger_name_only_fallback(reconciliation):
-    candidates = [Person(full_name="Jane Doe"), Person(full_name="Jane Doe", linkedin_id="jane-one"), Person(full_name="Jane Doe", linkedin_id="jane-two")]
-    result = reconciliation._resolve_existing(Person(full_name="Jane Doe", linkedin_id="jane-one"), candidates)
-    assert [p.linkedin_id for p in result] == ["jane-one"]
+def test_multiple_candidate_ids_are_not_arbitrarily_assigned(reconciliation):
+    candidates = [Person(full_name="Jane Doe", linkedin_id="jane-one", email_addresses=["one@example.com"]),
+                  Person(full_name="Jane Doe", linkedin_id="jane-two", email_addresses=["two@example.com"]),
+                  Person(full_name="Jane Doe", email_addresses=["supported@example.com"])]
+    result = reconciliation._enrich_person(Person(full_name="Jane Doe"), candidates)
+    assert result.linkedin_id == ""
+    assert result.email_addresses == ["supported@example.com"]
+
+
+def test_exact_id_also_collects_idless_fragments(reconciliation):
+    chunk = build_chunk("jane@example.com", "contact.md", 1, 0)
+    candidates = [Person(full_name="Jane Doe", linkedin_id="jane-one"),
+                  Person(full_name="Jane Doe", linkedin_id="jane-two", email_addresses=["other@example.com"]),
+                  Person(email_addresses=["jane@example.com"], mentions=[chunk])]
+    result = reconciliation._enrich_person(Person(full_name="Jane Doe", linkedin_id="jane-one",
+                                                  email_addresses=["jane@example.com"]), candidates)
+    assert result.linkedin_id == "jane-one"
+    assert result.email_addresses == ["jane@example.com"]
+    assert result.mentions == [chunk]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("group", ["existing_persons", "additional_persons"])
+async def test_returned_people_are_the_only_roster_members(reconciliation, group):
+    chunk = build_chunk("Christoph Messmer: c.messmer@ai-on.ai", "team.md", 1, 0)
+    candidates = [Person(full_name="Christoph Messmer", mentions=[chunk]),
+                  Person(email_addresses=["c.messmer@ai-on.ai"]), Person(full_name="Unselected Person")]
+    response = {"existing_persons": [], "additional_persons": []}
+    response[group] = [{"full_name": "Christoph Messmer", "linkedin_id": "", "email_addresses": ["c.messmer@ai-on.ai"]}]
+    reconciliation.generate_json.return_value = response
+    result = await reconciliation.reconcile_people(candidates, [], startup_context="Aion", company_names=["aion"],
+        config=load_repository_config("persons_in_dataset", "discovery"))
+    assert len(result) == 1
+    assert result[0].full_name == "Christoph Messmer"
+    assert result[0].email_addresses == ["c.messmer@ai-on.ai"]
+    assert result[0].mentions == [chunk]
 
 
 def test_response_schema_objects_are_closed_and_require_all_fields():

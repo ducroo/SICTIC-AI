@@ -8,7 +8,7 @@ from lib.datasets.models import Chunk
 from lib.datasets.paths import dataset_location
 from lib.datasets.search import dataset_search
 from lib.datasets.source import iter_parsed_chunks, snapshot_source_files
-from lib.infrastructure.configuration import config_cache_key, load_repository_config
+from lib.infrastructure.configuration import config_cache_key, get_env_var, load_repository_config
 from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 from lib.people.linkedin.errors import is_acquisition_unavailable
 from lib.infrastructure.logging import get_logger
@@ -16,7 +16,7 @@ from lib.infrastructure.web_search import WebSearchAdapter
 from lib.insights import InsightFile, InsightResult
 from lib.model_config import llm_model
 from lib.people.discovery import _render_manual_persons_table, manual_persons_in_dataset, read_persons_roster
-from lib.people.extraction import PersonExtractor, merge_person, rank_people_by_document_weight
+from lib.people.extraction import PersonExtractor, merge_person
 from lib.people.linkedin import LinkedInResolver
 from lib.people.linkedin.search import search_people
 from lib.people.linkedin.identity import is_linkedin_document
@@ -42,7 +42,8 @@ def _roster_insight(dataset: str, config: dict) -> InsightFile:
         except PackageNotFoundError:
             packages[package] = None
     return InsightFile(dataset, "persons_in_dataset", llm_model(), config_key=config_cache_key(
-        "people-discovery-v2", config, sorted(sources), packages, startup_aliases(),
+        "people-discovery-v3", config, sorted(sources), packages, startup_aliases(),
+        int(get_env_var("OLLAMA_CONTEXT_LENGTH_MAX")),
     ))
 
 
@@ -51,22 +52,6 @@ def _scan(dataset: str, extractor: PersonExtractor) -> tuple[list[Person], list[
     # LinkedIn JSON is consumed as structured data, never as NER input.
     chunks = [chunk for chunk in chunks if not is_linkedin_document(chunk.document_name)]
     return extractor.extract(chunks), chunks
-
-
-def _shortlist_ner_people(people: list[Person], limit: int) -> list[Person]:
-    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
-        raise ValueError("ner_max_candidates must be a positive integer")
-    ranked = rank_people_by_document_weight(people)
-    selected = {id(person) for person, _ in ranked[:limit]}
-    # Explicit contacts and imported website discoveries are independent inputs.
-    result = [person for person in people if id(person) in selected
-              or person.linkedin_id or person.email_addresses
-              or any(chunk.document_name.startswith("website/") for chunk in person.mentions)]
-    logger.info("NER weighted shortlist: %d/%d names selected; %d candidates retained including contacts and website evidence",
-                min(limit, len(ranked)), len(ranked), len(result))
-    for rank, (person, score) in enumerate(ranked[:limit], 1):
-        logger.debug("NER rank %d: %s (document weight %.6f)", rank, person.display_name, score)
-    return result
 
 
 async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
@@ -132,7 +117,6 @@ async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
                 people, chunks = await asyncio.to_thread(_scan, dataset, extractor)
     elif not website and location.domain == "startups":
         logger.info("[%s] No unambiguous documented website; skipping website crawl", dataset)
-    people = _shortlist_ner_people(people, config["ner_max_candidates"])
     for person in resolver.get_cached_persons():
         merge_person(people, person)
     web_chunks: list[Chunk] = []

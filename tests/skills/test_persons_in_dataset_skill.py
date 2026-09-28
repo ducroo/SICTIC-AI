@@ -74,11 +74,7 @@ async def test_names_without_linkedin_create_generated_roster_and_reuse_before_s
 
 
 @pytest.mark.asyncio
-async def test_weighted_shortlist_precedes_search_and_preserves_independent_sources(discovery, monkeypatch):
-    config = discovery.load_repository_config("persons_in_dataset", "discovery")
-    config["ner_max_candidates"] = 1
-    original_config = discovery.load_repository_config
-    monkeypatch.setattr(discovery, "load_repository_config", lambda *sections: config if sections == ("persons_in_dataset", "discovery") else original_config(*sections))
+async def test_all_candidates_reach_reconciliation_without_an_early_shortlist(discovery, monkeypatch):
     crowded = build_chunk("Several names", "paper.md", 1, 0)
     dedicated = build_chunk("Strong Candidate", "cv.md", 1, 0)
     strong = Person(full_name="Strong Candidate", mentions=[dedicated])
@@ -86,7 +82,7 @@ async def test_weighted_shortlist_precedes_search_and_preserves_independent_sour
     contact = Person(linkedin_id="explicit-id", mentions=[crowded])
     email = Person(email_addresses=["person@example.com"], mentions=[crowded])
     website = Person(full_name="Website Person", mentions=[crowded, build_chunk("Website Person", "website/team.md", 1, 0)])
-    # Strong ranks first; website survives independently despite the cutoff.
+    # All local candidates survive until token-budget selection in reconciliation.
     strong.mentions.append(build_chunk("Strong Candidate", "employment.md", 1, 0))
     discovery._scan.side_effect = lambda *_: ([strong, weak, contact, email, website], [])
     discovery.LinkedInResolver.return_value.get_cached_persons.return_value = [Person(full_name="Cached Person", linkedin_id="cached-id")]
@@ -95,7 +91,7 @@ async def test_weighted_shortlist_precedes_search_and_preserves_independent_sour
     people = await discovery.persons_in_dataset_as_person_objects("acme")
     discovery.search_people.assert_called_once()
     assert discovery.search_people.call_args.args == ("acme",)
-    assert "Weak Candidate" not in [p.full_name for p in people]
+    assert "Weak Candidate" in [p.full_name for p in people]
     assert {"Strong Candidate", "Website Person", "Web Search Person"} <= {p.full_name for p in people}
     assert {p.linkedin_id for p in people} >= {"explicit-id", "cached-id", "search-id"}
     assert any(p.email_addresses == ["person@example.com"] for p in people)
@@ -352,3 +348,11 @@ async def test_one_company_search_regardless_of_candidate_count(discovery, monke
     )
     assert any(p.linkedin_id == "discovered-employee" for p in people)
     assert any(p.full_name == "Candidate 99" for p in people)
+
+
+@pytest.mark.asyncio
+async def test_context_cap_change_invalidates_generated_roster(discovery, monkeypatch):
+    await discovery.persons_in_dataset("acme")
+    monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "16384")
+    await discovery.persons_in_dataset("acme")
+    assert discovery.reconcile_people.await_count == 2
