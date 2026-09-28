@@ -8,6 +8,7 @@ from lib.infrastructure.dealum import DealumAdapter
 from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.startups.identity import canonical_startup_slug
+from lib.startups.dealum.session import list_applications
 
 logger = get_logger(__name__)
 
@@ -95,7 +96,7 @@ def reconcile_dealum_startup(
     )
     if applications is None:
         try:
-            applications = adapter.list_applications()
+            applications = list_applications(adapter)
         except Exception:
             logger.exception(
                 "[dealum-reconcile] Failed to retrieve Dealum applications: "
@@ -136,6 +137,15 @@ def reconcile_dealum_startup(
             "application_code",
             adapter.dealroom_id,
         )
+
+    # Explicit configured aliases are a fallback; exact names/codes retain precedence.
+    canonical = canonical_startup_slug(requested)
+    alias_matches = [
+        application for application in applications
+        if canonical_startup_slug(str(application.get("name") or "")) == canonical
+    ]
+    if alias_matches:
+        return _dealum_match(requested, alias_matches, "startup_alias", adapter.dealroom_id)
 
     logger.warning(
         "[dealum-reconcile] No exact match: requested=%r normalized=%r "

@@ -99,6 +99,10 @@ confirming that Drive contains the intended canonical files.
 - `rclone-sync/logs/`: immutable log for each invocation.
 - `logs/rclone.log`: continuous operational log.
 
+Output streams live to the terminal and both logs, including progress statistics
+every 30 seconds. The helper waits for logging to finish before releasing its lock
+and preserves rclone's failure exit status.
+
 Changing `filters.txt` requires a new reviewed bootstrap because rclone protects
 against applying changed filters to an existing baseline. Directory modification
 times are not written locally; file contents and file modification times remain

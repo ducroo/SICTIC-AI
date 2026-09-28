@@ -11,7 +11,8 @@ Import the application's source snapshot through the shared Dealum library.
 
 The async `dealum_import(startup)` returns `DealumImportResult`, not
 `list[InsightFile]`. Shared matching accepts exact normalized names or application
-codes. Duplicate names select the latest available application date; unresolved
+codes, then falls back to explicitly configured startup aliases. Duplicate matches
+select the latest available application date; unresolved
 ties or missing usable dates require a more specific identifier.
 
 The shared importer requires configured Dealum credentials. It creates the
@@ -20,6 +21,14 @@ raw JSON, metadata and downloaded attachments before replacing the
 `datasets/dealum/` snapshot. Removed attachments disappear from the replacement.
 A download failure preserves the prior snapshot. The importer does not perform
 dataset indexing or generate insight reports.
+Identical source snapshots are not replaced; only changed bookkeeping is updated.
+For partial source changes, unchanged files are reused through staged hard links,
+preserving their content, identity and modification timestamps. Within a bulk-refresh
+run, successful imports and the application list
+are reused by composed workflows; standalone imports retain their normal behavior.
+Bulk refresh disables imports for Application-stage and already archived dossiers;
+composed calls return `imported=False` without downloads or activation for those
+dossiers. This restriction is scoped to the bulk run, not standalone explicit imports.
 
 Inspect the result's `application_found`, `changed`, counts and paths.
 The direct CLI continues after individual failures and exits with code 1 if

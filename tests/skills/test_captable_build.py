@@ -60,13 +60,15 @@ def test_document_classes_match_schema_enum() -> None:
     assert tuple(enum) == DOCUMENT_CLASSES
 
 
-def test_specialized_schema_pins_filenames() -> None:
+def test_specialized_schema_bounds_count_without_filename_enum() -> None:
     schema = _load("classification_response_schema.json")
-    filenames = ["a.pdf", "b.xlsx", "c.md"]
+    filenames = ["a.pdf", "Data Room/02 Legal/b (signed) & final.xlsx", "c.md"]
     specialized = _specialized_schema(schema, filenames)
     documents = specialized["properties"]["documents"]
     assert documents["minItems"] == documents["maxItems"] == 3
-    assert documents["items"]["properties"]["filename"]["enum"] == filenames
+    # Issue #76: data-room paths must not be pinned through a schema enum;
+    # the reviewer enforces the exact filename set instead.
+    assert "enum" not in documents["items"]["properties"]["filename"]
     # The base schema must remain untouched.
     assert "minItems" not in schema["properties"]["documents"]
 
@@ -85,6 +87,22 @@ def test_classification_reviewer_requires_exact_file_set() -> None:
         "documents": [{"filename": "a.pdf"}, {"filename": "a.pdf"}]
     }
     assert reviewer(duplicated).problems
+
+
+def test_classification_reviewer_rejects_altered_filenames() -> None:
+    """Without a schema enum, the reviewer is what keeps filenames verbatim."""
+    expected = ["Data Room/02 Legal/b (signed) & final.xlsx", "c.md"]
+    reviewer = _review_classification(expected)
+    altered = {
+        "documents": [
+            {"filename": "b (signed) & final.xlsx"},
+            {"filename": "c.md"},
+        ]
+    }
+    problems = reviewer(altered).problems
+    assert len(problems) == 1
+    assert "Missing: ['Data Room/02 Legal/b (signed) & final.xlsx']" in problems[0]
+    assert "unexpected: ['b (signed) & final.xlsx']" in problems[0]
 
 
 def _minimal_extraction(**overrides) -> dict:

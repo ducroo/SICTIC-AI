@@ -22,6 +22,7 @@ dependencies:
   - requests
   - rich
   - striprtf
+  - spacy
   - typer<0.25
   - xlrd
   # Optional SaaS backends (DOCUMENT_PARSER=llamaparse / VECTOR_STORE=firestore).  # pragma: allowlist secret

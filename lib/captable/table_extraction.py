@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from lib.captable.table_evidence import (
-    DOCUMENT_HEADINGS, ROW_SCOPE, TABLE_SCOPE, QuoteError, Source, numbers, resolve_quote,
+    DOCUMENT_HEADINGS, ROW_SCOPE, TABLE_SCOPE, QuoteError, Source, resolve_quote,
 )
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
@@ -17,11 +17,6 @@ logger = get_logger(__name__)
 # share (covers rounding rows); larger gaps mean silently dropped rows.
 COMPLETENESS_TOLERANCE = 0.005
 POOL_FIELDS = frozenset({"total", "granted", "unallocated"})
-
-
-def _numbers_in_quote(quote: str) -> set[float]:
-    """Recognize source numerals cell by cell, never joining across cells."""
-    return {float(value) for cell in quote.split("|") for value in numbers(cell)}
 
 
 def _review_evidence(output: dict, document_text: str) -> list[str]:

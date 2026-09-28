@@ -8,6 +8,8 @@ from lib.infrastructure.configuration import config_cache_key, load_repository_c
 from lib.infrastructure.ai_text_generation import generate_markdown
 from lib.insights import InsightFile, InsightResult
 from lib.people.linkedin import LinkedInResolver
+from lib.people.linkedin.errors import is_acquisition_unavailable
+from lib.infrastructure.errors import InfrastructureError
 from lib.infrastructure.logging import get_logger
 from lib.people.discovery import persons_in_dataset
 from lib.people.dossier import build_person_dossier
@@ -98,10 +100,19 @@ async def _person_profile_result(
     # 2. Batch Resolution
     logger.info(f"[{dataset_slug}] Resolving profiles for {len(target_persons)} entities...")
     linkedin_resolver = LinkedInResolver(dataset_slug)
-    all_profiles_raw = await asyncio.to_thread(
-        linkedin_resolver.get_profiles,
-        target_persons,
-    )
+    acquisition_incomplete = False
+    try:
+        all_profiles_raw = await asyncio.to_thread(
+            linkedin_resolver.get_profiles,
+            target_persons,
+        )
+    except InfrastructureError as error:
+        if not is_acquisition_unavailable(error):
+            raise
+        logger.warning("[%s] LinkedIn acquisition incomplete; continuing with available evidence: %s", dataset_slug, error)
+        acquisition_incomplete = True
+        # The resolver attaches successful retrievals before raising.
+        all_profiles_raw = target_persons
     await sync_datasets([dataset_slug], raise_on_error=True)
 
     # De-duplicate the resolved profiles using Person entity resolution
@@ -124,6 +135,7 @@ async def _person_profile_result(
                 dataset_slug,
                 person,
                 include_dataset_context=include_dataset_context,
+                linkedin_incomplete=bool(acquisition_incomplete and person.linkedin_id and not person.linkedin_profile),
             )
 
     generated = await asyncio.gather(
@@ -191,6 +203,7 @@ async def _generate_single_profile(
     person: Person,
     *,
     include_dataset_context: bool = True,
+    linkedin_incomplete: bool = False,
 ) -> InsightFile:
     """
     Worker function to generate a single profile from a fully populated Person Wrapper.
@@ -214,7 +227,7 @@ async def _generate_single_profile(
 
     # Generation settings affect freshness, never the standard profile filename.
     effective_config_key = config_cache_key(
-        query + llm_instructions,
+        query + llm_instructions + conf["incomplete_notice"],
         {
             "include_dataset_context": include_dataset_context,
         },
@@ -273,6 +286,8 @@ async def _generate_single_profile(
         )
         profile_output = await generate_markdown(prompt)
     
+    if linkedin_incomplete:
+        profile_output = conf["incomplete_notice"].strip() + "\n\n" + profile_output
     profile_output = _ensure_profile_metadata_header(person, profile_output)
 
     # Save and update object

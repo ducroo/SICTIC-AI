@@ -13,6 +13,7 @@ from lib.startups.dealum.manifest import (
 )
 from lib.infrastructure.logging import get_logger
 from lib.startups.identity import canonical_startup_slug
+from lib.startups.dealum.session import current_session
 from lib.storage import get_storage
 from lib.datasets.paths import (
     find_dataset_location,
@@ -47,6 +48,13 @@ async def ensure_startup_dataset(
     existing_location = find_dataset_location(dataset_slug)
     dataset_exists = existing_location is not None
     adapter = DealumAdapter()
+    session = current_session()
+    if session is not None and dataset_slug in session.checked:
+        return StartupDataStatus(
+            startup=startup, dataset_slug=dataset_slug,
+            dataset_exists=dataset_exists, dealum_configured=adapter.is_configured(),
+            dealum_checked=True,
+        )
 
     if not adapter.is_configured():
         return StartupDataStatus(

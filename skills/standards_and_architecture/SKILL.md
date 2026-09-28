@@ -43,11 +43,41 @@ Use `Person.identifier`: **LinkedIn ID → first normalized email → slugified
 full name**. `Person.display_name` is display text, not artifact identity.
 Use `extract_linkedin_id` from `lib.people.linkedin` for URLs or ID inputs.
 
-Reconcile through `Person.match_score`, `matches`, `find_best_match` and `merge`.
+Reconcile through `Person.match_score`, `matches`, `find_matches`, `find_best_match`
+and `merge`. Candidate selection returns only exact LinkedIn-ID matches when
+present; otherwise it ranks qualifying shared scores, preserving input order on
+ties. `find_best_match` returns the first selection. Dropping an ID for a retry
+is an explicit caller policy, not an automatic shared fallback.
+On merge, prefer the structured name from the person's own LinkedIn profile;
+without an available matching profile name, retain the existing longer-name rule.
 Confirm the match before merging; `merge` does not validate compatibility.
 LinkedIn-cache resolution uses the stricter `find_cached_person` policy and
 preserves explicit ID boundaries. Do not substitute general matching for it.
 Preserve existing thresholds and workflow-specific rules for supplied contacts.
+
+For merger comparisons, `Person.merge_all` exposes the existing incremental
+consolidation (also used by extraction's `merge_person`). `Person.merge_all_alternative` is an
+experimental alternative, not used by production workflows: stable groups of
+LinkedIn IDs, names with emails, email-only records, then others; exact ID lookup;
+email-only records merge directly into the first target with an exact email match,
+including when multiple targets match. Other records use email-restricted fuzzy selection;
+strictly greater than 85 using token-sort similarity. It compares full names with
+full names and derived LinkedIn/email names in both directions, never two derived
+names. Different explicit IDs remain separate, and ties retain target order.
+Experimental matching normalizes Unicode with NFKC, case folding and punctuation/
+spacing cleanup, preserving non-Latin letters. This does not change canonical
+identifiers or filename normalization.
+Both routines mutate retained objects; compare independent deep copies of one
+candidate list. `PersonExtractor.extract_candidates` supplies unmerged local
+candidates for this purpose; normal `extract` retains its sparse-email behavior.
+Run `SICTIC_PERSON_MERGE_BENCHMARK=1` with
+`python -m pytest -s tests/people/test_person_merge_comparison.py` for a synthetic
+comparison. Set `SICTIC_PERSON_MERGE_DATASET` for a local parsed dataset and
+`SICTIC_PERSON_MERGE_REPORT` for a JSON report with timing, counts and identity/evidence
+signatures. Local datasets also require `SICTIC_DISCOVERY_BENCHMARK_STORAGE` and
+`SICTIC_DISCOVERY_BENCHMARK_RUNTIME` pointing to their storage roots (pytest's
+default storage is isolated). This compares merger policies, not end-to-end
+discovery runtime.
 
 ### Authoritative roster and table parsing
 
@@ -59,10 +89,11 @@ owns reading and rendering. Its synchronous readers never discover or enrich:
 - `persons_in_dataset`: absent file raises, directing callers to the skill.
 - Both return `[]` for an intentionally empty valid table and reject invalid input.
 
-The manual roster is authoritative. Preserve edits; generated discovery JSON
-is not an alternative input. Empty discovery must not create a permanent empty
-roster. Consumers must read it without implicit discovery; bulk refresh may run
-the declared discovery dependency.
+The manual roster is authoritative. Preserve edits. Without one, the general
+reader selects an existing model-generated Markdown roster through InsightFile;
+generated discovery JSON is not an alternative input. Empty discovery must not
+create a permanent empty roster. Consumers read without implicit discovery or
+freshness enforcement; bulk refresh may run the declared discovery dependency.
 The discovery sources and `sictic-members` cache-only path belong in the skill.
 
 Use the roster reader for roster inputs. For other person tables, use
@@ -76,14 +107,23 @@ incidental-mention lists. Its `get_filtered_chunks`, `person_in_filename` and
 `is_personal_document` own retrieval filtering and document selection.
 Dossiers exclude LinkedIn documents; profiling supplies that evidence separately.
 Preserve source-document and page metadata; do not recreate selection in skills.
+Local discovery uses shared source enumeration/chunking and the person extraction
+module. Candidate evidence belongs in `Person.mentions`; its merge deduplicates
+by chunk identity, preserving different passages from the same document page.
 
 ### LinkedIn retrieval and persistence
 
 Use [LinkedInResolver](../../lib/people/linkedin/service.py):
 
 - `get_cached_persons`: cached `Person` objects without external requests.
+- `resolve_pending_profiles`: resolve this dataset's registered requests in one
+  existing resolver pass before the standard manual/reusable insight lookup.
+- `collect_pending_profiles`: collect existing runs without new submissions or
+  waiting; return this dataset's unresolved people for the existing resolver.
 - `get_profiles`: enriches people; may fetch profiles, write stored files and
   registry state, or raise unresolved-profile errors.
+  Successfully retrieved profiles are attached before unresolved-profile errors
+  are raised, so callers that handle those errors retain partial enrichment.
 - `get_profiles(allow_scrape=False)`: can still register missing profiles;
   it is not read-only.
 - `get_all_persons`: display-name strings, not a roster or complete objects.
@@ -91,6 +131,9 @@ Use [LinkedInResolver](../../lib/people/linkedin/service.py):
 Use [LinkedInProfileStore](../../lib/people/linkedin/store.py); its `write`
 applies shared `clean_linkedin_payload`. Stored LinkedIn JSON and generated
 profile Markdown are distinct artifacts. Do not vary stored payloads by skill.
+LinkedIn-focused search and local employment-evidence condensation belong in
+the LinkedIn module. Condensation does not modify stored payloads or generate
+person profiles.
 
 Use [LinkedInRegistry](../../lib/people/linkedin/registry.py) mutation methods
 and their locked updates, not independent load–modify–save or direct JSON edits.
@@ -161,6 +204,9 @@ such as JSON; not every insight is Markdown.
 Save through `save()`. Manual precedence is applied during selection;
 `save()` itself does not prevent overwriting a manual file.
 Automated generation must preserve manual overrides.
+
+When a workflow produces partial output, describe that limitation in its Markdown
+for the deal lead. Such notices do not change InsightFile or its freshness rules.
 
 ### Selection and freshness
 
@@ -345,6 +391,11 @@ policies belong to the shared pipeline.
 Use `is_active_dataset`, `activate_dataset` and `archive_dataset`
 for refresh-status markers. Archiving changes refresh eligibility;
 it does not delete the dataset.
+`update_dataset_inactivity` applies the bulk-refresh calendar-month expiry rule
+using `latest_dataset_edit`; the existing `archive_dataset(age_days=...)` retains
+its marker-age semantics for compatibility. Bulk archive markers are terminal for
+automation; only manual activation removes the block. Bulk stage policy and expiry
+rules are documented in the bulk-refresh skill.
 
 Use the `dataset_maintenance` skill for operational maintenance rather
 than adding repair or rebuild logic to unrelated skills.
@@ -398,9 +449,10 @@ repairs unambiguous JSON syntax; `validate_json_schema` checks the contract
 without modifying data; an optional `Review` reviewer checks business rules.
 Reviewers receive schema-valid data, and generation validates their returned
 payload again. The provider response format omits unsupported `if`/`then`/`else`
-keywords; the prompt and local validator retain the full schema, including
-those conditional checks. Put nonblank-text constraints and structural field dependencies
-in schemas. Perform business review once within generation; afterwards only
+keywords and regular-expression `pattern` keywords, which local Ollama models
+reject or stall on; the prompt and local validator retain the full schema,
+including those checks. Put nonblank-text constraints and structural field
+dependencies in schemas. Perform business review once within generation; afterwards only
 convert or render the accepted result. Keep adapter `None` handling for absent
 evidence. Standalone text parsers use the same repair, validation and business
 review sequence explicitly.
@@ -413,6 +465,12 @@ supported. Prompt caching does not replace insight freshness checks.
 Use `ApifyAdapter`, `DealumAdapter` and `WebSearchAdapter` for their
 provider operations. Business decisions belong in domain libraries
 or skills, not generic adapters.
+
+Apify API/HTTP failures use `InfrastructureError` with provider `apify` and the
+operation name; web search preserves that structured error. Capacity, credit,
+authentication, rate limits and transport failures remain distinguishable from
+invalid responses. Callers decide whether an unavailable acquisition step allows
+an incomplete output; adapters do not silently substitute empty results.
 
 Use dataset-scoped `QdrantAdapter` operations and preserve dataset
 filtering within shared collections. Deleting a dataset is different
@@ -436,6 +494,18 @@ Keep scheduling metadata non-sensitive.
 
 Preserve shared concurrency, lease and cloud-budget policies.
 Do not modify scheduler state directly; use `snapshot()` for diagnostics.
+
+The default scheduler has one dispatcher thread per process, shared across
+caller event loops. Jobs await grant futures instead of polling. The dispatcher
+batches registrations, releases and heartbeats under one shared-state lock;
+arrivals and completions wake it immediately. While requests wait, it polls
+at the configured interval for capacity changes in other processes. With only
+running work it wakes for heartbeats; with no work it exits and restarts on demand.
+Scheduler-state I/O failures allow three consecutive attempts before failing waiting
+callers. Running jobs remain tracked, and the dispatcher continues heartbeat and
+cleanup attempts. Retried registrations are idempotent even if an earlier write
+was published before reporting an error. Persistent storage outages can still
+exceed the shared lease lifetime; retries do not change lease-expiry policy.
 
 Scheduler waiting and provider request timeouts are separate.
 Use the shared transient-error retry mechanism and keep provider
@@ -529,9 +599,16 @@ Harness registration does not imply bulk-refresh registration.
 
 Register batch workflows in `skills/skill_registry.py` with their
 callable, supported domains and prerequisite skill keys.
+The registry also owns `mandatory_stages` for default per-dataset selection.
+Selected `prepares_sources` jobs run before insight jobs for the same dataset;
+this ordering does not add required dependencies or propagate failure skips.
+These acquisition jobs are not implicitly added to explicit skill selections.
 
 Bulk callables must support invocation with the dataset as their
-single positional argument. Other required inputs must not be hidden
+single positional argument. The scheduler awaits async callables and runs
+synchronous callables in worker threads. A skill may resolve an optional input
+through its documented shared evidence helpers, as website import does for URLs.
+Other required inputs must not be hidden
 behind invented defaults just to make a skill batch-compatible.
 
 Dependencies must reference registered skills and form an acyclic

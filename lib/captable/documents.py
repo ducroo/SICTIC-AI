@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from lib.datasets.paths import dataset_parsed_path, dataset_raw_path
@@ -31,6 +33,21 @@ def normalize_for_matching(text: str) -> str:
     projection is only used to confirm the quote exists in the document.
     """
     return re.sub(r"[^0-9a-zA-ZÀ-ɏ]+", "", text).casefold()
+
+
+def closest_line(fragment: str, lines: Iterable[str], cutoff: float = 0.6) -> str | None:
+    """The line most similar to ``fragment`` under quote normalization.
+
+    Used for correction feedback when a quote is not found: the model is
+    told which source line comes closest, without any search for meaning.
+    """
+    key = normalize_for_matching(fragment)
+    if not key:
+        return None
+    candidates = {normalize_for_matching(line): line.strip() for line in lines if line.strip()}
+    candidates.pop("", None)
+    matches = difflib.get_close_matches(key, list(candidates), n=1, cutoff=cutoff)
+    return candidates[matches[0]] if matches else None
 
 
 def load_parsed_documents(dataset_name: str) -> list[ParsedDocument]:

@@ -37,12 +37,17 @@ def _specialized_schema(
     base_schema: dict[str, Any],
     filenames: list[str],
 ) -> dict[str, Any]:
-    """Pin the response to exactly one entry per dataset filename."""
+    """Bound the response to one entry per dataset filename.
+
+    Only the item count goes into the schema. The exact filename set is
+    enforced by ``_review_classification``, not by a schema ``enum``:
+    Gemini's structured-output validator rejects a schema whose enum
+    carries arbitrary data-room paths (400 INVALID_ARGUMENT, issue #76).
+    """
     schema = copy_schema(base_schema)
     documents_schema = schema["properties"]["documents"]
     documents_schema["minItems"] = len(filenames)
     documents_schema["maxItems"] = len(filenames)
-    documents_schema["items"]["properties"]["filename"]["enum"] = filenames
     return schema
 
 
@@ -105,9 +110,8 @@ async def classify_documents(dataset_name: str) -> dict[str, Any]:
     settings = config["classification_settings"]
     documents = load_parsed_documents(dataset_name)
 
-    # Gemini's structured-output schema rejects the pinned-filename schema
-    # beyond ~8 enum entries (400 "invalid argument"), so classify in chunks
-    # and run the chunks concurrently.
+    # Classify in chunks of ``max_documents_per_call`` documents to bound the
+    # prompt size, and run the chunks concurrently.
     import asyncio
 
     chunk_size = int(settings.get("max_documents_per_call", 8))

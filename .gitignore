@@ -61,6 +61,7 @@ condaenv.*.requirements.txt
 claude_resume.txt
 .env-old
 .tmp/
+/tmp/
 local-storage/
 output/
 outputs/

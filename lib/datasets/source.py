@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Iterator
 
 from lib.datasets.manifest import content_hash
+from lib.datasets.models import Chunk
 
 IGNORED_EXTENSIONS = (
     ".svg",
@@ -87,3 +89,21 @@ def parsed_filepath(parsed_rel: str, filename: str) -> str:
     if filename.lower().endswith(".md"):
         return f"{parsed_rel}/{filename}"
     return f"{parsed_rel}/{filename}.md"
+
+
+def iter_parsed_chunks(dataset_name: str) -> Iterator[Chunk]:
+    """Read every available current source's parsed text through shared chunking.
+
+    Synchronization belongs to the caller. Source enumeration prevents stale
+    parsed files and ingestion manifests from becoming discovery evidence.
+    """
+    from lib.datasets.chunking import split_markdown
+    from lib.datasets.paths import dataset_location
+    from lib.storage import get_storage
+
+    storage = get_storage()
+    location = dataset_location(dataset_name)
+    for filename, mtime in sorted(list_source_files(storage, location.raw_rel)):
+        path = parsed_filepath(location.parsed_rel, filename)
+        if storage.exists(path):
+            yield from split_markdown(storage.read_text(path), filename, mtime)

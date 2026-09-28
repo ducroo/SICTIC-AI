@@ -376,7 +376,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
     monkeypatch.setattr(team_profile_revised_mod, "startup_profile", fake_startup_profile)
     monkeypatch.setattr(team_profile_revised_mod, "generate_markdown", fake_llm_chat)
     persons_skill = importlib.import_module("skills.persons_in_dataset.persons_in_dataset")
-    monkeypatch.setattr(persons_skill, "dataset_chat_json", fake_dataset_chat_json)
+    monkeypatch.setattr(persons_skill, "reconcile_people", fake_dataset_chat_json)
     monkeypatch.setattr(persons_skill, "LinkedInResolver", FakeLinkedInResolver)
 
 

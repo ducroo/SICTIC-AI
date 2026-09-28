@@ -268,6 +268,9 @@ if [ "$SKIP_ENV" -eq 0 ]; then
         exit 1
     fi
 
+    NER_MODEL=$("$ENV_PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["ner"]["model"])' "$REPO_ROOT/config/persons_in_dataset/discovery.json")
+    echo "[1/3] Installing compatible spaCy model: $NER_MODEL"
+    "$ENV_PY" -m spacy download "$NER_MODEL"
 else
     echo "[1+2/3] conda env: skipped (--skip-env)"
     ENV_PY=$(conda run -n "$ENV_NAME" --no-capture-output which python 2>/dev/null | tail -1 | tr -d '\r' || true)

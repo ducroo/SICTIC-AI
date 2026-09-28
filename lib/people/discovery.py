@@ -93,11 +93,19 @@ def _parse_manual_persons_table(content: str) -> List[Person] | None:
     return persons if header is not None or persons else None
 
 
-def _render_manual_persons_table(dataset_name: str, persons: List[Person]) -> str:
+def _render_manual_persons_table(dataset_name: str, persons: List[Person], *, generated: InsightFile | None = None) -> str:
+    reminder = "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten."
+    if generated is not None:
+        manual = InsightFile(dataset=generated.dataset, skill="persons_in_dataset", model="manual")
+        reminder = (
+            f"Deal lead: if you edit this roster, rename `{generated.filename}` to "
+            f"`{manual.filename}`. Model-generated files may be regenerated; the manual "
+            "file takes precedence and will never be overwritten by automated discovery."
+        )
     lines = [
         f"# Persons in {dataset_name}",
         "",
-        "Deal leads, feel free to add or remove employees - SICTIC-AI will remember the edits; this file will never be overwritten.",
+        reminder,
         "",
         "| full-name | linkedin-id | email-addresses |",
         "|---|---|---|",
@@ -129,8 +137,20 @@ def manual_persons_in_dataset(dataset_name: str) -> List[Person] | None:
 def persons_in_dataset(dataset_name: str) -> List[Person]:
     """Read the roster for synchronous consumers; discovery belongs to the skill."""
     persons = manual_persons_in_dataset(dataset_name)
+    if persons is None and slugify(dataset_name) != "sictic-members":
+        insight = InsightFile(slugify(dataset_name), "persons_in_dataset", "manual").find(selection="any")
+        if insight is not None:
+            persons = read_persons_roster(insight)
     if persons is None:
         raise FileNotFoundError(
             f"No persons roster for {dataset_name}; run the persons_in_dataset skill first."
         )
+    return persons
+
+
+def read_persons_roster(insight: InsightFile) -> List[Person]:
+    """Parse the exact selected roster, without selecting a different model."""
+    persons = _parse_manual_persons_table(insight.content())
+    if persons is None:
+        raise ValueError(f"Unsupported persons roster: {insight.path}")
     return persons

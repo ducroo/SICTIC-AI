@@ -27,12 +27,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
-import difflib
 import re
 
 from lib.captable.aggregation import normalize_lender_name
-from lib.captable.documents import normalize_for_matching
-from lib.markdown_tables import is_separator_row, is_table_line, parse_table, split_cells
+from lib.captable.documents import closest_line, normalize_for_matching
+from lib.datasets.page_markers import PAGE_MARKER_RE
+from lib.datasets.spreadsheet_markdown import SPREADSHEET_MARKER_RE
+from lib.markdown_tables import CELL_SPLIT_RE, is_separator_row, is_table_line, parse_table, split_cells
 
 # Column meanings used to exclude columns that cannot evidence a field.
 # Vocabulary, not thresholds: a header naming certificates, dates, money
@@ -61,9 +62,7 @@ _PROSE_LABELS = {
     "votes_per_share": re.compile(r"\bvotes?\b|\bvoting\b|stimm", re.I),
 }
 _ZERO_MARKERS = frozenset({"-", "–", "—", "0", "none", "nil", "keine", "aucun", "aucune"})
-_PAGE_MARKER = re.compile(r"^\s*<!--\s*[\w-]*page[\w-]*\s*:\s*\d+\s*-->\s*$")
 _FRAGMENT_SPLIT = re.compile(r"\r?\n|\.{3,}|…")
-_CELL_SPLIT = re.compile(r"(?<!\\)\|")
 _HEADING = re.compile(r"^\s*#{1,6}\s+\S")
 PROSE_WINDOW = 8         # adjacent prose lines one fragment may span (a quoted list)
 CONTEXT_LINES = 3        # prose lines directly above a table that may name a row
@@ -77,6 +76,11 @@ DOCUMENT_HEADINGS = "headings"  # pools: additionally headings and the title blo
 
 
 _ENTITY = re.compile(r"&#\d+;|&#x[0-9a-fA-F]+;|&[a-zA-Z]+;")
+
+
+def _is_page_marker(line: str) -> bool:
+    """A page boundary as the shared converter writes it (lib.datasets.page_markers)."""
+    return PAGE_MARKER_RE.fullmatch(line.strip()) is not None
 
 
 def _clean_cell(cell: str) -> str:
@@ -215,7 +219,7 @@ def _drop_page_breaks(raw_lines: list[str]) -> list[str]:
     index = 0
     while index < len(raw_lines):
         line = raw_lines[index]
-        if _PAGE_MARKER.match(line):
+        if _is_page_marker(line):
             before = len(kept) - 1
             while before >= 0 and not kept[before].strip():
                 before -= 1
@@ -277,7 +281,7 @@ def source_lines(document: str) -> list[SourceLine]:
         pending.clear()
 
     for raw in _drop_page_breaks(document.splitlines()):
-        if _PAGE_MARKER.match(raw):
+        if _is_page_marker(raw):
             flush_table()
             lines.append(SourceLine(len(lines), raw, "page"))
             continue
@@ -460,17 +464,12 @@ class Source:
 
     def headings(self) -> list[SourceLine]:
         """Markdown headings and the title block of the document."""
-        prose = [line for line in self.lines if line.kind == "prose" and not line.text.startswith("<!--")]
+        prose = [line for line in self.lines if line.kind == "prose" and not SPREADSHEET_MARKER_RE.match(line.text)]
         return [line for line in prose if _HEADING.match(line.text)] + prose[:TITLE_LINES]
 
     def closest_line(self, fragment: str) -> str | None:
         """The source line most similar to an unresolved fragment."""
-        key = normalize_for_matching(fragment)
-        if not key:
-            return None
-        candidates = {self._keys[line.index]: line.text for line in self.lines if line.text and line.kind != "page"}
-        matches = difflib.get_close_matches(key, list(candidates), n=1, cutoff=0.6)
-        return candidates[matches[0]] if matches else None
+        return closest_line(fragment, (line.text for line in self.lines if line.kind != "page"))
 
 
 def _cell_key(cell: str) -> str:
@@ -488,7 +487,7 @@ def quote_cells(fragment: str) -> list[str]:
         stripped = stripped[1:]
     if stripped.endswith("|") and not stripped.endswith("\\|"):
         stripped = stripped[:-1]
-    return [cell.strip() for cell in _CELL_SPLIT.split(stripped)]
+    return [cell.strip() for cell in CELL_SPLIT_RE.split(stripped)]
 
 
 def _cells_match_row(quoted: list[str], row: SourceLine) -> bool:

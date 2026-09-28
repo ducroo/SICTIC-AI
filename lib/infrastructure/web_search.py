@@ -3,6 +3,7 @@
 from typing import TypedDict
 
 from lib.infrastructure.apify import ApifyAdapter
+from lib.infrastructure.errors import InfrastructureError
 from lib.infrastructure.logging import get_logger
 
 logger = get_logger(__name__)
@@ -50,4 +51,6 @@ class WebSearchAdapter:
             return parsed_results[:num_results]
         except Exception as error:
             logger.error("Web search failed for query %r: %s", query, error)
+            if isinstance(error, InfrastructureError):
+                raise
             raise RuntimeError(f"Web search error: {error}") from error

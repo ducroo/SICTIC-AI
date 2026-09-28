@@ -140,11 +140,12 @@ on the round price, typically 15–25 %. The lender pays, say, 80 % of what
 new investors pay. Some agreements step the discount over time ("15 % in
 the first four months, 25 % after") to push founders towards a quick round.
 When both cap and discount apply, the lender gets whichever price is better
-for them. A discount above one third becomes delicate under Swiss tax
-practice: such a loan is reportedly no longer treated as a "classic"
-convertible, with income-tax consequences for the investor — the exact
-threshold must be confirmed by tax counsel, which is why it lives in
-configuration, not code.
+for them. A discount above one third is a problem under Swiss tax
+practice: such a loan is no longer treated as a "classic" convertible,
+with income-tax consequences for the investor. Since 1 May 2025 the ESTV
+accepts discounts up to 33 1/3 % (previously 20 %; Walder Wyss Newsletter
+214, May 2025). The threshold lives in configuration, not code, so it can
+follow future practice changes.
 
 **Valuation floor.** The counterpart of the cap: a minimum valuation below
 which conversion does not go. It protects founders in a down round, is rare

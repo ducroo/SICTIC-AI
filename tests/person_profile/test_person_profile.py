@@ -42,6 +42,7 @@ async def test_person_profile_generation(mock_env, mocker, monkeypatch):
         "query": "Who is {name}?",
         "llm_instructions": "Be concise.",
         "founder_traits_instructions": "Assess founder traits from evidence.",
+        "incomplete_notice": "> **INCOMPLETE:** LinkedIn retrieval unavailable.",
     }
 
     mock_linkedin = mocker.patch("skills.person_profile.person_profile.LinkedInResolver")
@@ -119,6 +120,7 @@ async def test_person_profile_can_explicitly_skip_dataset_context(mock_env, mock
             "query": "Who is {{name}}?",
             "llm_instructions": "Be concise.",
             "founder_traits_instructions": "Assess founder traits from evidence.",
+            "incomplete_notice": "> **INCOMPLETE:** LinkedIn retrieval unavailable.",
         },
     )
     mock_llm = mocker.patch(

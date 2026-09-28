@@ -29,8 +29,8 @@ def local_profiles(mock_env, monkeypatch):
     monkeypatch.setattr(discovery_module, "sync_datasets", AsyncMock())
     monkeypatch.setattr(module, "LinkedInResolver", Mock())
     module.LinkedInResolver.return_value.get_profiles.side_effect = lambda people: people
-    discovery = AsyncMock(return_value={"names": ["Jane Doe", "Jane Doe", "Ann Advisor"]})
-    monkeypatch.setattr(discovery_module, "dataset_chat_json", discovery)
+    discovery = AsyncMock()
+    monkeypatch.setattr(discovery_module, "reconcile_people", discovery)
     module.discovery_test_module = discovery_module
     chunk = Chunk(chunk_id="cv-1", document_name="cv.pdf", page_number=1, last_modified=0.0, text="Jane Doe founded Acme. Ann Advisor advises Acme.", score=1.0)
     monkeypatch.setattr(module, "build_person_dossier", AsyncMock(return_value=([chunk], [])))
@@ -57,7 +57,7 @@ async def test_standard_profile_reads_roster_and_enriches_without_discovery(loca
     await module.person_profile_as_person_objects(
         "acme",
     )
-    module.discovery_test_module.dataset_chat_json.assert_not_awaited()
+    module.discovery_test_module.reconcile_people.assert_not_awaited()
     assert module.generate_markdown.await_count == 2
 
 
@@ -120,7 +120,7 @@ async def test_manual_roster_overrides_existing_json_discovery(local_profiles):
     people = local_profiles.persons_in_dataset("acme")
     assert [person.full_name for person in people] == ["Takuya Takahashi"]
     assert people[0].linkedin_id == "takuya"
-    local_profiles.discovery_test_module.dataset_chat_json.assert_not_awaited()
+    local_profiles.discovery_test_module.reconcile_people.assert_not_awaited()
     local_profiles.LinkedInResolver.assert_not_called()
 
 
@@ -130,7 +130,7 @@ async def test_empty_manual_roster_does_not_trigger_discovery(local_profiles):
         "| full-name | linkedin-id |\n|---|---|\n"
     )
     assert local_profiles.persons_in_dataset("acme") == []
-    local_profiles.discovery_test_module.dataset_chat_json.assert_not_awaited()
+    local_profiles.discovery_test_module.reconcile_people.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_missing_roster_never_triggers_discovery(local_profiles):
         await local_profiles.person_profile_as_person_objects(
             "missing-roster",
         )
-    local_profiles.discovery_test_module.dataset_chat_json.assert_not_awaited()
+    local_profiles.discovery_test_module.reconcile_people.assert_not_awaited()
     local_profiles.sync_datasets.assert_not_awaited()
     local_profiles.generate_markdown.assert_not_awaited()
 
@@ -205,3 +205,120 @@ async def test_registry_profiles_are_reused_by_team_workflow(local_profiles, mon
     assert {insight.path: insight.content() for insight in original} == contents
     team._run_audits.assert_awaited_once()
     team.generate_markdown.assert_awaited_once()
+
+
+def _partial_linkedin_failure(module):
+    from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+
+    InsightFile("acme", "persons_in_dataset", "manual").save(
+        "| full-name | linkedin-id |\n|---|---|\n| Jane Doe | jane-doe |\n| Ann Advisor | ann-advisor |\n"
+    )
+
+    def resolve(people):
+        people[0].linkedin_profile = {"headline": "Retrieved founder background"}
+        raise InfrastructureError("Pending profiles", provider="linkedin", operation="get_profiles",
+                                  kind=InfrastructureErrorKind.SERVICE_UNAVAILABLE)
+
+    module.LinkedInResolver.return_value.get_profiles.side_effect = resolve
+
+
+@pytest.mark.asyncio
+async def test_partial_retrieval_keeps_enrichment_and_cv_evidence(local_profiles):
+    module = local_profiles
+    _partial_linkedin_failure(module)
+    people = await module.person_profile_as_person_objects("acme")
+    assert len(people) == 2
+    assert "INCOMPLETE" not in people[0].person_profile_markdown
+    assert "INCOMPLETE" in people[1].person_profile_markdown
+    prompts = [call.args[0] for call in module.generate_markdown.await_args_list]
+    assert any("Retrieved founder background" in prompt for prompt in prompts)
+    assert all("cv.pdf" in prompt for prompt in prompts)
+    # Acquisition failure does not force regeneration of reusable profiles.
+    await module.person_profile_as_person_objects("acme")
+    assert module.generate_markdown.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_failed_retrieval_without_evidence_saves_note_without_llm(local_profiles):
+    module = local_profiles
+    _partial_linkedin_failure(module)
+    module.build_person_dossier.return_value = ([], [])
+    people = await module.person_profile_as_person_objects("acme")
+    assert "No relevant information found." in people[1].person_profile_markdown
+    assert "INCOMPLETE" in people[1].person_profile_markdown
+    module.generate_markdown.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_manual_profile_preserved_after_retrieval_failure(local_profiles):
+    module = local_profiles
+    _partial_linkedin_failure(module)
+    manual = InsightFile("acme", "person_profile", "manual", identifier="ann-advisor", subdir=True)
+    manual.save("Human reviewed background")
+    people = await module.person_profile_as_person_objects("acme")
+    assert manual.content() == "Human reviewed background"
+    assert "INCOMPLETE" not in people[1].person_profile_markdown
+    module.generate_markdown.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [ValueError("bug"), OSError("storage failure")])
+async def test_unexpected_retrieval_errors_still_raise(local_profiles, error):
+    local_profiles.LinkedInResolver.return_value.get_profiles.side_effect = error
+    with pytest.raises(type(error), match=str(error)):
+        await local_profiles.person_profile("acme")
+    local_profiles.generate_markdown.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("skill", ["team_profile", "team_profile_revised"])
+async def test_team_workflows_continue_after_partial_retrieval(local_profiles, monkeypatch, skill):
+    _partial_linkedin_failure(local_profiles)
+    team = importlib.import_module(f"skills.{skill}.{skill}")
+    preparation = AsyncMock(return_value=SimpleNamespace(dataset_slug="acme"))
+    monkeypatch.setattr("lib.startups.sources.ensure_startup_dataset", preparation)
+    monkeypatch.setattr(team, "sync_datasets", AsyncMock())
+    monkeypatch.setattr(team, "generate_markdown", AsyncMock(return_value="Team report with evidence limitations"))
+    if skill == "team_profile_revised":
+        monkeypatch.setattr(team, "ensure_startup_dataset", preparation)
+        monkeypatch.setattr(team, "startup_profile", AsyncMock(return_value=[]))
+        monkeypatch.setattr(team, "_run_audits", AsyncMock(return_value=[]))
+    else:
+        monkeypatch.setattr(team, "dataset_search", AsyncMock(return_value=[]))
+    result = await getattr(team, skill)("acme")
+    assert len(result) == 1
+    if skill == "team_profile_revised":
+        context = team._run_audits.await_args.args[1]
+    else:
+        context = team.generate_markdown.await_args.args[0]
+    assert "INCOMPLETE" in context
+    assert "Jane Doe" in context and "Ann Advisor" in context
+
+
+@pytest.mark.asyncio
+async def test_generation_failure_still_raises_after_partial_retrieval(local_profiles):
+    _partial_linkedin_failure(local_profiles)
+    local_profiles.generate_markdown.side_effect = RuntimeError("generation failed")
+    with pytest.raises(RuntimeError, match="Failed to generate 2 person profile"):
+        await local_profiles.person_profile("acme")
+
+
+@pytest.mark.asyncio
+async def test_no_linkedin_id_or_evidence_is_not_a_retrieval_failure(local_profiles):
+    local_profiles.build_person_dossier.return_value = ([], [])
+    people = await local_profiles.person_profile_as_person_objects("acme")
+    assert all("No relevant information found." in p.person_profile_markdown for p in people)
+    assert all("INCOMPLETE" not in p.person_profile_markdown for p in people)
+    local_profiles.generate_markdown.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invalid_provider_response_still_blocks_profile(local_profiles):
+    from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+
+    error = InfrastructureError("invalid response", provider="apify", operation="get_profiles",
+                                kind=InfrastructureErrorKind.INVALID_RESPONSE)
+    local_profiles.LinkedInResolver.return_value.get_profiles.side_effect = error
+    with pytest.raises(InfrastructureError, match="invalid response"):
+        await local_profiles.person_profile("acme")
+    local_profiles.generate_markdown.assert_not_awaited()

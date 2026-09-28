@@ -115,8 +115,11 @@ def schema_prompt_block(schema: dict[str, Any]) -> str:
 
 
 def _provider_schema(schema: dict[str, Any]) -> dict[str, Any]:
-    """Omit conditional keywords unsupported by strict structured output.
+    """Omit keywords that providers do not reliably support in structured output.
 
+    Conditional keywords are unsupported by strict structured output. Regular
+    expression patterns break local models: Ollama rejects patterns that are
+    not written as ``^...$``, and an anchored pattern can stall generation.
     The original schema remains authoritative in the prompt and local validator.
     Walk schema positions only: property names and literal values may themselves
     contain words such as ``if`` and must remain intact.
@@ -126,7 +129,7 @@ def _provider_schema(schema: dict[str, Any]) -> dict[str, Any]:
     def visit(node: Any) -> None:
         if not isinstance(node, dict):
             return
-        for keyword in ("if", "then", "else"):
+        for keyword in ("if", "then", "else", "pattern"):
             node.pop(keyword, None)
         for keyword in (
             "properties", "$defs", "definitions", "patternProperties",

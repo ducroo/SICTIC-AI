@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from lib.captable.aggregation import normalize_lender_name
-from lib.captable.documents import normalize_for_matching
+from lib.captable.documents import closest_line, normalize_for_matching
 from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.logging import get_logger
@@ -38,21 +38,8 @@ def _quote_found(quote: str, normalized_text: str) -> bool:
     )
 
 
-def _closest_line(quote: str, document_text: str) -> str | None:
-    """The source line most similar to an unmatched quote, for feedback."""
-    import difflib
-
-    key = normalize_for_matching(quote)
-    candidates = {
-        normalize_for_matching(line): line.strip()
-        for line in document_text.splitlines() if line.strip()
-    }
-    matches = difflib.get_close_matches(key, list(candidates), n=1, cutoff=0.6)
-    return candidates[matches[0]] if matches else None
-
-
 def _quote_hint(quote: str, document_text: str) -> str:
-    closest = _closest_line(quote, document_text)
+    closest = closest_line(quote, document_text.splitlines())
     return f" The closest source line is {closest!r}." if closest else ""
 
 

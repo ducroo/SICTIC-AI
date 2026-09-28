@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          environment-file: environment.yml
+          activate-environment: sictic-env
+          auto-activate-base: false
+
+      - name: Run the test suite
+        shell: bash -el {0}
+        env:
+          SICTIC_TESTING: "1"
+          RANKED_LLMS: "ollama/test_model:1b"
+        run: python -m pytest -q -m "not live"

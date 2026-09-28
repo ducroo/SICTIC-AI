@@ -1,13 +1,46 @@
 """Generic access to Apify actors and runs."""
 
 from datetime import timedelta
+from typing import NoReturn
 
 from apify_client import ApifyClient
+from apify_client.errors import ApifyApiError
+from httpx import HTTPError, TimeoutException
 
 from lib.infrastructure.configuration import get_env_var
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 
 logger = get_logger(__name__)
+
+
+def _raise_apify_error(error: Exception, operation: str) -> NoReturn:
+    """Classify provider failures without hiding programming or storage errors."""
+    kind = InfrastructureErrorKind
+    if isinstance(error, TimeoutException):
+        category = kind.TIMEOUT
+    elif isinstance(error, ApifyApiError):
+        error_type = error.type
+        if error_type in {"concurrent-runs-limit-exceeded", "actor-memory-limit-exceeded"}:
+            category = kind.RESOURCE_BUSY
+        elif error_type in {"monthly-usage-limit-exceeded", "monthly-usage-limit-too-low",
+                            "not-enough-usage-to-run-paid-actor", "apify-plan-required-to-use-paid-actor",
+                            "apify-signup-not-allowed-for-paid-actor"} or error.status_code in {402, 403}:
+            category = kind.PERMISSION_DENIED
+        elif error.status_code == 401:
+            category = kind.AUTHENTICATION
+        elif error.status_code == 429:
+            category = kind.RATE_LIMIT
+        elif error.status_code >= 500:
+            category = kind.SERVICE_UNAVAILABLE
+        else:
+            category = kind.INVALID_RESPONSE
+    elif isinstance(error, HTTPError):
+        category = kind.SERVICE_UNAVAILABLE
+    else:
+        raise error
+    raise InfrastructureError(str(error), kind=category, provider="apify",
+                              operation=operation) from error
 
 
 class ApifyAdapter:
@@ -31,7 +64,7 @@ class ApifyAdapter:
             return results
         except Exception as error:
             logger.error("Apify Actor %s failed: %s", actor_id, error)
-            raise RuntimeError(f"Apify API error: {error}") from error
+            _raise_apify_error(error, "run_actor")
 
     def start_actor(self, actor_id: str, run_input: dict) -> str:
         try:
@@ -42,7 +75,7 @@ class ApifyAdapter:
             return str(run_id)
         except Exception as error:
             logger.error("Failed to start Apify Actor %s: %s", actor_id, error)
-            raise RuntimeError(f"Apify API error: {error}") from error
+            _raise_apify_error(error, "start_actor")
 
     def wait_for_run(self, run_id: str, wait_seconds: int) -> dict:
         try:
@@ -51,13 +84,13 @@ class ApifyAdapter:
             )
             return _run_dict(run)
         except Exception as error:
-            raise RuntimeError(f"Apify API error: {error}") from error
+            _raise_apify_error(error, "wait_for_run")
 
     def get_run(self, run_id: str) -> dict:
         try:
             return _run_dict(self.client.run(run_id).get())
         except Exception as error:
-            raise RuntimeError(f"Apify API error: {error}") from error
+            _raise_apify_error(error, "get_run")
 
     def run_items(self, run: dict) -> list[dict]:
         dataset_id = _run_value(run, "defaultDatasetId", "default_dataset_id")
@@ -66,7 +99,7 @@ class ApifyAdapter:
         try:
             return list(self.client.dataset(dataset_id).iterate_items())
         except Exception as error:
-            raise RuntimeError(f"Apify API error: {error}") from error
+            _raise_apify_error(error, "run_items")
 
     def delete_run(self, run_id: str) -> None:
         try:

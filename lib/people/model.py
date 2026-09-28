@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass, field
 import re
+import unicodedata
 from typing import Dict, List, Any, Iterable
-from rapidfuzz import fuzz
+from rapidfuzz import fuzz, process
 from lib.slugify import slugify
 from lib.datasets.models import Chunk
 from lib.linkedin_ids import normalize_linkedin_id
@@ -132,24 +133,31 @@ class Person:
         """Determines if two Person objects represent the same individual (1-to-1 equivalence)."""
         return self.match_score(other) >= threshold
         
-    def find_best_match(self, candidates: List['Person'], threshold: int = 85) -> 'Person | None':
-        """Returns the best matching Person from a list of candidates, or None if no match meets the threshold."""
-        best_match = None
-        highest_score = 0
-        
+    def find_matches(self, candidates: List['Person'], threshold: int = 85) -> List['Person']:
+        """Prefer exact LinkedIn IDs exclusively; otherwise rank shared scores.
+
+        Ties retain candidate order. Different explicit IDs remain non-matches;
+        dropping an ID for a retry is an explicit caller decision.
+        """
+        if self.linkedin_id:
+            exact = [candidate for candidate in candidates if candidate.linkedin_id == self.linkedin_id]
+            if exact:
+                return exact if threshold <= 100 else []
+        scored = []
         for candidate in candidates:
             score = self.match_score(candidate)
-            if score >= threshold and score > highest_score:
-                highest_score = score
-                best_match = candidate
-                # Early exit for perfect matches
-                if score == 100:
-                    return best_match
-                    
-        return best_match
+            if score >= threshold and score > 0:
+                scored.append((score, candidate))
+        return [candidate for _, candidate in sorted(scored, key=lambda item: item[0], reverse=True)]
+
+    def find_best_match(self, candidates: List['Person'], threshold: int = 85) -> 'Person | None':
+        """Return the first shared selection, or None when no candidate matches."""
+        matches = self.find_matches(candidates, threshold=threshold)
+        return matches[0] if matches else None
 
     def merge(self, other: 'Person') -> None:
         """Merges missing or richer attributes from another Person object into this one."""
+        profile_owner = self.linkedin_id if self.linkedin_profile else ""
         # Prefer longer, more complete names ("Johannes Aicher" > "J. Aicher")
         if not self.full_name and other.full_name:
             self.full_name = other.full_name
@@ -163,6 +171,16 @@ class Person:
             
         if not self.linkedin_profile and other.linkedin_profile:
             self.linkedin_profile = other.linkedin_profile
+            profile_owner = other.linkedin_id
+
+        if self.linkedin_id and profile_owner == self.linkedin_id:
+            # Import lazily: the LinkedIn package also consumes Person.
+            from lib.people.linkedin.identity import profile_full_name, profile_linkedin_id
+            payload_id = profile_linkedin_id(self.linkedin_profile)
+            if not payload_id or payload_id == self.linkedin_id:
+                profile_name = profile_full_name(self.linkedin_profile)
+                if profile_name:
+                    self.full_name = profile_name
             
         if not self.person_profile_markdown and other.person_profile_markdown:
             self.person_profile_markdown = other.person_profile_markdown
@@ -179,8 +197,138 @@ class Person:
                     existing_dossier.add(c.document_name)
                     
         if other.mentions:
-            existing_mentions = { (c.document_name, c.page_number) for c in self.mentions }
+            existing_mentions = {c.chunk_id for c in self.mentions}
             for c in other.mentions:
-                if (c.document_name, c.page_number) not in existing_mentions:
+                if c.chunk_id not in existing_mentions:
                     self.mentions.append(c)
-                    existing_mentions.add((c.document_name, c.page_number))
+                    existing_mentions.add(c.chunk_id)
+
+    @staticmethod
+    def merge_into(persons: List['Person'], candidate: 'Person') -> None:
+        """Original incremental consolidation, including its second merge pass."""
+        existing = candidate.find_best_match(persons)
+        if existing is None:
+            persons.append(candidate)
+            return
+        existing.merge(candidate)
+        for other in list(persons):
+            if other is not existing and existing.matches(other):
+                existing.merge(other)
+                persons.remove(other)
+
+    @staticmethod
+    def merge_all(persons: Iterable['Person']) -> List['Person']:
+        """Consolidate in input order with the production policy; mutates targets."""
+        targets: List[Person] = []
+        for candidate in persons:
+            Person.merge_into(targets, candidate)
+        return targets
+
+    def _matching_names(self) -> tuple[str, tuple[str, ...]]:
+        """Normalized full name and derived hints, never canonical identities."""
+        def normalize(value: str) -> str:
+            value = unicodedata.normalize("NFKC", value).casefold()
+            return re.sub(r"[\W_]+", " ", value).strip()
+
+        derived = [normalize(re.sub(r"[._+\-]+", " ", email.split("@", 1)[0]))
+                   for email in self.email_addresses]
+        if self.linkedin_id:
+            derived.append(normalize(re.sub(r"-?\d+$", "", self.linkedin_id)))
+        return normalize(self.full_name), tuple(dict.fromkeys(filter(None, derived)))
+
+    def name_match_score(self, other: 'Person') -> float:
+        """Maximum full/full or full/derived score, symmetrically; no ID policy."""
+        name, hints = self._matching_names()
+        other_name, other_hints = other._matching_names()
+        pairs = [(name, other_name), *((name, hint) for hint in other_hints),
+                 *((hint, other_name) for hint in hints)]
+        return max((fuzz.token_sort_ratio(left, right) for left, right in pairs
+                    if left and right), default=0.0)
+
+    @staticmethod
+    def merge_all_alternative(persons: Iterable['Person']) -> List['Person']:
+        """Experimental grouped merger. Production remains on the default policy.
+
+        Mutates retained input objects, just like default consolidation. Compare
+        independent deep copies. Process IDs, named email records, email-only
+        records, then others. Exact IDs win; email-only records merge into the
+        first exact email target. Otherwise emails restrict fuzzy candidates;
+        names must score strictly above 85. Ties retain target insertion order.
+        """
+        targets: List[Person] = []
+        ids: dict[str, int] = {}
+        emails: dict[str, set[int]] = {}
+        full_names: dict[tuple[int, int], str] = {}
+        all_names: dict[tuple[int, int], str] = {}
+        keys: dict[int, list[tuple[int, int]]] = {}
+        seen_objects: set[int] = set()
+
+        def index_target(index: int) -> None:
+            person = targets[index]
+            if person.linkedin_id:
+                ids[person.linkedin_id] = index
+            for email in person.email_addresses:
+                emails.setdefault(email, set()).add(index)
+            # A richer/profile name can replace the old name; discard stale hints.
+            for key in keys.get(index, []):
+                all_names.pop(key, None)
+                full_names.pop(key, None)
+            name, hints = person._matching_names()
+            aliases = [name, *hints]
+            keys[index] = []
+            for position, alias in enumerate(aliases):
+                if alias:
+                    key = (index, position)
+                    keys[index].append(key)
+                    all_names[key] = alias
+                    if position == 0:
+                        full_names[key] = alias
+
+        def group(person: Person) -> int:
+            if person.linkedin_id:
+                return 0
+            if person.email_addresses:
+                return 1 if person.full_name.strip() else 2
+            return 3
+
+        for candidate in sorted(persons, key=group):
+            if id(candidate) in seen_objects:
+                continue
+            seen_objects.add(id(candidate))
+            index = ids.get(candidate.linkedin_id) if candidate.linkedin_id else None
+            if index is None and not candidate.linkedin_id:
+                restricted: set[int] = set()
+                for email in candidate.email_addresses:
+                    restricted.update(emails.get(email, ()))
+                if restricted and not candidate.full_name.strip():
+                    index = min(restricted)
+                    targets[index].merge(candidate)
+                    index_target(index)
+                    continue
+                name, hints = candidate._matching_names()
+                best_score, best_index = 85.0, None
+                for queries, choices in [([name], all_names), (hints, full_names)]:
+                    if restricted:
+                        choices = {key: choices[key] for i in sorted(restricted)
+                                   for key in keys[i] if key in choices}
+                    for query in queries:
+                        if not query:
+                            continue
+                        matches = process.extract(query, choices, scorer=fuzz.token_sort_ratio,
+                                                  processor=None, score_cutoff=best_score, limit=None)
+                        for _, score, key in matches:
+                            if score < best_score:
+                                break
+                            if score > best_score or (score > 85 and score == best_score
+                                                      and (best_index is None or key[0] < best_index)):
+                                best_score, best_index = score, key[0]
+                index = best_index
+            # The ID group runs first: a new explicit ID cannot fuzzy-match a
+            # different ID, and there are no ID-less targets at that point.
+            if index is None:
+                index = len(targets)
+                targets.append(candidate)
+            else:
+                targets[index].merge(candidate)
+            index_target(index)
+        return targets
