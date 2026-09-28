@@ -30,6 +30,9 @@ def test_page_reviews_a_deck_and_hides_the_skill_picker():
     assert 'class="sponsor-logo"' in page
     assert "#4b5563" in page
     assert "/static/review.js" in page
+    assert "max-width: 52rem" not in page
+    assert "min-width: 42rem" not in page
+    assert "table-layout: fixed" in page
 
 
 def test_report_renderer_marks_status_cells():
@@ -45,6 +48,17 @@ def test_report_renderer_marks_status_cells():
     assert "<li>Fine. Clear.</li>" in html
     assert 'class="status-critical"' in html
     assert "Valuation cap" in html
+
+
+def test_report_renderer_keeps_a_quoted_pipe_in_one_cell():
+    html = render_report(
+        "| No | Check | Status | Where in the deck |\n"
+        "| --- | --- | --- | --- |\n"
+        "| 1.1 | Customer and revenue | Fine | acme-deck.pdf \\| Page: 1 |\n"
+    )
+
+    assert "<td>acme-deck.pdf | Page: 1</td>" in html
+    assert "<td>Page: 1</td>" not in html
 
 
 @pytest.mark.asyncio

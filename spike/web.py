@@ -60,11 +60,37 @@ def _inline(text: str) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
 
 
+def _split_row(line: str) -> list[str]:
+    """Split a markdown row. A backslash keeps a literal pipe inside the cell."""
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|"):
+        inner = inner[:-1]
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for char in inner:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == "|":
+            cells.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    if escaped:
+        current.append("\\")
+    cells.append("".join(current).strip())
+    return cells
+
+
 def _table(lines: list[str]) -> str:
-    rows = []
-    for line in lines:
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        rows.append(cells)
+    rows = [_split_row(line) for line in lines]
     if len(rows) < 2:
         return ""
     header, _separator, body = rows[0], rows[1], rows[2:]
@@ -183,16 +209,12 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
       border-bottom: 4px solid var(--red);
     }}
     .bar {{
-      max-width: 52rem;
-      margin: 0 auto;
       padding: 0.9rem 1.25rem;
       display: flex;
       align-items: center;
     }}
     .brand img {{ height: 36px; width: auto; display: block; }}
     main {{
-      max-width: 52rem;
-      margin: 0 auto;
       padding: 2rem 1.25rem 3rem;
     }}
     h1, h2, h3 {{
@@ -251,9 +273,20 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
     .error {{ color: var(--red); font-weight: 600; }}
     .report {{ margin-top: 2rem; }}
     .report h2 {{ margin-top: 0; }}
-    .table-wrap {{ overflow-x: auto; background: var(--card); border: 1px solid var(--line); }}
-    table {{ border-collapse: collapse; width: 100%; min-width: 42rem; font-size: 0.92rem; }}
-    th, td {{ text-align: left; vertical-align: top; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--line); }}
+    .table-wrap {{ background: var(--card); border: 1px solid var(--line); }}
+    table {{ border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 0.92rem; }}
+    th, td {{
+      text-align: left;
+      vertical-align: top;
+      padding: 0.55rem 0.7rem;
+      border-bottom: 1px solid var(--line);
+      overflow-wrap: anywhere;
+    }}
+    th:first-child, td:first-child {{ width: 3.2rem; }}
+    th:nth-child(2), td:nth-child(2) {{ width: 14%; }}
+    th:nth-child(3), td:nth-child(3) {{ width: 7.2rem; }}
+    th:nth-child(4), td:nth-child(4) {{ width: 34%; }}
+    th:nth-child(5), td:nth-child(5) {{ width: 16%; }}
     thead th {{ background: #f6f6f6; }}
     .status-fine {{ color: #0b6e4f; font-weight: 600; }}
     .status-sufficient {{ color: #0070ad; font-weight: 600; }}
@@ -265,8 +298,6 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
       border-top: 1px solid var(--line);
     }}
     .sponsor {{
-      max-width: 52rem;
-      margin: 0 auto;
       padding: 1.25rem;
       display: flex;
       align-items: center;
