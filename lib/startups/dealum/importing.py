@@ -35,6 +35,11 @@ APPLICATION_MD = "application.md"
 APPLICATION_RAW_JSON = "application.raw.json"
 
 
+def append_txt_to_md_filename(filename: str) -> str:
+    """Keep Dealum Markdown out of Drive's Markdown-to-Docs conversion."""
+    return f"{filename}.txt" if filename.lower().endswith(".md") else filename
+
+
 def _successful_pull_time() -> int:
     return int(time.time())
 
@@ -115,7 +120,8 @@ def import_startup_from_dealum(
         dataset_slug,
         dealum_rel=dealum_rel,
     )
-    application_path = f"{dealum_rel}/{APPLICATION_MD}"
+    application_filename = append_txt_to_md_filename(APPLICATION_MD)
+    application_path = f"{dealum_rel}/{application_filename}"
     manifest_path = f"{dealum_rel}/{MANIFEST_JSON}"
 
     staging_rel = (
@@ -144,7 +150,7 @@ def import_startup_from_dealum(
 
     try:
         storage.write_text(
-            f"{staging_rel}/{APPLICATION_MD}",
+            f"{staging_rel}/{application_filename}",
             render_application_markdown(
                 application,
                 dealum_url=match.dealum_url,
@@ -158,9 +164,10 @@ def import_startup_from_dealum(
 
         if download_documents:
             for link in file_links:
-                final_rel = f"{dealum_rel}/documents/{link.filename}"
+                filename = append_txt_to_md_filename(link.filename)
+                final_rel = f"{dealum_rel}/documents/{filename}"
                 staging_file_rel = (
-                    f"{staging_rel}/documents/{link.filename}"
+                    f"{staging_rel}/documents/{filename}"
                 )
                 content, download_metadata = adapter.download_file(link.url)
                 storage.write_bytes(staging_file_rel, content)
@@ -168,7 +175,7 @@ def import_startup_from_dealum(
                 metadata = {
                     "field": link.field,
                     "url": link.url,
-                    "filename": link.filename,
+                    "filename": filename,
                     "path": final_rel,
                     "sha256": content_sha256,
                 }
