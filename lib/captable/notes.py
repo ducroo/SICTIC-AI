@@ -7,29 +7,18 @@ assumption string, never silently.
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
+from lib.captable.data import field_value, parse_extraction_date
 from lib.captable.model import Note, loan_balance
 
-
-def _value(entry: Any) -> Any:
-    if isinstance(entry, dict) and "value" in entry:
-        return entry["value"]
-    return entry
+NOTE_LABEL_PREFIX = "lenders of "
 
 
-def _parse_date(value: Any) -> date | None:
-    from lib.captable.data import normalize_iso_date
-
-    value = normalize_iso_date(value) if isinstance(value, str) else value
-    if isinstance(value, str):
-        for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-            try:
-                return datetime.strptime(value, fmt).date()
-            except ValueError:
-                continue
-    return None
+def note_label(document: Any) -> str:
+    """The holder label under which an executed loan's lenders appear in a scenario."""
+    return f"{NOTE_LABEL_PREFIX}{document}"
 
 
 def existing_shares(snapshot: dict[str, Any]) -> dict[str, float]:
@@ -54,6 +43,16 @@ def existing_shares(snapshot: dict[str, Any]) -> dict[str, float]:
                 name = f"[reserved pool] {name}"
             shares[name] = diluted
     return shares
+
+
+def issued_shares(snapshot: dict[str, Any]) -> float:
+    """Issued and outstanding shares: every holding except treasury, pools and authorized capital."""
+    return sum(
+        holding.get("count") or 0.0
+        for holder in snapshot.get("stakeholders", [])
+        if holder.get("kind") not in ("treasury", "pool", "authorized_capital")
+        for holding in holder.get("holdings", [])
+    )
 
 
 def normalize_currency(value: Any) -> str | None:
@@ -114,12 +113,13 @@ def notes_from_snapshot(
     for cla in snapshot.get("convertibles", []):
         if cla.get("status") != "executed":
             continue
-        principal = _value(cla.get("principal_total"))
+        principal = field_value(cla.get("principal_total"))
         if not principal:
+            assumptions.append(f"{cla.get('document')}: principal unstated; the loan is left out of the converting stack.")
             continue
-        rate = _value(cla.get("interest_rate_pct")) or 0.0
-        if _value(cla.get("interest_mode")) == "safe_harbor_capped":
-            safe_harbor = _value(cla.get("interest_safe_harbor_rate_pct"))
+        rate = field_value(cla.get("interest_rate_pct")) or 0.0
+        if field_value(cla.get("interest_mode")) == "safe_harbor_capped":
+            safe_harbor = field_value(cla.get("interest_safe_harbor_rate_pct"))
             if safe_harbor is not None and safe_harbor < rate:
                 assumptions.append(
                     f"{cla.get('document')}: interest is the LOWER of the "
@@ -137,13 +137,13 @@ def notes_from_snapshot(
                     " OVERSTATES the balance — obtain the applicable ESTV "
                     "safe-harbor rate."
                 )
-        day_count = _value(cla.get("interest_day_count"))
+        day_count = field_value(cla.get("interest_day_count"))
         if day_count in (None, "unstated"):
             day_count = "act/365"
             assumptions.append(
                 f"{cla.get('document')}: day count unstated; act/365 assumed."
             )
-        compounding = _value(cla.get("interest_compounding"))
+        compounding = field_value(cla.get("interest_compounding"))
         if compounding in (None, "unstated"):
             compounding = "simple"
             assumptions.append(
@@ -155,7 +155,7 @@ def notes_from_snapshot(
                 "computed as ANNUAL compounding (approximation, slightly "
                 "understates the balance)."
             )
-        start = _parse_date(_value(cla.get("execution_date")))
+        start = parse_extraction_date(field_value(cla.get("execution_date")))
         if start is None:
             start = valuation_date
             assumptions.append(
@@ -166,7 +166,7 @@ def notes_from_snapshot(
             start = valuation_date
             assumptions.append(
                 f"{cla.get('document')}: execution date "
-                f"{_value(cla.get('execution_date'))!r} lies after the "
+                f"{field_value(cla.get('execution_date'))!r} lies after the "
                 "valuation date (typo/OCR?); no interest accrued."
             )
         balance = loan_balance(
@@ -179,34 +179,29 @@ def notes_from_snapshot(
             if str(compounding).startswith("compound")
             else "simple",
         )
-        basis = _value(cla.get("denominator_basis"))
+        basis = field_value(cla.get("denominator_basis"))
         denominator = None
         if basis == "issued_and_outstanding":
-            denominator = sum(
-                h.get("count") or 0.0
-                for holder in snapshot.get("stakeholders", [])
-                if holder.get("kind") not in ("treasury", "pool", "authorized_capital")
-                for h in holder.get("holdings", [])
-            )
+            denominator = issued_shares(snapshot)
             if denominator <= 0:
                 raise ValueError(f"{cla.get('document')}: no issued and outstanding shares for conversion.")
         elif basis not in (None, "unstated", "fully_diluted"):
             raise ValueError(f"Unsupported conversion denominator: {basis!r}")
         elif basis in (None, "unstated") and (
-            _value(cla.get("valuation_cap")) or _value(cla.get("valuation_floor"))
+            field_value(cla.get("valuation_cap")) or field_value(cla.get("valuation_floor"))
         ):
             assumptions.append(f"{cla.get('document')}: cap/floor denominator unstated; pre-round fully diluted shares assumed.")
         notes.append(
             Note(
-                label=f"lenders of {cla.get('document')}",
+                label=note_label(cla.get("document")),
                 balance=balance,
-                cap=_value(cla.get("valuation_cap")),
-                discount_pct=_value(cla.get("discount_pct")),
-                floor=_value(cla.get("valuation_floor")),
+                cap=field_value(cla.get("valuation_cap")),
+                discount_pct=field_value(cla.get("discount_pct")),
+                floor=field_value(cla.get("valuation_floor")),
                 denominator_shares=denominator,
                 currency=normalize_currency(
-                    _value(cla.get("principal_currency"))
-                    or _value(cla.get("currency"))
+                    field_value(cla.get("principal_currency"))
+                    or field_value(cla.get("currency"))
                 ),
             )
         )

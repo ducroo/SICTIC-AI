@@ -14,7 +14,7 @@ from datetime import date
 from typing import Any
 
 from lib.captable.aggregation import aggregate_clas, terms_group_key
-from lib.captable.assessment import _value as extraction_value
+from lib.captable.data import extraction_value, parse_extraction_date
 
 SCENARIO_MEMBER = "Syndicate member {index} (scenario)"
 COMPARED_TERMS = (
@@ -119,7 +119,7 @@ def loan_context(
 
     maturities = sorted(
         [{"document": row["document"], "maturity_date": row["maturity_date"], "role": row["role"]} for row in comparison],
-        key=lambda item: (item["maturity_date"] is None, str(item["maturity_date"])),
+        key=lambda item: (parse_extraction_date(item["maturity_date"]) is None, parse_extraction_date(item["maturity_date"]) or date.min, str(item["maturity_date"])),
     )
     return {
         "as_of": str(as_of),

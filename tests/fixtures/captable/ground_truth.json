@@ -253,7 +253,7 @@
       }
     ],
     "principal_total": 150000,
-    "principal_total_note": "Slice-1 decision: 150,000 follows the executed-CLA convention (sum of committed lenders); the aggregate range CHF 300,000 to 500,000 sits in term_sheet_only_fields. Not settled.",
+    "principal_total_note": "150,000 follows the executed-CLA convention (sum of the lenders named in the document); the aggregate range CHF 300,000 to 500,000 sits in aggregate_amount_min/max under term_sheet_only_fields and is what question 2 divides by the member count.",
     "principal_currency": "CHF",
     "interest_mode": "fixed",
     "interest_rate_pct": 4,
@@ -313,7 +313,7 @@
       "documentation_counsel": "Fixture Legal AG"
     },
     "lender_angle_expectations": {
-      "_note": "What the lender-angle rules in config/cla_review/settings.json would flag once approved and active; none is active in slice 0.",
+      "_note": "What the lender-angle rules in config/cla_review/settings.json flag when approved and active; the tests force activation, so this key holds whatever the current approval state is.",
       "valuation_cap_required": "pass (cap present)",
       "denominator_fully_diluted_expected": "flag (denominator unstated)",
       "maturity_conversion_required": "flag (repayment only at maturity, no conversion mechanism)",

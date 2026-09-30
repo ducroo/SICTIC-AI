@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from lib.captable.model import convert_in_round, stamp_duty
-from lib.captable.notes import _parse_date, _value, existing_shares, normalize_currency, notes_from_snapshot, notes_in_currency
+from lib.captable.notes import existing_shares, normalize_currency, note_label, notes_from_snapshot, notes_in_currency
 from lib.captable.rubric import apply_rubric, ownership_by_role, founder_ownership_pct
-from lib.captable.data import data_fingerprint, TOOL_VERSION
+from lib.captable.data import TOOL_VERSION, data_fingerprint, field_value
 from lib.captable.insights import select_consolidated, read_build_insight
 from lib.captable.render_markdown import REPORT_VERSION, render_report
 from lib.infrastructure.ai_text_generation import generate_markdown
@@ -124,11 +124,11 @@ def build_scenarios(
     # the scenario currency like the notes, and skip the ones without a rate.
     qefr_mins = []
     for cla in snapshot.get("convertibles", []):
-        minimum = _value(cla.get("qefr_min_raise"))
+        minimum = field_value(cla.get("qefr_min_raise"))
         if cla.get("status") != "executed" or not minimum:
             continue
         loan_currency = normalize_currency(
-            _value(cla.get("principal_currency")) or _value(cla.get("currency"))
+            field_value(cla.get("principal_currency")) or field_value(cla.get("currency"))
         )
         if loan_currency in (None, target_currency):
             qefr_mins.append(float(minimum))
@@ -174,14 +174,14 @@ def build_scenarios(
     for cla in snapshot.get("convertibles", []):
         if cla.get("status") != "executed":
             continue
-        fixed_price = _value(cla.get("maturity_conversion_price"))
+        fixed_price = field_value(cla.get("maturity_conversion_price"))
         if not fixed_price:
             continue
         balance = next(
             (
                 note.balance
                 for note in notes
-                if note.label == f"lenders of {cla.get('document')}"
+                if note.label == note_label(cla.get("document"))
             ),
             None,
         )
@@ -190,8 +190,8 @@ def build_scenarios(
                 "document": cla.get("document"),
                 # all three figures are in the LOAN's currency, unconverted
                 "currency": normalize_currency(
-                    _value(cla.get("principal_currency"))
-                    or _value(cla.get("currency"))
+                    field_value(cla.get("principal_currency"))
+                    or field_value(cla.get("currency"))
                 ),
                 "price_per_share": round(float(fixed_price), 4),
                 "implied_shares_at_balance": round(balance / fixed_price, 2)

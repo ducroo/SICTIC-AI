@@ -5,7 +5,7 @@ from html import escape
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 TOOL_VERSION = "captable_build/0.5"
@@ -67,6 +67,31 @@ def normalize_iso_date(value: str | None) -> str | None:
         month_name, year = match.groups()
         return f"{year}-{_MONTHS[month_name.lower()]:02d}"
     return value
+
+
+def field_value(entry: Any) -> Any:
+    """The value of a quoted extraction entry (``{"value": ..., "quote": ...}``), else the entry itself."""
+    if isinstance(entry, dict) and "value" in entry:
+        return entry["value"]
+    return entry
+
+
+def extraction_value(extraction: dict[str, Any], field: str) -> Any:
+    """``field_value`` of one field of a CLA or cap-table extraction; ``None`` when absent."""
+    return field_value(extraction.get(field))
+
+
+def parse_extraction_date(value: Any) -> date | None:
+    """A model-extracted date string as a ``date`` (year or month precision floors to the first day); ``None`` otherwise."""
+    if not isinstance(value, str):
+        return None
+    text = normalize_iso_date(value)
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def resolve_as_of(

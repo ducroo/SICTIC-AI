@@ -12,9 +12,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from lib.captable.assessment import _value as extraction_value
+from lib.captable.data import extraction_value, parse_extraction_date
 from lib.captable.model import Note, conversion_price, convert_in_round, loan_balance, stamp_duty
-from lib.captable.notes import existing_shares, normalize_currency, notes_from_snapshot, notes_in_currency
+from lib.captable.notes import NOTE_LABEL_PREFIX, existing_shares, issued_shares, normalize_currency, notes_from_snapshot, notes_in_currency
 
 EVIDENCED = "evidenced"
 EXPLICIT = "explicit"
@@ -29,24 +29,6 @@ def _input(value: Any, source: str, note: str | None = None) -> dict[str, Any]:
 
 def _setting(settings: dict[str, Any], name: str) -> Any:
     return settings["rules"][name]["value"]
-
-
-def _parse_iso(value: Any) -> date | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        return date.fromisoformat(value[:10])
-    except ValueError:
-        return None
-
-
-def _issued_shares(snapshot: dict[str, Any]) -> float:
-    return sum(
-        holding.get("count") or 0.0
-        for holder in snapshot.get("stakeholders", [])
-        if holder.get("kind") not in ("treasury", "pool", "authorized_capital")
-        for holding in holder.get("holdings", [])
-    )
 
 
 def resolve_inputs(
@@ -110,15 +92,25 @@ def resolve_inputs(
     if round_investment is None:
         omitted.append({"calculation": "my conversion", "reason": "no round size: the term sheet states no qualified-financing threshold"})
 
-    maturity = _parse_iso(v("maturity_date"))
-    inputs["conversion_dates"] = _input(
-        [str(as_of)] + ([str(maturity)] if maturity else []),
-        EVIDENCED if maturity else ASSUMPTION,
-        "the run date (no accrued interest) and the maturity date (maximum accrual)" if maturity
-        else "the run date only; the term sheet states no parseable maturity date",
-    )
+    maturity = parse_extraction_date(v("maturity_date"))
+    if maturity is not None and maturity < as_of:
+        inputs["conversion_dates"] = _input([str(as_of)], ASSUMPTION,
+                                            f"the run date only; the maturity date {maturity} lies before it, so the loan would already be due")
+    else:
+        inputs["conversion_dates"] = _input(
+            [str(as_of)] + ([str(maturity)] if maturity else []),
+            EVIDENCED if maturity else ASSUMPTION,
+            "the run date (no accrued interest) and the maturity date (maximum accrual)" if maturity
+            else "the run date only; the term sheet states no parseable maturity date",
+        )
 
-    rate = v("interest_rate_pct") or 0.0
+    rate = v("interest_rate_pct")
+    safe_harbor = v("interest_safe_harbor_rate_pct")
+    if v("interest_mode") == "safe_harbor_capped" and safe_harbor is not None and (rate is None or safe_harbor < rate):
+        assumptions.append(f"term sheet: interest is the lower of {rate if rate is not None else 'the stated rate'}% and the "
+                           f"safe-harbor rate; {safe_harbor}% applied, as for the existing loans.")
+        rate = safe_harbor
+    rate = rate or 0.0
     day_count = v("interest_day_count")
     if day_count in (None, "unstated"):
         day_count = "act/365"
@@ -134,7 +126,7 @@ def resolve_inputs(
     basis = v("denominator_basis")
     fully_diluted = existing_shares(snapshot)
     if basis == "issued_and_outstanding":
-        denominator = _issued_shares(snapshot)
+        denominator = issued_shares(snapshot)
         inputs["denominator"] = _input({"basis": basis, "shares": denominator}, EVIDENCED, "issued and outstanding shares of the snapshot")
     else:
         denominator = sum(fully_diluted.values())
@@ -164,7 +156,28 @@ def resolve_inputs(
         omitted.append({"calculation": "my conversion", "reason": "uncapped term sheet: set valuation_grid_absolute in settings.json"})
 
     inputs["round_method"] = _input(_setting(settings, "conversion_round_method"), ASSUMPTION, "settings.json; captable shows all three methods")
+
+    executed = [c for c in snapshot.get("convertibles", []) if c.get("status") == "executed"]
+    inputs["participating_loans"] = _input(
+        [{"document": c.get("document"), "principal": extraction_value(c, "principal_total"),
+          "currency": normalize_currency(extraction_value(c, "principal_currency")) or "unstated"} for c in executed],
+        EVIDENCED, "every executed loan of the snapshot converts alongside my ticket at its accrued balance" if executed
+        else "the snapshot holds no executed loan",
+    )
     return inputs, omitted, assumptions
+
+
+def crossover_valuation(cap: float, discount_pct: float, *, cap_denominator: float | None, round_denominator: float | None) -> float:
+    """The pre-money valuation at which the capped price equals the discounted round price.
+
+    The cap prices on ``cap_denominator`` shares (the term sheet's basis), the
+    round on ``round_denominator`` (fully diluted pre-round shares); with one
+    denominator the expression collapses to ``cap / (1 - discount)``.
+    """
+    ratio = 1.0
+    if cap_denominator and round_denominator:
+        ratio = round_denominator / cap_denominator
+    return round(cap * ratio / (1 - discount_pct / 100.0), 2)
 
 
 def my_conversion(
@@ -181,8 +194,12 @@ def my_conversion(
         "balances": {}, "crossover_valuation": None, "scenarios": [], "stamp_duty": None,
     }
     terms = inputs["cap_discount_floor"]["value"]
+    fully_diluted_pre = sum(existing_shares(snapshot).values())
     if terms["cap"] is not None and terms["discount_pct"] is not None and terms["discount_pct"] < 100:
-        result["crossover_valuation"] = round(float(terms["cap"]) / (1 - float(terms["discount_pct"]) / 100.0), 2)
+        result["crossover_valuation"] = crossover_valuation(
+            float(terms["cap"]), float(terms["discount_pct"]),
+            cap_denominator=inputs["denominator"]["value"]["shares"], round_denominator=fully_diluted_pre,
+        )
     if any(item["calculation"] == "my conversion" for item in omitted):
         return result
 
@@ -233,7 +250,7 @@ def my_conversion(
                 round_price_per_share=scenario.price_per_share, denominator_shares=denominator,
                 cap=terms["cap"], discount_pct=terms["discount_pct"], floor=terms["floor"], nominal_value=nominal,
             )
-            existing_loans_pct = sum(pct for holder, pct in scenario.ownership_pct.items() if holder.startswith("lenders of "))
+            existing_loans_pct = sum(pct for holder, pct in scenario.ownership_pct.items() if holder.startswith(NOTE_LABEL_PREFIX))
             result["scenarios"].append({
                 "conversion_date": label,
                 "pre_money": pre_money,
@@ -248,10 +265,17 @@ def my_conversion(
                 "warnings": list(scenario.warnings),
             })
 
-    if currency == "CHF":
+    existing_notes, _ = notes_from_snapshot(snapshot, as_of)
+    excluded = [loan["document"] for loan in inputs["participating_loans"]["value"] if not loan["principal"]]  # left out by notes_from_snapshot
+    foreign = [n.label for n in existing_notes if n.currency not in (None, currency)]
+    if currency != "CHF":
+        result["omitted"].append({"calculation": "stamp duty", "reason": f"only computed for CHF; the term sheet is in {currency}"})
+    elif excluded or foreign:
+        result["omitted"].append({"calculation": "stamp duty", "reason": "the converting stack is incomplete: "
+                                  + ", ".join([f"{d} (principal unstated)" for d in excluded] + [f"{label} (other currency)" for label in foreign])})
+    else:
         paid_in = sum(s.get("invested_amount") or 0.0 for s in snapshot.get("stakeholders", []))
-        existing_notes, _ = notes_from_snapshot(snapshot, as_of)
-        converting = sum(n.balance for n in existing_notes if n.currency in (None, "CHF")) + my_ticket + float(others or 0.0)
+        converting = sum(n.balance for n in existing_notes) + my_ticket + float(others or 0.0)
         result["stamp_duty"] = {
             "cumulative_paid_in_before": round(paid_in, 2),
             "round_contribution": round(round_investment + converting, 2),
@@ -259,6 +283,4 @@ def my_conversion(
             "note": "1% issuance stamp duty above the CHF 1M lifetime exemption on the new money plus every converting balance "
                     "at the run date; the company pays it, so it dilutes nobody but reduces the proceeds",
         }
-    else:
-        result["omitted"].append({"calculation": "stamp duty", "reason": f"only computed for CHF; the term sheet is in {currency}"})
     return result
