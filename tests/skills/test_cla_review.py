@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,7 +20,6 @@ from lib.storage import get_storage
 from skills.cla_review import cla_review as module
 from skills.cla_review.cla_review import (
     APPROVED_STATUS,
-    active_rules,
     cla_review,
     document_slug,
     load_reference_term_sheets,
@@ -39,13 +39,12 @@ def _settings() -> dict:
     return copy.deepcopy(load_repository_config("cla_review")["settings"])
 
 
-def test_every_configured_rule_is_complete_and_inactive():
+def test_every_configured_rule_is_complete():
     rules = load_rules(_settings())
     assert len(rules) >= 16
-    assert active_rules(rules) == {}
     for name, rule in rules.items():
         assert rule["source"].strip(), name
-        assert rule["status"] != APPROVED_STATUS, name
+        assert rule["active"] is False or rule["status"] == APPROVED_STATUS, name
 
 
 def test_only_approved_rules_may_be_active():
@@ -55,7 +54,7 @@ def test_only_approved_rules_may_be_active():
         load_rules(settings)
 
     settings["rules"]["valuation_cap_required"]["status"] = APPROVED_STATUS
-    assert set(active_rules(load_rules(settings))) == {"valuation_cap_required"}
+    assert load_rules(settings)["valuation_cap_required"]["active"] is True
 
 
 @pytest.mark.parametrize(
@@ -105,10 +104,27 @@ def test_fixture_term_sheet_plants_the_recorded_absences():
         assert planted in TERM_SHEET, planted
 
 
+AS_OF = date(2026, 8, 15)  # the fixture's expected first closing; workflow tests run on this date, not today
+
+
+class _FixedDate(date):
+    @classmethod
+    def today(cls):
+        return cls(AS_OF.year, AS_OF.month, AS_OF.day)
+
+
+def _slug(path: str) -> str:
+    return document_slug(path)
+
+
 def test_document_identity_keeps_the_folder():
-    assert document_slug("legal/drafts/CLA Term Sheet v2.pdf") == "legal-drafts-cla-term-sheet-v2-pdf"
+    assert document_slug("legal/drafts/CLA Term Sheet v2.pdf").startswith("legal-drafts-cla-term-sheet-v2-pdf-")
     assert document_slug("legal/final/CLA Term Sheet v2.pdf") != document_slug("legal/drafts/CLA Term Sheet v2.pdf")
-    assert document_slug("legal/a/ts.md") == "legal-a-ts"
+    assert document_slug("legal/a/ts.md").startswith("legal-a-ts-")
+    # readable slugs are lossy; the digest keeps different documents apart
+    assert document_slug("legal/a-ts.pdf") != document_slug("legal/a/ts.pdf")
+    assert document_slug("legal/Term Sheet v2.pdf") != document_slug("legal/term_sheet_v2.pdf")
+    assert document_slug("legal/a/ts.md") == document_slug("legal/a/ts.md")
 
 
 # --- slice 1: the workflow ----------------------------------------------------------
@@ -127,10 +143,12 @@ def _install(name: str, documents: dict[str, str]) -> None:
 
 
 def _patched(monkeypatch, *, selected: str | None = None, extraction_error: Exception | None = None,
-             documentation_form: str | None = "seca_short_form", audit_status: str = "balanced", audit_error: str | None = None) -> dict:
+             documentation_form: str | None = "seca_short_form", audit_status: str = "balanced", audit_error: str | None = None,
+             extraction_overrides: dict | None = None) -> dict:
     """Fake every model boundary; ``batch_audit`` itself runs for real on a faked check engine."""
     calls = {"extract": 0, "identify": 0, "rank": 0, "checks": 0, "synthesis": 0, "prompts": [], "prefixes": []}
     monkeypatch.setenv("RANKED_LLMS", "ollama/test_model:1b")  # reusable selection ranks models
+    monkeypatch.setattr(module, "date", _FixedDate)
 
     async def fake_ensure(startup, **_kwargs):
         return SimpleNamespace(dataset_slug=startup, dataset_exists=True)
@@ -144,6 +162,7 @@ def _patched(monkeypatch, *, selected: str | None = None, extraction_error: Exce
             raise extraction_error
         extraction = {**copy.deepcopy(_term_sheet_extraction()), "dataset": dataset, "document": filename}
         extraction["documentation_form"] = {"value": documentation_form, "quote": "based on the SECA model" if documentation_form else None}
+        extraction.update(extraction_overrides or {})
         return extraction
 
     async def fake_rank(prompt, schema, reviewer=None):
@@ -196,13 +215,13 @@ async def test_explicit_document_review_writes_report_and_intermediates(mock_env
     [report] = await cla_review("acme", document="legal/a/term-sheet.md", ticket=25000)
 
     assert (calls["extract"], calls["identify"], calls["rank"], calls["synthesis"]) == (1, 0, 0, 1)
-    assert report.filename.startswith("cla-review-acme-legal-a-term-sheet-") and report.filename.endswith(".md")
+    assert report.filename.startswith(f"cla-review-acme-{_slug('legal/a/term-sheet.md')}-") and report.filename.endswith(".md")
     assert "/cla-review/" not in report.path
     for stage in ("identification", "extraction", "assessment"):
-        artifact = _intermediate("acme", f"legal-a-term-sheet-{stage}")
+        artifact = _intermediate("acme", f"{_slug('legal/a/term-sheet.md')}-{stage}")
         assert artifact.exists(), stage
         assert "/cla-review/" in artifact.path
-    identification = json.loads(_intermediate("acme", "legal-a-term-sheet-identification").content())
+    identification = json.loads(_intermediate("acme", f"{_slug('legal/a/term-sheet.md')}-identification").content())
     assert identification["selection"] == "explicit" and identification["source_path"] == "legal/a/term-sheet.md"
 
     content = report.content()
@@ -229,8 +248,8 @@ async def test_equal_basenames_in_different_folders_are_isolated(mock_env, monke
 
     assert first.path != second.path
     assert calls["extract"] == 2
-    assert _intermediate("acme", "legal-a-ts-extraction").path != _intermediate("acme", "legal-b-ts-extraction").path
-    assert all(_intermediate("acme", f"legal-{folder}-ts-{stage}").exists() for folder in "ab" for stage in ("identification", "extraction", "assessment"))
+    assert _intermediate("acme", f"{_slug('legal/a/ts.md')}-extraction").path != _intermediate("acme", f"{_slug('legal/b/ts.md')}-extraction").path
+    assert all(_intermediate("acme", f"{_slug(f'legal/{folder}/ts.md')}-{stage}").exists() for folder in "ab" for stage in ("identification", "extraction", "assessment"))
 
 
 @pytest.mark.asyncio
@@ -243,6 +262,7 @@ async def test_ticket_change_regenerates_the_report_but_not_the_extraction(mock_
     [third] = await cla_review("acme", document="legal/a/ts.md", ticket=20000)
 
     assert calls["extract"] == 1
+    assert calls["synthesis"] == 2  # a new ticket re-renders; the same ticket reuses the report
     assert first.path == second.path == third.path
     assert "**Ticket:** 20,000 CHF" in third.content()
 
@@ -251,7 +271,7 @@ async def test_ticket_change_regenerates_the_report_but_not_the_extraction(mock_
 async def test_manual_report_wins_even_when_fresh(mock_env, monkeypatch):
     _install("acme", {"legal/a/ts.md": TERM_SHEET})
     calls = _patched(monkeypatch)
-    manual = InsightFile("acme", "cla_review", "manual", identifier="acme-legal-a-ts")
+    manual = InsightFile("acme", "cla_review", "manual", identifier=f"acme-{_slug('legal/a/ts.md')}")
     manual.save("# Hand-written review\n")
 
     [result] = await cla_review("acme", document="legal/a/ts.md", fresh=True)
@@ -269,9 +289,11 @@ async def test_explicit_and_automatic_selection_never_share_an_identification(mo
     [explicit] = await cla_review("acme", document="legal/a/ts.md")
 
     assert calls["identify"] == 1
+    assert calls["extract"] == 1  # the extraction is keyed on the document, not on how it was selected
+    assert calls["synthesis"] == 2  # the report is re-rendered: its selection concerns differ
     assert automatic.path == explicit.path  # same document, one report
     auto = json.loads(_intermediate("acme", "identification-automatic").content())
-    exp = json.loads(_intermediate("acme", "legal-a-ts-identification").content())
+    exp = json.loads(_intermediate("acme", f"{_slug('legal/a/ts.md')}-identification").content())
     assert auto["selection"] == "automatic" and exp["selection"] == "explicit"
     assert auto["source_path"] == exp["source_path"] == "legal/a/ts.md"
     assert "The draft carries no version marker." in auto["concerns"]
@@ -315,17 +337,76 @@ async def test_extraction_failure_saves_nothing(mock_env, monkeypatch):
     _patched(monkeypatch, extraction_error=RuntimeError("model down"))
     with pytest.raises(RuntimeError, match="model down"):
         await cla_review("acme", document="legal/a/ts.md")
-    assert not _intermediate("acme", "legal-a-ts-extraction").exists()
-    assert not _intermediate("acme", "legal-a-ts-assessment").exists()
-    assert not InsightFile("acme", "cla_review", llm_model(), identifier="acme-legal-a-ts").exists()
+    assert not _intermediate("acme", f"{_slug('legal/a/ts.md')}-extraction").exists()
+    assert not _intermediate("acme", f"{_slug('legal/a/ts.md')}-assessment").exists()
+    assert not InsightFile("acme", "cla_review", llm_model(), identifier=f"acme-{_slug('legal/a/ts.md')}").exists()
 
 
 @pytest.mark.asyncio
-async def test_unresolvable_document_path_fails(mock_env, monkeypatch):
-    _install("acme", {"legal/a/ts.md": TERM_SHEET})
-    _patched(monkeypatch)
-    with pytest.raises(ValueError, match="Could not resolve"):
+async def test_explicit_document_must_match_exactly(mock_env, monkeypatch):
+    _install("acme", {"legal/ts-v2.md": TERM_SHEET})
+    calls = _patched(monkeypatch)
+    with pytest.raises(ValueError, match="names the file exactly"):
+        await cla_review("acme", document="legal/ts-v1.md")  # a near miss is never substituted
+    with pytest.raises(ValueError, match="names the file exactly"):
         await cla_review("acme", document="zzzz-unrelated-name.pdf")
+    assert calls["extract"] == 0
+    [report] = await cla_review("acme", document="ts-v2.md")  # a unique basename names the file too
+    assert report.exists()
+    identification = json.loads(_intermediate("acme", f"{_slug('legal/ts-v2.md')}-identification").content())
+    [concern] = identification["concerns"]
+    assert concern.startswith("The supplied name 'ts-v2.md' names 'legal/ts-v2.md'; a bare basename picks one file")
+
+
+@pytest.mark.asyncio
+async def test_harness_forwards_every_flag(monkeypatch):
+    from skills.harness.harness import dispatch_command
+
+    received = {}
+
+    async def fake(dataset, *, document=None, ticket=None, fresh=False):
+        received.update(dataset=dataset, document=document, ticket=ticket, fresh=fresh)
+        return []
+
+    monkeypatch.setattr(module, "cla_review", fake)
+    await dispatch_command("/cla_review acme --document legal/ts.md --ticket 25000 --fresh")
+    assert received == {"dataset": "acme", "document": "legal/ts.md", "ticket": 25000.0, "fresh": True}
+
+
+@pytest.mark.asyncio
+async def test_slug_collisions_stay_isolated(mock_env, monkeypatch):
+    _install("acme", {"legal/a-ts.md": TERM_SHEET, "legal/a/ts.md": TERM_SHEET.replace("CHF 12,000,000", "CHF 9,000,000")})
+    calls = _patched(monkeypatch)
+    [first] = await cla_review("acme", document="legal/a-ts.md")
+    [second] = await cla_review("acme", document="legal/a/ts.md")
+    assert first.path != second.path and calls["extract"] == 2
+    assert _intermediate("acme", f"{_slug('legal/a-ts.md')}-extraction").exists()
+    assert _intermediate("acme", f"{_slug('legal/a/ts.md')}-extraction").exists()
+
+
+def test_reviewers_reject_null_paths_and_incomplete_rankings():
+    from lib.infrastructure.ai_text_generation import Review
+
+    rejected = module._review_identification({"path": None, "selection_reason": "nothing plausible"})
+    assert isinstance(rejected, Review) and rejected.problems and "nothing plausible" in rejected.problems[0]
+    assert module._review_identification({"path": "legal/ts.md", "selection_reason": "x"}).problems == ()
+    keys = ["long", "short"]
+    assert module._review_ranking({"rankings": [{"template_key": "short"}, {"template_key": "long"}]}, keys).problems == ()
+    assert "duplicate" in module._review_ranking({"rankings": [{"template_key": "short"}, {"template_key": "short"}]}, keys).problems[0]
+    assert "every configured" in module._review_ranking({"rankings": [{"template_key": "short"}]}, keys).problems[0]
+
+
+def test_configuration_shapes_fail_loudly():
+    with pytest.raises(ValueError, match="between 0 and 100"):
+        module._resolve("acme", "x", {"document_path_resolution": {"min_score": 120}})
+    with pytest.raises(ValueError, match="is empty"):
+        load_reference_term_sheets({"reference_term_sheets": {"a": "x", "b": "   "}})
+    with pytest.raises(ValueError, match="must be an object"):
+        module._form_references({"settings": {"documentation_form_references": "short"}}, {})
+    with pytest.raises(ValueError, match="must contain {{reference_term_sheet}} once"):
+        module._fill("no placeholders here", "audit_instructions", {"{{reference_term_sheet}}": "x"})
+    with pytest.raises(ValueError, match="template_key"):
+        module._ranking_schema({"type": "object", "properties": {}}, ["a"])
 
 
 @pytest.mark.asyncio
@@ -380,9 +461,9 @@ async def test_reusable_snapshot_yields_question_2(mock_env, monkeypatch):
     assert "| synthetic_cla.md | executed loan | Petra Muster, Bruno Muster |" in content
     assert "### 10/20 non-bank rules" in content and "After 5 members join on these terms | 6 | within | 8 | within" in content
     assert "My conversion on this cap table" not in content  # no longer pending
-    conversion = json.loads(_intermediate("acme", "legal-a-ts-conversion").content())
+    conversion = json.loads(_intermediate("acme", f"{_slug('legal/a/ts.md')}-conversion").content())
     assert conversion["snapshot"]["state"] == "reusable" and conversion["result"]["scenarios"]
-    loans = json.loads(_intermediate("acme", "legal-a-ts-loan-context").content())
+    loans = json.loads(_intermediate("acme", f"{_slug('legal/a/ts.md')}-loan-context").content())
     assert loans["result"]["ten_twenty"]["after"]["total_lenders_all_terms"] == 8
 
 
@@ -393,7 +474,7 @@ async def test_absent_and_stale_snapshots_are_insufficient_evidence_not_errors(m
 
     [absent] = await cla_review("acme", document="legal/a/ts.md")
     assert "**Insufficient evidence (absent cap-table snapshot).**" in absent.content()
-    assert json.loads(_intermediate("acme", "legal-a-ts-conversion").content())["result"] is None
+    assert json.loads(_intermediate("acme", f"{_slug('legal/a/ts.md')}-conversion").content())["result"] is None
 
     _write_consolidated("acme", model=llm_model())  # generated, but no reusable upstream chain
     [stale] = await cla_review("acme", document="legal/a/ts.md")
@@ -412,7 +493,7 @@ async def test_malformed_snapshot_is_an_error(mock_env, monkeypatch):
     _write_consolidated("acme", broken=True)
     with pytest.raises(ValueError, match="stakeholders"):
         await cla_review("acme", document="legal/a/ts.md")
-    assert not _intermediate("acme", "legal-a-ts-conversion").exists()
+    assert not _intermediate("acme", f"{_slug('legal/a/ts.md')}-conversion").exists()
 
 
 # --- slice 3: audits, reference, synthesis ---------------------------------------
@@ -431,9 +512,9 @@ def _seeded() -> dict[str, dict[str, object]]:
 
     config = _config()
     groups = {}
-    for group, folder, _section, _placeholder in module.AUDIT_GROUPS:
-        parsed = [parse_checklist(markdown) for markdown in config[folder].values()]
-        groups[group] = {"titles": [c.title for c in parsed],
+    for group in module.AUDIT_GROUPS:
+        parsed = [parse_checklist(markdown) for markdown in config[group.folder].values()]
+        groups[group.section] = {"titles": [c.title for c in parsed],
                          "checks": sum(len(ch.checks) for c in parsed for ch in c.chapters)}
     return groups
 
@@ -443,9 +524,9 @@ def test_seeded_checklists_parse_with_unique_titles_and_keywords():
 
     config = _config()
     titles = []
-    for _group, folder, _section, _placeholder in module.AUDIT_GROUPS:
-        assert config[folder], folder
-        for key, markdown in config[folder].items():
+    for group in module.AUDIT_GROUPS:
+        assert config[group.folder], group.folder
+        for key, markdown in config[group.folder].items():
             checklist = parse_checklist(markdown)
             titles.append(checklist.title)
             for chapter in checklist.chapters:
@@ -453,15 +534,16 @@ def test_seeded_checklists_parse_with_unique_titles_and_keywords():
                     assert check.keywords, f"{key} {check.number} {check.name} has no keywords"
                     assert check.description.endswith(("?", ".")), f"{key} {check.number}"
     assert len(titles) == len(set(titles)), "audit identifiers are keyed on the checklist title"
-    assert config["settings"]["checklists_provenance"]["status"] == "provisional"
+    provenance = config["settings"]["checklists_provenance"]
+    assert isinstance(provenance.get("status"), str) and provenance["status"].strip()  # the value is Enrico's to set
 
 
 def test_instruction_files_carry_their_placeholders_once():
     config = _config()
-    for _group, _folder, section, placeholder in module.AUDIT_GROUPS:
-        for marker in (module._TERM_SHEET_PLACEHOLDER, placeholder):
-            assert config[section].count(marker) == 1, (section, marker)
-        assert "not operative provisions" in config[section] or "not with a template" in config[section]
+    for group in module.AUDIT_GROUPS:
+        for marker in (module._TERM_SHEET_PLACEHOLDER, group.placeholder):
+            assert config[group.instructions].count(marker) == 1, (group.instructions, marker)
+        assert "not operative provisions" in config[group.instructions] or "not with a template" in config[group.instructions]
     assert config["audit_response_schema"]["properties"]["status"]["enum"] == ["unclear", "too weak", "balanced", "too strong"]
     assert "{{startup}}" in config["summary_instructions"]
     assert "`open_question`" in config["summary_instructions"] and "never a verdict" in config["summary_instructions"]
@@ -491,12 +573,12 @@ async def test_audits_carry_the_document_identity_and_feed_the_report(mock_env, 
     per_document = sum(group["checks"] for group in seeded.values())
     titles = [title for group in seeded.values() for title in group["titles"]]
     assert checks_after_first == per_document and calls["checks"] == 2 * per_document
-    for docslug in ("legal-a-ts", "legal-b-ts"):
+    for docslug in (_slug("legal/a/ts.md"), _slug("legal/b/ts.md")):
         for title in titles:
             audit = _audit("acme", docslug, title)
             assert audit.exists() and "/batch-audit/" in audit.path
             assert json.loads(audit.content())["skill"] == f"cla_review-{docslug}"
-    assert _audit("acme", "legal-a-ts", titles[0]).path != _audit("acme", "legal-b-ts", titles[0]).path
+    assert _audit("acme", _slug("legal/a/ts.md"), titles[0]).path != _audit("acme", _slug("legal/b/ts.md"), titles[0]).path
     content = first.content()
     assert all(f"### {title}" in content for title in titles)
     assert "## The SHA and articles: can the conversion be executed" in content
@@ -514,7 +596,7 @@ async def test_stated_documentation_form_skips_the_ranking(mock_env, monkeypatch
     [report] = await cla_review("acme", document="legal/a/ts.md")
 
     assert calls["rank"] == 0
-    reference = json.loads(_intermediate("acme", "legal-a-ts-reference").content())
+    reference = json.loads(_intermediate("acme", f"{_slug('legal/a/ts.md')}-reference").content())
     assert reference["selection"] == "stated" and reference["reference_key"] == "seca_cla_term_sheet_long_form_february_2025"
     assert reference["rankings"] == [] and "seca_long_form" in reference["reason"]
     assert "**Reference term sheet:** `seca_cla_term_sheet_long_form_february_2025` (stated:" in report.content()
@@ -529,7 +611,7 @@ async def test_unstated_documentation_form_ranks_the_references(mock_env, monkey
     await cla_review("acme", document="legal/a/ts.md")
 
     assert calls["rank"] == 1  # the reference artifact is reused
-    reference = json.loads(_intermediate("acme", "legal-a-ts-reference").content())
+    reference = json.loads(_intermediate("acme", f"{_slug('legal/a/ts.md')}-reference").content())
     assert reference["selection"] == "ranked" and len(reference["rankings"]) == 2
     assert reference["reference_key"] == reference["rankings"][0]["template_key"]
     assert "ranked by the model" in reference["reason"]
@@ -547,10 +629,10 @@ async def test_bespoke_documentation_form_ranks_too(mock_env, monkeypatch):
 async def test_a_failed_check_blocks_the_report(mock_env, monkeypatch):
     _install("acme", {"legal/a/ts.md": TERM_SHEET})
     calls = _patched(monkeypatch, audit_error="model down")
-    with pytest.raises(ValueError, match="error"):
+    with pytest.raises(ValueError, match="'model down' is not of type 'null'"):
         await cla_review("acme", document="legal/a/ts.md")
     assert calls["synthesis"] == 0
-    assert not InsightFile("acme", "cla_review", llm_model(), identifier="acme-legal-a-ts").exists()
+    assert not InsightFile("acme", "cla_review", llm_model(), identifier=f"acme-{_slug('legal/a/ts.md')}").exists()
 
 
 @pytest.mark.asyncio
@@ -605,13 +687,14 @@ async def test_fresh_regenerates_the_report_but_batch_audit_keeps_its_audits(moc
     await cla_review("acme", document="legal/a/ts.md")
     checks = calls["checks"]
     [report] = await cla_review("acme", document="legal/a/ts.md", fresh=True)
+    assert calls["extract"] == 2, "fresh regenerates the cla_review intermediates"
     assert calls["checks"] == checks and calls["synthesis"] == 2 and report.exists()
 
 
 @pytest.mark.asyncio
 async def test_missing_checklist_folder_fails_loudly(mock_env, monkeypatch):
     _install("acme", {"legal/a/ts.md": TERM_SHEET})
-    _patched(monkeypatch)
+    calls = _patched(monkeypatch)
     real = module.load_repository_config
 
     def without_executability(*sections):
@@ -624,3 +707,40 @@ async def test_missing_checklist_folder_fails_loudly(mock_env, monkeypatch):
     monkeypatch.setattr(module, "load_repository_config", without_executability)
     with pytest.raises(ValueError, match="executability_checklists"):
         await cla_review("acme", document="legal/a/ts.md")
+    assert calls["extract"] == 0 and calls["rank"] == 0, "configuration is validated before any model call"
+
+
+def test_executability_settings_are_validated_against_the_shared_schemas():
+    config, captable = _config(), load_repository_config("captable_build")
+    module.validate_audit_config(config, captable)
+    broken = copy.deepcopy(config)
+    broken["settings"]["executability_assumption_fields"].append("founder_lockup_months")
+    with pytest.raises(ValueError, match="founder_lockup_months"):
+        module.validate_audit_config(broken, captable)
+    broken = copy.deepcopy(config)
+    broken["settings"]["constitutional_document_classes"] = ["board_minutes"]
+    with pytest.raises(ValueError, match="board_minutes"):
+        module.validate_audit_config(broken, captable)
+    broken = copy.deepcopy(config)
+    broken["audit_instructions"] = broken["audit_instructions"].replace("{{reference_term_sheet}}", "")
+    with pytest.raises(ValueError, match="reference_term_sheet"):
+        module.validate_audit_config(broken, captable)
+
+
+def test_plain_renders_inputs_without_json_quotes():
+    assert module._plain({"basis": "fully_diluted", "shares": 900000.0}) == "basis fully_diluted; shares 900,000"
+    assert module._plain(["2026-08-15", "2028-08-15"]) == "2026-08-15, 2028-08-15"
+    assert module._plain(None) == "none" and module._plain(0.8) == 0.8 and module._plain("CHF") == "CHF"
+
+
+@pytest.mark.asyncio
+async def test_report_renders_the_sparse_and_the_rich_term_sheet(mock_env, monkeypatch):
+    _install("acme", {"legal/a/ts.md": TERM_SHEET})
+    _patched(monkeypatch, extraction_overrides={"missing_terms": [],
+                                                "comments": "Conversion at a fixed price of CHF 9.00 per share if the round is led by an existing investor."})
+    [report] = await cla_review("acme", document="legal/a/ts.md")
+    content = report.content()
+    assert "No absent clause recorded." in content
+    assert "### Unusual valuation and conversion provisions (verbatim)" in content and "CHF 9.00 per share" in content
+    assert "**Ticket:** not supplied; question 2 derives one" in content
+    assert "## Question 2 — the terms in this company" in content

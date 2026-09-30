@@ -196,5 +196,25 @@
     "seeded_by": "Manfred with Claude, from docs/cla-review-design.md section 4 (steps 4 and 7) and the SECA drafting notes",
     "awaiting": "Enrico's review of every check in config/cla_review/checklists/ and config/cla_review/executability_checklists/; the checklist parser accepts no prose outside checks, so this note lives here",
     "note": "A checklist file under either folder is executed as an audit; keep prose out of those folders."
-  }
+  },
+  "executability_assumption_fields": [
+    "conversion_capital_sources",
+    "shareholder_consents_referenced",
+    "pre_emption_reduction",
+    "conversion_share_class",
+    "sha_accession_required",
+    "accession_of_further_investors",
+    "investor_majority",
+    "valuation_cap",
+    "denominator_basis",
+    "aggregate_amount_max"
+  ],
+  "constitutional_document_classes": [
+    "sha_or_priced_term_sheet",
+    "articles_of_association",
+    "commercial_register_extract",
+    "share_register",
+    "syndicate_agreement"
+  ],
+  "_executability_note": "executability_assumption_fields are the extracted term-sheet fields handed to the SHA/articles audit as the conversion assumptions (validated against config/captable_build/cla_terms.md at start); constitutional_document_classes are the captable_build classification classes whose documents that audit is pointed at (validated against the classification schema)."
 }

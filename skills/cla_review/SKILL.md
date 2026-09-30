@@ -15,10 +15,17 @@ returns one Markdown report in `list[InsightFile]`, named
 intermediates (`identification`, `extraction`, `assessment`, `conversion`,
 `loan-context`, `reference`) live under `insights/cla-review/`; the audits
 live under `insights/batch-audit/` because `batch_audit` owns them. Every
-intermediate carries the document identity in its identifier.
-`document` names the data-room path of the term sheet; omitted, the model
-selects the most recent CLA term sheet and executed loans are context, not
-candidates. `ticket` is the member's own amount and is part of the
+document-specific intermediate carries the document identity in its
+identifier (a readable slug of the full path plus a short digest, so
+`legal/a-ts.pdf` and `legal/a/ts.pdf` never share a path); the automatic
+identification is the one dataset-level artifact, its output being the
+document.
+`document` names the data-room path of the term sheet exactly (a bare
+basename is accepted and picks one file when several folders hold that
+name, with a concern in the report; a near miss is an error, never a
+substitute); omitted,
+the model selects the most recent CLA term sheet and executed loans are
+context, not candidates. `ticket` is the member's own amount and is part of the
 configuration key, so a new ticket replaces the generated result for that
 document. `fresh` bypasses generated reuse without deleting files or
 overriding manual inputs; the audits are reused by `batch_audit` on their
@@ -34,11 +41,11 @@ built. The lender-perspective checklists are seeded drafts marked
 slices are defined in
 [docs/cla-review-design.md](../../docs/cla-review-design.md#7-slices).
 
-Artifact identity is the slugified full relative path of the document, so
-equal basenames in different folders stay distinct. The automatic
-identification is one dataset-level artifact (`identification-automatic`);
-an explicit `document` gets its own (`<document>-identification`), so the
-two never reuse each other. The report is
+The automatic identification is one dataset-level artifact
+(`identification-automatic`); an explicit `document` gets its own
+(`<document>-identification`), so the two never reuse each other. The
+extraction is keyed on the document and the extraction configuration only,
+so both selection modes share it. The report is
 `cla-review-<startup>-<document>-<model>.md` directly under `insights/`.
 
 ## Workflow and dependencies
@@ -61,7 +68,10 @@ carries value, source, status, effective date and an `active` flag; only
 `approved` rules may be active and judge, an inactive rule yields an open
 question with the observation, a rule whose input is unavailable is not
 evaluated and names the input. The term in months is measured from the
-run date, which is part of the assessment key.
+run date, which is part of the assessment key; a maturity before the run
+date is flagged. The 10/20 rule reads the counts of question 2, so the
+lender-angle assessment runs after it and carries the loan context in its
+key; without a reusable snapshot the rule is not evaluated.
 
 Each stage is a managed JSON artifact validated on read and write against
 `config/cla_review/artifact_schemas.json` or the `captable_build` CLA
@@ -116,10 +126,13 @@ Preparation may import, convert and index documents. The review calls models
 and saves intermediates and the report; it sends nothing. An absent or stale
 cap-table snapshot yields an insufficient-evidence paragraph for question 2
 and the run completes; a malformed snapshot, failed path resolution and
-technical failures remain errors. No plausible term sheet, an unresolvable path, an extraction
-failure or a failed audit check stops the run without saving a partial report. A
-run costs one model call per check, each carrying the term sheet and the
-reference in its prefix, plus at most one ranking and one synthesis; the
+technical failures remain errors. No plausible term sheet, a `document` that
+matches no file exactly, an incomplete audit configuration (validated before
+any model call), an extraction failure or a failed audit check stops the run
+without saving a partial report. A run costs one extraction call, one model
+call per check (each carrying the term sheet and the reference in its
+prefix) and one synthesis, plus one identification call when `document` is
+omitted and one ranking call when the term sheet names no SECA form; the
 checks of every checklist run concurrently. The report aids human review and is not legal
 advice.
 
