@@ -84,6 +84,61 @@ def test_dealum_file_link_keeps_apostrophes_in_filename():
     assert links[0].filename == "PROUD-s pitch deck.pdf"
 
 
+@pytest.mark.parametrize("filename,expected", [
+    ("notes.md", "notes.md.txt"),
+    ("notes.MD", "notes.MD.txt"),
+    ("notes.md.txt", "notes.md.txt"),
+    ("deck.pdf", "deck.pdf"),
+])
+def test_append_txt_to_md_filename(filename, expected):
+    from lib.startups.dealum.importing import append_txt_to_md_filename
+
+    assert append_txt_to_md_filename(filename) == expected
+
+
+def test_dealum_markdown_paths_manifest_and_repeat_import(mock_env):
+    application = {
+        **APPLICATION,
+        "answers": {
+            **APPLICATION["answers"],
+            "notes": "https://files.dealum.com/token/notes.md",
+        },
+    }
+    adapter = FakeDealumAdapter(application)
+    storage = get_storage()
+    root = "storage/startups/avientus/datasets/dealum"
+    storage.write_text(f"{root}/application.md", "legacy application")
+    storage.write_text(f"{root}/documents/notes.md", "legacy attachment")
+
+    first = import_startup_from_dealum("Avientus", adapter=adapter)
+
+    assert first.application_path == f"{root}/application.md.txt"
+    assert not storage.exists(f"{root}/application.md")
+    assert not storage.exists(f"{root}/documents/notes.md")
+    manifest = json.loads(storage.read_text(first.manifest_path))
+    attachment = next(item for item in manifest["files"] if item["field"] == "notes")
+    assert attachment["filename"] == "notes.md.txt"
+    assert attachment["path"] == f"{root}/documents/notes.md.txt"
+    assert storage.read_bytes(attachment["path"]) == b"test"
+    sources = snapshot_source_files(storage, root)
+    assert {source.filename for source in sources} >= {
+        "application.md.txt", "documents/notes.md.txt",
+    }
+    for path in (first.application_path, attachment["path"]):
+        storage.set_mtime(path, 1_000_000_000)
+
+    second = import_startup_from_dealum("Avientus", adapter=adapter)
+
+    assert not second.changed
+    assert [
+        (source.filename, source.sha256) for source in sources
+    ] == [
+        (source.filename, source.sha256) for source in snapshot_source_files(storage, root)
+    ]
+    for path in (first.application_path, attachment["path"]):
+        assert storage.mtime(path) == 1_000_000_000
+
+
 def test_dealum_import_creates_dataset_and_manifest(mock_env):
     adapter = FakeDealumAdapter()
 
@@ -101,7 +156,7 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     assert result.application_code == "JHXM-QZHJ-8684"
     assert result.match_method == "normalized_name"
     assert result.downloaded_files == 2
-    assert storage.exists("storage/startups/avientus/datasets/dealum/application.md")
+    assert storage.exists("storage/startups/avientus/datasets/dealum/application.md.txt")
     assert storage.exists("storage/startups/avientus/datasets/dealum/documents/Avientus_Deck.pdf")
     assert storage.exists("storage/startups/avientus/datasets/__active_dataset__.md")
 
@@ -113,7 +168,7 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     assert manifest["step"] == "Jury"
     assert len(manifest["files"]) == 2
     application_md = storage.read_text(
-        "storage/startups/avientus/datasets/dealum/application.md"
+        "storage/startups/avientus/datasets/dealum/application.md.txt"
     )
     assert (
         "- Dealum URL: https://app.dealum.com/#/dealroom/19180?application=491739"

@@ -21,6 +21,10 @@ raw JSON, metadata and downloaded attachments before replacing the
 `datasets/dealum/` snapshot. Removed attachments disappear from the replacement.
 A download failure preserves the prior snapshot. The importer does not perform
 dataset indexing or generate insight reports.
+Generated application Markdown and downloaded `.md` attachments are stored as
+`.md.txt` (content unchanged) to avoid Markdown-to-Google-Docs conversion during
+Drive sync. Other extensions are unchanged. The next successful snapshot replaces
+legacy local `.md` paths; existing Google Docs require separate sync reconciliation.
 Identical source snapshots are not replaced; only changed bookkeeping is updated.
 For partial source changes, unchanged files are reused through staged hard links,
 preserving their content, identity and modification timestamps. Within a bulk-refresh
