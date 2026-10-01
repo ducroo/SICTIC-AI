@@ -1,0 +1,28 @@
+{
+  "label": "moonlit",
+  "variant": "moonlit",
+  "confidence": "low",
+  "uncertain": true,
+  "ambiguity_reason": "Synthetic fixture deliberately leaves the variant uncertain.",
+  "override_reason": null,
+  "provenance": {"id": "synthetic-classifier", "version": "v1"},
+  "evidence_ids": ["synthetic-evidence-01"],
+  "applicability": {
+    "fable-team-echo": {
+      "state": "applicable", "basis": "evidence", "evidence_ids": ["synthetic-evidence-01"],
+      "provenance": {"id": "synthetic-applicability", "version": "v1"}
+    },
+    "fable-market-whisper": {
+      "state": "applicable", "basis": "evidence", "evidence_ids": ["synthetic-evidence-02"],
+      "provenance": {"id": "synthetic-applicability", "version": "v1"}
+    },
+    "fable-product-kite": {
+      "state": "applicable", "basis": "evidence", "evidence_ids": ["synthetic-evidence-03"],
+      "provenance": {"id": "synthetic-applicability", "version": "v1"}
+    },
+    "fable-docs-lantern": {
+      "state": "applicable", "basis": "evidence", "evidence_ids": ["synthetic-evidence-04"],
+      "provenance": {"id": "synthetic-applicability", "version": "v1"}
+    }
+  }
+}
