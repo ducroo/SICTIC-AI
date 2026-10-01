@@ -65,6 +65,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.llm_chat.__main__",
         "skills.member_preferences.__main__",
         "skills.person_profile.__main__",
+        "skills.pitch_deck_review.__main__",
         "skills.potential_investors.__main__",
         "skills.ranking.__main__",
         "skills.sha_review.__main__",

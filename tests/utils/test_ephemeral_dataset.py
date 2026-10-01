@@ -28,6 +28,7 @@ async def test_ephemeral_cleanup_keeps_dataset_visible_for_adapter(mocker):
         return_value=SimpleNamespace(
             raw_rel="generated/temp/datasets",
             parsed_rel="parsed/temp",
+            insights_rel="insights/temp",
         ),
     )
     mocker.patch.object(ephemeral_dataset, "QdrantAdapter", side_effect=create_adapter)
@@ -36,9 +37,10 @@ async def test_ephemeral_cleanup_keeps_dataset_visible_for_adapter(mocker):
     result = await ephemeral_dataset.prepare_ephemeral_dataset([], "temp")
 
     assert result == "temp"
-    assert events[:4] == [
+    assert events[:5] == [
         ("adapter", "temp"),
         ("delete", None),
         ("rmtree", "generated/temp/datasets"),
         ("rmtree", "parsed/temp"),
+        ("rmtree", "insights/temp"),
     ]
