@@ -267,6 +267,7 @@ Internal building blocks are intentionally omitted.
 | `sha_review` | 🚧 | Reviews a selected Shareholders' Agreement against a reference SHA and legal checklists. |
 | `captable_build` | ✅ | Extracts, assesses, and validates a startup's cap table and convertible loans into four managed JSON insights, every extracted figure backed by a verified source quote (see [docs/captable.md](docs/captable.md)). |
 | `captable` | ✅ | Computes conversion scenarios, stamp duty, and red-flag analysis over consolidated data; produces a Markdown report. |
+| `cla_review` | 🚧 | Reviews one convertible-loan term sheet from the lender's side, in the context of the cap table, existing loans and SHA (see [docs/cla-review-design.md](docs/cla-review-design.md)). |
 | `companyresearch.ch` | 🚧 | Uses the companyresearch.ch API to collect publicly available information about a startup. |
 | **Ongoing monitoring** | | |
 | `alerts_and_news` | ◻️ | Monitors and interprets relevant portfolio-company news and updates. |

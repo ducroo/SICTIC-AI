@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.captable.data import field_value, parse_extraction_date
+
 from lib.captable.aggregation import names_match, normalize_lender_name
 
 TOLERANCE = 0.005  # 0.5 %
@@ -20,12 +22,6 @@ def _finding(check: str, status: str, severity: str, detail: str) -> dict:
         "severity": severity,
         "detail": detail,
     }
-
-
-def _value(entry: Any) -> Any:
-    if isinstance(entry, dict) and "value" in entry:
-        return entry["value"]
-    return entry
 
 
 def _holdings_sum(stakeholder: dict) -> float:
@@ -424,7 +420,7 @@ def check_cla_lifecycle(
     for cla in clas:
         if cla.get("status") != "executed":
             continue
-        execution = _value(cla.get("execution_date"))
+        execution = field_value(cla.get("execution_date"))
         for lender in cla.get("lenders", []):
             key = normalize_lender_name(lender.get("name", ""))
             if not any(names_match(key, s) for s in shareholder_keys):
@@ -435,10 +431,8 @@ def check_cla_lifecycle(
                     if names_match(key, reg_key):
                         acquired = reg_date
                         break
-            from lib.captable.aggregation import _parse_date
-
-            acquired_date = _parse_date(acquired)
-            execution_date = _parse_date(execution)
+            acquired_date = parse_extraction_date(acquired)
+            execution_date = parse_extraction_date(execution)
             if (
                 acquired_date
                 and execution_date
@@ -482,7 +476,7 @@ def check_nominal_floor(captable: dict, clas: list[dict]) -> list[dict]:
         return findings
     min_nominal = min(nominals)
     for cla in clas:
-        cap = _value(cla.get("valuation_cap"))
+        cap = field_value(cla.get("valuation_cap"))
         if cap is None:
             continue
         implied = cap / diluted_total

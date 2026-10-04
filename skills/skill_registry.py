@@ -5,6 +5,7 @@ from skills.startup_website_import.startup_website_import import startup_website
 
 from skills.captable.captable import captable
 from skills.captable_build.captable_build import captable_build
+from skills.cla_review.cla_review import cla_review
 from skills.dd_checks.dd_checks import dd_checks
 from skills.dd_priorities.dd_priorities import dd_priorities
 from skills.sha_review.sha_review import sha_review
@@ -94,6 +95,10 @@ SKILL_REGISTRY = {
         func=captable,
         domains=frozenset({"startups"}),
         depends_on=("captable-build",),
+    ),
+    "cla-review": SkillSpec(
+        func=cla_review,
+        domains=frozenset({"startups"}),
     ),
     "submission-ready": SkillSpec(
         func=submission_ready,

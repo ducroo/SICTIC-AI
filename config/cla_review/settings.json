@@ -1,0 +1,220 @@
+{
+  "_purpose": "Lender-angle rules for cla_review. Every rule stays INACTIVE until its status is 'approved' (Enrico, Lucas); an inactive rule may raise an open question in the report but never a judgment. Values follow the proposal table in docs/cla-review-design.md, section 4, step 3. Change values here, never in code. member_count_n and valuation_grid_multiples_of_cap are scenario inputs for question 2, not rules; they are listed here so one file holds every tunable number.",
+  "rule_statuses": [
+    "approved",
+    "to verify",
+    "placeholder",
+    "rule",
+    "fixed"
+  ],
+  "rules": {
+    "discount_minimum_pct": {
+      "value": 15,
+      "unit": "percent",
+      "source": "Swiss Angel Investor Handbook 8.3: 15 to 25% most common for angels; SECA band 5 to 30%; Enrico (design doc footnote 1): market 10 to 30%, 20% modal for a 12 to 18 month loan",
+      "status": "to verify",
+      "effective_date": null,
+      "active": false
+    },
+    "discount_schedule_expected_above_months": {
+      "value": 12,
+      "unit": "months",
+      "source": "SECA drafting note: discount correlates with term, rising schedule advised; Enrico (design doc footnote 2) on schedule variants",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "valuation_cap_required": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA drafting note: cap often requested by investors; without it the conversion price is unbounded",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "denominator_fully_diluted_expected": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA drafting note: fully diluted is the investor-friendly choice",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "qefr_threshold_minimum_multiple_of_aggregate_loan": {
+      "value": 1,
+      "unit": "multiple",
+      "source": "SECA drafting note: not too low, or a tiny round converts the loans",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "qefr_threshold_maximum_multiple_of_round_target": {
+      "value": 3,
+      "unit": "multiple",
+      "source": "SECA drafting note: not too high, or the company can avoid conversion",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "maturity_conversion_required": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA drafting note: cap rarely accepted at maturity, fixed valuation or fair market value used",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "term_maximum_months": {
+      "value": 24,
+      "unit": "months",
+      "source": "SECA drafting note: bridge until the next round; number is a placeholder",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "interest_safe_harbor_rate_pct": {
+      "value": null,
+      "unit": "percent",
+      "source": "ESTV safe-harbor interest rate, published yearly; SECA drafting note and Handbook 8.3. Needs the current figure and its year.",
+      "status": "to verify",
+      "effective_date": null,
+      "active": false
+    },
+    "coc_repayment_multiple_minimum": {
+      "value": 1,
+      "unit": "multiple",
+      "source": "SECA short form: conversion or repayment on change of control",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "lender_majority_minimum_share_of_principal": {
+      "value": 0.6667,
+      "unit": "fraction",
+      "source": "earlier cla_review sketch: defined, at least two thirds of principal",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "exclusivity_flagged": {
+      "value": true,
+      "unit": "switch",
+      "source": "Swiss Angel Investor Handbook: not recommended for angel rounds",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "legal_fees_each_party_own": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA short form wording",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "binding_provisions_limited": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA short form: binding provisions limited to confidentiality, costs, effect of the term sheet and applicable law; economic terms or exclusivity declared binding are flagged",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "documentation_seca_form_expected": {
+      "value": true,
+      "unit": "switch",
+      "source": "SECA CLA Model Documentation: the definitive agreements should follow the SECA short or long form; bespoke or unnamed documentation is flagged",
+      "status": "rule",
+      "effective_date": null,
+      "active": false
+    },
+    "non_bank_rules": {
+      "value": {
+        "identical_terms_lenders": 10,
+        "total_lenders": 20
+      },
+      "unit": "count",
+      "source": "Swiss Angel Investor Handbook 8.4, fixed by law; applicability and counting assumptions still need approval",
+      "status": "fixed",
+      "effective_date": null,
+      "active": false
+    },
+    "member_count_n": {
+      "value": 5,
+      "unit": "count",
+      "source": "SICTIC syndicate practice; placeholder",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "valuation_grid_multiples_of_cap": {
+      "value": [
+        0.5,
+        0.75,
+        1.0,
+        1.5,
+        2.0,
+        3.0
+      ],
+      "unit": "multiple of the valuation cap",
+      "source": "for the cap-versus-discount crossover; the pre-money valuations of the conversion table",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "valuation_grid_absolute": {
+      "value": null,
+      "unit": "pre-money valuations in the term sheet currency",
+      "source": "explicit grid for an uncapped term sheet; null omits the conversion table when no cap exists",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    },
+    "conversion_round_method": {
+      "value": "pre_money",
+      "unit": "method name of lib.captable.model.convert_in_round",
+      "source": "one method in the member's conversion table; captable shows all three",
+      "status": "placeholder",
+      "effective_date": null,
+      "active": false
+    }
+  },
+  "inputs_not_rules": [
+    "member_count_n",
+    "valuation_grid_multiples_of_cap",
+    "valuation_grid_absolute",
+    "conversion_round_method"
+  ],
+  "documentation_form_references": {
+    "_purpose": "documentation_form values of the extraction that name a SECA form select the reference term sheet directly (evidenced choice, no ranking call); any other value ranks the references with the model.",
+    "seca_short_form": "seca_cla_term_sheet_short_form_february_2025",
+    "seca_long_form": "seca_cla_term_sheet_long_form_february_2025"
+  },
+  "checklists_provenance": {
+    "status": "provisional",
+    "seeded_on": "2026-09-27",
+    "seeded_by": "Manfred with Claude, from docs/cla-review-design.md section 4 (steps 4 and 7) and the SECA drafting notes",
+    "awaiting": "Enrico's review of every check in config/cla_review/checklists/ and config/cla_review/executability_checklists/; the checklist parser accepts no prose outside checks, so this note lives here",
+    "note": "A checklist file under either folder is executed as an audit; keep prose out of those folders."
+  },
+  "executability_assumption_fields": [
+    "conversion_capital_sources",
+    "shareholder_consents_referenced",
+    "pre_emption_reduction",
+    "conversion_share_class",
+    "sha_accession_required",
+    "accession_of_further_investors",
+    "investor_majority",
+    "valuation_cap",
+    "denominator_basis",
+    "aggregate_amount_max"
+  ],
+  "constitutional_document_classes": [
+    "sha_or_priced_term_sheet",
+    "articles_of_association",
+    "commercial_register_extract",
+    "share_register",
+    "syndicate_agreement"
+  ],
+  "_executability_note": "executability_assumption_fields are the extracted term-sheet fields handed to the SHA/articles audit as the conversion assumptions (validated against config/captable_build/cla_terms.md at start); constitutional_document_classes are the captable_build classification classes whose documents that audit is pointed at (validated against the classification schema)."
+}

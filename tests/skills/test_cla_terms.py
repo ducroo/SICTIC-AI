@@ -41,6 +41,7 @@ def _minimal_md() -> str:
             "enum: loan_balance_full | principal_only | not_subordinated"
         ),
         "conversion_capital_sources": "enum list: consents",
+        "documentation_form": "enum: seca_short_form | seca_long_form | bespoke | unstated",
     }
     for field, (kind, _members) in CODE_CONSUMED_FIELDS.items():
         lines += [f"### {field} ({kinds.get(field, kind)})", "", "Guidance.", ""]
@@ -50,7 +51,7 @@ def _minimal_md() -> str:
 def test_real_checklist_builds_the_expected_schema() -> None:
     built = build_cla_schema(_config())
     schema = built["schema"]
-    assert len(schema["properties"]) == 39
+    assert len(schema["properties"]) == 55
     assert set(schema["required"]) == set(schema["properties"])
     assert schema["additionalProperties"] is False
     # structural shapes come from the base file, verbatim
@@ -58,13 +59,17 @@ def test_real_checklist_builds_the_expected_schema() -> None:
     for name in ("lenders", "status", "status_evidence", "missing_terms", "comments"):
         assert schema["properties"][name] == base["properties"][name]
     # every non-structural field is quote-reviewed; presence set is exact
-    assert len(built["quoted_fields"]) == 34
+    assert len(built["quoted_fields"]) == 50
     assert built["presence_fields"] == {
         "qefr_present",
         "coc_present",
         "maturity_conversion_present",
         "mfn_clause",
         "pro_rata_rights",
+        "non_qualified_voluntary_conversion",
+        "conditions_precedent",
+        "representations_and_covenants",
+        "exclusivity_present",
     }
     assert "TERMS TO EXTRACT" in built["prompt_block"]
     assert "`maturity_conversion_price`" in built["prompt_block"]
@@ -126,3 +131,44 @@ def test_unknown_structural_field_fails() -> None:
     config["cla_terms"] += "\n### mystery (structural)\n\nText.\n"
     with pytest.raises(ValueError, match="mystery"):
         build_cla_schema(config)
+
+
+# --- term-sheet provisions (cla_review, design decision 1): no legacy schema ---
+
+def test_stored_extraction_without_a_term_sheet_field_is_invalid(mock_env) -> None:
+    from lib.captable.schema import validate_build_artifact
+    from tests.skills.test_captable_build import _complete_cla
+
+    cla = _complete_cla()
+    validate_build_artifact({"dataset": "fixture", "clas": [cla], "failures": []}, "loan-extraction")
+    del cla["exclusivity_present"]
+    with pytest.raises(ValueError, match="exclusivity_present"):
+        validate_build_artifact({"dataset": "fixture", "clas": [cla], "failures": []}, "loan-extraction")
+
+
+def test_loan_extraction_key_follows_the_checklist(mock_env, monkeypatch) -> None:
+    from lib.captable import insights
+    from lib.datasets.paths import dataset_location_for_domain
+    from lib.insights import InsightFile
+    from lib.storage import get_storage
+
+    location = dataset_location_for_domain("fixture", "startups")
+    for path in (location.raw_rel, location.parsed_rel, location.insights_rel):
+        get_storage().mkdir(path)
+    classification = InsightFile(
+        "fixture", "captable_build", "test-model-1b",
+        identifier="classification", subdir=True, extension="json",
+    )
+    classification.save('{"dataset": "fixture", "documents": []}')
+    before = insights.configured_build_insight("fixture", "loan-extraction", classification).config_key
+
+    real = insights.load_repository_config
+
+    def with_extra_term(*sections):
+        config = dict(real(*sections))
+        config["cla_terms"] += "\n### founder_lockup_months (number)\n\nGuidance.\n"
+        return config
+
+    monkeypatch.setattr(insights, "load_repository_config", with_extra_term)
+    after = insights.configured_build_insight("fixture", "loan-extraction", classification).config_key
+    assert before != after

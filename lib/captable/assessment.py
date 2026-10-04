@@ -10,18 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from lib.captable.data import extraction_value
+
 SEVERITY_ORDER = ("info", "medium", "high", "severe")
 
 STATUS_STANDARD = "present_market_standard"
 STATUS_DEVIATING = "present_deviating"
 STATUS_ABSENT = "absent"
-
-
-def _value(extraction: dict[str, Any], field: str) -> Any:
-    entry = extraction.get(field)
-    if isinstance(entry, dict) and "value" in entry:
-        return entry["value"]
-    return entry
 
 
 def _finding(
@@ -44,7 +39,7 @@ def assess_cla(
 ) -> list[dict[str, str]]:
     """Assess one CLA extraction; returns one finding per checklist item."""
     findings: list[dict[str, str]] = []
-    v = lambda field: _value(extraction, field)  # noqa: E731
+    v = lambda field: extraction_value(extraction, field)  # noqa: E731
 
     # --- Discount ---------------------------------------------------------
     band_low, band_high = rules["discount_commercial_band_pct"]
