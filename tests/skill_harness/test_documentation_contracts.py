@@ -68,13 +68,30 @@ def test_maintained_document_links_resolve(document):
             assert unquote(parsed.fragment) in _heading_anchors(path.read_text()), (document, target)
 
 
+def _command_tokens(line):
+    """Unwrap a quoted command-substitution assignment without executing it."""
+    assignment = re.fullmatch(r'\s*[A-Za-z_]\w*="\$\((.*)\)"\s*', line)
+    return shlex.split(assignment.group(1) if assignment else line, comments=True)
+
+
+@pytest.mark.parametrize("line", [
+    'conda run -n sictic-env python -m skills.send_gmail "/path/with spaces.md"',
+    'email_html="$(conda run -n sictic-env python -m skills.send_gmail "/path/with spaces.md")"',
+])
+def test_command_tokens_preserve_module_and_quoted_arguments(line):
+    tokens = _command_tokens(line)
+    assert tokens[tokens.index("-m") + 1:] == [
+        "skills.send_gmail", "/path/with spaces.md",
+    ]
+
+
 def _skill_examples():
     for document in MAINTAINED_DOCS:
         for block in re.findall(r"```(?:bash|sh|shell)\n(.*?)```", document.read_text(), re.S):
             for line in block.replace("\\\n", " ").splitlines():
                 if " -m skills." not in line:
                     continue
-                tokens = shlex.split(line, comments=True)
+                tokens = _command_tokens(line)
                 module_index = tokens.index("-m") + 1
                 if tokens[module_index].startswith("skills."):
                     yield document, tokens[module_index], tokens[module_index + 1:]
@@ -89,11 +106,17 @@ class _ParsedHarnessArguments(BaseException):
     ids=lambda value: str(value.relative_to(ROOT)) if isinstance(value, Path) else str(value),
 )
 def test_documented_skill_commands_parse_without_running_workflows(
-    mock_env, monkeypatch, document, module_name, arguments,
+    mock_env, monkeypatch, tmp_path, document, module_name, arguments,
 ):
     module = importlib.import_module(f"{module_name}.__main__")
     command = get_command(module.app)
     args = list(arguments)
+    # Supply an actual file for the documentation's input-file placeholder;
+    # retain Click's normal exists/readability validation.
+    if "/path/to/insight.md" in args:
+        source = tmp_path / "insight.md"
+        source.write_text("# Example insight\n", encoding="utf-8")
+        args = [str(source) if arg == "/path/to/insight.md" else arg for arg in args]
     if isinstance(command, click.Group):
         assert args and args[0] in command.commands, (document, arguments)
         command = command.commands[args.pop(0)]
