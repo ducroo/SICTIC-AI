@@ -1,6 +1,6 @@
 ---
 name: deep_dive_invitation
-description: Create a Markdown deep-dive invitation for human review from a Dealum startup and supplied contacts. Optionally email the review artifact to the requester through gws according to their conversation preference.
+description: Create a Markdown deep-dive invitation for human review from a Dealum startup and supplied contacts.
 ---
 
 # Deep-dive invitation
@@ -67,13 +67,6 @@ mail drafts or change stages.
 Missing/ambiguous contacts can become visible review notices; dependency and
 generation failures propagate. Preserve the configured recipient precedence and
 manual output selection.
-
-## Emailing the requester
-
-If the requester's email address is provided and `gws` is installed, ask once
-whether to email this and future generated deep-dive invitations in the
-conversation using `gws`. Remember and follow their preference unless they
-change it.
 
 ## Usage
 
