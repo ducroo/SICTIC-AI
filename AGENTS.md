@@ -1,6 +1,25 @@
-# Repository working instructions
+# SICTIC-AI agent instructions
 
-## Read the standards first
+## Using the toolkit
+
+Apply this section when running skills or providing their outputs to users.
+
+### Emailing individual insights
+
+When a user requests an individual insight, their email address is provided,
+and `gws` is available, ask once whether they want this and future insights
+emailed to them. Remember and follow their answer within the conversation,
+unless they change it.
+
+If accepted, use the [send_gmail](skills/send_gmail/SKILL.md) skill to send the
+complete insight in the email body. This includes deep-dive invitations.
+
+## Developing the toolkit
+
+Apply this section when creating, modifying or reviewing repository code,
+configuration or skill instructions.
+
+### Read the standards first
 
 Before modifying code, read
 `skills/standards_and_architecture/SKILL.md`
@@ -9,13 +28,13 @@ and the documentation for the affected skills.
 The standards skill is the authoritative reference for repository
 conventions. Do not duplicate or redefine those conventions here.
 
-## Scope and approval
+### Scope and approval
 
 Clarify unresolved requirements before editing. Ask before changing
 skills outside the agreed scope or changing established contracts.
 Approval already given does not need to be requested again.
 
-## Preserve existing contracts
+### Preserve existing contracts
 
 A request to add or fix functionality does not authorize changing
 established conventions.
@@ -34,7 +53,7 @@ If documentation and established behavior conflict, explain the
 specific conflict before changing the affected contract. Do not
 silently choose a new convention.
 
-## Reuse shared implementations
+### Reuse shared implementations
 
 Use the repository's existing abstractions for identity, matching,
 paths, insight lifecycle, configuration, and orchestration.
@@ -43,7 +62,7 @@ Do not introduce local replacements, alternate discovery paths,
 filename variants, or generation modes without checking how they
 interact with existing consumers and caches.
 
-## Verify compatibility
+### Verify compatibility
 
 Run tests appropriate to the changed behavior.
 

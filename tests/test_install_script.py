@@ -94,6 +94,7 @@ def test_install_script_copies_skills_and_sets_env(tmp_path):
     assert installed_doc.startswith(source_doc)
     assert f"`{skill_dir / 'SKILL.md'}`" in installed_doc
     assert f"`{source / 'AGENTS.md'}`" in installed_doc
+    assert 'For individual insight requests, follow the "Emailing individual insights"' in installed_doc
     assert not (target / "AGENTS.md").exists()
     assert (fake_site_packages / "sictic-ai-repo.pth").read_text(encoding="utf-8").strip() == str(source)
 

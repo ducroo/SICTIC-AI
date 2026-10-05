@@ -29,6 +29,7 @@ SKILL_COVERAGE = {
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
     "sha_review": "local-smoke",
+    "send_gmail": "utility-smoke",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
     "startup_traction": "local-smoke",
