@@ -43,3 +43,25 @@ def test_resolve_document_path_returns_best_match_and_score(mock_env):
     assert 78 < score < 100
     assert exact_path == "legal/Shareholders Agreement 2025.pdf"
     assert exact_score == 100
+
+
+def test_equal_basenames_resolve_to_the_named_folder(mock_env):
+    _create_startup_dataset("acme")
+    location = dataset_location_for_domain("acme", "startups")
+    storage = get_storage()
+    for folder in ("drafts", "final"):
+        storage.write_text(
+            f"{location.parsed_rel}/legal/{folder}/term-sheet.pdf.md",
+            f"# Term sheet ({folder})\n",
+        )
+    manifest = IngestionManifest.load(storage, location.parsed_rel)
+    manifest.documents = {
+        "legal/drafts/term-sheet.pdf": {},
+        "legal/final/term-sheet.pdf": {},
+    }
+    manifest.save()
+
+    for folder in ("drafts", "final"):
+        matched_path, score = resolve_document_path("acme", f"legal/{folder}/term-sheet.pdf")
+        assert matched_path == f"legal/{folder}/term-sheet.pdf", folder
+        assert score == 100.0

@@ -34,6 +34,8 @@ dependencies:
 
   # Document conversion
   - docling=2.96.1
+  - markdown-it-py
+  - beautifulsoup4
 
   # Temporary compatibility constraints required by Docling 2.96.1.
   # Remove these after a newer Docling release has been tested.

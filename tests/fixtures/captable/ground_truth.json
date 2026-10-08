@@ -232,6 +232,122 @@
     "new_table_after_a_page_break": "a table declaring its own text header right after a page marker stays a separate table; unit test only (tests/skills/test_captable_table_evidence.py)"
   },
   "esignature": {
-    "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)"
+    "synthetic_cla.md": "not_applicable (markdown source, no PDF to scan; execution evidenced by extracted signature block)",
+    "synthetic_cla_term_sheet.md": "not_applicable (markdown source, unsigned draft: signature blocks read '(unsigned)')"
+  },
+  "cla_term_sheet": {
+    "_purpose": "Unsigned CLA term sheet for the cla_review skill (docs/cla-review-design.md, slice 0). Classification: cla_term_sheet; status term_sheet, so it never enters outstanding totals and aggregation reports it as an open term sheet (term_sheet_count 1, not superseded: no executed loan matches its lender). Planted absences below MUST be reported absent, not invented.",
+    "document": "synthetic_cla_term_sheet.md",
+    "status": "term_sheet",
+    "execution_date": null,
+    "signatures_complete": false,
+    "borrower_name": "Fixture Robotics AG",
+    "lenders": [
+      {
+        "name": "Fixture Angels",
+        "kind": "entity",
+        "domicile": "CH",
+        "principal_amount": 150000,
+        "shareholder": false,
+        "note": "Lead investor; further investors accede. The aggregate CHF 300,000 to 500,000 is a range, not a lender."
+      }
+    ],
+    "principal_total": 150000,
+    "principal_total_note": "150,000 follows the executed-CLA convention (sum of the lenders named in the document); the aggregate range CHF 300,000 to 500,000 sits in aggregate_amount_min/max under term_sheet_only_fields and is what question 2 divides by the member count.",
+    "principal_currency": "CHF",
+    "interest_mode": "fixed",
+    "interest_rate_pct": 4,
+    "interest_day_count": "act/365",
+    "interest_compounding": "simple",
+    "maturity_date": "2028-08-15",
+    "qefr_present": true,
+    "qefr_min_raise": 3000000,
+    "qefr_mandatory": true,
+    "coc_present": false,
+    "maturity_conversion_present": false,
+    "valuation_cap": 12000000,
+    "discount_pct": 20,
+    "discount_schedule": null,
+    "valuation_floor": null,
+    "denominator_basis": "unstated",
+    "subordinated": true,
+    "subordination_scope": "loan_balance_full",
+    "mfn_clause": false,
+    "pro_rata_rights": false,
+    "conversion_capital_sources": [
+      "conditional_capital",
+      "consents"
+    ],
+    "shareholder_consents_referenced": true,
+    "sha_accession_required": true,
+    "governing_law": "Swiss law",
+    "expected_missing_terms": [
+      "execution_date",
+      "coc_present",
+      "maturity_conversion_present",
+      "discount_schedule",
+      "valuation_floor",
+      "denominator_basis",
+      "mfn_clause",
+      "pro_rata_rights",
+      "conditions_precedent",
+      "representations_and_covenants"
+    ],
+    "term_sheet_only_fields": {
+      "_note": "Fields of the 'Term sheet provisions' group of config/captable_build/cla_terms.md (added for cla_review, design decision 1).",
+      "aggregate_amount_min": 300000,
+      "aggregate_amount_max": 500000,
+      "lead_investor": "Fixture Angels",
+      "accession_of_further_investors": true,
+      "pre_emption_reduction": true,
+      "conversion_share_class": "the same class of shares issued in that round (expected: preferred A shares)",
+      "non_qualified_voluntary_conversion": true,
+      "conditions_precedent": false,
+      "representations_and_covenants": false,
+      "binding_provisions": "Confidentiality, Legal Fees and Expenses, Exclusivity, Applicable Law and Jurisdiction",
+      "exclusivity_present": true,
+      "exclusivity_until": "2026-09-30",
+      "investor_majority": "Investors holding at least two thirds of the aggregate principal amount of the Loans",
+      "legal_fees_each_party_own": true,
+      "documentation_form": "seca_short_form",
+      "documentation_counsel": "Fixture Legal AG"
+    },
+    "lender_angle_expectations": {
+      "_note": "What the lender-angle rules in config/cla_review/settings.json flag when approved and active; the tests force activation, so this key holds whatever the current approval state is.",
+      "valuation_cap_required": "pass (cap present)",
+      "denominator_fully_diluted_expected": "flag (denominator unstated)",
+      "maturity_conversion_required": "flag (repayment only at maturity, no conversion mechanism)",
+      "coc_repayment_multiple_minimum": "flag (no change-of-control clause)",
+      "exclusivity_flagged": "flag (exclusivity until 2026-09-30, and it is binding)",
+      "legal_fees_each_party_own": "pass",
+      "lender_majority_minimum_share_of_principal": "pass (two thirds)",
+      "discount_minimum_pct": "pass at 15% (discount 20%)",
+      "term_maximum_months": "pass at 24 months (exactly 24)",
+      "binding_provisions_limited": "flag (exclusivity is declared binding)",
+      "documentation_seca_form_expected": "pass (SECA short form referenced)",
+      "discount_schedule_expected_above_months": "flag (24-month term, no discount schedule)",
+      "qefr_threshold_minimum_multiple_of_aggregate_loan": "pass (3,000,000 >= 1x the 500,000 aggregate)",
+      "_as_of": "2026-08-15 (the expected first closing; the 24-month term is measured from it)"
+    },
+    "question_2_expectations": {
+      "_note": "cla_review slice 2 on the fixture: the term sheet next to synthetic_cla.md (executed, 2 lenders, cap 8M, 20%, 5%, MFN). Deterministic; tests/skills/test_cla_review_context.py.",
+      "_as_of": "2026-08-15",
+      "ticket_default": "500,000 aggregate / member_count_n 5 = 100,000, labelled assumption (never the lead's 150,000 / N)",
+      "other_new_lenders": 400000,
+      "round_investment": "3,000,000 = qefr_min_raise, labelled assumption",
+      "crossover_valuation": "15,000,000 = cap 12M / (1 - 20%); discount binds below, cap binds above",
+      "mfn": "no effect from the term sheet to the executed loan (its cap is lower and interest higher); the executed loan is more favourable (lower cap, higher interest) and the term sheet has no MFN",
+      "identical_terms": "the term sheet forms a new group (different cap, interest, maturity, QEFR)",
+      "ten_twenty_before": {
+        "max_lenders_on_identical_terms": 2,
+        "total_lenders_all_terms": 2
+      },
+      "ten_twenty_after": {
+        "max_lenders_on_identical_terms": 6,
+        "total_lenders_all_terms": 8,
+        "note": "lead investor + 5 scenario members on the term sheet's terms"
+      },
+      "stamp_duty": "CHF: computed on 3,000,000 new money plus every converting balance"
+    }
   }
 }

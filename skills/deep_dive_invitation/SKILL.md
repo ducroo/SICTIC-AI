@@ -1,6 +1,6 @@
 ---
 name: deep_dive_invitation
-description: Create a review-only Markdown deep-dive invitation for Joëlle from a Dealum startup and supplied contacts. Use for invitation preparation; never send the email or create a Gmail draft.
+description: Create a Markdown deep-dive invitation for human review from a Dealum startup and supplied contacts.
 ---
 
 # Deep-dive invitation
@@ -61,8 +61,9 @@ for a reusable invitation before executing the remaining dependencies.
 
 ## Side effects and failure behavior
 
-Dependencies may import, synchronize, generate profiles and rank experts. Save
-only a review artifact: do not send messages, create mail drafts or change stages.
+Dependencies may import, synchronize, generate profiles and rank experts. The
+Python workflow saves only a review artifact; it does not send messages, create
+mail drafts or change stages.
 Missing/ambiguous contacts can become visible review notices; dependency and
 generation failures propagate. Preserve the configured recipient precedence and
 manual output selection.

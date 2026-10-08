@@ -10,6 +10,7 @@ SKILL_COVERAGE = {
     "captable_analysis": "harness-smoke",
     "captable": "harness-smoke",
     "captable_build": "harness-smoke",
+    "cla_review": "local-smoke",
     "submission_ready": "local-smoke",
     "dataset_chat": "harness-smoke",
     "dataset_maintenance": "utility-smoke",
@@ -29,6 +30,7 @@ SKILL_COVERAGE = {
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
     "sha_review": "local-smoke",
+    "send_gmail": "utility-smoke",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
     "startup_traction": "local-smoke",
@@ -75,4 +77,5 @@ HARNESS_SMOKE_COMMANDS = {
     "/captable_build": "/captable_build example-startup",
     "/captable": "/captable example-startup",
     "/captable_analysis": "/captable_analysis example-startup",
+    "/cla_review": "/cla_review example-startup",
 }

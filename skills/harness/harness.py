@@ -309,6 +309,22 @@ async def _submission_ready(args: List[str]) -> str:
     return _format_result(result)
 
 
+async def _cla_review(args: List[str]) -> str:
+    parser = _parser("/cla_review")
+    parser.add_argument("dataset", metavar="startup")
+    parser.add_argument("--document")
+    parser.add_argument("--ticket", type=float)
+    parser.add_argument("--fresh", action="store_true")
+    ns = parser.parse_args(args)
+    from skills.cla_review.cla_review import cla_review
+
+    return _format_result(
+        await cla_review(
+            ns.dataset, document=ns.document, ticket=ns.ticket, fresh=ns.fresh,
+        )
+    )
+
+
 async def _dealum_import(args: List[str]) -> str:
     parser = _parser("/dealum_import")
     parser.add_argument("startup")
@@ -368,6 +384,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/captable_build", "/captable_build <startup> [--fresh]", "Build consolidated cap-table/CLA JSON.", _captable_build),
         HarnessCommand("/captable", "/captable <startup> [--pre-money x] [--investment y] [--fx-rate CUR=RATE ...]", "Capitalization data, scenarios and commentary as Markdown.", _captable),
         HarnessCommand("/captable_analysis", "/captable_analysis <startup>", "Compatibility alias for /captable.", _captable),
+        HarnessCommand("/cla_review", "/cla_review <startup> [--document f] [--ticket n] [--fresh]", "Review one CLA term sheet from the lender's side.", _cla_review),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
     ]
     return {cmd.name: cmd for cmd in commands}

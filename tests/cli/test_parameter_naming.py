@@ -45,6 +45,13 @@ from skills.harness.harness import dispatch_command, help_text
         ),
         ("team_profile_revised", ["--startup", "Example One"], ["--dataset", "Example One"], ("Example One",), {}),
         ("sha_review", ["--startup", "Example One"], ["--dataset", "Example One"], ("Example One",), {}),
+        (
+            "cla_review",
+            ["--startup", "Example One", "--document", "legal/ts.md", "--ticket", "25000", "--fresh"],
+            ["--dataset", "Example One", "--document", "legal/ts.md", "--ticket", "25000", "--fresh"],
+            ("Example One",),
+            {"document": "legal/ts.md", "ticket": 25000.0, "fresh": True},
+        ),
     ],
 )
 def test_selectors_preserve_python_calls(

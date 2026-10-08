@@ -59,7 +59,18 @@ time instead (`CODE_CONSUMED_FIELDS`). That core is: `lenders`,
 `conversion_capital_sources`; and the booleans `qefr_present`,
 `coc_present`, `maturity_conversion_present`, `subordinated`,
 `mfn_clause`, `pro_rata_rights`, `shareholder_consents_referenced`,
-`sha_accession_required`. A unit test pins this list to the code.
+`sha_accession_required`; and, since the `cla_review` skill reads them by
+name for its lender-angle rules, the term-sheet provisions
+`aggregate_amount_min`, `aggregate_amount_max`, `lead_investor`,
+`accession_of_further_investors`, `pre_emption_reduction`,
+`conversion_share_class`, `non_qualified_voluntary_conversion`,
+`conditions_precedent`, `representations_and_covenants`,
+`binding_provisions`, `exclusivity_present`, `exclusivity_until`,
+`investor_majority`, `legal_fees_each_party_own`, `documentation_form`
+and `documentation_counsel` (usually absent in an executed loan agreement
+and reported through `missing_terms`; see
+[cla-review-design.md](cla-review-design.md), decision 1). A unit test
+pins this list to the code.
 
 **Deterministic assessment items (12)** over those fields
 (`lib/captable/assessment.py`, bands in `assessment_rules.json`):

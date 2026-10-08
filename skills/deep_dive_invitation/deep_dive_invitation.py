@@ -306,11 +306,12 @@ def _investor_table(resolutions: list[RecipientResolution]) -> str:
         lines.append("| — | — | — |")
     for resolution in resolutions:
         email = resolution.selected_email or "<insert email here>"
+        email_cell = f"[{email}](mailto:{email})" if resolution.selected_email else email
         linkedin_url = _linkedin_url(resolution.person)
         linkedin = f"[LinkedIn]({linkedin_url})" if linkedin_url else "—"
         lines.append(
             f"| {_escape_cell(resolution.person.display_name)} | "
-            f"{_escape_cell(email)} | {linkedin} |"
+            f"{_escape_cell(email_cell)} | {linkedin} |"
         )
     return "\n".join(lines)
 
@@ -527,7 +528,7 @@ async def deep_dive_invitation(
             ),
             "",
             f"Subject:{_MARKDOWN_HARD_BREAK}",
-            f"{dealum.dealum_name or startup}: Deep Dive Setup",
+            f"{dealum.dealum_name or startup}: Investor Interests",
             "",
             body.strip(),
             "",

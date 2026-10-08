@@ -71,6 +71,24 @@ CODE_CONSUMED_FIELDS: dict[str, tuple[str, tuple[str, ...]]] = {
     "conversion_capital_sources": ("enum list", ()),
     "shareholder_consents_referenced": ("boolean", ()),
     "sha_accession_required": ("boolean", ()),
+    # Term-sheet provisions read by name by the lender-angle rules of
+    # cla_review (lib/cla_review/assessment.py).
+    "aggregate_amount_min": ("number", ()),
+    "aggregate_amount_max": ("number", ()),
+    "lead_investor": ("string", ()),
+    "accession_of_further_investors": ("boolean", ()),
+    "pre_emption_reduction": ("boolean", ()),
+    "conversion_share_class": ("string", ()),
+    "non_qualified_voluntary_conversion": ("presence boolean", ()),
+    "conditions_precedent": ("presence boolean", ()),
+    "representations_and_covenants": ("presence boolean", ()),
+    "binding_provisions": ("string", ()),
+    "exclusivity_present": ("presence boolean", ()),
+    "exclusivity_until": ("string", ()),
+    "investor_majority": ("string", ()),
+    "legal_fees_each_party_own": ("boolean", ()),
+    "documentation_form": ("enum", ("seca_short_form", "seca_long_form", "bespoke", "unstated")),
+    "documentation_counsel": ("string", ()),
 }
 
 

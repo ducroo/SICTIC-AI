@@ -233,7 +233,9 @@ async def test_dd_checks_writes_report_from_local_fixture(mocked_skill_boundarie
     assert path.startswith("storage/startups/example-startup/insights/")
     report = get_storage().read_text(path)
     assert "Due Diligence" in report
-    assert "| No | Check | Status | Rationale | Source documents |" in report
+    assert "## Most important findings" in report
+    assert "| Importance | No | Check | Status | Rationale | Source documents |" in report
+    assert "| No | Check | Status | Importance | Rationale | Source documents |" in report
     json_insights = get_storage().list(
         "storage/startups/example-startup/insights/batch-audit",
         suffix=".json",

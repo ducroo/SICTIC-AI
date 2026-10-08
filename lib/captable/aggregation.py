@@ -22,11 +22,7 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any, Iterable
 
-def _value(entry: Any) -> Any:
-    if isinstance(entry, dict) and "value" in entry:
-        return entry["value"]
-    return entry
-
+from lib.captable.data import field_value, parse_extraction_date
 
 def normalize_lender_name(name: str) -> str:
     """Collapse spelling variants of the same lender name."""
@@ -78,17 +74,17 @@ def terms_group_key(extraction: dict[str, Any]) -> tuple:
     are the same terms, and splitting one round across spelling variants
     would under-report the 10-non-bank count.
     """
-    maturity = _value(extraction.get("maturity_date"))
-    parsed = _parse_date(maturity)
-    currency = _value(extraction.get("principal_currency"))
+    maturity = field_value(extraction.get("maturity_date"))
+    parsed = parse_extraction_date(maturity)
+    currency = field_value(extraction.get("principal_currency"))
     return (
-        _value(extraction.get("interest_mode")),
-        _value(extraction.get("interest_rate_pct")),
-        _value(extraction.get("discount_pct")),
-        _value(extraction.get("valuation_cap")),
-        _value(extraction.get("valuation_floor")),
+        field_value(extraction.get("interest_mode")),
+        field_value(extraction.get("interest_rate_pct")),
+        field_value(extraction.get("discount_pct")),
+        field_value(extraction.get("valuation_cap")),
+        field_value(extraction.get("valuation_floor")),
         parsed.isoformat() if parsed else maturity,
-        _value(extraction.get("qefr_min_raise")),
+        field_value(extraction.get("qefr_min_raise")),
         currency.strip().upper() if isinstance(currency, str) else currency,
     )
 
@@ -102,7 +98,7 @@ def _loan_amounts(extraction: dict[str, Any]) -> list[tuple[str, float | None]]:
     principal must never silently count as zero outstanding.
     """
     lenders = extraction.get("lenders") or []
-    total = _value(extraction.get("principal_total"))
+    total = field_value(extraction.get("principal_total"))
     if len(lenders) == 1:
         name = lenders[0].get("name", "unknown")
         amount = lenders[0].get("principal_amount")
@@ -129,20 +125,6 @@ def _loan_amounts(extraction: dict[str, Any]) -> list[tuple[str, float | None]]:
     return pairs
 
 
-def _parse_date(value: Any) -> date | None:
-    if not isinstance(value, str):
-        return None
-    from lib.captable.data import normalize_iso_date
-
-    value = normalize_iso_date(value)
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
-        try:
-            return datetime.strptime(value, fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
 def aggregate_clas(
     extractions: list[dict[str, Any]],
     *,
@@ -165,7 +147,7 @@ def aggregate_clas(
         if (
             len(lenders) > 1
             and all(l.get("principal_amount") is None for l in lenders)
-            and _value(extraction.get("principal_total")) is not None
+            and field_value(extraction.get("principal_total")) is not None
         ):
             diligence_questions.append(
                 f"{extraction['document']!r}: per-lender loan amounts are "
@@ -196,7 +178,7 @@ def aggregate_clas(
         }
         if matching:
             superseded_term_sheets.append(sheet["document"])
-            sheet_amount = _value(sheet.get("principal_total"))
+            sheet_amount = field_value(sheet.get("principal_total"))
             for lender_key in matching:
                 matching_extractions = {
                     id(e): e
@@ -299,7 +281,7 @@ def aggregate_clas(
     unknown_amounts = 0
     maturity_findings = []
     for extraction in executed:
-        raw_currency = _value(extraction.get("principal_currency"))
+        raw_currency = field_value(extraction.get("principal_currency"))
         currency = (
             raw_currency.strip().upper()
             if isinstance(raw_currency, str) and raw_currency.strip()
@@ -312,7 +294,7 @@ def aggregate_clas(
                 outstanding_by_currency[currency] = (
                     outstanding_by_currency.get(currency, 0.0) + amount
                 )
-        maturity = _parse_date(_value(extraction.get("maturity_date")))
+        maturity = parse_extraction_date(field_value(extraction.get("maturity_date")))
         if maturity is not None:
             deadline = maturity + timedelta(days=conversion_window_days)
             if deadline < run_date:
@@ -383,7 +365,7 @@ def aggregate_clas(
     esignature = []
     for extraction in executed + term_sheets:
         document = extraction["document"]
-        claimed = _value(extraction.get("signatures_complete"))
+        claimed = field_value(extraction.get("signatures_complete"))
         if document not in esign_markers:
             esignature.append(
                 {

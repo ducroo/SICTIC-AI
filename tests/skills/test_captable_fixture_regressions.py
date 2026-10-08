@@ -15,7 +15,7 @@ import pytest
 from lib.captable.table_extraction import _review_captable, _review_table_evidence
 from lib.captable.validate import check_cross_snapshot, validate_captable
 from lib.datasets.source import IGNORED_EXTENSIONS
-from tests.skills.test_captable_build import _reviewer as cla_reviewer
+from tests.skills.test_captable_build import _BUILT, _reviewer as cla_reviewer
 
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "captable"
 GROUND_TRUTH = json.loads((FIXTURES / "ground_truth.json").read_text(encoding="utf-8"))
@@ -187,6 +187,8 @@ def test_cla_borrower_in_the_party_block_is_not_a_lender():
     ("synthetic_pool_overview.md", "% of shares issued (1,300,000)"),
     ("synthetic_esop_plan.md", "Date:\n\n15 February 2026"),
     ("synthetic_cla.md", "Lender 2 contributes CHF 50,000.00"),
+    ("synthetic_cla_term_sheet.md", "*(unsigned)*"),
+    ("synthetic_cla_term_sheet.md", "Only the sections marked \"Binding\""),
 ])
 def test_planted_quirks_are_still_in_the_documents(name, needle):
     assert needle in text(name)
@@ -309,3 +311,94 @@ def test_register_mistakes_surface_in_reconciliation_not_only_in_evidence():
     findings = validate_captable(MARCH, register=register)
     mismatches = [f for f in findings if f["check"] == "register_mismatch"]
     assert len(mismatches) == 1 and "Bruno Muster" in mismatches[0]["detail"]
+
+
+# --- CLA term sheet (cla_review fixture): planted absences, unsigned --------
+
+TERM_SHEET_QUOTES = {
+    "borrower_name": ("Fixture Robotics AG", "Fixture Robotics AG, Zurich (CHE-999.999.999)."),
+    "signatures_complete": (False, "For the Borrower: Fixture Robotics AG *(unsigned)*"),
+    "principal_total": (150000, "CHF 150,000 from Fixture Angels, Zug"),
+    "principal_currency": ("CHF", "CHF 150,000 from Fixture Angels, Zug"),
+    "interest_mode": ("fixed", "4% per annum, accruing"),
+    "interest_rate_pct": (4, "4% per annum, accruing"),
+    "interest_day_count": ("act/365", "calculated on the actual number of days elapsed over a 365-day year"),
+    "interest_compounding": ("simple", "not compounded"),
+    "maturity_date": ("2028-08-15", "i.e. on 15 August 2028"),
+    "qefr_present": (True, "Qualified Equity Financing Round"),
+    "qefr_min_raise": (3000000, "gross proceeds of at least CHF 3,000,000"),
+    "qefr_mandatory": (True, "Upon the closing of the Qualified Equity Financing Round, the outstanding loan balance including accrued interest converts"),
+    "valuation_cap": (12000000, "pre-money valuation of CHF 12,000,000"),
+    "discount_pct": (20, "less a discount of 20%"),
+    "subordinated": (True, "subordinated within the meaning of art. 725b para. 4 no. 1 CO"),
+    "subordination_scope": ("loan_balance_full", "The Loans, including accrued interest, are subordinated"),
+    "conversion_capital_sources": (["conditional_capital", "consents"], "issued out of the conditional share capital of the Borrower or, failing that, by way of an ordinary capital increase to which the existing shareholders have consented in advance"),
+    "shareholder_consents_referenced": (True, "to which the existing shareholders have consented in advance"),
+    "sha_accession_required": (True, "Upon conversion the Investors accede to the shareholders' agreement"),
+    "governing_law": ("Swiss law", "Swiss law; courts of Zurich."),
+    "denominator_basis": ("unstated", None),
+    # term-sheet provisions (cla_terms.md group added for cla_review)
+    "aggregate_amount_min": (300000, "minimum aggregate amount of CHF 300,000 for the first closing"),
+    "aggregate_amount_max": (500000, "Up to an aggregate amount of CHF 500,000"),
+    "lead_investor": ("Fixture Angels", "CHF 150,000 from Fixture Angels, Zug"),
+    "accession_of_further_investors": (True, "Additional investors may, with the consent of the Borrower and the Lead Investor, accede to this Term Sheet"),
+    "pre_emption_reduction": (True, "The Investment Amount may be reduced to the extent existing shareholders of the Borrower exercise their pre-emption rights."),
+    "conversion_share_class": ("the same class of shares issued in that round (expected: preferred A shares)", "converts into the same class of shares issued in that round (expected: preferred A shares)"),
+    "non_qualified_voluntary_conversion": (True, "If an equity financing round closes that does not qualify, each Investor may elect to convert its Loan"),
+    "binding_provisions": ("Confidentiality, Legal Fees and Expenses, Exclusivity, Applicable Law and Jurisdiction", "Only the sections marked \"Binding\" (Confidentiality, Legal Fees and Expenses, Exclusivity, Applicable Law and Jurisdiction) are legally binding."),
+    "exclusivity_present": (True, "the Borrower shall not solicit or negotiate any other convertible loan financing"),
+    "exclusivity_until": ("2026-09-30", "Until 30 September 2026"),
+    "investor_majority": ("Investors holding at least two thirds of the aggregate principal amount of the Loans", "require the consent of Investors holding at least two thirds of the aggregate principal amount of the Loans"),
+    "legal_fees_each_party_own": (True, "Each party bears its own costs and expenses"),
+    "documentation_form": ("seca_short_form", "based on the SECA CLA Model Documentation (short form)"),
+    "documentation_counsel": ("Fixture Legal AG", "drafted by Fixture Legal AG, Zurich, as counsel to the Borrower"),
+}
+
+
+def _term_sheet_extraction() -> dict:
+    """The faithful extraction: every planted value quoted, every absence declared."""
+    truth = GROUND_TRUTH["cla_term_sheet"]
+    output: dict = {"status": truth["status"], "status_evidence": "Not signed.", "comments": None}
+    absent = []
+    planted = {**truth, **truth["term_sheet_only_fields"]}
+    for field in _BUILT["quoted_fields"]:
+        value, quote = TERM_SHEET_QUOTES.get(field, (None, None))
+        if field in planted and field not in TERM_SHEET_QUOTES:
+            value = planted[field]  # planted absences: None / False / "unstated"
+        output[field] = {"value": value, "quote": quote}
+        if quote is None:
+            absent.append(field)
+    output["lenders"] = [
+        {"name": lender["name"], "kind": lender["kind"], "domicile": lender["domicile"],
+         "principal_amount": lender["principal_amount"],
+         "quote": "CHF 150,000 from Fixture Angels, Zug"}
+        for lender in truth["lenders"]
+    ]
+    output["missing_terms"] = [{"term": field, "sections_scanned": ["whole term sheet"]} for field in absent]
+    return output
+
+
+def test_term_sheet_faithful_extraction_passes_and_planted_absences_are_declared():
+    truth = GROUND_TRUTH["cla_term_sheet"]
+    output = _term_sheet_extraction()
+    planted = {**truth, **truth["term_sheet_only_fields"]}
+    for field, (value, _quote) in TERM_SHEET_QUOTES.items():
+        assert planted[field] == value, field
+    assert not cla_reviewer(text("synthetic_cla_term_sheet.md"))(output).problems
+    declared = {entry["term"] for entry in output["missing_terms"]}
+    assert set(truth["expected_missing_terms"]) <= declared
+
+
+def test_term_sheet_invented_change_of_control_is_rejected():
+    output = _term_sheet_extraction()
+    output["coc_present"] = {"value": True, "quote": "upon a change of control the Loans convert or are repaid at 2.0x"}
+    output["missing_terms"] = [e for e in output["missing_terms"] if e["term"] != "coc_present"]
+    found = cla_reviewer(text("synthetic_cla_term_sheet.md"))(output).problems
+    assert found and "coc_present: quote not found verbatim" in found[0]
+
+
+def test_term_sheet_absence_without_missing_terms_entry_is_rejected():
+    output = _term_sheet_extraction()
+    output["missing_terms"] = [e for e in output["missing_terms"] if e["term"] != "maturity_conversion_present"]
+    found = cla_reviewer(text("synthetic_cla_term_sheet.md"))(output).problems
+    assert found and "maturity_conversion_present" in found[-1]

@@ -260,13 +260,14 @@ Internal building blocks are intentionally omitted.
 | `team_profile` | ✅ | Assesses founders and the overall team. |
 | `person_profile` | ✅ | Creates a comprehensive profile of a founder, member, or other person. |
 | `startup_traction` | ✅ | Summarizes and quantifies commercial traction. |
-| `dd_checks` | ✅ | Runs a broad suite of due-diligence checks. |
-| `dd_priorities` | ✅ | Synthesizes up to eight decision-relevant priorities from a saved `dd_checks` report. |
+| `dd_checks` | ✅ | Runs a broad suite of due-diligence checks and lists the most important findings first. |
+| `dd_priorities` | ✅ | Merges the most important findings of a saved `dd_checks` report into up to five priorities, including risks that grow when findings occur together. |
 | `startup_website_import` | ✅ | Imports a startup's public website into its due-diligence dataset. |
 | `market_review` | ◻️ | Reviews market size, customer needs, competition, and substitutes. |
 | `sha_review` | 🚧 | Reviews a selected Shareholders' Agreement against a reference SHA and legal checklists. |
 | `captable_build` | ✅ | Extracts, assesses, and validates a startup's cap table and convertible loans into four managed JSON insights, every extracted figure backed by a verified source quote (see [docs/captable.md](docs/captable.md)). |
 | `captable` | ✅ | Computes conversion scenarios, stamp duty, and red-flag analysis over consolidated data; produces a Markdown report. |
+| `cla_review` | 🚧 | Reviews one convertible-loan term sheet from the lender's side, in the context of the cap table, existing loans and SHA (see [docs/cla-review-design.md](docs/cla-review-design.md)). |
 | `companyresearch.ch` | 🚧 | Uses the companyresearch.ch API to collect publicly available information about a startup. |
 | **Ongoing monitoring** | | |
 | `alerts_and_news` | ◻️ | Monitors and interprets relevant portfolio-company news and updates. |

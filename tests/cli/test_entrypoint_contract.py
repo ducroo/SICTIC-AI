@@ -51,6 +51,7 @@ def test_run_command_reports_errors_consistently(capsys):
         "skills.captable_analysis.__main__",
         "skills.captable.__main__",
         "skills.captable_build.__main__",
+        "skills.cla_review.__main__",
         "skills.submission_ready.__main__",
         "skills.dataset_chat.__main__",
         "skills.dataset_maintenance.__main__",
