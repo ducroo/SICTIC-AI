@@ -75,6 +75,7 @@ def test_insight_skill_apis_declare_uniform_result_contract():
         "expert_search": "skills.expert_search.expert_search",
         "investor_profile": "skills.investor_profile.investor_profile",
         "person_profile": "skills.person_profile.person_profile",
+        "pitch_deck_review": "skills.pitch_deck_review.pitch_deck_review",
         "persons_in_dataset": "skills.persons_in_dataset.persons_in_dataset",
         "potential_investors": "skills.potential_investors.potential_investors",
         "sha_review": "skills.sha_review.sha_review",
