@@ -11,5 +11,5 @@ window.REVIEW_CONFIG = {
     measurementId: "G-BWKVK273QB",
   },
   // Set after App Check is registered with reCAPTCHA v3 in the Firebase console.
-  recaptchaSiteKey: "6LduMugtAAAAANXp7OujEpLDUtvMEBiRnVkbZ9k4",
+  recaptchaSiteKey: "6LcHbugtAAAAAFoOyNV5G9hXyFIWMB4yeYcsi2eC",
 };
