@@ -5,24 +5,61 @@ import {
   getToken,
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app-check.js";
 
+const WORKING_MESSAGE = "We're working on your deck.";
 const config = window.REVIEW_CONFIG;
 const form = document.getElementById("review-form");
 const fileInput = document.getElementById("deck");
 const submit = document.getElementById("submit");
 const errorEl = document.getElementById("error");
-const statusEl = document.getElementById("status");
+const workingPanel = document.getElementById("working");
+const workingMessage = document.getElementById("working-message");
+const elapsedEl = document.getElementById("elapsed");
 const reportEl = document.getElementById("report");
+const buttonLabel = submit.textContent;
 
 let appCheck = null;
+let busy = false;
+let timer = null;
 
 function showError(message) {
   errorEl.hidden = !message;
   errorEl.textContent = message || "";
 }
 
-function showStatus(message) {
-  statusEl.hidden = !message;
-  statusEl.textContent = message || "";
+function formatElapsed(seconds) {
+  const whole = Math.max(0, seconds);
+  const minutes = Math.floor(whole / 60);
+  const remainder = whole % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function showWorking(message) {
+  workingPanel.hidden = false;
+  workingMessage.textContent = message;
+}
+
+function setSteps(steps) {
+  (steps || []).forEach((step) => {
+    const item = document.querySelector(`[data-step="${step.id}"]`);
+    if (!item) {
+      return;
+    }
+    item.classList.remove("done", "current", "waiting");
+    item.classList.add(step.state);
+  });
+}
+
+function tick(seconds) {
+  elapsedEl.textContent = `Elapsed ${formatElapsed(seconds)}`;
+}
+
+function release() {
+  clearInterval(timer);
+  timer = null;
+  busy = false;
+  submit.disabled = false;
+  submit.textContent = buttonLabel;
+  fileInput.disabled = false;
 }
 
 async function ensureAppCheck() {
@@ -48,23 +85,6 @@ async function appCheckHeader() {
   return { "X-Firebase-AppCheck": token };
 }
 
-function formatSteps(payload) {
-  const lines = (payload.steps || []).map((step) => {
-    const mark = step.state === "done" ? "done" : step.state === "current" ? "now" : "wait";
-    return `${mark}: ${step.label}`;
-  });
-  const elapsed = payload.elapsed_seconds;
-  if (typeof elapsed === "number") {
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = String(elapsed % 60).padStart(2, "0");
-    lines.push(`Elapsed ${minutes}:${seconds}`);
-  }
-  if (payload.message) {
-    lines.unshift(payload.message);
-  }
-  return lines.join("\n");
-}
-
 async function pollStatus(jobId, headers) {
   const url = `${config.apiBaseUrl}/api/review/${jobId}`;
   while (true) {
@@ -73,7 +93,10 @@ async function pollStatus(jobId, headers) {
     if (!response.ok) {
       throw new Error(payload.error || "The review status could not be read.");
     }
-    showStatus(formatSteps(payload));
+    setSteps(payload.steps);
+    if (typeof payload.elapsed_seconds === "number") {
+      tick(payload.elapsed_seconds);
+    }
     if (payload.error) {
       throw new Error(payload.error);
     }
@@ -84,18 +107,37 @@ async function pollStatus(jobId, headers) {
   }
 }
 
+submit.addEventListener("click", () => {
+  if (busy) {
+    showWorking(WORKING_MESSAGE);
+  }
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (busy) {
+    showWorking(WORKING_MESSAGE);
+    return;
+  }
   showError("");
-  reportEl.hidden = true;
   reportEl.innerHTML = "";
   const file = fileInput.files && fileInput.files[0];
   if (!file) {
     showError("Choose a PDF or PowerPoint pitch deck.");
     return;
   }
+
+  busy = true;
   submit.disabled = true;
-  submit.textContent = "We're working on your deck.";
+  submit.textContent = WORKING_MESSAGE;
+  fileInput.disabled = true;
+  showWorking(WORKING_MESSAGE);
+  const startedAt = Date.now();
+  tick(0);
+  timer = setInterval(() => {
+    tick(Math.floor((Date.now() - startedAt) / 1000));
+  }, 1000);
+
   try {
     const headers = await appCheckHeader();
     const body = new FormData();
@@ -109,17 +151,20 @@ form.addEventListener("submit", async (event) => {
     if (!start.ok) {
       throw new Error(started.error || "The review could not be started.");
     }
-    showStatus(formatSteps(started));
+    setSteps(started.steps);
+    if (typeof started.elapsed_seconds === "number") {
+      tick(started.elapsed_seconds);
+    }
     const finished = await pollStatus(started.job_id || started.id, headers);
     if (finished.report_html) {
       reportEl.innerHTML = finished.report_html;
-      reportEl.hidden = false;
     }
-    showStatus("The review is ready.");
+    showWorking("The review is ready.");
   } catch (error) {
-    showError(error.message || String(error));
+    const message = error.message || String(error);
+    showError(message);
+    showWorking(message);
   } finally {
-    submit.disabled = false;
-    submit.textContent = "Review this deck";
+    release();
   }
 });
