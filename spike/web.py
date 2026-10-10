@@ -12,6 +12,20 @@ from pathlib import Path
 from aiohttp import web
 
 from lib.infrastructure.logging import get_logger
+from spike.app_check import (
+    HEADER_NAME as APP_CHECK_HEADER,
+    app_check_required,
+    firebase_project_id,
+    token_from_headers,
+    verify_app_check_token,
+)
+from spike.auth import (
+    AUTH_HEADER,
+    auth_required,
+    id_token_from_headers,
+    verify_id_token,
+)
+from spike.purge_auth_users import DEFAULT_RETENTION_DAYS, purge_auth_users_older_than
 from spike.runtime import (
     SpikeStatus,
     check_pitch_deck_upload,
@@ -23,6 +37,12 @@ from spike.runtime import (
 )
 
 logger = get_logger(__name__)
+
+DEFAULT_CORS_ORIGINS = (
+    "https://review-deck-a3c26.web.app",
+    "https://review-deck-a3c26.firebaseapp.com",
+)
+PROTECTED_API_PREFIXES = ("/api/review",)
 
 
 @dataclass(frozen=True)
@@ -651,6 +671,74 @@ async def handle_api_skill(request: web.Request) -> web.Response:
     return web.json_response(asdict(result))
 
 
+async def handle_api_review_start(request: web.Request) -> web.Response:
+    """REST alias for the upload job. Same body and response as /review/start."""
+    return await handle_review_start(request)
+
+
+async def handle_api_review_status(request: web.Request) -> web.Response:
+    """REST alias for the job status poll."""
+    return await handle_review_status(request)
+
+
+def _admin_token() -> str:
+    return (os.environ.get("SPIKE_ADMIN_TOKEN") or "").strip()
+
+
+def _require_admin(request: web.Request) -> web.Response | None:
+    expected = _admin_token()
+    if not expected:
+        return web.json_response(
+            {"error": "SPIKE_ADMIN_TOKEN is not configured."},
+            status=503,
+        )
+    provided = (request.headers.get("X-Spike-Admin-Token") or "").strip()
+    if provided != expected:
+        return web.json_response({"error": "Admin token is invalid."}, status=401)
+    return None
+
+
+async def handle_api_purge_auth_users(request: web.Request) -> web.Response:
+    """Delete Firebase Auth profiles older than the retention window."""
+    denied = _require_admin(request)
+    if denied is not None:
+        return denied
+    dry_run = False
+    days = DEFAULT_RETENTION_DAYS
+    if request.can_read_body:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            dry_run = bool(body.get("dry_run"))
+            if body.get("days") is not None:
+                try:
+                    days = int(body["days"])
+                except (TypeError, ValueError):
+                    return web.json_response({"error": "days must be an integer."}, status=400)
+    try:
+        result = await asyncio.to_thread(
+            purge_auth_users_older_than,
+            days=days,
+            dry_run=dry_run,
+        )
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except Exception as error:
+        logger.exception("Auth user purge failed.")
+        return web.json_response({"error": str(error)}, status=500)
+    return web.json_response(
+        {
+            "retention_days": result.retention_days,
+            "scanned": result.scanned,
+            "deleted": result.deleted,
+            "dry_run": result.dry_run,
+            "deleted_emails": list(result.deleted_emails),
+        }
+    )
+
+
 ROUTES = (
     web.get("/", handle_index),
     web.get("/static/{name}", handle_static),
@@ -662,11 +750,87 @@ ROUTES = (
     web.get("/api/status", handle_api_status),
     web.post("/api/demo", handle_api_demo),
     web.post("/api/skill", handle_api_skill),
+    web.post("/api/review", handle_api_review_start),
+    web.get("/api/review/{job_id}", handle_api_review_status),
+    web.post("/api/admin/purge-auth-users", handle_api_purge_auth_users),
 )
 
 
+def cors_origins() -> frozenset[str]:
+    configured = (os.environ.get("SPIKE_CORS_ORIGINS") or "").strip()
+    if configured:
+        return frozenset(part.strip() for part in configured.split(",") if part.strip())
+    return frozenset(DEFAULT_CORS_ORIGINS)
+
+
+def _apply_cors(request: web.Request, response: web.StreamResponse) -> web.StreamResponse:
+    origin = request.headers.get("Origin", "").strip()
+    if origin and origin in cors_origins():
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Headers"] = (
+            f"Content-Type, {APP_CHECK_HEADER}, {AUTH_HEADER}"
+        )
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+@web.middleware
+async def cors_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS" and request.path.startswith("/api/"):
+        response = web.Response(status=204)
+        return _apply_cors(request, response)
+    response = await handler(request)
+    return _apply_cors(request, response)
+
+
+def _path_requires_api_auth(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in PROTECTED_API_PREFIXES)
+
+
+@web.middleware
+async def app_check_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    if not _path_requires_api_auth(request.path):
+        return await handler(request)
+    if not app_check_required():
+        return await handler(request)
+    token = token_from_headers(request.headers)
+    try:
+        verify_app_check_token(token, project_id=firebase_project_id())
+    except ValueError as error:
+        return _apply_cors(
+            request,
+            web.json_response({"error": str(error)}, status=401),
+        )
+    return await handler(request)
+
+
+@web.middleware
+async def auth_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    if not _path_requires_api_auth(request.path):
+        return await handler(request)
+    if not auth_required():
+        return await handler(request)
+    token = id_token_from_headers(request.headers)
+    try:
+        verify_id_token(token, project_id=firebase_project_id())
+    except ValueError as error:
+        return _apply_cors(
+            request,
+            web.json_response({"error": str(error)}, status=401),
+        )
+    return await handler(request)
+
+
 def create_app() -> web.Application:
-    app = web.Application(client_max_size=32 * 1024 * 1024)
+    app = web.Application(
+        client_max_size=32 * 1024 * 1024,
+        middlewares=(cors_middleware, app_check_middleware, auth_middleware),
+    )
     app.add_routes(ROUTES)
     return app
 

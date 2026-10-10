@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Check your pitch deck · SICTIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #bc2132;
+      --ink: #212529;
+      --muted: #607382;
+      --line: #d2d6dc;
+      --paper: #f6f6f6;
+      --card: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: Figtree, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    a { color: var(--red); }
+    header {
+      background: var(--card);
+      border-bottom: 4px solid var(--red);
+    }
+    .bar {
+      padding: 0.9rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand img { height: 36px; width: auto; display: block; }
+    .nav-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .nav-link:hover { color: var(--red); }
+    main {
+      flex: 1;
+      padding: 2rem 1.25rem 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .panel {
+      width: 100%;
+      max-width: 28rem;
+      text-align: center;
+    }
+    h1, h2 {
+      font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
+      line-height: 1.2;
+    }
+    h1 { font-size: 2rem; margin: 0 0 0.75rem; }
+    .lead {
+      font-size: 1.05rem;
+      margin: 0 auto 0.25rem;
+      color: var(--ink);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      padding: 1.25rem;
+      margin-top: 1.5rem;
+      width: 100%;
+      text-align: left;
+    }
+    label { display: block; font-weight: 600; margin: 0.85rem 0 0.35rem; }
+    label:first-of-type { margin-top: 0; }
+    input[type=email], input[type=password] {
+      display: block;
+      width: 100%;
+      font: inherit;
+      padding: 0.65rem 0.7rem;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .hint { color: var(--muted); margin: 0.4rem 0 1rem; }
+    button, .google {
+      background: var(--red);
+      color: #fff;
+      border: 0;
+      font: 600 1rem/1 Figtree, Helvetica, Arial, sans-serif;
+      padding: 0.85rem 1.2rem;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 0.75rem;
+    }
+    button:hover, .google:hover { background: #a41c2b; }
+    button:disabled, .google:disabled {
+      background: #607382;
+      cursor: not-allowed;
+    }
+    .google {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .google:hover { background: #f6f6f6; }
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--muted);
+      margin: 1.1rem 0 0.25rem;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      height: 1px;
+      background: var(--line);
+      flex: 1;
+    }
+    .error { color: var(--red); font-weight: 600; margin: 0.75rem 0 0; }
+    .notice {
+      color: var(--ink);
+      background: #f6f6f6;
+      border: 1px solid var(--line);
+      padding: 0.75rem 0.85rem;
+      margin: 0.75rem 0 0;
+    }
+    .notice.ok { border-color: #0b6e4f; }
+    .switch { margin-top: 1rem; color: var(--muted); }
+    .spam-hint { color: var(--muted); margin: 0.75rem 0 0; font-size: 0.95rem; }
+    .privacy-link {
+      margin-top: 1rem;
+      color: var(--muted);
+    }
+    .secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .secondary:hover { background: #f6f6f6; }
+    footer {
+      background: var(--card);
+      border-top: 1px solid var(--line);
+    }
+    .sponsor {
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      color: var(--muted);
+    }
+    .sponsor-logo {
+      background: #4b5563;
+      padding: 0.45rem 0.7rem;
+      line-height: 0;
+    }
+    .sponsor-logo img { height: 32px; width: auto; display: block; }
+    @media (max-width: 640px) {
+      h1 { font-size: 1.6rem; }
+      .sponsor { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand" href="https://www.sictic.ch/">
+        <img src="/static/sictic-logo.svg" alt="SICTIC">
+      </a>
+      <a class="nav-link" href="/privacy.html">Privacy notice</a>
+    </div>
+  </header>
+  <main>
+    <div class="panel">
+      <h1>Sign in to review your deck</h1>
+      <p class="lead">Use your Google account or an email and password. Email accounts must be verified before you can upload a deck.</p>
+      <form class="card" id="login-form">
+        <button type="button" class="google" id="google">Continue with Google</button>
+        <div class="divider"><span>or email</span></div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
+        <p class="hint">Password must be at least 6 characters. After you create an account we send a verification link.</p>
+        <button type="submit" id="email-submit">Sign in with email</button>
+        <button type="button" id="create-account">Create an account</button>
+        <button type="button" class="secondary" id="resend-verification" hidden>Resend verification email</button>
+        <p class="error" id="error" hidden role="alert"></p>
+        <p class="notice" id="notice" hidden role="status"></p>
+        <p class="spam-hint">The verification email may land in your spam or junk folder. Sender setup is not fully customized yet.</p>
+        <p class="switch" id="mode-hint">New here? Use “Create an account”, verify the email link, then sign in.</p>
+      </form>
+      <p class="privacy-link"><a href="/privacy.html">Privacy notice</a></p>
+    </div>
+  </main>
+  <footer>
+    <div class="sponsor">
+      <span>Hosting sponsored by Safe Swiss Cloud</span>
+      <a class="sponsor-logo" href="https://safeswisscloud.com/">
+        <img src="/static/safe-swiss-cloud-logo.svg" alt="Safe Swiss Cloud">
+      </a>
+    </div>
+  </footer>
+  <script src="/config.js"></script>
+  <script type="module" src="/login.js"></script>
+</body>
+</html>

@@ -8,6 +8,26 @@ Use an Ubuntu VM with an NVIDIA GPU and a working driver. The current host is a 
 
 Install Podman and Ollama. Ollama's own installer creates `ollama.service`.
 
+## Cloud Agent SSH
+
+Cursor Cloud Agents do not keep a local SSH key across machines. Store the private key as the environment secret `VPS_SSH_PRIVATE_KEY`. `scripts/cloud-agent-start.sh` writes it to `~/.ssh/id_ed25519` on every boot.
+
+Put this public key in `/home/ubuntu/.ssh/authorized_keys` on the VPS:
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIIVTlTu3uFrNSty9ZDPGTi1ERcRWF3a+AZaapGPnaTW cursor-cloud-agent@review-vps
+```
+
+Fingerprint: `SHA256:dGpGha1W4F63q8PF+hEWEFaK+k0EBCxKoL5RE1EPmb4`
+
+From a Cloud Agent that has the secret:
+
+```bash
+ssh review-vps
+# or
+ssh -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519 ubuntu@217.20.195.232
+```
+
 ## Application
 
 Clone this branch into the ubuntu home directory. Install Miniforge, then run `./install.sh` so the Conda environment from the installer exists. Create `.env` from `.env-template` and keep the document converter and the Ollama model names from that template.
@@ -101,3 +121,55 @@ WantedBy=multi-user.target
 Create `/home/ubuntu/caddy/data` and `/home/ubuntu/caddy/config`, then `sudo systemctl enable --now caddy-podman.service`. Caddy redirects port 80 to HTTPS and obtains the certificate by itself once the A record is in place.
 
 The raw IP has no public certificate. Open the site at `https://review.sictic.ch`.
+
+## REST API
+
+The HTML page at `/` stays as it is. The same review is also available as JSON:
+
+- `POST /api/review` with multipart field `deck` starts a job.
+- `GET /api/review/{job_id}` returns progress and, when finished, `report_html`.
+
+Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header and a Firebase Auth ID token in the `Authorization: Bearer …` header when `FIREBASE_PROJECT_ID` is set. The older `/review/start` and `/review/status/{job_id}` routes stay open for the Caddy-hosted page.
+
+On the VPS `.env`, set:
+
+```
+FIREBASE_PROJECT_ID=review-deck-a3c26
+FIREBASE_SERVICE_ACCOUNT_JSON=<one-line JSON or leave unset; verification uses the public JWKS>
+SPIKE_REQUIRE_AUTH=1
+SPIKE_CORS_ORIGINS=https://review-deck-a3c26.web.app,https://review-deck-a3c26.firebaseapp.com
+```
+
+App Check and Auth verification read the public Firebase JWKS endpoints. The service-account JSON is optional for that path. Keep it as a secret if you use Admin SDK calls later.
+
+## Firebase Hosting
+
+The front end lives under `spike/hosting/public` and deploys from `spike/` with the Firebase project `review-deck-a3c26`.
+
+1. Auth providers are defined in `spike/firebase.json` (`emailPassword` and `googleSignIn`). Deploy them with `firebase deploy --only auth --project review-deck-a3c26`.
+2. In the Firebase console, open App Check for the web app "Pitch deck review".
+3. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. The Hosting app uses `ReCaptchaEnterpriseProvider`.
+4. From `spike/`, deploy Hosting:
+
+```bash
+firebase deploy --only hosting --project review-deck-a3c26
+```
+
+The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://review.sictic.ch/api/review` with App Check and Auth tokens. `/privacy.html` states the retention rules (account details 60 days; uploaded decks deleted after review).
+
+## Auth profile purge (daily)
+
+Firebase Auth has no built-in 60-day purge for email/Google accounts. The VPS runs a systemd timer that calls `python -m spike.purge_auth_users --days 60`. Unit files live in `spike/systemd/`. The service uses `WorkingDirectory=/home/ubuntu/app`, so point that path at the repo checkout (symlink is fine):
+
+```bash
+ln -sfn /home/ubuntu/SICTIC-AI /home/ubuntu/app  # pragma: allowlist secret
+sudo cp spike/systemd/purge-auth-users.service /etc/systemd/system/
+sudo cp spike/systemd/purge-auth-users.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now purge-auth-users.timer
+# optional one-shot test:
+sudo systemctl start purge-auth-users.service
+journalctl -u purge-auth-users.service -n 50 --no-pager
+```
+
+Needs `FIREBASE_SERVICE_ACCOUNT_JSON` in the VPS `.env`. The timer fires daily at 03:15 local time (`Persistent=true` catches up after downtime).
