@@ -128,6 +128,10 @@ watchAuth((user) => {
     window.location.replace("/login.html");
     return;
   }
+  if (!user.emailVerified) {
+    window.location.replace("/login.html");
+    return;
+  }
   readyUser = user;
   sessionEmail.textContent = user.email || user.uid;
   sessionEl.hidden = false;

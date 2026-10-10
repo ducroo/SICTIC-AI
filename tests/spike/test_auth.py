@@ -41,6 +41,7 @@ def test_verify_id_token_checks_issuer(monkeypatch, mocker):
             "aud": "review-deck-a3c26",
             "sub": "user-123",
             "email": "founder@example.com",
+            "email_verified": True,
             "exp": 9999999999,
             "iat": 1,
         },
@@ -48,6 +49,33 @@ def test_verify_id_token_checks_issuer(monkeypatch, mocker):
     claims = auth.verify_id_token("token")
     assert claims["sub"] == "user-123"
     assert decode.call_args.kwargs["audience"] == "review-deck-a3c26"
+
+
+def test_verify_id_token_rejects_unverified_email(monkeypatch, mocker):
+    monkeypatch.setenv("FIREBASE_PROJECT_ID", "review-deck-a3c26")
+
+    class FakeKey:
+        key = "secret"
+
+    mocker.patch.object(
+        auth,
+        "_jwks",
+        return_value=mocker.Mock(get_signing_key_from_jwt=lambda _token: FakeKey()),
+    )
+    mocker.patch(
+        "spike.auth.jwt.decode",
+        return_value={
+            "iss": "https://securetoken.google.com/review-deck-a3c26",
+            "aud": "review-deck-a3c26",
+            "sub": "user-123",
+            "email": "fake@example.com",
+            "email_verified": False,
+            "exp": 9999999999,
+            "iat": 1,
+        },
+    )
+    with pytest.raises(ValueError, match="Verify your email"):
+        auth.verify_id_token("token")
 
 
 def test_verify_id_token_rejects_empty(monkeypatch):

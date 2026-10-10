@@ -76,6 +76,8 @@ def verify_id_token(token: str, *, project_id: str | None = None) -> dict[str, A
         raise ValueError("Sign-in token issuer is invalid.")
     if not str(claims.get("sub") or "").strip():
         raise ValueError("Sign-in token subject is invalid.")
+    if claims.get("email_verified") is not True:
+        raise ValueError("Verify your email before using the review.")
     return claims
 
 

@@ -123,11 +123,26 @@
       flex: 1;
     }
     .error { color: var(--red); font-weight: 600; margin: 0.75rem 0 0; }
+    .notice {
+      color: var(--ink);
+      background: #f6f6f6;
+      border: 1px solid var(--line);
+      padding: 0.75rem 0.85rem;
+      margin: 0.75rem 0 0;
+    }
+    .notice.ok { border-color: #0b6e4f; }
     .switch { margin-top: 1rem; color: var(--muted); }
+    .spam-hint { color: var(--muted); margin: 0.75rem 0 0; font-size: 0.95rem; }
     .privacy-link {
       margin-top: 1rem;
       color: var(--muted);
     }
+    .secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .secondary:hover { background: #f6f6f6; }
     footer {
       background: var(--card);
       border-top: 1px solid var(--line);
@@ -163,7 +178,7 @@
   <main>
     <div class="panel">
       <h1>Sign in to review your deck</h1>
-      <p class="lead">Use your Google account or an email and password. After you sign in you can upload a pitch deck for review.</p>
+      <p class="lead">Use your Google account or an email and password. Email accounts must be verified before you can upload a deck.</p>
       <form class="card" id="login-form">
         <button type="button" class="google" id="google">Continue with Google</button>
         <div class="divider"><span>or email</span></div>
@@ -171,11 +186,14 @@
         <input id="email" name="email" type="email" autocomplete="email" required>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
-        <p class="hint">Password must be at least 6 characters.</p>
+        <p class="hint">Password must be at least 6 characters. After you create an account we send a verification link.</p>
         <button type="submit" id="email-submit">Sign in with email</button>
         <button type="button" id="create-account">Create an account</button>
+        <button type="button" class="secondary" id="resend-verification" hidden>Resend verification email</button>
         <p class="error" id="error" hidden role="alert"></p>
-        <p class="switch" id="mode-hint">New here? Use “Create an account”, then upload your deck.</p>
+        <p class="notice" id="notice" hidden role="status"></p>
+        <p class="spam-hint">The verification email may land in your spam or junk folder. Sender setup is not fully customized yet.</p>
+        <p class="switch" id="mode-hint">New here? Use “Create an account”, verify the email link, then sign in.</p>
       </form>
       <p class="privacy-link"><a href="/privacy.html">Privacy notice</a></p>
     </div>
