@@ -2,6 +2,23 @@
 
 Uses the Identity Toolkit Admin REST API with FIREBASE_SERVICE_ACCOUNT_JSON.
 No Cloud Functions required — run from the VPS via cron or the admin API.
+
+CLI (repo root, Conda env ``sictic-env``):
+
+    python -m spike.purge_auth_users --dry-run --days 60
+    python -m spike.purge_auth_users --days 60
+
+HTTP (requires ``SPIKE_ADMIN_TOKEN`` in ``.env``):
+
+    POST /api/admin/purge-auth-users
+    Header: X-Spike-Admin-Token: <token>
+    JSON body: {"days": 60, "dry_run": true}
+
+Example daily cron on the VPS (run from the repo root):
+
+    15 3 * * * cd "$REPO_PATH" && \\
+      "$CONDA_PREFIX/bin/python" -m spike.purge_auth_users --days 60 \\
+      >>"$HOME/purge-auth-users.log" 2>&1
 """
 
 from __future__ import annotations
