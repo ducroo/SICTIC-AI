@@ -25,6 +25,7 @@ from spike.auth import (
     id_token_from_headers,
     verify_id_token,
 )
+from spike.purge_auth_users import DEFAULT_RETENTION_DAYS, purge_auth_users_older_than
 from spike.runtime import (
     SpikeStatus,
     check_pitch_deck_upload,
@@ -680,6 +681,64 @@ async def handle_api_review_status(request: web.Request) -> web.Response:
     return await handle_review_status(request)
 
 
+def _admin_token() -> str:
+    return (os.environ.get("SPIKE_ADMIN_TOKEN") or "").strip()
+
+
+def _require_admin(request: web.Request) -> web.Response | None:
+    expected = _admin_token()
+    if not expected:
+        return web.json_response(
+            {"error": "SPIKE_ADMIN_TOKEN is not configured."},
+            status=503,
+        )
+    provided = (request.headers.get("X-Spike-Admin-Token") or "").strip()
+    if provided != expected:
+        return web.json_response({"error": "Admin token is invalid."}, status=401)
+    return None
+
+
+async def handle_api_purge_auth_users(request: web.Request) -> web.Response:
+    """Delete Firebase Auth profiles older than the retention window."""
+    denied = _require_admin(request)
+    if denied is not None:
+        return denied
+    dry_run = False
+    days = DEFAULT_RETENTION_DAYS
+    if request.can_read_body:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            dry_run = bool(body.get("dry_run"))
+            if body.get("days") is not None:
+                try:
+                    days = int(body["days"])
+                except (TypeError, ValueError):
+                    return web.json_response({"error": "days must be an integer."}, status=400)
+    try:
+        result = await asyncio.to_thread(
+            purge_auth_users_older_than,
+            days=days,
+            dry_run=dry_run,
+        )
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except Exception as error:
+        logger.exception("Auth user purge failed.")
+        return web.json_response({"error": str(error)}, status=500)
+    return web.json_response(
+        {
+            "retention_days": result.retention_days,
+            "scanned": result.scanned,
+            "deleted": result.deleted,
+            "dry_run": result.dry_run,
+            "deleted_emails": list(result.deleted_emails),
+        }
+    )
+
+
 ROUTES = (
     web.get("/", handle_index),
     web.get("/static/{name}", handle_static),
@@ -693,6 +752,7 @@ ROUTES = (
     web.post("/api/skill", handle_api_skill),
     web.post("/api/review", handle_api_review_start),
     web.get("/api/review/{job_id}", handle_api_review_status),
+    web.post("/api/admin/purge-auth-users", handle_api_purge_auth_users),
 )
 
 

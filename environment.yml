@@ -58,5 +58,6 @@ dependencies:
   # conda-forge across all supported platforms.
   - pip:
       - apify-client
+      - google-auth
       - 'ocrmac>=1,<2; platform_system == "Darwin"'
       - 'onnxruntime; platform_system != "Darwin"'
