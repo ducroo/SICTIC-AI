@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy notice · Check your pitch deck · SICTIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #bc2132;
+      --ink: #212529;
+      --muted: #607382;
+      --line: #d2d6dc;
+      --paper: #f6f6f6;
+      --card: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Figtree, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    a { color: var(--red); }
+    header {
+      background: var(--card);
+      border-bottom: 4px solid var(--red);
+    }
+    .bar {
+      padding: 0.9rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .brand img { height: 36px; width: auto; display: block; }
+    .nav-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .nav-link:hover { color: var(--red); }
+    main {
+      padding: 2rem 1.25rem 3rem;
+      max-width: 44rem;
+      margin: 0 auto;
+    }
+    h1, h2 {
+      font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
+      line-height: 1.2;
+    }
+    h1 { font-size: 2rem; margin: 0 0 0.75rem; }
+    h2 { font-size: 1.15rem; margin: 1.75rem 0 0.5rem; }
+    .lead { font-size: 1.05rem; }
+    p { max-width: 40rem; }
+    ul {
+      padding-left: 1.2rem;
+      max-width: 40rem;
+    }
+    li { margin: 0.35rem 0; }
+    .muted { color: var(--muted); }
+    footer {
+      background: var(--card);
+      border-top: 1px solid var(--line);
+    }
+    .sponsor {
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      color: var(--muted);
+    }
+    .sponsor-logo {
+      background: #4b5563;
+      padding: 0.45rem 0.7rem;
+      line-height: 0;
+    }
+    .sponsor-logo img { height: 32px; width: auto; display: block; }
+    @media (max-width: 640px) {
+      h1 { font-size: 1.6rem; }
+      .sponsor { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand" href="https://www.sictic.ch/">
+        <img src="/static/sictic-logo.svg" alt="SICTIC">
+      </a>
+      <a class="nav-link" href="/login.html">Sign in</a>
+    </div>
+  </header>
+  <main>
+    <h1>Privacy notice</h1>
+    <p class="lead">This notice explains how SICTIC processes personal data when you use the pitch deck review service on this site.</p>
+
+    <h2>Account details</h2>
+    <p>When you sign in with Google or create an email account, we keep your email address and name on file for 60 days. After that period we delete the authentication profile and those account details.</p>
+
+    <h2>Uploaded documents</h2>
+    <p>Pitch decks and other files you upload are used only to run the document review. We delete those documents right away after the review finishes. They are not kept as a lasting archive on this service.</p>
+
+    <h2>What we use the data for</h2>
+    <ul>
+      <li>To authenticate you before you can upload a deck</li>
+      <li>To run the automated pitch deck review and show you the result</li>
+      <li>To operate and secure the service</li>
+    </ul>
+
+    <h2>GDPR and DSGVO</h2>
+    <p>We process this data in line with the EU General Data Protection Regulation (GDPR) and the German Datenschutz-Grundverordnung (DSGVO).</p>
+
+    <h2>Contact</h2>
+    <p>For privacy inquiries, access requests, or deletion requests, email <a href="mailto:ai@sictic.ch">ai@sictic.ch</a>.</p>
+    <p class="muted"><a href="/login.html">Back to sign in</a></p>
+  </main>
+  <footer>
+    <div class="sponsor">
+      <span>Hosting sponsored by Safe Swiss Cloud</span>
+      <a class="sponsor-logo" href="https://safeswisscloud.com/">
+        <img src="/static/safe-swiss-cloud-logo.svg" alt="Safe Swiss Cloud">
+      </a>
+    </div>
+  </footer>
+</body>
+</html>

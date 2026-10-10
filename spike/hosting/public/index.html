@@ -53,6 +53,13 @@
       border: 1px solid var(--line);
     }
     .session button:hover { background: #f6f6f6; }
+    .nav-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .nav-link:hover { color: var(--red); }
     main {
       padding: 2rem 1.25rem 3rem;
     }
@@ -163,6 +170,7 @@
         <img src="/static/sictic-logo.svg" alt="SICTIC">
       </a>
       <div class="session" id="session" hidden>
+        <a class="nav-link" href="/privacy.html">Privacy notice</a>
         <span id="session-email"></span>
         <button type="button" id="sign-out">Sign out</button>
       </div>

@@ -19,6 +19,9 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
       font-family: Figtree, Helvetica, Arial, sans-serif;
       color: var(--ink);
       background: var(--paper);
@@ -33,21 +36,46 @@
       padding: 0.9rem 1.25rem;
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
     }
     .brand img { height: 36px; width: auto; display: block; }
-    main { padding: 2rem 1.25rem 3rem; }
+    .nav-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .nav-link:hover { color: var(--red); }
+    main {
+      flex: 1;
+      padding: 2rem 1.25rem 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .panel {
+      width: 100%;
+      max-width: 28rem;
+      text-align: center;
+    }
     h1, h2 {
       font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
       line-height: 1.2;
     }
     h1 { font-size: 2rem; margin: 0 0 0.75rem; }
-    .lead { font-size: 1.05rem; max-width: 40rem; }
+    .lead {
+      font-size: 1.05rem;
+      margin: 0 auto 0.25rem;
+      color: var(--ink);
+    }
     .card {
       background: var(--card);
       border: 1px solid var(--line);
       padding: 1.25rem;
       margin-top: 1.5rem;
-      max-width: 28rem;
+      width: 100%;
+      text-align: left;
     }
     label { display: block; font-weight: 600; margin: 0.85rem 0 0.35rem; }
     label:first-of-type { margin-top: 0; }
@@ -96,6 +124,10 @@
     }
     .error { color: var(--red); font-weight: 600; margin: 0.75rem 0 0; }
     .switch { margin-top: 1rem; color: var(--muted); }
+    .privacy-link {
+      margin-top: 1rem;
+      color: var(--muted);
+    }
     footer {
       background: var(--card);
       border-top: 1px solid var(--line);
@@ -125,24 +157,28 @@
       <a class="brand" href="https://www.sictic.ch/">
         <img src="/static/sictic-logo.svg" alt="SICTIC">
       </a>
+      <a class="nav-link" href="/privacy.html">Privacy notice</a>
     </div>
   </header>
   <main>
-    <h1>Sign in to review your deck</h1>
-    <p class="lead">Use your Google account or an email and password. After you sign in you can upload a pitch deck for review.</p>
-    <form class="card" id="login-form">
-      <button type="button" class="google" id="google">Continue with Google</button>
-      <div class="divider"><span>or email</span></div>
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="email" required>
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
-      <p class="hint">Password must be at least 6 characters.</p>
-      <button type="submit" id="email-submit">Sign in with email</button>
-      <button type="button" id="create-account">Create an account</button>
-      <p class="error" id="error" hidden role="alert"></p>
-      <p class="switch" id="mode-hint">New here? Use “Create an account”, then upload your deck.</p>
-    </form>
+    <div class="panel">
+      <h1>Sign in to review your deck</h1>
+      <p class="lead">Use your Google account or an email and password. After you sign in you can upload a pitch deck for review.</p>
+      <form class="card" id="login-form">
+        <button type="button" class="google" id="google">Continue with Google</button>
+        <div class="divider"><span>or email</span></div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required minlength="6">
+        <p class="hint">Password must be at least 6 characters.</p>
+        <button type="submit" id="email-submit">Sign in with email</button>
+        <button type="button" id="create-account">Create an account</button>
+        <p class="error" id="error" hidden role="alert"></p>
+        <p class="switch" id="mode-hint">New here? Use “Create an account”, then upload your deck.</p>
+      </form>
+      <p class="privacy-link"><a href="/privacy.html">Privacy notice</a></p>
+    </div>
   </main>
   <footer>
     <div class="sponsor">

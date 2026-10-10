@@ -155,4 +155,6 @@ The front end lives under `spike/hosting/public` and deploys from `spike/` with 
 firebase deploy --only hosting --project review-deck-a3c26
 ```
 
-The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://review.sictic.ch/api/review` with App Check and Auth tokens.
+The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://review.sictic.ch/api/review` with App Check and Auth tokens. `/privacy.html` states the retention rules (account details 60 days; uploaded decks deleted after review).
+
+Firebase Auth has no built-in 60-day purge for email/Google accounts (only optional cleanup for anonymous accounts). Schedule a later Admin SDK job or Cloud Function if automatic deletion must match the privacy notice.
