@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import {
   initializeAppCheck,
-  ReCaptchaV3Provider,
+  ReCaptchaEnterpriseProvider,
   getToken,
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app-check.js";
 
@@ -36,7 +36,7 @@ async function ensureAppCheck() {
   }
   const app = initializeApp(config.firebase);
   appCheck = initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(config.recaptchaSiteKey),
+    provider: new ReCaptchaEnterpriseProvider(config.recaptchaSiteKey),
     isTokenAutoRefreshEnabled: true,
   });
   return appCheck;

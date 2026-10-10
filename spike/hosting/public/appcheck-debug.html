@@ -28,33 +28,33 @@
       out.appendChild(span);
     };
 
-    function loadRecaptcha(siteKey) {
+    function loadRecaptchaEnterprise(siteKey) {
       return new Promise((resolve, reject) => {
-        if (window.grecaptcha?.enterprise || window.grecaptcha?.ready) {
-          resolve(window.grecaptcha);
+        if (window.grecaptcha?.enterprise?.ready) {
+          window.grecaptcha.enterprise.ready(() => resolve(window.grecaptcha.enterprise));
           return;
         }
         const script = document.createElement("script");
-        script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
+        script.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(siteKey)}`;
         script.onload = () => {
-          if (!window.grecaptcha) {
-            reject(new Error("grecaptcha missing after script load"));
+          if (!window.grecaptcha?.enterprise) {
+            reject(new Error("grecaptcha.enterprise missing after script load"));
             return;
           }
-          window.grecaptcha.ready(() => resolve(window.grecaptcha));
+          window.grecaptcha.enterprise.ready(() => resolve(window.grecaptcha.enterprise));
         };
-        script.onerror = () => reject(new Error("Failed to load reCAPTCHA api.js"));
+        script.onerror = () => reject(new Error("Failed to load reCAPTCHA enterprise.js"));
         document.head.appendChild(script);
       });
     }
 
     async function exchangeToken(appId, apiKey, recaptchaToken) {
       const url =
-        `https://content-firebaseappcheck.googleapis.com/v1/projects/review-deck-a3c26/apps/${encodeURIComponent(appId)}:exchangeRecaptchaV3Token?key=${encodeURIComponent(apiKey)}`;
+        `https://content-firebaseappcheck.googleapis.com/v1/projects/review-deck-a3c26/apps/${encodeURIComponent(appId)}:exchangeRecaptchaEnterpriseToken?key=${encodeURIComponent(apiKey)}`;
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recaptchaV3Token: recaptchaToken }),
+        body: JSON.stringify({ recaptchaEnterpriseToken: recaptchaToken }),
       });
       const text = await response.text();
       let json;
@@ -78,6 +78,7 @@
       log(`siteKey: ${cfg.recaptchaSiteKey || "(empty)"}`);
       log(`appId: ${cfg.firebase.appId}`);
       log(`apiKey: ${cfg.firebase.apiKey}`);
+      log(`provider: reCAPTCHA Enterprise`);
       log("");
 
       if (!cfg.recaptchaSiteKey) {
@@ -86,8 +87,8 @@
       }
 
       try {
-        const grecaptcha = await loadRecaptcha(cfg.recaptchaSiteKey);
-        log("reCAPTCHA script loaded", "ok");
+        const grecaptcha = await loadRecaptchaEnterprise(cfg.recaptchaSiteKey);
+        log("reCAPTCHA Enterprise script loaded", "ok");
         const recaptchaToken = await grecaptcha.execute(cfg.recaptchaSiteKey, {
           action: "appcheck_debug",
         });
@@ -111,17 +112,20 @@
         const message = exchanged.json?.error?.message || "";
         log("");
         log("How to read this:", "bad");
+        if (/App not registered/i.test(message)) {
+          log("- App Check reCAPTCHA Enterprise is not registered on this appId with this site key.", "bad");
+        }
         if (/HOSTNAME_MISMATCH|hostname/i.test(message) || /domain/i.test(message)) {
           log("- Domain mismatch: add this hostname in reCAPTCHA admin for this site key.", "bad");
         }
         if (/invalid.*site.?key|API_KEY_INVALID|key/i.test(message)) {
-          log("- Site key / secret mismatch: the secret in Firebase App Check must belong to this site key.", "bad");
+          log("- Site key mismatch: App Check Enterprise config must use this exact site key.", "bad");
         }
         if (/score/i.test(message)) {
           log("- Score too low: Firebase App Check minValidScore is 0.5 for this app.", "bad");
         }
         if (!message) {
-          log("- No message field. Check that App Check reCAPTCHA v3 is registered on app Pitch deck review with this exact site key.", "bad");
+          log("- No message field. Confirm App Check Enterprise is registered on Pitch deck review.", "bad");
         }
       } catch (error) {
         log(String(error && error.stack ? error.stack : error), "bad");

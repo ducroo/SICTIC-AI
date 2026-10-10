@@ -10,6 +10,6 @@ window.REVIEW_CONFIG = {
     appId: "1:224218759787:web:84cf6f9973748262dda72e",
     measurementId: "G-BWKVK273QB",
   },
-  // Set after App Check is registered with reCAPTCHA v3 in the Firebase console.
+  // reCAPTCHA Enterprise site key registered for App Check on this web app.
   recaptchaSiteKey: "6LcHbugtAAAAAFoOyNV5G9hXyFIWMB4yeYcsi2eC",
 };
