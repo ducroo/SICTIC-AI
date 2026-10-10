@@ -63,4 +63,11 @@ Host review-vps
 EOF
     chmod 600 "${key_dir}/config"
   fi
+
+  if command -v ssh-keyscan >/dev/null 2>&1; then
+    if ! grep -q "217.20.195.232" "${key_dir}/known_hosts" 2>/dev/null; then
+      ssh-keyscan -T 10 -t ed25519,rsa,ecdsa 217.20.195.232 >> "${key_dir}/known_hosts" 2>/dev/null || true
+      chmod 600 "${key_dir}/known_hosts" 2>/dev/null || true
+    fi
+  fi
 }
