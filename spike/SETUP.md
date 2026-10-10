@@ -146,7 +146,7 @@ App Check verification reads the Firebase JWKS. The service-account JSON is opti
 The front end lives under `spike/hosting/public` and deploys from `spike/` with the Firebase project `review-deck-a3c26`.
 
 1. In the Firebase console, open App Check for the web app "Pitch deck review".
-2. Register the reCAPTCHA v3 provider and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`.
+2. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. The Hosting app uses `ReCaptchaEnterpriseProvider`.
 3. From `spike/`, deploy Hosting:
 
 ```bash
