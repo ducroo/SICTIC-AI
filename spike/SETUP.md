@@ -157,4 +157,18 @@ firebase deploy --only hosting --project review-deck-a3c26
 
 The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://review.sictic.ch/api/review` with App Check and Auth tokens. `/privacy.html` states the retention rules (account details 60 days; uploaded decks deleted after review).
 
-Firebase Auth has no built-in 60-day purge for email/Google accounts (only optional cleanup for anonymous accounts). Schedule a later Admin SDK job or Cloud Function if automatic deletion must match the privacy notice.
+## Auth profile purge (daily)
+
+Firebase Auth has no built-in 60-day purge for email/Google accounts. The VPS runs a systemd timer that calls `python -m spike.purge_auth_users --days 60`. Unit files live in `spike/systemd/`.
+
+```bash
+sudo cp spike/systemd/purge-auth-users.service /etc/systemd/system/
+sudo cp spike/systemd/purge-auth-users.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now purge-auth-users.timer
+# optional one-shot test:
+sudo systemctl start purge-auth-users.service
+journalctl -u purge-auth-users.service -n 50 --no-pager
+```
+
+Needs `FIREBASE_SERVICE_ACCOUNT_JSON` in the VPS `.env`. The timer fires daily at 03:15 local time (`Persistent=true` catches up after downtime).
