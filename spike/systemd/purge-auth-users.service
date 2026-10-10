@@ -7,9 +7,10 @@ Wants=network-online.target
 Type=oneshot
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/SICTIC-AI  # pragma: allowlist secret
+# Repo checkout path on the review host (symlink or real directory).
+WorkingDirectory=/home/ubuntu/app
 Environment=HOME=/home/ubuntu
-Environment=REPO_PATH=/home/ubuntu/SICTIC-AI  # pragma: allowlist secret
+Environment=REPO_PATH=/home/ubuntu/app
 ExecStart=/home/ubuntu/miniforge3/envs/sictic-env/bin/python -m spike.purge_auth_users --days 60
 Nice=10
 
