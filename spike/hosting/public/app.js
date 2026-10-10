@@ -1,9 +1,14 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import {
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   getToken,
 } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app-check.js";
+import {
+  firebaseApp,
+  watchAuth,
+  signOutUser,
+  currentIdToken,
+} from "./auth-session.js";
 
 const WORKING_MESSAGE = "We're working on your deck.";
 const config = window.REVIEW_CONFIG;
@@ -15,11 +20,17 @@ const workingPanel = document.getElementById("working");
 const workingMessage = document.getElementById("working-message");
 const elapsedEl = document.getElementById("elapsed");
 const reportEl = document.getElementById("report");
+const sessionEl = document.getElementById("session");
+const sessionEmail = document.getElementById("session-email");
+const signOutButton = document.getElementById("sign-out");
+const appMain = document.getElementById("app-main");
+const authLoading = document.getElementById("auth-loading");
 const buttonLabel = submit.textContent;
 
 let appCheck = null;
 let busy = false;
 let timer = null;
+let readyUser = null;
 
 function showError(message) {
   errorEl.hidden = !message;
@@ -62,7 +73,7 @@ function release() {
   fileInput.disabled = false;
 }
 
-async function ensureAppCheck() {
+function ensureAppCheck() {
   if (appCheck) {
     return appCheck;
   }
@@ -71,18 +82,23 @@ async function ensureAppCheck() {
       "App Check is not configured yet. Add the reCAPTCHA site key in config.js after enabling App Check in the Firebase console.",
     );
   }
-  const app = initializeApp(config.firebase);
-  appCheck = initializeAppCheck(app, {
+  appCheck = initializeAppCheck(firebaseApp, {
     provider: new ReCaptchaEnterpriseProvider(config.recaptchaSiteKey),
     isTokenAutoRefreshEnabled: true,
   });
   return appCheck;
 }
 
-async function appCheckHeader() {
-  const instance = await ensureAppCheck();
-  const { token } = await getToken(instance, false);
-  return { "X-Firebase-AppCheck": token };
+async function apiHeaders() {
+  const instance = ensureAppCheck();
+  const [{ token: appCheckToken }, idToken] = await Promise.all([
+    getToken(instance, false),
+    currentIdToken(false),
+  ]);
+  return {
+    "X-Firebase-AppCheck": appCheckToken,
+    Authorization: `Bearer ${idToken}`,
+  };
 }
 
 async function pollStatus(jobId, headers) {
@@ -107,6 +123,23 @@ async function pollStatus(jobId, headers) {
   }
 }
 
+watchAuth((user) => {
+  if (!user) {
+    window.location.replace("/login.html");
+    return;
+  }
+  readyUser = user;
+  sessionEmail.textContent = user.email || user.uid;
+  sessionEl.hidden = false;
+  appMain.hidden = false;
+  authLoading.hidden = true;
+});
+
+signOutButton.addEventListener("click", async () => {
+  await signOutUser();
+  window.location.replace("/login.html");
+});
+
 submit.addEventListener("click", () => {
   if (busy) {
     showWorking(WORKING_MESSAGE);
@@ -115,6 +148,10 @@ submit.addEventListener("click", () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!readyUser) {
+    window.location.replace("/login.html");
+    return;
+  }
   if (busy) {
     showWorking(WORKING_MESSAGE);
     return;
@@ -139,7 +176,7 @@ form.addEventListener("submit", async (event) => {
   }, 1000);
 
   try {
-    const headers = await appCheckHeader();
+    const headers = await apiHeaders();
     const body = new FormData();
     body.append("deck", file, file.name);
     const start = await fetch(`${config.apiBaseUrl}/api/review`, {

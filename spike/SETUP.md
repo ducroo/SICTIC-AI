@@ -129,28 +129,30 @@ The HTML page at `/` stays as it is. The same review is also available as JSON:
 - `POST /api/review` with multipart field `deck` starts a job.
 - `GET /api/review/{job_id}` returns progress and, when finished, `report_html`.
 
-Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header when `FIREBASE_PROJECT_ID` is set. The older `/review/start` and `/review/status/{job_id}` routes stay open for the Caddy-hosted page.
+Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header and a Firebase Auth ID token in the `Authorization: Bearer …` header when `FIREBASE_PROJECT_ID` is set. The older `/review/start` and `/review/status/{job_id}` routes stay open for the Caddy-hosted page.
 
 On the VPS `.env`, set:
 
 ```
 FIREBASE_PROJECT_ID=review-deck-a3c26
 FIREBASE_SERVICE_ACCOUNT_JSON=<one-line JSON or leave unset; verification uses the public JWKS>
+SPIKE_REQUIRE_AUTH=1
 SPIKE_CORS_ORIGINS=https://review-deck-a3c26.web.app,https://review-deck-a3c26.firebaseapp.com
 ```
 
-App Check verification reads the Firebase JWKS. The service-account JSON is optional for that path. Keep it as a secret if you use Admin SDK calls later.
+App Check and Auth verification read the public Firebase JWKS endpoints. The service-account JSON is optional for that path. Keep it as a secret if you use Admin SDK calls later.
 
 ## Firebase Hosting
 
 The front end lives under `spike/hosting/public` and deploys from `spike/` with the Firebase project `review-deck-a3c26`.
 
-1. In the Firebase console, open App Check for the web app "Pitch deck review".
-2. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. The Hosting app uses `ReCaptchaEnterpriseProvider`.
-3. From `spike/`, deploy Hosting:
+1. Auth providers are defined in `spike/firebase.json` (`emailPassword` and `googleSignIn`). Deploy them with `firebase deploy --only auth --project review-deck-a3c26`.
+2. In the Firebase console, open App Check for the web app "Pitch deck review".
+3. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. The Hosting app uses `ReCaptchaEnterpriseProvider`.
+4. From `spike/`, deploy Hosting:
 
 ```bash
 firebase deploy --only hosting --project review-deck-a3c26
 ```
 
-The Hosting app calls `https://review.sictic.ch/api/review` with an App Check token.
+The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://review.sictic.ch/api/review` with App Check and Auth tokens.

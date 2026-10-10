@@ -12,5 +12,14 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "SICTIC Pitch Deck Review",
+        "supportEmail": "ai@sictic.ch"
+      }
+    }
   }
 }

@@ -19,6 +19,12 @@ from spike.app_check import (
     token_from_headers,
     verify_app_check_token,
 )
+from spike.auth import (
+    AUTH_HEADER,
+    auth_required,
+    id_token_from_headers,
+    verify_id_token,
+)
 from spike.runtime import (
     SpikeStatus,
     check_pitch_deck_upload,
@@ -703,7 +709,7 @@ def _apply_cors(request: web.Request, response: web.StreamResponse) -> web.Strea
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
         response.headers["Access-Control-Allow-Headers"] = (
-            f"Content-Type, {APP_CHECK_HEADER}"
+            f"Content-Type, {APP_CHECK_HEADER}, {AUTH_HEADER}"
         )
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
@@ -718,7 +724,7 @@ async def cors_middleware(request: web.Request, handler):
     return _apply_cors(request, response)
 
 
-def _path_requires_app_check(path: str) -> bool:
+def _path_requires_api_auth(path: str) -> bool:
     return any(path == prefix or path.startswith(prefix + "/") for prefix in PROTECTED_API_PREFIXES)
 
 
@@ -726,7 +732,7 @@ def _path_requires_app_check(path: str) -> bool:
 async def app_check_middleware(request: web.Request, handler):
     if request.method == "OPTIONS":
         return await handler(request)
-    if not _path_requires_app_check(request.path):
+    if not _path_requires_api_auth(request.path):
         return await handler(request)
     if not app_check_required():
         return await handler(request)
@@ -741,10 +747,29 @@ async def app_check_middleware(request: web.Request, handler):
     return await handler(request)
 
 
+@web.middleware
+async def auth_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    if not _path_requires_api_auth(request.path):
+        return await handler(request)
+    if not auth_required():
+        return await handler(request)
+    token = id_token_from_headers(request.headers)
+    try:
+        verify_id_token(token, project_id=firebase_project_id())
+    except ValueError as error:
+        return _apply_cors(
+            request,
+            web.json_response({"error": str(error)}, status=401),
+        )
+    return await handler(request)
+
+
 def create_app() -> web.Application:
     app = web.Application(
         client_max_size=32 * 1024 * 1024,
-        middlewares=(cors_middleware, app_check_middleware),
+        middlewares=(cors_middleware, app_check_middleware, auth_middleware),
     )
     app.add_routes(ROUTES)
     return app

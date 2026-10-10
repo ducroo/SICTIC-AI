@@ -33,8 +33,26 @@
       padding: 0.9rem 1.25rem;
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
     }
     .brand img { height: 36px; width: auto; display: block; }
+    .session {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .session button {
+      width: auto;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.9rem;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .session button:hover { background: #f6f6f6; }
     main {
       padding: 2rem 1.25rem 3rem;
     }
@@ -144,9 +162,13 @@
       <a class="brand" href="https://www.sictic.ch/">
         <img src="/static/sictic-logo.svg" alt="SICTIC">
       </a>
+      <div class="session" id="session" hidden>
+        <span id="session-email"></span>
+        <button type="button" id="sign-out">Sign out</button>
+      </div>
     </div>
   </header>
-  <main>
+  <main id="app-main" hidden>
     <h1>Check your pitch deck</h1>
     <p class="lead">Upload the deck you would send to SICTIC. The review reads it against the jury criteria and the investment criteria published for startups that want to pitch at an Investor Day. This is a document check. It is not a jury decision, and it does not submit an application.</p>
     <p><a href="https://www.sictic.ch/startups/">Read the criteria on sictic.ch</a></p>
@@ -169,6 +191,7 @@
     </form>
     <div id="report"></div>
   </main>
+  <p class="lead" id="auth-loading" style="padding: 2rem 1.25rem;">Checking sign-in…</p>
   <footer>
     <div class="sponsor">
       <span>Hosting sponsored by Safe Swiss Cloud</span>

@@ -10,6 +10,7 @@ from spike.web import create_app
 @pytest.mark.asyncio
 async def test_api_review_requires_app_check_when_enabled(monkeypatch, mocker):
     monkeypatch.setenv("SPIKE_REQUIRE_APP_CHECK", "1")
+    monkeypatch.setenv("SPIKE_REQUIRE_AUTH", "0")
     monkeypatch.setenv("FIREBASE_PROJECT_ID", "review-deck-a3c26")
     mocker.patch(
         "spike.web.verify_app_check_token",
@@ -29,6 +30,7 @@ async def test_api_review_requires_app_check_when_enabled(monkeypatch, mocker):
 @pytest.mark.asyncio
 async def test_api_review_accepts_a_valid_app_check_token(monkeypatch, mocker):
     monkeypatch.setenv("SPIKE_REQUIRE_APP_CHECK", "1")
+    monkeypatch.setenv("SPIKE_REQUIRE_AUTH", "0")
     monkeypatch.setenv("FIREBASE_PROJECT_ID", "review-deck-a3c26")
     mocker.patch(
         "spike.web.verify_app_check_token",
@@ -95,6 +97,7 @@ async def test_legacy_review_start_stays_open_without_app_check(monkeypatch, moc
 @pytest.mark.asyncio
 async def test_api_review_sets_cors_for_hosting_origin(monkeypatch, mocker):
     monkeypatch.setenv("SPIKE_REQUIRE_APP_CHECK", "0")
+    monkeypatch.setenv("SPIKE_REQUIRE_AUTH", "0")
     mocker.patch(
         "spike.web.review_pitch_deck_upload",
         return_value="# Pitch deck review\n\nFine.\n",
