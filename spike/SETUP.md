@@ -159,9 +159,10 @@ The Hosting app sends visitors to `/login.html` first (Google or email/password)
 
 ## Auth profile purge (daily)
 
-Firebase Auth has no built-in 60-day purge for email/Google accounts. The VPS runs a systemd timer that calls `python -m spike.purge_auth_users --days 60`. Unit files live in `spike/systemd/`.
+Firebase Auth has no built-in 60-day purge for email/Google accounts. The VPS runs a systemd timer that calls `python -m spike.purge_auth_users --days 60`. Unit files live in `spike/systemd/`. The service uses `WorkingDirectory=/home/ubuntu/app`, so point that path at the repo checkout (symlink is fine):
 
 ```bash
+ln -sfn /home/ubuntu/SICTIC-AI /home/ubuntu/app  # pragma: allowlist secret
 sudo cp spike/systemd/purge-auth-users.service /etc/systemd/system/
 sudo cp spike/systemd/purge-auth-users.timer /etc/systemd/system/
 sudo systemctl daemon-reload
