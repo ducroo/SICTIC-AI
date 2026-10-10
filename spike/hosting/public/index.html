@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check your pitch deck · SICTIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #bc2132;
+      --ink: #212529;
+      --muted: #607382;
+      --line: #d9dee3;
+      --paper: #f6f6f6;
+      --card: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Figtree, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    header {
+      background: var(--card);
+      border-bottom: 4px solid var(--red);
+      padding: 0.9rem 1.25rem;
+    }
+    .brand {
+      font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
+      font-weight: 700;
+      color: var(--red);
+      text-decoration: none;
+      font-size: 1.25rem;
+    }
+    main { padding: 2rem 1.25rem 3rem; max-width: 40rem; }
+    h1 {
+      font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
+      font-size: 2rem;
+      margin: 0 0 0.75rem;
+    }
+    .lead { font-size: 1.05rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      padding: 1.25rem;
+      margin-top: 1.5rem;
+    }
+    label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+    input[type=file] { display: block; width: 100%; }
+    .hint { color: var(--muted); margin: 0.4rem 0 1rem; }
+    button {
+      background: var(--red);
+      color: #fff;
+      border: 0;
+      font: 600 1rem/1 Figtree, Helvetica, Arial, sans-serif;
+      padding: 0.85rem 1.2rem;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #607382;
+      cursor: not-allowed;
+    }
+    .error { color: var(--red); font-weight: 600; }
+    .status { color: var(--muted); white-space: pre-wrap; }
+    .report {
+      margin-top: 1.5rem;
+      overflow-x: auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      padding: 1rem;
+    }
+    footer {
+      border-top: 1px solid var(--line);
+      background: var(--card);
+      padding: 1.25rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand" href="https://www.sictic.ch/">SICTIC</a>
+  </header>
+  <main>
+    <h1>Check your pitch deck</h1>
+    <p class="lead">Upload the deck you would send to SICTIC. The review reads it against the published jury and investment criteria.</p>
+    <p><a href="https://www.sictic.ch/startups/">Read the criteria on sictic.ch</a></p>
+    <form class="card" id="review-form">
+      <label for="deck">Pitch deck</label>
+      <input id="deck" name="deck" type="file" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+      <p class="hint">PDF or PowerPoint. A long deck can take a few minutes.</p>
+      <button type="submit" id="submit">Review this deck</button>
+      <p class="error" id="error" hidden></p>
+      <p class="status" id="status" hidden></p>
+      <div class="report" id="report" hidden></div>
+    </form>
+  </main>
+  <footer>Hosting on Firebase. Review API on review.sictic.ch.</footer>
+  <script src="/config.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -12,6 +12,13 @@ from pathlib import Path
 from aiohttp import web
 
 from lib.infrastructure.logging import get_logger
+from spike.app_check import (
+    HEADER_NAME as APP_CHECK_HEADER,
+    app_check_required,
+    firebase_project_id,
+    token_from_headers,
+    verify_app_check_token,
+)
 from spike.runtime import (
     SpikeStatus,
     check_pitch_deck_upload,
@@ -23,6 +30,12 @@ from spike.runtime import (
 )
 
 logger = get_logger(__name__)
+
+DEFAULT_CORS_ORIGINS = (
+    "https://review-deck-a3c26.web.app",
+    "https://review-deck-a3c26.firebaseapp.com",
+)
+PROTECTED_API_PREFIXES = ("/api/review",)
 
 
 @dataclass(frozen=True)
@@ -651,6 +664,16 @@ async def handle_api_skill(request: web.Request) -> web.Response:
     return web.json_response(asdict(result))
 
 
+async def handle_api_review_start(request: web.Request) -> web.Response:
+    """REST alias for the upload job. Same body and response as /review/start."""
+    return await handle_review_start(request)
+
+
+async def handle_api_review_status(request: web.Request) -> web.Response:
+    """REST alias for the job status poll."""
+    return await handle_review_status(request)
+
+
 ROUTES = (
     web.get("/", handle_index),
     web.get("/static/{name}", handle_static),
@@ -662,11 +685,67 @@ ROUTES = (
     web.get("/api/status", handle_api_status),
     web.post("/api/demo", handle_api_demo),
     web.post("/api/skill", handle_api_skill),
+    web.post("/api/review", handle_api_review_start),
+    web.get("/api/review/{job_id}", handle_api_review_status),
 )
 
 
+def cors_origins() -> frozenset[str]:
+    configured = (os.environ.get("SPIKE_CORS_ORIGINS") or "").strip()
+    if configured:
+        return frozenset(part.strip() for part in configured.split(",") if part.strip())
+    return frozenset(DEFAULT_CORS_ORIGINS)
+
+
+def _apply_cors(request: web.Request, response: web.StreamResponse) -> web.StreamResponse:
+    origin = request.headers.get("Origin", "").strip()
+    if origin and origin in cors_origins():
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Headers"] = (
+            f"Content-Type, {APP_CHECK_HEADER}"
+        )
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+@web.middleware
+async def cors_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS" and request.path.startswith("/api/"):
+        response = web.Response(status=204)
+        return _apply_cors(request, response)
+    response = await handler(request)
+    return _apply_cors(request, response)
+
+
+def _path_requires_app_check(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in PROTECTED_API_PREFIXES)
+
+
+@web.middleware
+async def app_check_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    if not _path_requires_app_check(request.path):
+        return await handler(request)
+    if not app_check_required():
+        return await handler(request)
+    token = token_from_headers(request.headers)
+    try:
+        verify_app_check_token(token, project_id=firebase_project_id())
+    except ValueError as error:
+        return _apply_cors(
+            request,
+            web.json_response({"error": str(error)}, status=401),
+        )
+    return await handler(request)
+
+
 def create_app() -> web.Application:
-    app = web.Application(client_max_size=32 * 1024 * 1024)
+    app = web.Application(
+        client_max_size=32 * 1024 * 1024,
+        middlewares=(cors_middleware, app_check_middleware),
+    )
     app.add_routes(ROUTES)
     return app
 

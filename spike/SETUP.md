@@ -101,3 +101,36 @@ WantedBy=multi-user.target
 Create `/home/ubuntu/caddy/data` and `/home/ubuntu/caddy/config`, then `sudo systemctl enable --now caddy-podman.service`. Caddy redirects port 80 to HTTPS and obtains the certificate by itself once the A record is in place.
 
 The raw IP has no public certificate. Open the site at `https://review.sictic.ch`.
+
+## REST API
+
+The HTML page at `/` stays as it is. The same review is also available as JSON:
+
+- `POST /api/review` with multipart field `deck` starts a job.
+- `GET /api/review/{job_id}` returns progress and, when finished, `report_html`.
+
+Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header when `FIREBASE_PROJECT_ID` is set. The older `/review/start` and `/review/status/{job_id}` routes stay open for the Caddy-hosted page.
+
+On the VPS `.env`, set:
+
+```
+FIREBASE_PROJECT_ID=review-deck-a3c26
+FIREBASE_SERVICE_ACCOUNT_JSON=<one-line JSON or leave unset; verification uses the public JWKS>
+SPIKE_CORS_ORIGINS=https://review-deck-a3c26.web.app,https://review-deck-a3c26.firebaseapp.com
+```
+
+App Check verification reads the Firebase JWKS. The service-account JSON is optional for that path. Keep it as a secret if you use Admin SDK calls later.
+
+## Firebase Hosting
+
+The front end lives under `spike/hosting/public` and deploys from `spike/` with the Firebase project `review-deck-a3c26`.
+
+1. In the Firebase console, open App Check for the web app "Pitch deck review".
+2. Register the reCAPTCHA v3 provider and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`.
+3. From `spike/`, deploy Hosting:
+
+```bash
+firebase deploy --only hosting --project review-deck-a3c26
+```
+
+The Hosting app calls `https://review.sictic.ch/api/review` with an App Check token.
