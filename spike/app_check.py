@@ -16,7 +16,7 @@ from lib.infrastructure.logging import get_logger
 logger = get_logger(__name__)
 
 APP_CHECK_JWKS_URL = "https://firebaseappcheck.googleapis.com/v1/jwks"
-APP_CHECK_ISSUER = "https://firebaseappcheck.googleapis.com/"
+APP_CHECK_ISSUER_PREFIX = "https://firebaseappcheck.googleapis.com/"
 HEADER_NAME = "X-Firebase-AppCheck"
 
 _jwks_client: PyJWKClient | None = None
@@ -52,6 +52,23 @@ def _jwks() -> PyJWKClient:
     return _jwks_client
 
 
+def app_check_audience(project_id: str) -> str:
+    """Firebase App Check tokens use projects/<projectId> as audience."""
+    return f"projects/{project_id.strip()}"
+
+
+def project_number_from_subject(subject: str) -> str:
+    """Subjects look like 1:PROJECT_NUMBER:web:APP_ID."""
+    parts = subject.split(":")
+    if len(parts) >= 2 and parts[0] == "1" and parts[1].isdigit():
+        return parts[1]
+    return ""
+
+
+def expected_issuer(project_number: str) -> str:
+    return f"{APP_CHECK_ISSUER_PREFIX}{project_number}"
+
+
 def verify_app_check_token(token: str, *, project_id: str | None = None) -> dict[str, Any]:
     """Return App Check claims, or raise ValueError when the token is invalid."""
     cleaned = token.strip()
@@ -60,25 +77,26 @@ def verify_app_check_token(token: str, *, project_id: str | None = None) -> dict
     project = (project_id or firebase_project_id()).strip()
     if not project:
         raise ValueError("FIREBASE_PROJECT_ID is not configured.")
+    audience = app_check_audience(project)
     try:
         signing_key = _jwks().get_signing_key_from_jwt(cleaned)
         claims = jwt.decode(
             cleaned,
             signing_key.key,
             algorithms=["RS256"],
-            audience=project,
+            audience=audience,
             options={"require": ["exp", "iat", "sub", "iss"]},
         )
     except Exception as error:
+        logger.warning("App Check token verification failed: %s", error)
         raise ValueError("App Check token is invalid.") from error
-    if claims.get("iss") != APP_CHECK_ISSUER:
-        raise ValueError("App Check token issuer is invalid.")
+
     subject = str(claims.get("sub") or "")
-    if f":web:" not in subject and f":{project}:" not in subject:
-        # Accept any app under this project. Subjects look like
-        # 1:PROJECT_NUMBER:web:APP_ID.
-        if not subject.startswith("1:"):
-            raise ValueError("App Check token subject is invalid.")
+    project_number = project_number_from_subject(subject)
+    if not project_number:
+        raise ValueError("App Check token subject is invalid.")
+    if claims.get("iss") != expected_issuer(project_number):
+        raise ValueError("App Check token issuer is invalid.")
     return claims
 
 

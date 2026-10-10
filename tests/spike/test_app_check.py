@@ -20,8 +20,38 @@ def test_app_check_required_follows_explicit_flag(monkeypatch):
     assert app_check.app_check_required() is True
 
 
+def test_app_check_audience_uses_projects_prefix():
+    assert app_check.app_check_audience("review-deck-a3c26") == "projects/review-deck-a3c26"
+
+
 def test_verify_app_check_token_checks_issuer_and_audience(monkeypatch, mocker):
     monkeypatch.setenv("FIREBASE_PROJECT_ID", "review-deck-a3c26")
+    class FakeKey:
+        key = "secret"
+
+    mocker.patch.object(
+        app_check,
+        "_jwks",
+        return_value=mocker.Mock(get_signing_key_from_jwt=lambda _token: FakeKey()),
+    )
+    decode = mocker.patch(
+        "spike.app_check.jwt.decode",
+        return_value={
+            "iss": "https://firebaseappcheck.googleapis.com/224218759787",
+            "sub": "1:224218759787:web:84cf6f9973748262dda72e",
+            "aud": ["projects/224218759787", "projects/review-deck-a3c26"],
+            "exp": 9999999999,
+            "iat": 1,
+        },
+    )
+    claims = app_check.verify_app_check_token("token")
+    assert claims["sub"].endswith(":web:84cf6f9973748262dda72e")
+    assert decode.call_args.kwargs["audience"] == "projects/review-deck-a3c26"
+
+
+def test_verify_app_check_token_rejects_wrong_issuer(monkeypatch, mocker):
+    monkeypatch.setenv("FIREBASE_PROJECT_ID", "review-deck-a3c26")
+
     class FakeKey:
         key = "secret"
 
@@ -33,14 +63,14 @@ def test_verify_app_check_token_checks_issuer_and_audience(monkeypatch, mocker):
     mocker.patch(
         "spike.app_check.jwt.decode",
         return_value={
-            "iss": app_check.APP_CHECK_ISSUER,
+            "iss": "https://firebaseappcheck.googleapis.com/",
             "sub": "1:224218759787:web:84cf6f9973748262dda72e",
             "exp": 9999999999,
             "iat": 1,
         },
     )
-    claims = app_check.verify_app_check_token("token")
-    assert claims["sub"].endswith(":web:84cf6f9973748262dda72e")
+    with pytest.raises(ValueError, match="issuer"):
+        app_check.verify_app_check_token("token")
 
 
 def test_verify_app_check_token_rejects_empty(monkeypatch):
