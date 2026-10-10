@@ -10,6 +10,27 @@
 #
 # shellcheck shell=bash
 
+_normalize_openssh_private_key() {
+  # Secrets UIs often collapse PEM newlines into one line. Rebuild the
+  # OpenSSH private-key shape: header, 70-column body, footer.
+  python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+import textwrap
+
+raw = Path(sys.argv[1]).read_text()
+raw = raw.replace("\\n", "\n").strip()
+begin = "-----BEGIN OPENSSH PRIVATE KEY-----"
+end = "-----END OPENSSH PRIVATE KEY-----"
+if begin not in raw or end not in raw:
+    raise SystemExit("VPS_SSH_PRIVATE_KEY is not an OpenSSH private key")
+body = raw.split(begin, 1)[1].split(end, 1)[0]
+body = "".join(body.split())
+wrapped = "\n".join(textwrap.wrap(body, 70))
+Path(sys.argv[1]).write_text(f"{begin}\n{wrapped}\n{end}\n")
+PY
+}
+
 materialize_vps_ssh_key() {
   local key_dir="${HOME}/.ssh"
   local key_path="${key_dir}/id_ed25519"
@@ -22,12 +43,8 @@ materialize_vps_ssh_key() {
   mkdir -p "$key_dir"
   chmod 700 "$key_dir"
 
-  # Secrets UIs sometimes store literal \n sequences.
-  if printf '%s' "$raw" | grep -q '\\n'; then
-    printf '%s\n' "$raw" | sed 's/\\n/\n/g' > "$key_path"
-  else
-    printf '%s\n' "$raw" > "$key_path"
-  fi
+  printf '%s\n' "$raw" > "$key_path"
+  _normalize_openssh_private_key "$key_path"
   chmod 600 "$key_path"
 
   if [ ! -f "${key_path}.pub" ] && command -v ssh-keygen >/dev/null 2>&1; then
