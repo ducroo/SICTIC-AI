@@ -1,10 +1,10 @@
 # Rebuild the review host
 
-This is the host setup for https://review.sictic.ch. The pitch deck skill and the web page are the rest of this branch. A new VM needs the steps below. Certificates, model weights, the Qdrant database, and `.env` stay off git.
+This is the host setup for the review API at https://api.sictic.ch. The pitch deck skill and the Firebase Hosting front end (`https://review.sictic.ch`) are the rest of this branch. A new VM needs the steps below. Certificates, model weights, the Qdrant database, and `.env` stay off git.
 
 ## Machine
 
-Use an Ubuntu VM with an NVIDIA GPU and a working driver. The current host is a KVM guest with an L4 (24 GB). The public site needs a public IPv4 address. The DNS A record `review.sictic.ch` must point at that address before Caddy asks for a certificate.
+Use an Ubuntu VM with an NVIDIA GPU and a working driver. The current host is a KVM guest with an L4 (24 GB). The public API needs a public IPv4 address. The DNS A record `api.sictic.ch` must point at that address before Caddy asks for a certificate. The UI hostname `review.sictic.ch` points at Firebase Hosting, not this VM.
 
 Install Podman and Ollama. Ollama's own installer creates `ollama.service`.
 
@@ -85,7 +85,7 @@ Enable it with `sudo systemctl enable --now spike-web.service`.
 
 ## HTTPS
 
-Caddy is the public entry. It terminates TLS for `review.sictic.ch` and proxies to `127.0.0.1:8080`. Let's Encrypt certificates are stored under `/home/ubuntu/caddy/data` and are requested again on a new machine. Port 443 must be reachable from the internet.
+Caddy is the public entry. It terminates TLS for `api.sictic.ch` and proxies to `127.0.0.1:8080`. Let's Encrypt certificates are stored under `/home/ubuntu/caddy/data` and are requested again on a new machine. Port 443 must be reachable from the internet.
 
 `/home/ubuntu/caddy/Caddyfile`
 
@@ -93,7 +93,7 @@ Caddy is the public entry. It terminates TLS for `review.sictic.ch` and proxies 
 {
 	admin off
 }
-review.sictic.ch {
+api.sictic.ch {
 	reverse_proxy 127.0.0.1:8080
 }
 ```
@@ -120,7 +120,7 @@ WantedBy=multi-user.target
 
 Create `/home/ubuntu/caddy/data` and `/home/ubuntu/caddy/config`, then `sudo systemctl enable --now caddy-podman.service`. Caddy redirects port 80 to HTTPS and obtains the certificate by itself once the A record is in place.
 
-The raw IP has no public certificate. Open the site at `https://review.sictic.ch`.
+The raw IP has no public certificate. Open the API at `https://api.sictic.ch`. The UI is at `https://review.sictic.ch` (Firebase Hosting).
 
 ## REST API
 
@@ -137,25 +137,26 @@ On the VPS `.env`, set:
 FIREBASE_PROJECT_ID=review-deck-a3c26
 FIREBASE_SERVICE_ACCOUNT_JSON=<one-line JSON or leave unset; verification uses the public JWKS>
 SPIKE_REQUIRE_AUTH=1
-SPIKE_CORS_ORIGINS=https://review-deck-a3c26.web.app,https://review-deck-a3c26.firebaseapp.com
+SPIKE_CORS_ORIGINS=https://review.sictic.ch,https://review-deck-a3c26.web.app,https://review-deck-a3c26.firebaseapp.com
 ```
 
 App Check and Auth verification read the public Firebase JWKS endpoints. The service-account JSON is optional for that path. Keep it as a secret if you use Admin SDK calls later.
 
 ## Firebase Hosting
 
-The front end lives under `spike/hosting/public` and deploys from `spike/` with the Firebase project `review-deck-a3c26`.
+The front end lives under `spike/hosting/public` and deploys from `spike/` with the Firebase project `review-deck-a3c26`. Custom domain: `review.sictic.ch` (CNAME to `review-deck-a3c26.web.app` plus the Hosting ownership TXT).
 
 1. Auth providers are defined in `spike/firebase.json` (`emailPassword` and `googleSignIn`). Deploy them with `firebase deploy --only auth --project review-deck-a3c26`.
-2. In the Firebase console, open App Check for the web app "Pitch deck review".
-3. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. The Hosting app uses `ReCaptchaEnterpriseProvider`.
-4. From `spike/`, deploy Hosting:
+2. In Firebase Auth → Settings → Authorized domains, include `review.sictic.ch` (required when `authDomain` in `config.js` is that host).
+3. In the Firebase console, open App Check for the web app "Pitch deck review".
+4. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. Allow `review.sictic.ch` on that site key. The Hosting app uses `ReCaptchaEnterpriseProvider`.
+5. From `spike/`, deploy Hosting:
 
 ```bash
 firebase deploy --only hosting --project review-deck-a3c26
 ```
 
-The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://review.sictic.ch/api/review` with App Check and Auth tokens. `/privacy.html` states the retention rules (account details 60 days; uploaded decks deleted after review).
+The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://api.sictic.ch/api/review` with App Check and Auth tokens. `/privacy.html` states the retention rules (account details 60 days; uploaded decks deleted after review).
 
 ## Auth profile purge (daily)
 

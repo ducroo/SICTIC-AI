@@ -1,9 +1,9 @@
 // Public Firebase web config. Safe to ship to the browser.
 window.REVIEW_CONFIG = {
-  apiBaseUrl: "https://review.sictic.ch",
+  apiBaseUrl: "https://api.sictic.ch",
   firebase: {
     apiKey: "AIzaSyAQXoDjVPKJvuEV2zuaGe2NJ-C2YujPq0Q",
-    authDomain: "review-deck-a3c26.firebaseapp.com",
+    authDomain: "review.sictic.ch",
     projectId: "review-deck-a3c26",
     storageBucket: "review-deck-a3c26.firebasestorage.app",
     messagingSenderId: "224218759787",

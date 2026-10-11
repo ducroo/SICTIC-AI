@@ -39,6 +39,7 @@ from spike.runtime import (
 logger = get_logger(__name__)
 
 DEFAULT_CORS_ORIGINS = (
+    "https://review.sictic.ch",
     "https://review-deck-a3c26.web.app",
     "https://review-deck-a3c26.firebaseapp.com",
 )

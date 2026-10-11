@@ -109,20 +109,20 @@ async def test_api_review_sets_cors_for_hosting_origin(monkeypatch, mocker):
         response = await client.post(
             "/api/review",
             data=form,
-            headers={"Origin": "https://review-deck-a3c26.web.app"},
+            headers={"Origin": "https://review.sictic.ch"},
         )
         options = await client.options(
             "/api/review",
             headers={
-                "Origin": "https://review-deck-a3c26.web.app",
+                "Origin": "https://review.sictic.ch",
                 "Access-Control-Request-Method": "POST",
             },
         )
 
     assert response.headers.get("Access-Control-Allow-Origin") == (
-        "https://review-deck-a3c26.web.app"
+        "https://review.sictic.ch"
     )
     assert options.status == 204
     assert options.headers.get("Access-Control-Allow-Origin") == (
-        "https://review-deck-a3c26.web.app"
+        "https://review.sictic.ch"
     )
