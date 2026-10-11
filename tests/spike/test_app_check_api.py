@@ -75,6 +75,7 @@ async def test_api_review_accepts_a_valid_app_check_token(monkeypatch, mocker):
 async def test_legacy_review_start_stays_open_without_app_check(monkeypatch, mocker):
     monkeypatch.setenv("SPIKE_REQUIRE_APP_CHECK", "1")
     monkeypatch.setenv("FIREBASE_PROJECT_ID", "review-deck-a3c26")
+    monkeypatch.setenv("SPIKE_SERVE_UI", "1")
 
     async def fake_review(*, filename, payload, on_progress=None):
         if on_progress is not None:

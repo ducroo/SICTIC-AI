@@ -124,12 +124,14 @@ The raw IP has no public certificate. Open the API at `https://api.sictic.ch`. T
 
 ## REST API
 
-The HTML page at `/` stays as it is. The same review is also available as JSON:
+Public users use `https://review.sictic.ch` (Firebase Hosting). This host exposes the JSON API:
 
 - `POST /api/review` with multipart field `deck` starts a job.
 - `GET /api/review/{job_id}` returns progress and, when finished, `report_html`.
 
-Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header and a Firebase Auth ID token in the `Authorization: Bearer …` header when `FIREBASE_PROJECT_ID` is set. The older `/review/start` and `/review/status/{job_id}` routes stay open for the Caddy-hosted page.
+Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header and a Firebase Auth ID token in the `Authorization: Bearer …` header when `FIREBASE_PROJECT_ID` is set.
+
+The on-host HTML UI (`/`, `/review`, `/static`, `/review/start`) is **off by default**. Set `SPIKE_SERVE_UI=1` in `.env` and restart `spike-web` only when you need that page for testing on the VPS.
 
 On the VPS `.env`, set:
 
@@ -137,6 +139,7 @@ On the VPS `.env`, set:
 FIREBASE_PROJECT_ID=review-deck-a3c26
 FIREBASE_SERVICE_ACCOUNT_JSON=<one-line JSON or leave unset; verification uses the public JWKS>
 SPIKE_REQUIRE_AUTH=1
+SPIKE_SERVE_UI=
 SPIKE_CORS_ORIGINS=https://review.sictic.ch,https://review-deck-a3c26.web.app,https://review-deck-a3c26.firebaseapp.com
 ```
 

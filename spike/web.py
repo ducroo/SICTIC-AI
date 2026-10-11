@@ -44,6 +44,7 @@ DEFAULT_CORS_ORIGINS = (
     "https://review-deck-a3c26.firebaseapp.com",
 )
 PROTECTED_API_PREFIXES = ("/api/review",)
+PUBLIC_UI_ORIGIN = "https://review.sictic.ch"
 
 
 @dataclass(frozen=True)
@@ -441,6 +442,24 @@ def _health_payload(status: SpikeStatus) -> dict:
     }
 
 
+def serve_ui_enabled() -> bool:
+    """Local HTML UI on this host. Off by default; public UI is Firebase Hosting."""
+    value = (os.environ.get("SPIKE_SERVE_UI") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _is_local_ui_path(path: str) -> bool:
+    if path == "/":
+        return True
+    if path.startswith("/static/"):
+        return True
+    if path == "/review" or path.startswith("/review/"):
+        return True
+    if path == "/demo":
+        return True
+    return False
+
+
 async def handle_index(_request: web.Request) -> web.Response:
     return web.Response(text=render_page(), content_type="text/html")
 
@@ -785,6 +804,23 @@ async def cors_middleware(request: web.Request, handler):
     return _apply_cors(request, response)
 
 
+@web.middleware
+async def local_ui_middleware(request: web.Request, handler):
+    """Hide the on-host HTML UI unless SPIKE_SERVE_UI is enabled."""
+    if serve_ui_enabled() or not _is_local_ui_path(request.path):
+        return await handler(request)
+    if request.path == "/":
+        return web.json_response(
+            {
+                "service": "sictic-review-api",
+                "ui": PUBLIC_UI_ORIGIN,
+                "error": "The HTML UI is not served on this host. Use the public site.",
+            },
+            status=404,
+        )
+    raise web.HTTPNotFound()
+
+
 def _path_requires_api_auth(path: str) -> bool:
     return any(path == prefix or path.startswith(prefix + "/") for prefix in PROTECTED_API_PREFIXES)
 
@@ -830,7 +866,12 @@ async def auth_middleware(request: web.Request, handler):
 def create_app() -> web.Application:
     app = web.Application(
         client_max_size=32 * 1024 * 1024,
-        middlewares=(cors_middleware, app_check_middleware, auth_middleware),
+        middlewares=(
+            cors_middleware,
+            local_ui_middleware,
+            app_check_middleware,
+            auth_middleware,
+        ),
     )
     app.add_routes(ROUTES)
     return app

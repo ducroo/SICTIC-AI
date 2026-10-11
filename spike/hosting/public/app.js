@@ -11,6 +11,7 @@ import {
 } from "./auth-session.js";
 
 const WORKING_MESSAGE = "We're working on your deck.";
+const ACTIVE_JOB_KEY = "sictic.review.activeJob";
 const config = window.REVIEW_CONFIG;
 const form = document.getElementById("review-form");
 const fileInput = document.getElementById("deck");
@@ -31,6 +32,7 @@ let appCheck = null;
 let busy = false;
 let timer = null;
 let readyUser = null;
+let resumeStarted = false;
 
 function showError(message) {
   errorEl.hidden = !message;
@@ -71,6 +73,44 @@ function release() {
   submit.disabled = false;
   submit.textContent = buttonLabel;
   fileInput.disabled = false;
+}
+
+function saveActiveJob(jobId) {
+  sessionStorage.setItem(
+    ACTIVE_JOB_KEY,
+    JSON.stringify({ jobId, savedAt: Date.now() }),
+  );
+}
+
+function clearActiveJob() {
+  sessionStorage.removeItem(ACTIVE_JOB_KEY);
+}
+
+function loadActiveJobId() {
+  try {
+    const raw = sessionStorage.getItem(ACTIVE_JOB_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return typeof parsed.jobId === "string" && parsed.jobId ? parsed.jobId : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function beginBusy(message = WORKING_MESSAGE) {
+  busy = true;
+  submit.disabled = true;
+  submit.textContent = WORKING_MESSAGE;
+  fileInput.disabled = true;
+  showWorking(message);
+  const startedAt = Date.now();
+  tick(0);
+  clearInterval(timer);
+  timer = setInterval(() => {
+    tick(Math.floor((Date.now() - startedAt) / 1000));
+  }, 1000);
 }
 
 function ensureAppCheck() {
@@ -123,6 +163,39 @@ async function pollStatus(jobId, headers) {
   }
 }
 
+async function followJob(jobId) {
+  beginBusy(WORKING_MESSAGE);
+  try {
+    const headers = await apiHeaders();
+    const finished = await pollStatus(jobId, headers);
+    if (finished.report_html) {
+      reportEl.innerHTML = finished.report_html;
+    }
+    showWorking("The review is ready.");
+  } catch (error) {
+    const message = error.message || String(error);
+    showError(message);
+    showWorking(message);
+    clearActiveJob();
+  } finally {
+    release();
+  }
+}
+
+async function resumeActiveJobIfAny() {
+  if (resumeStarted || busy) {
+    return;
+  }
+  const jobId = loadActiveJobId();
+  if (!jobId) {
+    return;
+  }
+  resumeStarted = true;
+  showError("");
+  reportEl.innerHTML = "";
+  await followJob(jobId);
+}
+
 watchAuth((user) => {
   if (!user) {
     window.location.replace("/login.html");
@@ -137,9 +210,11 @@ watchAuth((user) => {
   sessionEl.hidden = false;
   appMain.hidden = false;
   authLoading.hidden = true;
+  resumeActiveJobIfAny();
 });
 
 signOutButton.addEventListener("click", async () => {
+  clearActiveJob();
   await signOutUser();
   window.location.replace("/login.html");
 });
@@ -168,16 +243,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  busy = true;
-  submit.disabled = true;
-  submit.textContent = WORKING_MESSAGE;
-  fileInput.disabled = true;
-  showWorking(WORKING_MESSAGE);
-  const startedAt = Date.now();
-  tick(0);
-  timer = setInterval(() => {
-    tick(Math.floor((Date.now() - startedAt) / 1000));
-  }, 1000);
+  beginBusy(WORKING_MESSAGE);
 
   try {
     const headers = await apiHeaders();
@@ -192,11 +258,16 @@ form.addEventListener("submit", async (event) => {
     if (!start.ok) {
       throw new Error(started.error || "The review could not be started.");
     }
+    const jobId = started.job_id || started.id;
+    if (!jobId) {
+      throw new Error("The review could not be started.");
+    }
+    saveActiveJob(jobId);
     setSteps(started.steps);
     if (typeof started.elapsed_seconds === "number") {
       tick(started.elapsed_seconds);
     }
-    const finished = await pollStatus(started.job_id || started.id, headers);
+    const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
       reportEl.innerHTML = finished.report_html;
     }
@@ -205,6 +276,7 @@ form.addEventListener("submit", async (event) => {
     const message = error.message || String(error);
     showError(message);
     showWorking(message);
+    clearActiveJob();
   } finally {
     release();
   }
