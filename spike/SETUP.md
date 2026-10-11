@@ -151,9 +151,12 @@ The front end lives under `spike/hosting/public` and deploys from `spike/` with 
 
 1. Auth providers are defined in `spike/firebase.json` (`emailPassword` and `googleSignIn`). Deploy them with `firebase deploy --only auth --project review-deck-a3c26`.
 2. In Firebase Auth → Settings → Authorized domains, include `review.sictic.ch` (required when `authDomain` in `config.js` is that host).
-3. In the Firebase console, open App Check for the web app "Pitch deck review".
-4. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. Allow `review.sictic.ch` on that site key. The Hosting app uses `ReCaptchaEnterpriseProvider`.
-5. From `spike/`, deploy Hosting:
+3. In Firebase Auth → Templates, edit any email template → **customize action URL** →
+   `https://review.sictic.ch/__/auth/action`
+   (keeps verification / reset links on your domain instead of `*.firebaseapp.com`).
+4. In the Firebase console, open App Check for the web app "Pitch deck review".
+5. Register the **reCAPTCHA Enterprise** provider (not classic reCAPTCHA v3) and copy the site key into `spike/hosting/public/config.js` as `recaptchaSiteKey`. Allow `review.sictic.ch` on that site key. The Hosting app uses `ReCaptchaEnterpriseProvider`.
+6. From `spike/`, deploy Hosting:
 
 ```bash
 firebase deploy --only hosting --project review-deck-a3c26

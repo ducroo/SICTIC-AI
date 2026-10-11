@@ -18,9 +18,14 @@ const googleProvider = new GoogleAuthProvider();
 
 function verificationActionSettings() {
   const origin = window.location.origin;
+  const linkDomain =
+    (config.firebase && config.firebase.authDomain) ||
+    new URL(origin).hostname;
   return {
     url: `${origin}/login.html`,
     handleCodeInApp: false,
+    // Prefer the Hosting custom domain in Auth links when Firebase allows it.
+    linkDomain,
   };
 }
 
