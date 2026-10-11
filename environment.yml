@@ -50,9 +50,14 @@ dependencies:
   - pytest
   - pytest-mock
 
+  # JWT verification for Firebase App Check on the review API.
+  - pyjwt
+  - cryptography
+
   # Packages that cannot currently be handled reliably and portably through
   # conda-forge across all supported platforms.
   - pip:
       - apify-client
+      - google-auth
       - 'ocrmac>=1,<2; platform_system == "Darwin"'
       - 'onnxruntime; platform_system != "Darwin"'

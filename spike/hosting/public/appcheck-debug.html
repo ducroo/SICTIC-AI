@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>App Check debug</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 1.5rem; line-height: 1.4; }
+    pre { background: #f4f4f4; padding: 1rem; white-space: pre-wrap; word-break: break-word; }
+    button { font: inherit; padding: 0.6rem 1rem; margin: 0.25rem 0.5rem 0.25rem 0; }
+    .ok { color: #0b6e4f; }
+    .bad { color: #bc2132; }
+  </style>
+</head>
+<body>
+  <h1>App Check debug</h1>
+  <p>Open this from the Hosting origin, then run the checks. The raw Google error body matters more than the SDK throttle message.</p>
+  <button id="run">Run checks</button>
+  <button id="clear">Clear</button>
+  <pre id="out">Ready.</pre>
+  <script src="/config.js"></script>
+  <script type="module">
+    const out = document.getElementById("out");
+    const log = (line, cls) => {
+      const span = document.createElement("span");
+      if (cls) span.className = cls;
+      span.textContent = line + "\n";
+      out.appendChild(span);
+    };
+
+    function loadRecaptchaEnterprise(siteKey) {
+      return new Promise((resolve, reject) => {
+        if (window.grecaptcha?.enterprise?.ready) {
+          window.grecaptcha.enterprise.ready(() => resolve(window.grecaptcha.enterprise));
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = `https://www.google.com/recaptcha/enterprise.js?render=${encodeURIComponent(siteKey)}`;
+        script.onload = () => {
+          if (!window.grecaptcha?.enterprise) {
+            reject(new Error("grecaptcha.enterprise missing after script load"));
+            return;
+          }
+          window.grecaptcha.enterprise.ready(() => resolve(window.grecaptcha.enterprise));
+        };
+        script.onerror = () => reject(new Error("Failed to load reCAPTCHA enterprise.js"));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function exchangeToken(appId, apiKey, recaptchaToken) {
+      const url =
+        `https://content-firebaseappcheck.googleapis.com/v1/projects/review-deck-a3c26/apps/${encodeURIComponent(appId)}:exchangeRecaptchaEnterpriseToken?key=${encodeURIComponent(apiKey)}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recaptchaEnterpriseToken: recaptchaToken }),
+      });
+      const text = await response.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = { raw: text };
+      }
+      return { status: response.status, json };
+    }
+
+    document.getElementById("clear").onclick = () => {
+      out.textContent = "Ready.\n";
+    };
+
+    document.getElementById("run").onclick = async () => {
+      out.textContent = "";
+      const cfg = window.REVIEW_CONFIG;
+      log(`origin: ${location.origin}`);
+      log(`hostname: ${location.hostname}`);
+      log(`siteKey: ${cfg.recaptchaSiteKey || "(empty)"}`);
+      log(`appId: ${cfg.firebase.appId}`);
+      log(`apiKey: ${cfg.firebase.apiKey}`);
+      log(`provider: reCAPTCHA Enterprise`);
+      log("");
+
+      if (!cfg.recaptchaSiteKey) {
+        log("No recaptchaSiteKey in config.js", "bad");
+        return;
+      }
+
+      try {
+        const grecaptcha = await loadRecaptchaEnterprise(cfg.recaptchaSiteKey);
+        log("reCAPTCHA Enterprise script loaded", "ok");
+        const recaptchaToken = await grecaptcha.execute(cfg.recaptchaSiteKey, {
+          action: "appcheck_debug",
+        });
+        log(`reCAPTCHA token length: ${recaptchaToken.length}`, "ok");
+        log(`reCAPTCHA token prefix: ${recaptchaToken.slice(0, 24)}...`);
+
+        const exchanged = await exchangeToken(
+          cfg.firebase.appId,
+          cfg.firebase.apiKey,
+          recaptchaToken,
+        );
+        log(`exchange HTTP ${exchanged.status}`, exchanged.status === 200 ? "ok" : "bad");
+        log(JSON.stringify(exchanged.json, null, 2), exchanged.status === 200 ? "ok" : "bad");
+
+        if (exchanged.status === 200) {
+          log("");
+          log("App Check exchange works. The Hosting app should work after a hard refresh.", "ok");
+          return;
+        }
+
+        const message = exchanged.json?.error?.message || "";
+        log("");
+        log("How to read this:", "bad");
+        if (/App not registered/i.test(message)) {
+          log("- App Check reCAPTCHA Enterprise is not registered on this appId with this site key.", "bad");
+        }
+        if (/HOSTNAME_MISMATCH|hostname/i.test(message) || /domain/i.test(message)) {
+          log("- Domain mismatch: add this hostname in reCAPTCHA admin for this site key.", "bad");
+        }
+        if (/invalid.*site.?key|API_KEY_INVALID|key/i.test(message)) {
+          log("- Site key mismatch: App Check Enterprise config must use this exact site key.", "bad");
+        }
+        if (/score/i.test(message)) {
+          log("- Score too low: Firebase App Check minValidScore is 0.5 for this app.", "bad");
+        }
+        if (!message) {
+          log("- No message field. Confirm App Check Enterprise is registered on Pitch deck review.", "bad");
+        }
+      } catch (error) {
+        log(String(error && error.stack ? error.stack : error), "bad");
+      }
+    };
+  </script>
+</body>
+</html>
