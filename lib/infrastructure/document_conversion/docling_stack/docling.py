@@ -13,7 +13,6 @@ logger = get_logger(__name__)
 _converter = None
 _force_ocr_converter = None
 _converter_init_lock = threading.Lock()
-_convert_lock = threading.Lock()
 
 
 def build_converter(*, force_full_page_ocr: bool = False):
@@ -60,6 +59,7 @@ def build_converter(*, force_full_page_ocr: bool = False):
             url=chat_completions_url(vlm_base_url),
             headers=headers,
             params=picture_description_params(vlm_model),
+            concurrency=4,
             prompt="Describe this image in a few sentences.",
             timeout=600,
         ),
@@ -127,15 +127,13 @@ def export_document_markdown(document) -> str:
 
 def convert_document(filepath: str) -> str:
     converter = get_converter()
-    with _convert_lock:
-        result = converter.convert(filepath)
+    result = converter.convert(filepath)
     return export_document_markdown(result.document)
 
 
 def convert_document_force_ocr(filepath: str) -> str:
     converter = get_force_ocr_converter()
-    with _convert_lock:
-        result = converter.convert(filepath)
+    result = converter.convert(filepath)
     return export_document_markdown(result.document)
 
 
