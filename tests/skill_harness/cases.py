@@ -2,6 +2,7 @@ ADMIN_ONLY_HARNESS_COMMANDS = {
     "/config",
     "/sync",
     "/dealum_import",
+    "/import_companyresearch",
 }
 
 # These commands exercise dispatch with their workflow-specific fixtures.
@@ -23,6 +24,7 @@ SKILL_COVERAGE = {
     "dd_checks": "local-smoke",
     "dd_priorities": "local-smoke",
     "dealum_import": "utility-smoke",
+    "import_companyresearch": "existing-unit",
     "expert_search": "local-smoke",
     "harness": "existing-unit",
     "investor_profile": "local-smoke",

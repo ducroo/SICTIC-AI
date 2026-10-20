@@ -357,6 +357,20 @@ async def _dealum_import(args: List[str]) -> str:
     )
 
 
+async def _import_companyresearch(args: List[str]) -> str:
+    from dataclasses import asdict
+    import json
+    from skills.import_companyresearch import import_companyresearch
+
+    parser = _parser("/import_companyresearch")
+    parser.add_argument("startup", nargs="?")
+    parser.add_argument("--uid")
+    parser.add_argument("--company-name")
+    ns = parser.parse_args(args)
+    results = await import_companyresearch(ns.startup, uid=ns.uid, company_name=ns.company_name)
+    return json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2)
+
+
 def build_registry() -> Dict[str, HarnessCommand]:
     commands = [
         HarnessCommand("/config", "/config", "Load config cache.", _config),
@@ -401,6 +415,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/captable_analysis", "/captable_analysis <startup>", "Compatibility alias for /captable.", _captable),
         HarnessCommand("/cla_review", "/cla_review <startup> [--document f] [--ticket n] [--fresh]", "Review one CLA term sheet from the lender's side.", _cla_review),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
+        HarnessCommand("/import_companyresearch", "/import_companyresearch [startup] [--uid UID] [--company-name NAME]", "Import CompanyResearch or collect pending reports.", _import_companyresearch),
     ]
     return {cmd.name: cmd for cmd in commands}
 

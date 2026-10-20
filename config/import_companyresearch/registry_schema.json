@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "propertyNames": {"pattern": "^[a-z0-9][a-z0-9-]*$"},
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "uid": {"type": "string", "pattern": "^CHE-[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}$"},
+      "idempotency_key": {"type": "string", "minLength": 1},
+      "request_id": {"type": ["string", "null"]},
+      "status": {"enum": ["on_hold", "submitting", "queued", "running", "succeeded", "imported", "failed", "cancelled", "expired"]},
+      "error": {"type": "string"}
+    },
+    "required": ["uid", "idempotency_key", "request_id", "status"]
+  }
+}

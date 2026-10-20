@@ -1,0 +1,6 @@
+{
+  "base_url": "https://api.companyresearch.ch/api/v1",
+  "timeout_seconds": 30,
+  "max_identity_characters": 24000,
+  "max_lookup_queries": 12
+}
