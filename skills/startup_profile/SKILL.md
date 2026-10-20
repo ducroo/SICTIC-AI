@@ -12,7 +12,7 @@ Describe what the startup does and the structural questions requiring review.
 The async `startup_profile(startup)` returns one
 `InsightFile` in a list, named `startup-profile-<startup>-<model>.md`.
 The fifth bullet, **Classification**, is appended directly from the Dealum result
-in the startup_sector JSON insight, using resolved display names. Its sub-bullets
+in `insights/startup-sector/dealum-<model>.json`, using resolved display names. Its sub-bullets
 are **Primary-industry**, **Secondary-industries**, **Primary-technology** and
 **Secondary-technologies**, preserving the selection order from startup_sector.
 The current Dealum reference has no subindustry hierarchy.
@@ -28,12 +28,13 @@ current challenges; it does not classify the startup.
 
 Prepare and synchronize the named startup dataset, then select a manual override
 through InsightFile. If no manual profile exists, call startup_sector's existing
-`startup_sector_as_dict` adapter so edited manual category IDs receive current
+`startup_sector_as_dict` adapter with its default Dealum provider so edited manual category IDs receive current
 display names and derived fields without rewriting the source file.
 Include the Dealum record, rendered classification bullet and profile
 configuration in config_key before checking generated-profile reuse; InsightFile
 owns hashing and freshness. Classification freshness belongs to startup_sector.
-Changes to the other providers alone do not invalidate this profile. For a
+Other providers are neither generated nor validated by this call; their failures
+or reference changes do not block or invalidate this profile. For a
 legacy manual SICTIC classification, include that legacy classification instead.
 Retired product-type fields in older manual classification files are ignored
 for profile rendering and freshness, without modifying those files.
@@ -50,7 +51,7 @@ Use `dataset_chat` with the four configured questions and prompt, then append
 the fifth classification bullet in Python (or the legacy SICTIC sector, with
 technologies explicitly unavailable). This adds no LLM call and no separate header.
 The registry declares
-startup-sector as a prerequisite; direct calls invoke the same public skill.
+startup-sector as a prerequisite, using default Dealum; direct calls invoke the same public skill.
 Direct preparation may import Dealum source data.
 
 ## Side effects and failure behavior

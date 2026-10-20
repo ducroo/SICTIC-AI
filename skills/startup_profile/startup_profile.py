@@ -64,9 +64,6 @@ async def startup_profile(startup: str) -> InsightResult:
         return [preferred]
 
     classification = await startup_sector_as_dict(startup_slug)
-    if "providers" in classification:
-        # Other providers do not affect this profile's content or freshness.
-        classification = classification["providers"]["dealum"]
     classification_bullet = _classification_bullet(classification)
     insight.config_key = config_cache_key(config, classification, classification_bullet)
     reusable = insight.find(selection="reusable")

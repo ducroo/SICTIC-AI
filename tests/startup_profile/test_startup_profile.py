@@ -231,7 +231,7 @@ def test_profile_registry_requires_sector():
 
 
 @pytest.mark.asyncio
-async def test_dealum_is_displayed_and_other_provider_changes_do_not_invalidate(
+async def test_dealum_is_displayed_and_changes_invalidate(
     mock_env, mocker, monkeypatch, classification_skill,
 ):
     from lib.datasets.manifest import IngestionManifest
@@ -258,7 +258,7 @@ async def test_dealum_is_displayed_and_other_provider_changes_do_not_invalidate(
         "confidence": "H", "rationale": "Energy offering.",
         "evidence": ["Deck, page 1: energy."],
     }
-    classification = {"providers": {"dealum": provider_record(result, reference)}}
+    classification = provider_record(result, reference)
     classification_skill.return_value = classification
     [first] = await startup_profile("temp-profile")
     assert first.content().startswith("Profile body\n\n- **Classification:**\n")
@@ -270,14 +270,13 @@ async def test_dealum_is_displayed_and_other_provider_changes_do_not_invalidate(
         "  - **Secondary-technologies:** Autonomous systems.\n"
     )
     assert "**Dealum industry:**" not in first.content()
-    classification["providers"]["pitchbook"] = {"updated": "irrelevant to profile"}
     classification_skill.return_value = classification
     await startup_profile("temp-profile")
     assert chat.await_count == 1
 
     result["classifications"]["industries"]["primary"] = "defence"
     result["classifications"]["industries"]["secondary"] = []
-    classification["providers"]["dealum"] = provider_record(result, reference)
+    classification = provider_record(result, reference)
     classification_skill.return_value = classification
     [changed] = await startup_profile("temp-profile")
     assert changed.path == first.path
@@ -288,7 +287,7 @@ async def test_dealum_is_displayed_and_other_provider_changes_do_not_invalidate(
     result["classifications"]["industries"]["primary"] = None
     result["classifications"]["technologies"] = {"primary": None, "secondary": []}
     result["confidence"] = "L"
-    classification["providers"]["dealum"] = provider_record(result, reference)
+    classification = provider_record(result, reference)
     classification_skill.return_value = classification
     [unknown] = await startup_profile("temp-profile")
     assert "**Primary-industry:** Insufficient evidence" in unknown.content()

@@ -104,10 +104,11 @@ async def _startup_profile(args: List[str]) -> str:
 async def _startup_sector(args: List[str]) -> str:
     parser = _parser("/startup_sector")
     parser.add_argument("startup")
+    parser.add_argument("--provider", default="dealum")
     ns = parser.parse_args(args)
     from skills.startup_sector import startup_sector
 
-    return _format_result(await startup_sector(ns.startup))
+    return _format_result(await startup_sector(ns.startup, provider=ns.provider))
 
 
 async def _startup_traction(args: List[str]) -> str:
@@ -386,7 +387,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/sync", "/sync <dataset>", "Sync one dataset into the RAG index.", _sync),
         HarnessCommand("/dataset_chat", "/dataset_chat <dataset> <question>", "Ask a dataset question.", _dataset_chat),
         HarnessCommand("/startup_profile", "/startup_profile <startup>", "Generate a startup profile.", _startup_profile),
-        HarnessCommand("/startup_sector", "/startup_sector <startup>", "Classify SICTIC sector and product type.", _startup_sector),
+        HarnessCommand("/startup_sector", "/startup_sector <startup> [--provider dealum]", "Classify with one provider taxonomy.", _startup_sector),
         HarnessCommand("/startup_traction", "/startup_traction <startup>", "Summarize commercial traction.", _startup_traction),
         HarnessCommand("/persons_in_dataset", "/persons_in_dataset <dataset>", "Discover the editable person roster.", _persons_in_dataset),
         HarnessCommand("/person_profile", "/person_profile <dataset> <person>", "Generate a person profile.", _person_profile),

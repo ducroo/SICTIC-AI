@@ -7,16 +7,17 @@ description: Classify a startup independently with Dealum, Dealroom, PitchBook a
 
 ## Inputs and outputs
 
-`startup_sector(startup)` returns one JSON `InsightFile` in a list, named
-`startup-sector-<startup>-<model>.json`. The CLI and Python arguments are unchanged.
-`startup_sector_as_dict(startup)` calls the same workflow and reads the validated
+`startup_sector(startup, provider="dealum")` returns one JSON `InsightFile` in a list,
+saved at `insights/startup-sector/<provider>-<model>.json`. Each call handles only
+one provider: `dealum` (default), `dealroom`, `pitchbook` or `startupticker`. The CLI
+accepts `--provider`; request other providers with separate calls.
+`startup_sector_as_dict(startup, provider="dealum")` calls the same workflow and reads the validated
 artifact; it does not run a separate classifier. Use this adapter when consuming
 classifications: it resolves display names and derived fields for manual overrides.
 The primary workflow still returns the original InsightFile, whose raw contents
 are never changed merely by reading it.
 
-The JSON has a `providers` object keyed by `dealum`, `dealroom`, `pitchbook` and
-`startupticker`. Each provider record contains:
+The JSON contains the selected provider record directly:
 
 - `taxonomy`: provider, snapshot version, coverage status and sources.
 - `result`: `classifications` by component, H/M/L `confidence`, a succinct
@@ -79,8 +80,9 @@ count as evidence of absence. PitchBook ancestors are derived from industry IDs.
 1. Prepare startup dossiers through `ensure_startup_dataset`, including canonical
    aliases and the existing gated Dealum import; strictly synchronize the dataset.
    Prepared generated datasets skip external preparation. Other domains are rejected.
-2. Select manual or reusable JSON through `InsightFile.find(selection="reusable")`.
-   Validate stored results before returning them.
+2. Use shared InsightFile lookup to select a provider-specific manual override,
+   then a compatible old root-level manual override, then a reusable provider JSON.
+   Validate only the requested provider before returning it.
 3. On a cache miss, include the configured product, problem, benefit, customer and
    business-model sections from the latest local Dealum application when available.
    Use the importer’s snapshot inventory and canonical Markdown source, preserving
@@ -97,41 +99,47 @@ count as evidence of absence. PitchBook ancestors are derived from industry IDs.
    results are logged and explicitly marked; retrieval does not guarantee semantic
    completeness. The explicit application sections supplement the 25-chunk budget.
    Do not include or generate startup_profile.
-4. Call shared `generate_json` once per provider, sequentially, with identical
-   evidence in the cacheable prefix. The changing prompt contains only that
-   provider's taxonomy and the classification instructions. Provider-side prefix
+4. Call shared `generate_json` once for the requested provider, with evidence in
+   the cacheable prefix. The prompt contains only that provider's taxonomy and
+   the classification instructions. Provider-side prefix
    caching is an optimisation, not a guarantee. Correction retries may add calls.
 5. Derive each response schema from its reference: valid IDs, required components,
    selection limits, uniqueness, confidence and evidence requirements. The shared
    deterministic `Review` function checks primary/secondary overlap and valid
    parent-child choices. Shared generation handles validation and correction;
    there is no second LLM reviewer or custom retry loop.
-6. Resolve names, ancestors and known reporting rules in Python. Save one combined
-   JSON only after all four provider calls succeed. No partial insight is saved.
+6. Resolve names, ancestors and known reporting rules in Python. Save only the
+   requested provider JSON after successful generation. Other providers are untouched.
 
 Schema and consistency checks do not establish citation accuracy or factual
 support. Those remain grounded-generation requirements.
 
-Freshness includes source revisions, every taxonomy reference, queries, settings,
-prompts, schemas and structured-output configuration. There are no provider-specific
-cache files. A changed reference rebuilds the combined artifact on the next call.
-Generated files using the previous SICTIC schema follow normal invalidation.
+Freshness includes source revisions, the selected taxonomy reference, queries,
+settings, prompts, response schema and structured-output configuration. Changing
+another provider's reference does not invalidate this provider. Old root-level
+generated files (combined or legacy SICTIC) remain untouched; the requested
+provider is regenerated once at the new path.
 
 ## Manual compatibility
 
 Manual artifacts remain authoritative and are never rewritten. New manual files
-must retain each provider's taxonomy provenance and result. Edit the selected
+must retain the selected provider's taxonomy provenance and result. Edit the selected
 category IDs; display names and derived parent/reporting fields may be left stale
 or omitted. The structured reader recomputes those fields in memory from the
 current references, preserving the original file and its provenance. Invalid IDs,
 hierarchy relationships and other invalid assessment fields still raise.
 Generated cached artifacts retain their strict consistency checks.
 
+An old root-level combined manual file remains readable: only its requested
+provider is validated and returned. If that provider is absent, generation can
+proceed. A provider-specific manual file always takes precedence over it.
+
 A legacy manual file with `sector`, `sector_confidence`, `rationale` and `evidence`
 continues to be accepted against the legacy SICTIC schema and definitions. Its
 retired `product_type` and `product_type_confidence` fields are ignored on reading.
-It is returned unchanged and blocks provider generation, with an INFO log explaining
-that the legacy override was retained. startup_profile continues to label it
+It is returned unchanged for Dealum calls, blocking Dealum generation, with an
+INFO log explaining that the legacy override was retained. It does not block
+explicit calls for other providers. startup_profile continues to label it
 **SICTIC sector**, not **Dealum industry**. Migration to the provider structure is
 explicit manual work; the old label is never presented as a provider classification.
 `sectors.json` and `legacy_response_schema.json` exist only for this compatibility.
@@ -141,29 +149,33 @@ explicit manual work; the old label is never presented as a provider classificat
 Preparation and retrieval can import Dealum data, parse, embed and index sources.
 Optional acquisition failure retains its existing logged fallback; required
 synchronization, retrieval and generation failures propagate. Previous insights
-are preserved on failure, including when a later provider fails.
+are preserved on failure. Another provider's generation or stored-result failure
+cannot block a Dealum call or startup_profile.
 
-Successful retrieval with zero hits and no application proposition saves four explicit unresolved results with
-L confidence and no evidence, without model calls. Normal freshness applies.
+Successful retrieval with zero hits and no application proposition saves one
+explicit unresolved provider result with L confidence and no evidence, without model calls. Normal freshness applies.
 For user-supplied text or documents, use the shared temporary-dataset lifecycle:
 prepare once, then pass the dataset name. Additional evidence for the same
 investigation is added without wiping that dossier.
 
 The registry remains unchanged: this is an optional standalone bulk skill for
-startup/generated datasets and a prerequisite of startup_profile. No dependency
+startup/generated datasets and a prerequisite of startup_profile. Both bulk
+refresh and startup_profile use the default Dealum classification. No dependency
 on startup_profile is introduced; dd_checks retains its own product classifier.
 
 ## Usage
 
 ```bash
 conda run -n sictic-env python -m skills.startup_sector --startup avientus
+conda run -n sictic-env python -m skills.startup_sector --startup avientus --provider pitchbook
 conda run -n sictic-env python -m skills.harness '/startup_sector "avientus"'
 ```
 
 ```python
 from skills.startup_sector import startup_sector, startup_sector_as_dict
 insights = await startup_sector("avientus")
-classification = await startup_sector_as_dict("avientus")  # Reuses the same insight.
+classification = await startup_sector_as_dict("avientus")  # Reuses Dealum.
+pitchbook = await startup_sector("avientus", provider="pitchbook")
 ```
 
 ## References

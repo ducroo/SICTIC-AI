@@ -119,32 +119,31 @@ def test_references_are_complete_for_the_agreed_snapshots_and_internally_consist
 
 
 @pytest.mark.asyncio
-async def test_four_calls_share_balanced_evidence_and_identical_prefix(workflow):
-    [insight] = await module.startup_sector('Example Co')
+@pytest.mark.parametrize('provider', [None, 'dealum', 'dealroom', 'pitchbook', 'startupticker'])
+async def test_one_provider_with_balanced_evidence_and_independent_cache(workflow, provider):
+    selected = provider or 'dealum'
+    [insight] = await module.startup_sector('Example Co', **({'provider': provider} if provider else {}))
     assert isinstance(insight, InsightFile)
-    assert insight.filename == 'startup-sector-example-co-test-model-1b.json'
-    assert insight.directory == 'storage/startups/example-co/insights'
+    assert insight.filename == f'{selected}-test-model-1b.json'
+    assert insight.directory == 'storage/startups/example-co/insights/startup-sector'
     workflow.prepare.assert_awaited_once_with('Example Co', sync_after_import=False)
     workflow.sync.assert_awaited_once_with(['example-co'], raise_on_error=True)
     assert [c.args for c in workflow.retrieve.await_args_list] == [
         ('example-co', q) for q in workflow.config['queries']]
     assert [c.kwargs for c in workflow.retrieve.await_args_list] == [
         dict(max_chunks=n, raise_on_error=True) for n in (9, 8, 8)]
-    assert workflow.generate.await_count == 4
-    prefixes = {c.kwargs['cacheable_prompt_prefix'] for c in workflow.generate.await_args_list}
-    assert len(prefixes) == 1
-    prefix = prefixes.pop()
+    workflow.generate.assert_awaited_once()
+    call = workflow.generate.await_args
+    prefix = call.kwargs['cacheable_prompt_prefix']
     assert workflow.chunk.to_md() in prefix
     assert 'startup_profile' not in prefix
-    for call in workflow.generate.await_args_list:
-        ref = json.loads(call.args[0].split('Provider taxonomy:\n', 1)[1])
-        assert call.args[1] == response_schema(ref, workflow.config['response_schema'])
+    ref = workflow.config['taxonomies'][selected]
+    assert json.loads(call.args[0].split('Provider taxonomy:\n', 1)[1]) == ref
+    assert call.args[1] == response_schema(ref, workflow.config['response_schema'])
     result = json.loads(insight.content())
-    assert set(result['providers']) == set(workflow.config['taxonomies'])
-    for key, ref in workflow.config['taxonomies'].items():
-        assert result['providers'][key] == provider_record(classification(ref), ref)
-    assert await module.startup_sector_as_dict('example-co') == result
-    assert workflow.generate.await_count == 4
+    assert result == provider_record(classification(ref), ref)
+    assert await module.startup_sector_as_dict('example-co', provider=selected) == result
+    assert workflow.generate.await_count == 1
     assert workflow.retrieve.await_count == 3
 
 
@@ -176,7 +175,7 @@ async def test_missing_evidence_section_is_explicit_without_discarding_other_res
     results[missing] = []
     workflow.retrieve.side_effect = results
     await module.startup_sector('example-co')
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
     prefix = workflow.generate.await_args_list[0].kwargs['cacheable_prompt_prefix']
     assert f"{workflow.config['queries'][missing]}\n\nNo source passages retrieved" in prefix
     assert prefix.count(workflow.chunk.to_md()) == 1
@@ -204,7 +203,7 @@ async def test_latest_application_proposition_is_included_even_without_search_hi
         )
     workflow.retrieve.return_value = []
     await module.startup_sector('example-co')
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
     for call in workflow.generate.await_args_list:
         prefix = call.kwargs['cacheable_prompt_prefix']
         assert 'dealum/2026-01-01/application.md.txt' in prefix
@@ -248,7 +247,7 @@ async def test_shared_search_integrates_three_queries_and_deduplicates(workflow,
     if retrieval == 'empty':
         workflow.generate.assert_not_awaited()
     else:
-        assert workflow.generate.await_count == 4
+        assert workflow.generate.await_count == 1
         assert all(c.kwargs['cacheable_prompt_prefix'].count(workflow.chunk.text) == 1
                    for c in workflow.generate.await_args_list)
 
@@ -332,39 +331,37 @@ def test_derived_parents_and_reporting_groups(mock_env):
 async def test_new_manual_override_is_authoritative(workflow):
     [generated] = await module.startup_sector('example-co')
     payload = json.loads(generated.content())
-    manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
-    payload['providers']['dealum']['result']['rationale'] = 'Manually checked.'
+    manual = InsightFile('example-co', 'startup_sector', 'manual', identifier='dealum', subdir=True, extension='json')
+    payload['result']['rationale'] = 'Manually checked.'
     manual.save(json.dumps(payload))
     original = manual.content()
     install_dataset(revision='revision-2')
     assert await module.startup_sector_as_dict('example-co') == payload
     assert manual.content() == original
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('computed_fields', ['stale', 'absent'])
-async def test_manual_ids_drive_names_and_parents_without_rewriting(workflow, computed_fields):
-    [generated] = await module.startup_sector('example-co')
+@pytest.mark.parametrize('provider,category', [('dealum', 'energy'), ('pitchbook', '1.1.1')])
+async def test_manual_ids_drive_names_and_parents_without_rewriting(workflow, computed_fields, provider, category):
+    [generated] = await module.startup_sector('example-co', provider=provider)
     payload = json.loads(generated.content())
-    payload['providers']['dealum']['result']['classifications']['industries']['primary'] = 'energy'
-    payload['providers']['pitchbook']['result']['classifications']['industries']['primary'] = '1.1.1'
+    payload['result']['classifications']['industries']['primary'] = category
     if computed_fields == 'absent':
-        for record in payload['providers'].values():
-            del record['category_names']
-            del record['derived']
-    manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
+        del payload['category_names']
+        del payload['derived']
+    manual = InsightFile('example-co', 'startup_sector', 'manual', identifier=provider, subdir=True, extension='json')
     manual.save(json.dumps(payload))
     original = manual.content()
-
-    result = await module.startup_sector_as_dict('example-co')
-    assert result['providers']['dealum']['category_names']['industries'] == {'energy': 'Energy'}
-    assert result['providers']['pitchbook']['derived']['parents'] == {
-        'industry_groups': ['1.1'], 'broad_sectors': ['1'],
-    }
-    assert result['providers']['dealum']['taxonomy'] == payload['providers']['dealum']['taxonomy']
+    result = await module.startup_sector_as_dict('example-co', provider=provider)
+    if provider == 'dealum':
+        assert result['category_names']['industries'] == {'energy': 'Energy'}
+    else:
+        assert result['derived']['parents'] == {'industry_groups': ['1.1'], 'broad_sectors': ['1']}
+    assert result['taxonomy'] == payload['taxonomy']
     assert manual.content() == original
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
     assert workflow.retrieve.await_count == 3
 
 
@@ -372,7 +369,7 @@ async def test_manual_ids_drive_names_and_parents_without_rewriting(workflow, co
 async def test_manual_display_name_tracks_reference_without_rewriting(workflow, monkeypatch):
     [generated] = await module.startup_sector('example-co')
     payload = json.loads(generated.content())
-    manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
+    manual = InsightFile('example-co', 'startup_sector', 'manual', identifier='dealum', subdir=True, extension='json')
     manual.save(json.dumps(payload))
     original = manual.content()
     config = copy.deepcopy(workflow.config)
@@ -382,31 +379,31 @@ async def test_manual_display_name_tracks_reference_without_rewriting(workflow, 
     monkeypatch.setattr(module, 'load_repository_config',
                         lambda name: config if name == 'startup_sector' else original_loader(name))
     result = await module.startup_sector_as_dict('example-co')
-    assert result['providers']['dealum']['category_names']['industries'] == {
+    assert result['category_names']['industries'] == {
         category['id']: 'Updated display name',
     }
     assert manual.content() == original
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('problem', ['unknown-id', 'wrong-parent'])
 async def test_manual_still_rejects_invalid_decisions(workflow, problem):
-    [generated] = await module.startup_sector('example-co')
+    [generated] = await module.startup_sector('example-co', provider='dealroom')
     payload = json.loads(generated.content())
-    choices = payload['providers']['dealroom']['result']['classifications']
+    choices = payload['result']['classifications']
     choices['industries'] = dict(primary='energy', secondary=[])
     if problem == 'unknown-id':
         choices['industries']['primary'] = 'invented'
     else:
         choices['subindustries']['primary'] = 'medical-devices'
-    manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
+    manual = InsightFile('example-co', 'startup_sector', 'manual', identifier='dealroom', subdir=True, extension='json')
     manual.save(json.dumps(payload))
     original = manual.content()
     with pytest.raises(ValueError):
-        await module.startup_sector_as_dict('example-co')
+        await module.startup_sector_as_dict('example-co', provider='dealroom')
     assert manual.content() == original
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -418,14 +415,14 @@ async def test_profile_uses_resolved_manual_ids_and_preserves_legacy_reuse(workf
     monkeypatch.setattr(profile, 'dataset_chat', chat)
     [generated] = await module.startup_sector('temp-manual-profile')
     payload = json.loads(generated.content())
-    payload['providers']['dealum']['result']['classifications']['industries']['primary'] = 'energy'
+    payload['result']['classifications']['industries']['primary'] = 'energy'
     manual = InsightFile('temp-manual-profile', 'startup_sector', 'manual', extension='json')
-    manual.save(json.dumps(payload))
+    manual.save(json.dumps({'providers': {'dealum': payload, 'pitchbook': {'broken': True}}}))
     original = manual.content()
     [report] = await profile.startup_profile('temp-manual-profile')
     assert '  - **Primary-industry:** Energy.' in report.content()
     assert manual.content() == original
-    assert workflow.generate.await_count == 4
+    assert workflow.generate.await_count == 1
 
     manual.save(json.dumps(legacy(product_type='Hardware', product_type_confidence='H')))
     [report] = await profile.startup_profile('temp-manual-profile')
@@ -469,17 +466,17 @@ async def test_invalid_manual_raises_without_regeneration(workflow, content):
 @pytest.mark.asyncio
 @pytest.mark.parametrize('corruption', ['identifier', 'relationship', 'display', 'derived'])
 async def test_invalid_cached_json_raises_without_regeneration(workflow, corruption):
-    [insight] = await module.startup_sector('example-co')
+    [insight] = await module.startup_sector('example-co', provider='dealroom')
     payload = json.loads(insight.content())
-    record = payload['providers']['dealroom']
+    record = payload
     if corruption == 'identifier': record['result']['classifications']['industries']['primary'] = 'fake'
     elif corruption == 'relationship':
         record['result']['classifications']['industries'] = dict(primary='energy', secondary=['energy'])
     elif corruption == 'display': record['category_names'] = {}
     else: record['derived']['reporting_groups'] = ['invented']
     insight.save(json.dumps(payload))
-    with pytest.raises(ValueError): await module.startup_sector('example-co')
-    assert workflow.generate.await_count == 4
+    with pytest.raises(ValueError): await module.startup_sector('example-co', provider='dealroom')
+    assert workflow.generate.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -487,18 +484,19 @@ async def test_dataset_revision_invalidates(workflow):
     await module.startup_sector('example-co')
     install_dataset(revision='revision-2')
     await module.startup_sector('example-co')
-    assert workflow.generate.await_count == 8
+    assert workflow.generate.await_count == 2
 
 
 @pytest.mark.asyncio
-async def test_old_generated_artifact_rebuilds_at_same_path(workflow):
+async def test_old_generated_artifact_rebuilds_at_provider_path(workflow):
     old = InsightFile('example-co', 'startup_sector', module.llm_model(), extension='json',
                       config_key=config_cache_key({'old': 'SICTIC schema'}))
     old.save(json.dumps(legacy()))
     [new] = await module.startup_sector('example-co')
-    assert new.path == old.path
-    assert 'providers' in json.loads(new.content())
-    assert workflow.generate.await_count == 4
+    assert new.path != old.path
+    assert json.loads(old.content()) == legacy()
+    assert 'result' in json.loads(new.content())
+    assert workflow.generate.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -516,7 +514,7 @@ async def test_configuration_changes_invalidate(workflow, monkeypatch, section):
     else: structured['changed_setting'] = True
     monkeypatch.setattr(module, 'load_repository_config', lambda key: structured if key == 'structured_output' else config)
     await module.startup_sector('example-co')
-    assert workflow.generate.await_count == 8
+    assert workflow.generate.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -524,7 +522,7 @@ async def test_generated_dataset_isolated_and_skips_external_import(workflow):
     location = install_dataset('temp-sector-review', domain='generated')
     workflow.prepare.side_effect = AssertionError('No Dealum import for generated datasets')
     [insight] = await module.startup_sector('temp-sector-review')
-    assert insight.directory == location.insights_rel
+    assert insight.directory == f'{location.insights_rel}/startup-sector'
     assert insight.dataset == 'temp-sector-review'
     workflow.prepare.assert_not_awaited()
     assert workflow.retrieve.await_args.args[0] == 'temp-sector-review'
@@ -550,50 +548,49 @@ async def test_community_dataset_rejected(workflow):
 async def test_empty_retrieval_saves_unknowns_without_llm_calls(workflow):
     workflow.retrieve.return_value = []
     [insight] = await module.startup_sector('example-co')
-    for record in json.loads(insight.content())['providers'].values():
-        assert record['result']['confidence'] == 'L'
-        assert record['result']['evidence'] == []
-        assert all(v == dict(primary=None, secondary=[]) for v in record['result']['classifications'].values())
+    record = json.loads(insight.content())
+    assert record['result']['confidence'] == 'L'
+    assert record['result']['evidence'] == []
+    assert all(v == dict(primary=None, secondary=[]) for v in record['result']['classifications'].values())
     await module.startup_sector('example-co')
     assert workflow.retrieve.await_count == 3
     workflow.generate.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('failure', ['sync', 'retrieve', 'third-provider'])
+@pytest.mark.parametrize('failure', ['sync', 'retrieve', 'generate'])
 async def test_technical_failure_preserves_previous_artifact(workflow, failure):
     [insight] = await module.startup_sector('example-co')
     original = insight.content()
     install_dataset(revision='revision-2')
-    if failure == 'third-provider':
-        responses = [classification(ref) for ref in workflow.config['taxonomies'].values()]
-        workflow.generate.side_effect = responses[:2] + [RuntimeError('Provider unavailable')]
-    else: getattr(workflow, failure).side_effect = RuntimeError('Provider unavailable')
+    getattr(workflow, failure).side_effect = RuntimeError('Provider unavailable')
     with pytest.raises(RuntimeError, match='Provider unavailable'):
         await module.startup_sector('example-co')
     assert insight.content() == original
 
 
-def test_direct_cli_preserves_contract(workflow, monkeypatch):
+@pytest.mark.parametrize('provider', [None, 'pitchbook'])
+def test_direct_cli_preserves_contract(workflow, monkeypatch, provider):
     cli = importlib.import_module('skills.startup_sector.__main__')
     fake = SimpleNamespace(content=lambda: '{"providers": {}}', path='classification.json')
     run = AsyncMock(return_value=[fake])
     monkeypatch.setattr(cli, 'startup_sector', run)
-    result = CliRunner().invoke(cli.app, ['--startup', 'Example Co'])
+    result = CliRunner().invoke(cli.app, ['--startup', 'Example Co'] + (['--provider', provider] if provider else []))
     assert result.exit_code == 0, result.output
     assert '"providers"' in result.output
     assert 'RESULT_PATH: classification.json' in result.output
-    run.assert_awaited_once_with('Example Co')
+    run.assert_awaited_once_with('Example Co', provider=provider or 'dealum')
 
 
 @pytest.mark.asyncio
-async def test_harness_calls_public_skill(workflow, monkeypatch):
+@pytest.mark.parametrize('provider', [None, 'dealroom'])
+async def test_harness_calls_public_skill(workflow, monkeypatch, provider):
     from skills.harness.harness import dispatch_command
     package = importlib.import_module('skills.startup_sector')
     run = AsyncMock(return_value=[])
     monkeypatch.setattr(package, 'startup_sector', run)
-    assert await dispatch_command('/startup_sector "Example Co"') == ''
-    run.assert_awaited_once_with('Example Co')
+    assert await dispatch_command('/startup_sector "Example Co"' + (f' --provider {provider}' if provider else '')) == ''
+    run.assert_awaited_once_with('Example Co', provider=provider or 'dealum')
 
 
 def test_registry_contract_unchanged():
@@ -604,3 +601,90 @@ def test_registry_contract_unchanged():
     assert expand_skill_dependencies(['startup-sector']) == ['startup-sector']
     assert 'startup-sector' in expand_skill_dependencies(['startup-profile'])
     assert 'startup-sector' not in SKILL_REGISTRY['dd-checks'].depends_on
+
+
+@pytest.mark.asyncio
+async def test_invalid_provider_rejected_before_preparation(workflow):
+    with pytest.raises(ValueError, match='Unknown classification provider'):
+        await module.startup_sector('example-co', provider='all')
+    workflow.prepare.assert_not_awaited()
+    workflow.sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_independent_provider_files_and_caches(workflow):
+    paths = set()
+    prefixes = set()
+    for provider in workflow.config['taxonomies']:
+        [insight] = await module.startup_sector('example-co', provider=provider)
+        paths.add(insight.path)
+        prefixes.add(workflow.generate.await_args.kwargs['cacheable_prompt_prefix'])
+    assert len(paths) == 4
+    assert len(prefixes) == 1
+    assert workflow.generate.await_count == 4
+    for provider in workflow.config['taxonomies']:
+        await module.startup_sector('example-co', provider=provider)
+    assert workflow.generate.await_count == 4
+
+
+@pytest.mark.asyncio
+async def test_other_provider_changes_and_failures_do_not_block_profile(workflow, monkeypatch):
+    profile = importlib.import_module('skills.startup_profile.startup_profile')
+    install_dataset('temp-profile', domain='generated')
+    monkeypatch.setattr(profile, 'sync_datasets', workflow.sync)
+    chat = AsyncMock(return_value='Profile body.')
+    monkeypatch.setattr(profile, 'dataset_chat', chat)
+    [first] = await profile.startup_profile('temp-profile')
+    assert workflow.generate.await_count == 1
+    original_loader = module.load_repository_config
+    config = copy.deepcopy(workflow.config)
+    config['taxonomies']['pitchbook']['version'] += '-updated'
+    monkeypatch.setattr(module, 'load_repository_config',
+                        lambda name: config if name == 'startup_sector' else original_loader(name))
+    workflow.generate.side_effect = RuntimeError('PitchBook unavailable')
+    with pytest.raises(RuntimeError, match='PitchBook unavailable'):
+        await module.startup_sector('temp-profile', provider='pitchbook')
+    [reused] = await profile.startup_profile('temp-profile')
+    assert reused.content() == first.content()
+    assert chat.await_count == 1
+    assert workflow.generate.await_count == 2  # Dealum success, PitchBook failure only.
+
+
+@pytest.mark.asyncio
+async def test_other_provider_corrupt_manual_does_not_block_dealum(workflow):
+    manual = InsightFile('example-co', 'startup_sector', 'manual', identifier='pitchbook',
+                         subdir=True, extension='json')
+    manual.save('{broken')
+    [insight] = await module.startup_sector('example-co')
+    assert insight.identifier == 'dealum'
+    workflow.generate.assert_awaited_once()
+    assert manual.content() == '{broken'
+
+
+@pytest.mark.asyncio
+async def test_provider_manual_precedes_old_combined_manual_and_generated_cache(workflow):
+    [generated] = await module.startup_sector('example-co')
+    record = json.loads(generated.content())
+    record['result']['rationale'] = 'Old manual decision.'
+    old = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
+    old.save(json.dumps({'providers': {'dealum': record, 'pitchbook': {'invalid': True}}}))
+    assert (await module.startup_sector_as_dict('example-co'))['result']['rationale'] == 'Old manual decision.'
+    manual = InsightFile('example-co', 'startup_sector', 'manual', identifier='dealum',
+                         subdir=True, extension='json')
+    record['result']['rationale'] = 'New manual decision.'
+    manual.save(json.dumps(record))
+    assert (await module.startup_sector_as_dict('example-co'))['result']['rationale'] == 'New manual decision.'
+    assert json.loads(old.content())['providers']['dealum']['result']['rationale'] == 'Old manual decision.'
+    workflow.generate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('old_payload', [legacy(), {'providers': {'pitchbook': {'invalid': True}}}])
+async def test_old_manual_without_requested_provider_allows_generation(workflow, old_payload):
+    manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
+    manual.save(json.dumps(old_payload))
+    original = manual.content()
+    [insight] = await module.startup_sector('example-co', provider='dealroom')
+    assert insight.identifier == 'dealroom'
+    workflow.generate.assert_awaited_once()
+    assert manual.content() == original
