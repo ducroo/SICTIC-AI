@@ -90,7 +90,8 @@ async def test_preparing_again_removes_entire_previous_investigation(mock_env, m
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("domain", ["startups", "community"])
-async def test_cannot_reset_permanent_dataset(mock_env, mocker, domain):
+@pytest.mark.parametrize("operation", ["prepare", "discard"])
+async def test_cannot_reset_permanent_dataset(mock_env, mocker, domain, operation):
     storage = get_storage()
     location = dataset_location_for_domain("permanent", domain)
     source = f"{location.raw_rel}/keep.md"
@@ -99,7 +100,10 @@ async def test_cannot_reset_permanent_dataset(mock_env, mocker, domain):
     sync = mocker.patch.object(ephemeral_dataset, "sync_datasets", new_callable=mocker.AsyncMock)
 
     with pytest.raises(ValueError, match="Cannot reset permanent dataset"):
-        await ephemeral_dataset.prepare_ephemeral_dataset([], "permanent")
+        if operation == "prepare":
+            await ephemeral_dataset.prepare_ephemeral_dataset([], "permanent")
+        else:
+            await ephemeral_dataset.discard_ephemeral_dataset("permanent")
 
     assert storage.read_text(source) == "keep"
     adapter.assert_not_called()
@@ -107,7 +111,8 @@ async def test_cannot_reset_permanent_dataset(mock_env, mocker, domain):
 
 
 @pytest.mark.asyncio
-async def test_index_cleanup_failure_preserves_previous_files(mock_env, mocker):
+@pytest.mark.parametrize("operation", ["prepare", "discard"])
+async def test_index_cleanup_failure_preserves_previous_files(mock_env, mocker, operation):
     storage = get_storage()
     location = dataset_location_for_domain("temp", "generated")
     source = f"{location.raw_rel}/old.md"
@@ -119,7 +124,10 @@ async def test_index_cleanup_failure_preserves_previous_files(mock_env, mocker):
     sync = mocker.patch.object(ephemeral_dataset, "sync_datasets", new_callable=mocker.AsyncMock)
 
     with pytest.raises(RuntimeError, match="index unavailable"):
-        await ephemeral_dataset.prepare_ephemeral_dataset([], "temp")
+        if operation == "prepare":
+            await ephemeral_dataset.prepare_ephemeral_dataset([], "temp")
+        else:
+            await ephemeral_dataset.discard_ephemeral_dataset("temp")
 
     assert storage.read_text(source) == "keep"
     assert storage.read_text(insight) == "keep"
@@ -127,10 +135,14 @@ async def test_index_cleanup_failure_preserves_previous_files(mock_env, mocker):
 
 
 @pytest.mark.asyncio
-async def test_empty_name_cannot_reset_generated_root(mock_env, mocker):
+@pytest.mark.parametrize("operation", ["prepare", "discard"])
+async def test_empty_name_cannot_reset_generated_root(mock_env, mocker, operation):
     adapter = mocker.patch.object(ephemeral_dataset, "QdrantAdapter")
     with pytest.raises(ValueError, match="nonempty name"):
-        await ephemeral_dataset.prepare_ephemeral_dataset([], "")
+        if operation == "prepare":
+            await ephemeral_dataset.prepare_ephemeral_dataset([], "")
+        else:
+            await ephemeral_dataset.discard_ephemeral_dataset("")
     adapter.assert_not_called()
 
 
@@ -147,4 +159,32 @@ async def test_failed_directory_removal_stops_ingestion(mock_env, mocker):
     with pytest.raises(OSError, match="Could not clear temporary dataset directory"):
         await ephemeral_dataset.prepare_ephemeral_dataset([], "temp")
 
+    sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_discard_removes_complete_dossier_without_ingestion(mock_env, mocker):
+    storage = get_storage()
+    location = dataset_location_for_domain("pitch-deck-test", "generated")
+    paths = [
+        f"{location.raw_rel}/deck.pdf",
+        f"{location.insights_rel}/review-manual.md",
+        f"{location.dataset_root}/{location.slug}/.manifest.json",
+        f"{location.parsed_rel}/deck.pdf.md",
+    ]
+    for path in paths:
+        storage.write_text(path, "temporary evidence")
+    other = dataset_location_for_domain("other", "generated")
+    retained = f"{other.raw_rel}/keep.md"
+    storage.write_text(retained, "keep")
+    adapter = mocker.patch.object(ephemeral_dataset, "QdrantAdapter")
+    sync = mocker.patch.object(ephemeral_dataset, "sync_datasets", new_callable=mocker.AsyncMock)
+
+    await ephemeral_dataset.discard_ephemeral_dataset("pitch-deck-test")
+
+    adapter.assert_called_once_with("pitch-deck-test")
+    adapter.return_value.delete_dataset.assert_called_once_with()
+    assert all(not storage.exists(path) for path in paths)
+    assert not storage.exists(location.raw_rel)
+    assert storage.read_text(retained) == "keep"
     sync.assert_not_awaited()

@@ -10,14 +10,9 @@ from lib.datasets.paths import dataset_location_for_domain, find_dataset_locatio
 
 logger = get_logger(__name__)
 
-async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -> str:
-    """
-    1. Clears a generated dataset's dossier, including insights, parsed data and index.
-    2. Sets up a temporary dataset directory.
-    3. Copies the provided files into it.
-    4. Runs the ingestion pipeline to parse and embed them.
-    5. Returns the dataset name (e.g., 'temp') for the skill to use.
-    """
+
+async def discard_ephemeral_dataset(temp_name: str = "temp") -> None:
+    """Remove a generated dossier and index; preserve files if index cleanup fails."""
     storage = get_storage()
     location = dataset_location_for_domain(temp_name, "generated")
     if not location.slug:
@@ -25,7 +20,6 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
     existing = find_dataset_location(temp_name)
     if existing is not None and existing.domain != "generated":
         raise ValueError(f"Cannot reset permanent dataset {temp_name!r} as temporary.")
-    raw_dataset_rel = location.raw_rel
 
     # Derive dossier directories from the configured layout, never a domain root.
     reset_paths = []
@@ -50,6 +44,20 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
         storage.rmtree(path)
         if storage.exists(path):
             raise OSError(f"Could not clear temporary dataset directory: {path}")
+
+
+async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -> str:
+    """
+    1. Clears a generated dataset's dossier, including insights, parsed data and index.
+    2. Sets up a temporary dataset directory.
+    3. Copies the provided files into it.
+    4. Runs the ingestion pipeline to parse and embed them.
+    5. Returns the dataset name (e.g., 'temp') for the skill to use.
+    """
+    await discard_ephemeral_dataset(temp_name)
+    storage = get_storage()
+    location = dataset_location_for_domain(temp_name, "generated")
+    raw_dataset_rel = location.raw_rel
 
     # 2. Setup: Copy external files (absolute OS paths) into the storage tree
     storage.mkdir(raw_dataset_rel)

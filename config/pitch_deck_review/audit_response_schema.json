@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Assessment status selected from the configured scale.",
+      "enum": [
+        "Not Found",
+        "Critical",
+        "Borderline",
+        "Sufficient",
+        "Fine"
+      ],
+      "title": "Status"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "title": "What the deck says",
+      "pattern": "\\S"
+    },
+    "source_documents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Where in the deck"
+    },
+    "proposed_next_steps_and_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "What to fix"
+    }
+  },
+  "required": [
+    "status",
+    "rationale",
+    "source_documents",
+    "proposed_next_steps_and_questions"
+  ]
+}

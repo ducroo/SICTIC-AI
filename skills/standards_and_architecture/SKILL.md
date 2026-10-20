@@ -360,6 +360,10 @@ and metadata), parsed data and search index before ingesting the new material.
 Never reset a permanent startup or community dataset through this workflow.
 Index-cleanup failures must stop preparation so old evidence cannot carry over.
 
+`discard_ephemeral_dataset` performs this same guarded cleanup without preparing
+or ingesting replacement files. It raises on cleanup failure; the pitch-deck
+service logs that failure separately while retaining the completed review.
+
 Prepare once per investigation. Subsequent skills use the same dataset name
 without preparing it again; their insights and manual edits remain available
 throughout that investigation. Use distinct names for concurrent investigations.
