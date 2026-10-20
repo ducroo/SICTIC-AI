@@ -16,6 +16,7 @@ from lib.infrastructure.configuration import (
     load_repository_config,
 )
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.ai_text_generation import generate_json
 from lib.insights import InsightFile
 from lib.model_config import llm_model
 from lib.slugify import slugify
@@ -59,16 +60,28 @@ async def _run_check(
     check: ChecklistCheck,
     llm_instructions: str,
     response_schema: dict[str, Any],
+    evidence: str = "",
+    retrieve: bool = True,
 ) -> dict[str, Any]:
     try:
-        result = await dataset_chat_json(
-            dataset_name=dataset_name,
-            queries=_retrieval_queries(check),
-            prompt=_llm_check_prompt(check),
-            schema=response_schema,
-            cacheable_prompt_prefix=_llm_prompt_prefix(llm_instructions),
-            allow_empty_retrieval=True,
-        )
+        prefix = _llm_prompt_prefix(llm_instructions)
+        if evidence:
+            prefix = f"### SUPPLIED EVIDENCE\n\n{evidence}\n\n{prefix}"
+        if retrieve:
+            result = await dataset_chat_json(
+                dataset_name=dataset_name,
+                queries=_retrieval_queries(check),
+                prompt=_llm_check_prompt(check),
+                schema=response_schema,
+                cacheable_prompt_prefix=prefix,
+                allow_empty_retrieval=True,
+            )
+        else:
+            result = await generate_json(
+                prompt=_llm_check_prompt(check),
+                schema=response_schema,
+                cacheable_prompt_prefix=prefix,
+            )
         if result is None:
             raise ValueError("Batch-audit returned no assessment")
         return {"result": result, "error": None}
@@ -89,6 +102,8 @@ async def batch_audit(
     skill_name: str = "batch_audit",
     response_schema: dict[str, Any],
     llm_instructions: str,
+    evidence: str = "",
+    retrieve: bool = True,
 ) -> InsightFile:
     """Run a structured Markdown checklist and save its canonical JSON Insight.
 
@@ -111,6 +126,7 @@ async def batch_audit(
             "llm_instructions": llm_instructions,
             "response_schema": response_schema,
             "allow_empty_retrieval": True,
+            **({"evidence": evidence, "retrieve": retrieve} if evidence or not retrieve else {}),
             "numbering": [
                 {
                     "chapter": chapter.number,
@@ -163,6 +179,8 @@ async def batch_audit(
                     check,
                     llm_instructions,
                     response_schema,
+                    evidence,
+                    retrieve,
                 )
             )
             for check in checks

@@ -125,3 +125,82 @@ def test_provider_schema_omits_patterns_that_local_validation_keeps():
     assert schema == original
     with pytest.raises(ValueError, match=r"at \$\.rationale"):
         validate_json_schema({'rationale': '   '}, schema)
+
+
+def test_provider_schema_removes_allof_only_at_schema_positions():
+    from copy import deepcopy
+    from lib.infrastructure.ai_text_generation.json import json_schema_response_format
+
+    constraint = {'type': 'string', 'allOf': [{'minLength': 1}]}
+    schema = {
+        'type': 'object', 'allOf': [{'required': ['value']}],
+        'properties': {
+            'allOf': constraint,
+            'literal': {'const': {'allOf': ['unchanged']}},
+            'values': {'type': 'array', 'items': constraint},
+            'choice': {'anyOf': [constraint, {'type': 'null'}]},
+        },
+        '$defs': {'nonempty': constraint},
+    }
+    original = deepcopy(schema)
+    sent = json_schema_response_format(schema)['json_schema']['schema']
+    assert 'allOf' not in sent
+    assert sent['properties']['allOf'] == {'type': 'string'}
+    assert sent['properties']['literal']['const'] == {'allOf': ['unchanged']}
+    assert sent['properties']['values']['items'] == {'type': 'string'}
+    assert sent['properties']['choice']['anyOf'] == [{'type': 'string'}, {'type': 'null'}]
+    assert sent['$defs']['nonempty'] == {'type': 'string'}
+    assert schema == original
+
+
+@pytest.mark.asyncio
+async def test_uniqueness_is_checked_locally_and_corrected(mock_env, monkeypatch):
+    from copy import deepcopy
+    from lib.infrastructure.ai_text_generation.json import json_schema_response_format
+
+    schema = {
+        'type': 'object', 'additionalProperties': False,
+        'properties': {
+            'uniqueItems': {'type': 'array', 'items': {'type': 'string'}, 'uniqueItems': True},
+            'literal': {'const': {'uniqueItems': True}},
+        },
+        'required': ['uniqueItems', 'literal'],
+    }
+    original = deepcopy(schema)
+    valid = {'uniqueItems': ['energy'], 'literal': {'uniqueItems': True}}
+    invalid = {**valid, 'uniqueItems': ['energy', 'energy']}
+    request = AsyncMock(side_effect=[
+        json.dumps(invalid), json.dumps({'reasoning': 'Remove duplicate.', **valid}),
+    ])
+    monkeypatch.setattr(generation, '_request_text_waiting_out_rate_limits', request)
+    assert await generation.generate_json('Select categories', schema) == valid
+    assert request.await_count == 2
+    sent = json_schema_response_format(schema)['json_schema']['schema']
+    assert 'uniqueItems' not in sent['properties']['uniqueItems']
+    assert sent['properties']['literal']['const'] == {'uniqueItems': True}
+    assert schema == original
+
+
+@pytest.mark.asyncio
+async def test_sector_allof_stays_in_local_validation_and_correction(mock_env, monkeypatch):
+    from copy import deepcopy
+    from lib.infrastructure.ai_text_generation.json import validate_json_schema
+
+    from skills.startup_sector.taxonomy import response_schema
+    config = load_repository_config('startup_sector')
+    schema = response_schema(config['taxonomies']['startupticker'], config['response_schema'])
+    original = deepcopy(schema)
+    valid = dict(classifications={'industries': {'primary': None, 'secondary': []}}, confidence='L',
+                 rationale='No product evidence available.', evidence=[])
+    invalid = {**valid, 'confidence': 'H'}
+    with pytest.raises(ValueError):
+        validate_json_schema(invalid, schema)
+    request = AsyncMock(side_effect=[json.dumps(invalid), json.dumps({'reasoning': 'Correct confidence.', **valid})])
+    monkeypatch.setattr(generation, '_request_text_waiting_out_rate_limits', request)
+    assert await generation.generate_json('Classify startup', schema) == valid
+    assert request.await_count == 2
+    for call in request.await_args_list:
+        sent = call.kwargs['response_format']['json_schema']['schema']
+        assert 'allOf' not in sent
+        assert '"allOf"' in call.kwargs['prompt']
+    assert schema == original

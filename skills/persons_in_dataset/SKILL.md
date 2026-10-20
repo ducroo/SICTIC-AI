@@ -35,9 +35,11 @@ Existing manual rosters are not migrated, deleted or automatically regenerated.
    discovery configuration, the context cap, startup aliases and installed NER package versions.
    New raw LinkedIn JSON
    therefore invalidates reuse even before its indexed revision changes.
-3. On a miss, synchronize and call the public startup-profile workflow, which
+3. On a miss, synchronize. Only for datasets in the startups domain, call the public startup-profile workflow, which
    applies its own manual/freshness selection. Supply its returned content to
-   every person-selection LLM prompt. This skill does not separately look up
+   the person-selection LLM prompt. Startup-specific instructions and retrieval queries use
+   that same domain condition; other datasets use generic person-discovery instructions.
+   This skill does not separately look up
    startup-profile artifacts or reproduce their configuration keys.
 4. Examine all current sources' available parsed Markdown using shared source
    enumeration and chunking. Local spaCy NER extracts candidate names; shared

@@ -356,3 +356,25 @@ async def test_context_cap_change_invalidates_generated_roster(discovery, monkey
     monkeypatch.setenv("OLLAMA_CONTEXT_LENGTH_MAX", "16384")
     await discovery.persons_in_dataset("acme")
     assert discovery.reconcile_people.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_non_startup_context_and_wording_use_same_domain_guard(discovery):
+    location = dataset_location_for_domain("recruitment", "community")
+    get_storage().mkdir(location.raw_rel)
+    await discovery.persons_in_dataset("recruitment")
+    discovery.startup_profile.assert_not_awaited()
+    discovery.startup_website_import.assert_not_called()
+    discovery.search_people.assert_not_called()
+    arguments = discovery.reconcile_people.await_args.kwargs
+    assert arguments["startup_context"] == ""
+    assert "subjects of resumes" in arguments["config"]["instructions"]
+    assert "Names of founders" not in str(discovery.dataset_search.await_args.kwargs["query"])
+
+
+@pytest.mark.asyncio
+async def test_startup_keeps_startup_context_and_wording(discovery):
+    await discovery.persons_in_dataset("acme")
+    arguments = discovery.reconcile_people.await_args.kwargs
+    assert arguments["startup_context"] == "Acme startup context"
+    assert "Find every documented founder and employee" in arguments["config"]["instructions"]

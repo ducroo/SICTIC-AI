@@ -97,11 +97,14 @@ async def test_review_form_returns_the_report(mocker):
 
 
 @pytest.mark.asyncio
-async def test_review_start_follows_extract_then_review(mocker):
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+async def test_review_start_follows_extract_then_review(mocker, cleanup_fails, caplog):
     async def fake_prepare(files, temp_name="temp"):
         return temp_name
 
     async def fake_discard(_name):
+        if cleanup_fails:
+            raise RuntimeError("index unavailable")
         return None
 
     async def fake_skill(_name):
@@ -112,7 +115,7 @@ async def test_review_start_follows_extract_then_review(mocker):
         return [Insight()]
 
     mocker.patch("spike.runtime.prepare_ephemeral_dataset", side_effect=fake_prepare)
-    mocker.patch("spike.runtime.discard_ephemeral_dataset", side_effect=fake_discard)
+    discard = mocker.patch("spike.runtime.discard_ephemeral_dataset", side_effect=fake_discard)
     import importlib
     skill_module = importlib.import_module("skills.pitch_deck_review.pitch_deck_review")
     mocker.patch.object(skill_module, "pitch_deck_review", fake_skill)
@@ -126,6 +129,9 @@ async def test_review_start_follows_extract_then_review(mocker):
 
     assert report == "report"
     assert seen == ["extract", "review"]
+    discard.assert_awaited_once()
+    if cleanup_fails:
+        assert "Failed to remove pitch-deck dataset" in caplog.text
 
 
 @pytest.mark.asyncio

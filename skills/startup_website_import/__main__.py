@@ -23,22 +23,25 @@ def main(
         min=1,
         help="Maximum HTML pages to import.",
     ),
-    include_pdfs: bool | None = typer.Option(
+    include_documents: bool | None = typer.Option(
         None,
+        "--documents/--no-documents",
         "--pdfs/--no-pdfs",
-        help="Download same-domain PDFs linked from crawled pages.",
+        help="Download supported linked documents; --pdfs/--no-pdfs is a compatibility alias.",
     ),
-    max_pdfs: int | None = typer.Option(
+    max_documents: int | None = typer.Option(
         None,
+        "--max-documents",
         "--max-pdfs",
         min=0,
-        help="Maximum PDF files to download.",
+        help="Maximum document files to download.",
     ),
-    max_pdf_mb: int | None = typer.Option(
+    max_document_mb: int | None = typer.Option(
         None,
+        "--max-document-mb",
         "--max-pdf-mb",
         min=1,
-        help="Maximum size per PDF download.",
+        help="Maximum size per downloaded response, in MB.",
     ),
     respect_robots: bool | None = typer.Option(
         None,
@@ -52,9 +55,9 @@ def main(
             url,
             depth=depth,
             max_pages=max_pages,
-            include_pdfs=include_pdfs,
-            max_pdfs=max_pdfs,
-            max_pdf_mb=max_pdf_mb,
+            include_documents=include_documents,
+            max_documents=max_documents,
+            max_document_mb=max_document_mb,
             respect_robots=respect_robots,
         ),
         logger=logger,
@@ -67,6 +70,7 @@ def main(
     typer.echo(f"WEBSITE_PATH: {result.website_path}")
     typer.echo(f"HTML_PAGES: {result.pages_saved}")
     typer.echo(f"PDFS: {result.pdfs_saved}")
+    typer.echo(f"DOCUMENTS: {result.documents_saved}")
     typer.echo(f"LINKEDIN_URLS: {result.linkedin_urls_found}")
     typer.echo(f"LINKEDIN_URLS_PATH: {result.linkedin_urls_path}")
     typer.echo(f"FAILED_PAGES: {result.failed_pages}")

@@ -1,0 +1,74 @@
+{
+  "provider": "Startupticker",
+  "version": "snapshot-2026-10-20",
+  "status": "Swiss Venture Capital Report 2026; eight reporting categories.",
+  "sources": [
+    "https://allnews.ch/sites/default/files/ckfinder/userfiles/VCReport_2026_web.pdf#page=19"
+  ],
+  "id_policy": "Local stable keys; PitchBook numeric keys retain historical printed numbering, not current platform IDs.",
+  "components": {
+    "industries": {
+      "max_secondary": 0,
+      "categories": [
+        {
+          "id": "biotech",
+          "name": "Biotech",
+          "description": "Biological research and biotechnology products; distinguish medical devices and healthcare software.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cleantech",
+          "name": "Cleantech",
+          "description": "Technology reducing environmental impact through energy, resource or pollution improvements.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "consumer-products",
+          "name": "Consumer products",
+          "description": "Consumer goods outside the specialised technology reporting categories.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "hardware",
+          "name": "Hardware",
+          "description": "Physical devices, equipment or electronic components.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "healthcare-it",
+          "name": "Healthcare IT",
+          "description": "Software and information technology primarily serving healthcare.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ict",
+          "name": "ICT",
+          "description": "Information and communications technology outside the specialised healthcare and fintech categories.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ict-fintech",
+          "name": "ICT (fintech)",
+          "description": "ICT for financial services, including crypto and blockchain financial applications.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "medtech",
+          "name": "Medtech",
+          "description": "Medical devices, instruments and equipment; distinguish biotechnology and healthcare IT.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    }
+  },
+  "derived_components": {},
+  "reporting_groups": []
+}

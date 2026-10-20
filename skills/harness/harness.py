@@ -101,6 +101,16 @@ async def _startup_profile(args: List[str]) -> str:
     return _format_result(await startup_profile(ns.startup))
 
 
+async def _startup_sector(args: List[str]) -> str:
+    parser = _parser("/startup_sector")
+    parser.add_argument("startup")
+    parser.add_argument("--provider", default="dealum")
+    ns = parser.parse_args(args)
+    from skills.startup_sector import startup_sector
+
+    return _format_result(await startup_sector(ns.startup, provider=ns.provider))
+
+
 async def _startup_traction(args: List[str]) -> str:
     parser = _parser("/startup_traction")
     parser.add_argument("startup")
@@ -203,6 +213,20 @@ async def _deep_dive_invitation(args: List[str]) -> str:
         founders=parse_people_csv(" ".join(ns.founders)),
         investors=parse_people_csv(" ".join(ns.investors)),
     ))
+
+
+async def _recruiting(args: List[str]) -> str:
+    parser = _parser("/recruiting")
+    parser.add_argument("dataset")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--criteria")
+    source.add_argument("--criteria-file")
+    ns = parser.parse_args(args)
+    from pathlib import Path
+    from skills.recruiting import recruiting
+
+    criteria = Path(ns.criteria_file).read_text(encoding="utf-8") if ns.criteria_file else ns.criteria
+    return _format_result(await recruiting(ns.dataset, criteria))
 
 
 async def _advocates(args: List[str]) -> str:
@@ -343,12 +367,27 @@ async def _dealum_import(args: List[str]) -> str:
     )
 
 
+async def _import_companyresearch(args: List[str]) -> str:
+    from dataclasses import asdict
+    import json
+    from skills.import_companyresearch import import_companyresearch
+
+    parser = _parser("/import_companyresearch")
+    parser.add_argument("startup", nargs="?")
+    parser.add_argument("--uid")
+    parser.add_argument("--company-name")
+    ns = parser.parse_args(args)
+    results = await import_companyresearch(ns.startup, uid=ns.uid, company_name=ns.company_name)
+    return json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2)
+
+
 def build_registry() -> Dict[str, HarnessCommand]:
     commands = [
         HarnessCommand("/config", "/config", "Load config cache.", _config),
         HarnessCommand("/sync", "/sync <dataset>", "Sync one dataset into the RAG index.", _sync),
         HarnessCommand("/dataset_chat", "/dataset_chat <dataset> <question>", "Ask a dataset question.", _dataset_chat),
         HarnessCommand("/startup_profile", "/startup_profile <startup>", "Generate a startup profile.", _startup_profile),
+        HarnessCommand("/startup_sector", "/startup_sector <startup> [--provider dealum]", "Classify with one provider taxonomy.", _startup_sector),
         HarnessCommand("/startup_traction", "/startup_traction <startup>", "Summarize commercial traction.", _startup_traction),
         HarnessCommand("/persons_in_dataset", "/persons_in_dataset <dataset>", "Discover the editable person roster.", _persons_in_dataset),
         HarnessCommand("/person_profile", "/person_profile <dataset> <person>", "Generate a person profile.", _person_profile),
@@ -369,6 +408,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
             "Create a review-only deep-dive invitation draft.",
             _deep_dive_invitation,
         ),
+        HarnessCommand("/recruiting", '/recruiting <dataset> [--criteria-file <path>]', "Assess recruitment applicants.", _recruiting),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand(
@@ -386,6 +426,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
         HarnessCommand("/captable_analysis", "/captable_analysis <startup>", "Compatibility alias for /captable.", _captable),
         HarnessCommand("/cla_review", "/cla_review <startup> [--document f] [--ticket n] [--fresh]", "Review one CLA term sheet from the lender's side.", _cla_review),
         HarnessCommand("/dealum_import", "/dealum_import <startup>", "Import startup data from Dealum.", _dealum_import),
+        HarnessCommand("/import_companyresearch", "/import_companyresearch [startup] [--uid UID] [--company-name NAME]", "Import CompanyResearch or collect pending reports.", _import_companyresearch),
     ]
     return {cmd.name: cmd for cmd in commands}
 

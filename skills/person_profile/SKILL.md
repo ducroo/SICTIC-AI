@@ -24,6 +24,16 @@ Read the existing roster, resolve LinkedIn profiles and synchronize the dataset
 before selecting reusable individual profiles. On a cache miss, combine the
 resolved LinkedIn payload with `build_person_dossier` evidence when
 `include_dataset_context` is enabled, then synthesize the profile.
+The shared gatherer scans current parsed sources for full-word, ordered name
+combinations unique within the existing roster, or exact email/LinkedIn matches.
+Combinations require two words and eight letters; exact full names are exempt
+from the length requirement but still checked for ambiguity. The threshold lives
+in `config/people/dossier.json`. No discovery or NER call is needed.
+Personal documents are included once (up to the existing 20,000-character limit);
+other matches remain distinct chunks, excluding passages already in full documents.
+The profile prompt resolves attribution and ignores uncertain or unrelated evidence.
+The roster and retrieval settings participate in profile freshness, so new name
+collisions invalidate generated profiles; manual profiles retain precedence.
 
 Biographical and founder-trait instructions always belong to the standard prompt.
 Apply the trait assessment only to explicitly identified active founders; keep

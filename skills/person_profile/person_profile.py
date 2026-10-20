@@ -230,6 +230,11 @@ async def _generate_single_profile(
         query + llm_instructions + conf["incomplete_notice"],
         {
             "include_dataset_context": include_dataset_context,
+            "dossier": load_repository_config("people", "dossier") if include_dataset_context else None,
+            "roster": [
+                (p.full_name, p.linkedin_id, p.email_addresses)
+                for p in persons_in_dataset(dataset_slug)
+            ] if include_dataset_context else None,
         },
     )
     insight = InsightFile(
@@ -254,7 +259,7 @@ async def _generate_single_profile(
     context_parts = []
 
     if include_dataset_context:
-        dossier, mentions = await build_person_dossier(dataset_slug, display_name, query)
+        dossier, mentions = await build_person_dossier(dataset_slug, display_name, query, person=person)
 
         if dossier:
             person.dossier = dossier

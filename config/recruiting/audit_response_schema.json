@@ -1,0 +1,71 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "score": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 6,
+      "title": "Score",
+      "description": "1 = does not meet the requirement; 2 = limited fit; 3 = partial fit; 4 = meets the requirement; 5 = exceeds the requirement; 6 = overqualified (potential role mismatch, not a higher fit score). ? = insufficient evidence to score."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "assessed",
+        "unconfirmed"
+      ],
+      "title": "Status"
+    },
+    "evidence": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Evidence"
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Rationale"
+    },
+    "gaps": {
+      "type": "string",
+      "title": "Gaps"
+    },
+    "interview_question": {
+      "type": "string",
+      "title": "Interview question"
+    }
+  },
+  "required": [
+    "score",
+    "status",
+    "evidence",
+    "rationale",
+    "gaps",
+    "interview_question"
+  ],
+  "if": {
+    "properties": {
+      "status": {
+        "const": "unconfirmed"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "score": {
+        "type": "null"
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "score": {
+        "type": "integer"
+      }
+    }
+  }
+}
