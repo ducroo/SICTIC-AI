@@ -73,6 +73,30 @@ def reconcile_dealum_startup(
     adapter: DealumAdapter | None = None,
     applications: list[dict[str, Any]] | None = None,
 ) -> DealumMatch:
+    adapter = adapter or DealumAdapter()
+    candidates, method = _matching_applications(startup, adapter, applications)
+    return _dealum_match(startup.strip(), candidates, method, adapter.dealroom_id)
+
+
+def matching_dealum_applications(
+    startup: str,
+    *,
+    adapter: DealumAdapter,
+    applications: list[dict[str, Any]] | None = None,
+) -> list[DealumMatch]:
+    """Return all exact matches; an explicit application code remains selective."""
+    candidates, method = _matching_applications(startup, adapter, applications)
+    return [
+        _dealum_match(startup.strip(), [item], method, adapter.dealroom_id)
+        for item in candidates
+    ]
+
+
+def _matching_applications(
+    startup: str,
+    adapter: DealumAdapter,
+    applications: list[dict[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], str]:
     requested = startup.strip()
     if not requested:
         raise DealumReconciliationError(
@@ -117,12 +141,7 @@ def reconcile_dealum_startup(
         if slugify(str(application.get("name") or "")) == target_slug
     ]
     if name_matches:
-        return _dealum_match(
-            requested,
-            name_matches,
-            "normalized_name",
-            adapter.dealroom_id,
-        )
+        return name_matches, "normalized_name"
 
     code_matches = [
         application
@@ -131,12 +150,7 @@ def reconcile_dealum_startup(
         == target_code
     ]
     if code_matches:
-        return _dealum_match(
-            requested,
-            code_matches,
-            "application_code",
-            adapter.dealroom_id,
-        )
+        return code_matches, "application_code"
 
     # Explicit configured aliases are a fallback; exact names/codes retain precedence.
     canonical = canonical_startup_slug(requested)
@@ -145,7 +159,7 @@ def reconcile_dealum_startup(
         if canonical_startup_slug(str(application.get("name") or "")) == canonical
     ]
     if alias_matches:
-        return _dealum_match(requested, alias_matches, "startup_alias", adapter.dealroom_id)
+        return alias_matches, "startup_alias"
 
     logger.warning(
         "[dealum-reconcile] No exact match: requested=%r normalized=%r "
@@ -272,15 +286,26 @@ def _application_datetime(application: dict[str, Any]) -> datetime | None:
     value = _application_date_value(application)
     if not value:
         return None
-    if value.isdigit():
-        timestamp = int(value)
-        if timestamp > 10_000_000_000:
-            timestamp = timestamp / 1000
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        if value.isdigit():
+            timestamp = int(value)
+            if timestamp > 10_000_000_000:
+                timestamp = timestamp / 1000
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
         return None
+
+
+def application_create_day(application: dict[str, Any]) -> str:
+    """UTC calendar date from createDate only; never substitute another date."""
+    date = _application_datetime({"createDate": application.get("createDate")})
+    if date is None:
+        raise DealumReconciliationError(
+            f"Dealum application {application.get('id')!r} has no valid createDate."
+        )
+    return date.date().isoformat()
 
 
 def _raise_ambiguous(

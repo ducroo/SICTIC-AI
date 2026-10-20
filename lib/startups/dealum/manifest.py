@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 from typing import Any
 
 from lib.infrastructure.logging import get_logger
@@ -40,6 +41,16 @@ def read_manifest(
         return {}
     try:
         data = json.loads(storage.read_text(path))
+        if not dealum_rel and isinstance(data, dict) and "latest_application" in data:
+            # The collection records full-refresh freshness; each dated manifest
+            # records the individual snapshot. Existing callers still see the latest.
+            day = date.fromisoformat(data["latest_application"]).isoformat()
+            latest = read_manifest(dataset_slug, dealum_rel=f"{dealum_dataset_rel(dataset_slug)}/{day}")
+            latest[LAST_SUCCESSFUL_PULL_AT] = data.get(LAST_SUCCESSFUL_PULL_AT)
+            return latest
+        # Legacy root manifests also reach this fallback until migration completes
+        # (review after 2027-02-16). Keep the return: explicit dated-application
+        # reads still need it, as does migration's read of the old root manifest.
         return data if isinstance(data, dict) else {}
     except Exception as error:
         logger.warning(

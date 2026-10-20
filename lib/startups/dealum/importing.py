@@ -5,7 +5,7 @@ import os
 import shutil
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,12 +22,19 @@ from lib.startups.dealum.manifest import (
     stable_hash,
     stable_json,
 )
-from lib.startups.dealum.matching import reconcile_dealum_startup
+from lib.startups.dealum.matching import (
+    DealumMatch, application_create_day, matching_dealum_applications,
+    reconcile_dealum_startup,
+)
+from lib.startups.dealum.snapshots import (
+    migrate_flat_snapshot, stored_applications, validate_application_paths,
+    write_collection_manifest,
+)
 from lib.startups.dealum.rendering import render_application_markdown
 from lib.startups.dossier import ensure_startup_dossier
 from lib.startups.dealum.session import current_session
 from lib.storage import get_storage
-from lib.insights.locking import write_if_changed
+from lib.insights.locking import manifest_write_lock, write_if_changed
 
 logger = get_logger(__name__)
 
@@ -64,6 +71,7 @@ class DealumImportResult:
     skipped_files: int = 0
     stale_files: int = 0
     step: str | None = None
+    applications_imported: int = 0
 
 
 def import_startup_from_dealum(
@@ -76,12 +84,10 @@ def import_startup_from_dealum(
 ) -> DealumImportResult:
     adapter = adapter or DealumAdapter()
     logger.info("[dealum-import] Starting import: requested=%r", startup)
+    matches = matching_dealum_applications(startup, adapter=adapter, applications=applications)
     match = reconcile_dealum_startup(
-        startup,
-        adapter=adapter,
-        applications=applications,
+        startup, adapter=adapter, applications=[item.application for item in matches],
     )
-    application = match.application
     dataset_slug = match.dataset_slug
 
     session = current_session()
@@ -90,7 +96,10 @@ def import_startup_from_dealum(
             startup=startup, dataset_slug=dataset_slug, imported=False, changed=False,
             application_found=True, step=match.step,
         )
-    cache_key = (dataset_slug, download_documents)
+    cache_key = (
+        dataset_slug, tuple(sorted(str(item.dealum_id) for item in matches)),
+        download_documents, match.match_method == "application_code",
+    )
     if session is not None and cache_key in session.imports:
         if activate:
             from lib.datasets.state import activate_dataset
@@ -116,6 +125,66 @@ def import_startup_from_dealum(
     ensure_startup_dossier(dataset_slug, storage=storage, activate=activate)
     dealum_rel = f"{location.raw_rel}/{DEALUM_SUBDIR}"
 
+    # Serialize migration and publication for this dossier, including other processes.
+    lock_path = Path(storage.local_path(f"cache/dealum_import/{dataset_slug}/acquisition"))
+    with manifest_write_lock(lock_path):
+        validate_application_paths(matches, stored_applications(dataset_slug, dealum_rel))
+        # TEMPORARY MIGRATION — review after 2027-02-16; see migrate_flat_snapshot.
+        # Remove this call, its import and `or migrated` below together. Keep the
+        # lock and validation: they also protect normal dated-application updates.
+        migrated = migrate_flat_snapshot(dataset_slug, dealum_rel, matches)
+        results = []
+        successful_pull = None
+        try:
+            for item in sorted(matches, key=lambda item: application_create_day(item.application)):
+                # Retain the established selection metadata for the latest result.
+                if item.dealum_id == match.dealum_id:
+                    item = match
+                application_key = (dataset_slug, str(item.dealum_id), download_documents)
+                cached = session.application_imports.get(application_key) if session else None
+                if cached is None:
+                    cached = _import_application(
+                        item, adapter=adapter, download_documents=download_documents,
+                        dealum_rel=f"{dealum_rel}/{application_create_day(item.application)}",
+                    )
+                    if session is not None:
+                        session.application_imports[application_key] = cached
+                results.append(cached)
+            if match.match_method != "application_code":
+                successful_pull = max(
+                    read_manifest(dataset_slug, dealum_rel=str(Path(item.manifest_path).parent))[LAST_SUCCESSFUL_PULL_AT]
+                    for item in results
+                )
+        finally:
+            # Partial/code-only imports must not postpone a complete startup refresh.
+            write_collection_manifest(dataset_slug, dealum_rel, successful_pull=successful_pull)
+
+    latest = next(item for item in results if str(item.dealum_id) == str(match.dealum_id))
+    result = replace(
+        latest, startup=startup, match_method=match.match_method,
+        selection_method=match.selection_method,
+        changed=dossier_changed or migrated or any(item.changed for item in results),
+        downloaded_files=sum(item.downloaded_files for item in results),
+        skipped_files=sum(item.skipped_files for item in results),
+        stale_files=sum(item.stale_files for item in results),
+        applications_imported=len(results),
+    )
+    if session is not None:
+        session.imports[cache_key] = result
+    logger.info(
+        "[dealum-import] Completed startup import: dataset=%s applications=%d changed=%s",
+        dataset_slug, result.applications_imported, result.changed,
+    )
+    return result
+
+
+def _import_application(
+    match: DealumMatch, *, adapter: DealumAdapter,
+    download_documents: bool, dealum_rel: str,
+) -> DealumImportResult:
+    storage = get_storage()
+    startup, dataset_slug = match.requested_startup, match.dataset_slug
+    application = match.application
     previous_manifest = read_manifest(
         dataset_slug,
         dealum_rel=dealum_rel,
@@ -125,7 +194,7 @@ def import_startup_from_dealum(
     manifest_path = f"{dealum_rel}/{MANIFEST_JSON}"
 
     staging_rel = (
-        f"{location.raw_rel}/.{DEALUM_SUBDIR}-staging-{uuid.uuid4().hex}"
+        f"{Path(dealum_rel).parent}/.application-staging-{uuid.uuid4().hex}"
     )
     staging_path = Path(storage.local_path(staging_rel))
     target_path = Path(storage.local_path(dealum_rel))
@@ -266,10 +335,7 @@ def import_startup_from_dealum(
         if item.get("path")
     }
     stale_files = len(previous_paths - current_paths)
-    changed = (
-        dossier_changed
-        or previous_manifest.get("snapshot_hash") != snapshot_hash
-    )
+    changed = previous_manifest.get("snapshot_hash") != snapshot_hash
 
     logger.info(
         "[dealum-import] Completed import: requested=%r matched=%r "
@@ -302,6 +368,4 @@ def import_startup_from_dealum(
         stale_files=stale_files,
         step=application.get("step"),
     )
-    if session is not None:
-        session.imports[cache_key] = result
     return result

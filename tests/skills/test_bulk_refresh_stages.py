@@ -206,8 +206,8 @@ def test_default_filters_after_stage_updates_and_discovers_relevant_dossiers(moc
     dossier("old")
     dossier("jury", active=False)
     dealum.return_value = [
-        {"name": "Jury", "step": "Jury"},
-        {"name": "New Startup", "step": "Under Review"},
+        {"id": 1, "createDate": "2026-05-01", "name": "Jury", "step": "Jury"},
+        {"id": 2, "createDate": "2026-05-01", "name": "New Startup", "step": "Under Review"},
         {"name": "New Rejected", "step": "Rejected by Jury"},
         {"name": "Historical Pitched", "step": PITCHED_STAGE},
     ]
@@ -230,7 +230,7 @@ def test_explicit_selection_processes_archived_without_activating(mock_env, deal
 
 def test_alias_uses_shared_matching_and_existing_dossier(mock_env, dealum):
     dossier("checksum")
-    dealum.return_value = [{"name": "Checksum AG", "step": "Under Review"}]
+    dealum.return_value = [{"id": 1, "createDate": "2026-05-01", "name": "Checksum AG", "step": "Under Review"}]
     scope, errors = bulk._resolve_targets("checksum", None)
     assert not errors
     assert scope.stages == {"checksum": "Under Review"}
