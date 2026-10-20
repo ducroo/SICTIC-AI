@@ -5,6 +5,14 @@ from urllib.parse import urlsplit
 
 from lib.datasets.models import Chunk
 from lib.slugify import slugify
+from lib.infrastructure.configuration import load_repository_config
+
+
+def excluded_company_website(url: str) -> bool:
+    """A marketplace listing is evidence, not the company's crawlable website."""
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    hosts = load_repository_config("startup_website_import", "content_policy")["excluded_company_hosts"]
+    return any(host == suffix or host.endswith("." + suffix) for suffix in hosts)
 
 
 def website_from_evidence(company_names: list[str], chunks: list[Chunk]) -> str | None:
@@ -17,6 +25,8 @@ def website_from_evidence(company_names: list[str], chunks: list[Chunk]) -> str 
             if url.startswith("www."):
                 url = "https://" + url
             parsed = urlsplit(url)
+            if excluded_company_website(url):
+                continue
             host = (parsed.hostname or "").lower().removeprefix("www.")
             if not host or any(host == suffix or host.endswith("." + suffix) for suffix in (
                 "linkedin.com", "google.com", "youtube.com", "facebook.com", "dealum.com",

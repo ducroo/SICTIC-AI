@@ -18,6 +18,7 @@ class FakeResponse:
     content: bytes = b""
     headers: dict[str, str] | None = None
     status_code: int = 200
+    url: str = ""
 
     def __post_init__(self):
         if self.headers is None:
@@ -40,6 +41,136 @@ class FakeSession:
         if url not in self.responses:
             return FakeResponse(status_code=404)
         return self.responses[url]
+
+
+@pytest.mark.parametrize("url", ["https://www.amazon.in/book/dp/123", "https://smile.amazon.co.uk/", "https://amzn.to/book"])
+def test_marketplace_input_is_skipped_without_fetching(mock_env, url):
+    session = FakeSession({})
+    result = startup_website_import("SPDYO", url, session=session)
+    assert result.skipped_reason == "Marketplace URL is not a company website"
+    assert not session.requested
+    assert not get_storage().exists(result.website_path)
+
+
+@pytest.mark.parametrize("target", ["https://abbey.io/blog/", "https://www.amazon.in/", "https://example.com.attacker.test/"])
+def test_unapproved_homepage_redirect_is_not_saved_or_crawled(mock_env, target):
+    session = FakeSession({"https://example.com/": FakeResponse(
+        "<h1>Unrelated</h1><a href='/about'>About</a>", url=target)})
+    with pytest.raises(InfrastructureError):
+        startup_website_import("Example", "https://example.com", session=session, respect_robots=False)
+    assert session.requested == ["https://example.com/"]
+    storage = get_storage()
+    assert not storage.exists("storage/startups/example/datasets/website")
+    assert not any(".website-staging-" in name for name in storage.list("storage/startups/example/datasets"))
+
+
+@pytest.mark.parametrize("target", ["https://www.example.com/", "https://example.com/"])
+def test_canonical_redirect_still_crawls(mock_env, target):
+    session = FakeSession({
+        "http://example.com/": FakeResponse("<h1>Example</h1><a href='/about'>About</a>", url=target),
+        target + "about": FakeResponse("<h1>About Example</h1>"),
+    })
+    result = startup_website_import("Example", "http://example.com", session=session, respect_robots=False)
+    assert result.pages_saved == 2
+    assert target + "about" in session.requested
+
+
+def test_subpage_and_document_redirects_are_checked(mock_env):
+    session = FakeSession({
+        "https://example.com/": FakeResponse("<h1>Example</h1><a href='/news'>News</a><a href='/deck.pdf'>Deck</a>"),
+        "https://example.com/news": FakeResponse("<h1>Other</h1>", url="https://unrelated.test/"),
+        "https://example.com/deck.pdf": FakeResponse(content=b"%PDF-1.7 bad", url="https://unrelated.test/deck.pdf"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session, respect_robots=False)
+    assert result.pages_saved == 1
+    assert result.documents_saved == 0
+    assert result.failed_pages == 2
+
+
+@pytest.mark.parametrize("heading", ["KOITOTO Slot Gacor Slot777", "Online Casino — Free Spins Bonus"])
+def test_gambling_landing_page_is_rejected(mock_env, heading):
+    session = FakeSession({"https://example.com/": FakeResponse(
+        f"<title>{heading}</title><h1>{heading}</h1><a href='/register-now'>Play</a>")})
+    with pytest.raises(InfrastructureError):
+        startup_website_import("Example", "https://example.com", session=session, respect_robots=False)
+    assert session.requested == ["https://example.com/"]
+    assert not get_storage().exists("storage/startups/example/datasets/website")
+
+
+def test_spam_footer_removed_before_link_discovery_and_crawling(mock_env):
+    company = "Alchimist Grid connects land, air and sea transportation with intelligent fleet monitoring and fuel governance."
+    session = FakeSession({"https://example.com/": FakeResponse(f"""
+        <title>Alchimist Grid</title><h1>Alchimist Grid</h1><p>{company}</p>
+        <footer><p>Copyright Alchimist Grid</p><a href='/slot777'>Play</a>
+        <a href='https://linkedin.com/in/spam/'>badak88</a><p>slot gacor</p></footer>
+        <a href='https://linkedin.com/in/real-founder/'>Founder</a>
+    """)})
+    result = startup_website_import("Alchimist Grid", "https://example.com", session=session, respect_robots=False)
+    storage = get_storage()
+    text = storage.read_text(result.website_path + "/index.md")
+    assert company in text
+    assert "Copyright Alchimist Grid" in text
+    assert "gacor" not in text and "badak88" not in text and "Play" not in text
+    assert session.requested == ["https://example.com/"]
+    links = storage.read_text(result.linkedin_urls_path)
+    assert "/spam/" not in links and "/real-founder/" in links
+
+
+def test_legitimate_gambling_references_are_preserved(mock_env):
+    body = "We provide fraud prevention for online casinos. Our terms prohibit illegal gambling and bonus abuse."
+    session = FakeSession({"https://example.com/": FakeResponse(f"<title>AML Compliance</title><h1>Risk controls</h1><p>{body}</p>")})
+    result = startup_website_import("Example", "https://example.com", session=session, respect_robots=False)
+    assert body in get_storage().read_text(result.website_path + "/index.md")
+
+
+def test_explicit_verified_redirect_mapping():
+    from skills.startup_website_import.validation import redirect_allowed
+    policy = {"approved_redirect_hosts": {"old.example": ["new.example"]}}
+    assert redirect_allowed("https://old.example", "https://new.example/team", policy)
+    assert not redirect_allowed("https://old.example", "https://unrelated.example", policy)
+
+
+def test_spam_dominated_body_is_rejected_without_gambling_title():
+    from lib.infrastructure.configuration import load_repository_config
+    from skills.startup_website_import.validation import screen_html
+    policy = load_repository_config("startup_website_import", "content_policy")
+    assert screen_html("<h1>Welcome</h1><p>slot gacor</p><a href='/slot777'>Play</a>", policy)[0] is None
+
+
+def test_bare_spam_footer_removed_but_long_mixed_passage_is_not_rewritten():
+    from lib.infrastructure.configuration import load_repository_config
+    from skills.startup_website_import.validation import screen_html
+    policy = load_repository_config("startup_website_import", "content_policy")
+    company = "<h1>Alchimist Grid</h1><p>Intelligent monitoring for land, air and sea transportation, with fuel governance and compliance reporting.</p>"
+    footer = "badak88 dazbet rajajp88 hokigacor slot88 slot777 slot gacor idnslot mawar88 badak88"
+    cleaned, reason = screen_html(company + f"<footer>{footer}</footer>", policy)
+    assert cleaned is not None and "Alchimist Grid" in cleaned
+    assert "badak88" not in cleaned and "Removed" in reason
+    assert screen_html(company + "<p>This is a long mixed passage with slot gacor plus unrelated ordinary words that cannot be safely separated.</p>", policy)[0] is None
+
+
+def test_amazon_host_check_uses_domain_boundaries():
+    from lib.startups.website import excluded_company_website
+    assert not excluded_company_website("https://amazonian.example/")
+    assert not excluded_company_website("https://aws.amazon.com.example/")
+
+
+def test_verified_redirect_reloads_destination_robots(mock_env, mocker):
+    from lib.infrastructure.configuration import load_repository_config
+    policy = dict(load_repository_config("startup_website_import", "content_policy"))
+    policy["approved_redirect_hosts"] = {"example.com": ["new.example"]}
+    def config(*sections):
+        return policy if sections[-1] == "content_policy" else load_repository_config(*sections)
+    mocker.patch("skills.startup_website_import.startup_website_import.load_repository_config", side_effect=config)
+    session = FakeSession({
+        "https://example.com/robots.txt": FakeResponse("User-agent: *\nAllow: /\n"),
+        "https://example.com/": FakeResponse("<h1>Example moved</h1><a href='/private'>Private</a>", url="https://new.example/"),
+        "https://new.example/robots.txt": FakeResponse("User-agent: *\nDisallow: /private\n"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session)
+    assert result.pages_saved == 1
+    assert "https://new.example/robots.txt" in session.requested
+    assert "https://new.example/private" not in session.requested
 
 
 def test_startup_website_import_crawls_pages_pdfs_and_link_manifest(mock_env):
@@ -86,11 +217,11 @@ def test_startup_website_import_crawls_pages_pdfs_and_link_manifest(mock_env):
                 "<html><head><title>News</title></head><body><h1>News</h1><p>Interesting update.</p></body></html>",
             ),
             "https://example.com/files/founder-cv.pdf": FakeResponse(
-                content=b"%PDF founder",
+                content=b"%PDF-1.7 founder",
                 headers={"content-type": "application/pdf"},
             ),
             "https://example.com/files/team-bio.pdf": FakeResponse(
-                content=b"%PDF team",
+                content=b"%PDF-1.7 team",
                 headers={"content-type": "application/pdf"},
             ),
         }
@@ -123,10 +254,10 @@ def test_startup_website_import_crawls_pages_pdfs_and_link_manifest(mock_env):
     assert "ch.linkedin.com/in/advisor-founder" not in index_body
     assert storage.read_bytes(
         "storage/startups/example/datasets/website/pdfs/founder-cv.pdf"
-    ) == b"%PDF founder"
+    ) == b"%PDF-1.7 founder"
     assert storage.read_bytes(
         "storage/startups/example/datasets/website/pdfs/team-bio.pdf"
-    ) == b"%PDF team"
+    ) == b"%PDF-1.7 team"
 
     manifest = storage.read_text(
         "storage/startups/example/datasets/website/linkedin-and-resume-links.md"
@@ -165,7 +296,7 @@ def test_startup_website_import_can_disable_pdfs_and_depth(mock_env):
                 "<html><head><title>About</title></head><body><p>About</p></body></html>",
             ),
             "https://example.com/deck.pdf": FakeResponse(
-                content=b"%PDF deck",
+                content=b"%PDF-1.7 deck",
                 headers={"content-type": "application/pdf"},
             ),
         }
@@ -333,11 +464,11 @@ def test_startup_website_import_keeps_colliding_paths_distinct(mock_env):
                 "<html><head><title>About B</title></head><body><p>B</p></body></html>",
             ),
             "https://example.com/files/deck.pdf": FakeResponse(
-                content=b"%PDF deck a",
+                content=b"%PDF-1.7 deck a",
                 headers={"content-type": "application/pdf"},
             ),
             "https://example.com/other/deck.pdf": FakeResponse(
-                content=b"%PDF deck b",
+                content=b"%PDF-1.7 deck b",
                 headers={"content-type": "application/pdf"},
             ),
         }
@@ -363,3 +494,126 @@ def test_startup_website_import_keeps_colliding_paths_distinct(mock_env):
     assert any(name.startswith("about-") and name.endswith(".md") for name in names)
     assert "pdfs/deck.pdf" in names
     assert any(name.startswith("pdfs/deck-") and name.endswith(".pdf") for name in names)
+
+
+def test_redirected_pdf_to_homepage_is_not_saved_as_pdf(mock_env):
+    home = "<h1>Home</h1><a href='/old.pdf'>Old deck</a>"
+    session = FakeSession({
+        "https://example.com/": FakeResponse(home),
+        "https://example.com/old.pdf": FakeResponse(home, url="https://example.com/"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session,
+                                    respect_robots=False)
+    assert result.pages_saved == 1
+    assert result.documents_saved == 0
+    assert not get_storage().exists("storage/startups/example/datasets/website/pdfs/old.pdf")
+    assert session.requested.count("https://example.com/old.pdf") == 1
+
+
+def test_html_download_uses_final_url_and_follows_relative_links(mock_env):
+    session = FakeSession({
+        "https://example.com/": FakeResponse("<h1>Home</h1><a href='/old.pdf'>Team</a>"),
+        "https://example.com/old.pdf": FakeResponse(
+            "<h1>Team</h1><a href='bio.docx'>Bio</a>",
+            headers={"content-type": "application/pdf"}, url="https://example.com/team/",
+        ),
+        "https://example.com/team/bio.docx": FakeResponse(content=b"%PDF-1.7\nBio"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session,
+                                    respect_robots=False)
+    storage = get_storage()
+    root = "storage/startups/example/datasets/website"
+    assert result.pages_saved == 2
+    assert result.pdfs_saved == result.documents_saved == 1
+    assert "source_url: https://example.com/team/" in storage.read_text(f"{root}/team.md")
+    assert storage.read_bytes(f"{root}/pdfs/bio.pdf").startswith(b"%PDF-")
+    assert not storage.exists(f"{root}/pdfs/old.pdf")
+
+
+def test_supported_downloads_use_detected_extensions(mock_env):
+    import io
+    import zipfile
+
+    office = io.BytesIO()
+    with zipfile.ZipFile(office, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", "<document/>")
+    session = FakeSession({
+        "https://example.com/": FakeResponse(
+            "<h1>Home</h1><a href='/bio.pdf'>Bio</a><a href='/download'>Deck</a>"
+            "<a href='/team.csv'>Team</a><a href='/bad.xlsx'>Bad</a>"
+        ),
+        "https://example.com/bio.pdf": FakeResponse(content=office.getvalue()),
+        "https://example.com/download": FakeResponse(content=b"%PDF-1.7\nDeck"),
+        "https://example.com/team.csv": FakeResponse(content=b"Name,Role\nJane,Founder\n"),
+        "https://example.com/bad.xlsx": FakeResponse(content=b"PK\x03\x04broken"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session,
+                                    respect_robots=False)
+    root = "storage/startups/example/datasets/website"
+    storage = get_storage()
+    assert result.documents_saved == 3
+    assert result.pdfs_saved == 1
+    assert result.failed_pages == 1
+    assert storage.read_bytes(f"{root}/documents/bio.docx") == office.getvalue()
+    assert storage.exists(f"{root}/documents/team.csv")
+    assert storage.exists(f"{root}/pdfs/download.pdf")
+    assert not storage.exists(f"{root}/documents/bad.xlsx")
+    manifest = storage.read_text(f"{root}/linkedin-and-resume-links.md")
+    assert "documents/bio.docx" in manifest
+    assert "bad.xlsx" not in manifest
+    assert all(session.requested.count(url) == 1 for url in session.responses)
+
+
+@pytest.mark.parametrize("options", [
+    {"max_documents": 1}, {"max_pdfs": 1},
+])
+def test_download_limit_is_shared_across_document_types(mock_env, options):
+    session = FakeSession({
+        "https://example.com/": FakeResponse(
+            "<h1>Home</h1><a href='/a.txt'>Text</a><a href='/b.pdf'>PDF</a>"),
+        "https://example.com/a.txt": FakeResponse(content=b"Company notes"),
+        "https://example.com/b.pdf": FakeResponse(content=b"%PDF-1.7\nDeck"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session,
+                                    respect_robots=False, max_pages=1, **options)
+    assert result.documents_saved == 1
+    assert "https://example.com/b.pdf" not in session.requested
+
+
+@pytest.mark.parametrize("flag", ["--no-documents", "--no-pdfs"])
+def test_cli_supports_document_and_legacy_flags(mock_env, mocker, flag):
+    from typer.testing import CliRunner
+    from skills.startup_website_import.__main__ import app
+
+    session = FakeSession({"https://example.com/": FakeResponse(
+        "<h1>Home</h1><a href='/bio.docx'>Bio</a><a href='/deck.pdf'>Deck</a>",
+    )})
+    mocker.patch("skills.startup_website_import.startup_website_import.requests.Session",
+                 return_value=session)
+    result = CliRunner().invoke(app, ["Example", "https://example.com", flag, "--ignore-robots"])
+    assert result.exit_code == 0, result.output
+    assert "DOCUMENTS: 0" in result.output
+    assert session.requested == ["https://example.com/"]
+
+
+def test_oversized_document_is_skipped_and_later_document_is_saved(mock_env):
+    session = FakeSession({
+        "https://example.com/": FakeResponse(
+            "<h1>Home</h1><a href='/huge.pdf'>Large</a><a href='/small.txt'>Small</a>"),
+        "https://example.com/huge.pdf": FakeResponse(content=b"%PDF-1.7\n" + b"x" * 1024 * 1024),
+        "https://example.com/small.txt": FakeResponse(content=b"Company notes"),
+    })
+    result = startup_website_import("Example", "https://example.com", session=session,
+                                    respect_robots=False, max_document_mb=1, max_documents=1)
+    assert result.failed_pages == 1
+    assert result.documents_saved == 1
+    assert result.pdfs_saved == 0
+
+
+def test_declared_html_encoding_is_preserved_in_markdown(mock_env):
+    session = FakeSession({"https://example.com/": FakeResponse(
+        content=b"<h1>Z\xfcrich</h1>", headers={"content-type": "text/html; charset=iso-8859-1"},
+    )})
+    startup_website_import("Example", "https://example.com", session=session, respect_robots=False)
+    assert "Zürich" in get_storage().read_text("storage/startups/example/datasets/website/index.md")

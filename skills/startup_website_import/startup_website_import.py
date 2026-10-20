@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from typing import Iterable
 from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.robotparser import RobotFileParser
 
@@ -18,6 +17,9 @@ from lib.datasets.paths import dataset_location_for_domain
 from lib.datasets.source import list_source_files, parsed_filepath
 from lib.datasets.chunking import split_markdown
 from lib.infrastructure.logging import get_logger
+from lib.infrastructure.document_formats import (
+    DOCUMENT_EXTENSIONS, decode_document_text, detect_document_extension,
+)
 from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.filesystem import replace_directory_snapshot
@@ -25,8 +27,9 @@ from lib.insights.locking import manifest_write_lock
 from lib.slugify import slugify
 from lib.startups.dossier import ensure_startup_dossier
 from lib.startups.identity import canonical_startup_slug, startup_aliases
-from lib.startups.website import website_from_evidence
+from lib.startups.website import excluded_company_website, website_from_evidence
 from lib.storage import Storage, get_storage
+from skills.startup_website_import.validation import redirect_allowed, screen_html
 
 logger = get_logger(__name__)
 
@@ -58,10 +61,11 @@ class WebsiteImportResult:
     linkedin_urls_found: int
     failed_pages: int = 0
     skipped_reason: str | None = None
+    documents_saved: int = 0
 
 
 @dataclass(frozen=True)
-class PdfRecord:
+class DocumentRecord:
     url: str
     local_path: str
     possible_resume: bool
@@ -172,6 +176,9 @@ def startup_website_import(
     max_pdfs: int | None = None,
     max_pdf_mb: int | None = None,
     respect_robots: bool | None = None,
+    include_documents: bool | None = None,
+    max_documents: int | None = None,
+    max_document_mb: int | None = None,
     session: requests.Session | None = None,
     storage: Storage | None = None,
 ) -> WebsiteImportResult:
@@ -192,6 +199,15 @@ def startup_website_import(
             "max_pdfs": max_pdfs, "max_pdf_mb": max_pdf_mb,
             "respect_robots": respect_robots,
         }.items() if value is not None})
+        # Preserve old Python/CLI callers and configuration while exposing names
+        # that describe the generalized document download policy.
+        for old, new, value in (
+            ("include_pdfs", "include_documents", include_documents),
+            ("max_pdfs", "max_documents", max_documents),
+            ("max_pdf_mb", "max_document_mb", max_document_mb),
+        ):
+            options[new] = value if value is not None else options.pop(old)
+            options.pop(old, None)
         return _crawl_website(startup_name, url, session=session, storage=storage, **options)
 
 
@@ -201,9 +217,9 @@ def _crawl_website(
     *,
     depth: int = 1,
     max_pages: int = 50,
-    include_pdfs: bool = True,
-    max_pdfs: int = 20,
-    max_pdf_mb: int = 25,
+    include_documents: bool = True,
+    max_documents: int = 20,
+    max_document_mb: int = 25,
     respect_robots: bool = True,
     session: requests.Session | None = None,
     storage: Storage | None = None,
@@ -212,8 +228,10 @@ def _crawl_website(
         raise ValueError("depth must be >= 0")
     if max_pages < 1:
         raise ValueError("max_pages must be >= 1")
-    if max_pdfs < 0:
-        raise ValueError("max_pdfs must be >= 0")
+    if max_documents < 0:
+        raise ValueError("max_documents must be >= 0")
+    if max_document_mb < 1:
+        raise ValueError("max_document_mb must be >= 1")
 
     storage = storage or get_storage()
     dataset_slug = canonical_startup_slug(startup_name)
@@ -233,6 +251,10 @@ def _crawl_website(
         return _skipped_result(dataset_slug, website_root, "No unambiguous documented website")
 
     start_url = _normalize_start_url(url)
+    if excluded_company_website(start_url):
+        logger.warning("Skipping marketplace URL as company website: %s", start_url)
+        return _skipped_result(dataset_slug, website_root, "Marketplace URL is not a company website")
+    policy = load_repository_config("startup_website_import", "content_policy")
     host = urlparse(start_url).netloc.lower()
     session = session or requests.Session()
     ensure_startup_dossier(startup_name, storage=storage, activate=False)
@@ -243,19 +265,26 @@ def _crawl_website(
 
     robots = _load_robots(start_url, session) if respect_robots else None
     seen: set[str] = set()
-    queue: deque[tuple[str, int]] = deque([(start_url, 0)])
+    queue: deque[tuple[str, int, bool]] = deque([(start_url, 0, False)])
     linkedin_urls: set[str] = set()
-    pdf_urls: list[str] = []
+    document_records: list[DocumentRecord] = []
+    document_paths: set[str] = set()
+    saved_urls: set[str] = set()
     page_paths: set[str] = set()
     pages_saved = 0
     failed_pages = 0
 
-    while queue and pages_saved < max_pages:
-        current_url, current_depth = queue.popleft()
+    while queue:
+        current_url, current_depth, document_link = queue.popleft()
         current_url = _normalize_url(current_url)
         if current_url in seen:
             continue
         seen.add(current_url)
+        if document_link:
+            if not include_documents or len(document_records) >= max_documents:
+                continue
+        elif pages_saved >= max_pages:
+            continue
         if not _same_host(current_url, host):
             continue
         if _is_excluded_url(current_url):
@@ -271,56 +300,91 @@ def _crawl_website(
             failed_pages += 1
             logger.warning("Failed to fetch website page %s: %s", current_url, exc)
             continue
-        content_type = response.headers.get("content-type", "").lower()
-        if _is_pdf_url(current_url, content_type):
-            if include_pdfs and len(pdf_urls) < max_pdfs:
-                pdf_urls.append(current_url)
+        resolved_url = _normalize_url(getattr(response, "url", None) or current_url)
+        if excluded_company_website(resolved_url) or not redirect_allowed(current_url, resolved_url, policy):
+            failed_pages += 1
+            logger.warning("Skipping unapproved website destination: %s -> %s", current_url, resolved_url)
             continue
-        if "html" not in content_type and not current_url.endswith(("/", ".html", ".htm")):
+        if resolved_url in saved_urls:
             continue
-
-        document = _parse_html(response.text)
-        linkedin_urls.update(_extract_linkedin_profile_urls(response.text))
-        page_path = _page_storage_path(staging_root, current_url, used_paths=page_paths)
+        content = response.content
+        if len(content) > max_document_mb * 1024 * 1024:
+            failed_pages += 1
+            logger.warning("Skipping oversized website response %s -> %s (%d bytes)",
+                           current_url, resolved_url, len(content))
+            continue
+        content_type = response.headers.get("content-type", "")
+        extension = detect_document_extension(
+            content, filename=resolved_url, content_type=content_type,
+        )
+        if extension is None:
+            failed_pages += 1
+            logger.warning("Skipping unknown or unsupported website content %s -> %s (Content-Type: %s)",
+                           current_url, resolved_url, content_type)
+            continue
+        claimed_extension = PurePosixPath(urlparse(current_url).path).suffix.lower()
+        if claimed_extension and claimed_extension != extension:
+            logger.info("Website content format: %s -> %s; detected %s (Content-Type: %s)",
+                        current_url, resolved_url, extension, content_type)
+        if extension != ".html":
+            if not include_documents or len(document_records) >= max_documents:
+                continue
+            write_path = _document_storage_path(staging_root, current_url, extension, document_paths)
+            if extension in {".txt", ".md", ".json", ".csv"}:
+                storage.write_text(write_path, decode_document_text(content, content_type=content_type))
+            else:
+                storage.write_bytes(write_path, content)
+            local_path = f"{website_root}/{write_path.removeprefix(staging_root).lstrip('/')}"
+            document_records.append(DocumentRecord(
+                url=resolved_url, local_path=local_path,
+                possible_resume=bool(RESUME_HINT.search(current_url)),
+            ))
+            saved_urls.add(resolved_url)
+            continue
+        if pages_saved >= max_pages:
+            continue
+        html = decode_document_text(content, content_type=content_type)
+        html, reason = screen_html(html, policy)
+        if reason:
+            logger.warning("Website content check for %s: %s", resolved_url, reason)
+        if html is None:
+            failed_pages += 1
+            continue
+        document = _parse_html(html)
+        linkedin_urls.update(_extract_linkedin_profile_urls(html))
+        page_path = _page_storage_path(staging_root, resolved_url, used_paths=page_paths)
         storage.write_text(
             page_path,
             _render_markdown_page(
                 title=document.title,
-                source_url=current_url,
+                source_url=resolved_url,
                 depth=current_depth,
                 body=document.markdown(),
             ),
         )
         pages_saved += 1
+        saved_urls.add(resolved_url)
+        # Follow the homepage's canonical host after normal www/domain redirects.
+        if current_url == start_url:
+            host = urlparse(resolved_url).netloc.lower()
+            if respect_robots and urlparse(start_url).netloc.lower() != host:
+                robots = _load_robots(resolved_url, session)
 
         for link in document.links:
-            absolute = _normalize_url(urljoin(current_url, link))
+            absolute = _normalize_url(urljoin(resolved_url, link))
             if _is_linkedin_profile_url(absolute):
                 linkedin_urls.add(_normalize_linkedin_profile_url(absolute))
             if not _same_host(absolute, host):
                 continue
             if _is_excluded_url(absolute):
                 continue
-            if _is_pdf_url(absolute, ""):
-                if include_pdfs and len(pdf_urls) < max_pdfs:
-                    pdf_urls.append(absolute)
+            suffix = PurePosixPath(urlparse(absolute).path).suffix.lower()
+            if suffix in DOCUMENT_EXTENSIONS:
+                if include_documents and len(document_records) < max_documents:
+                    queue.append((absolute, current_depth + 1, True))
                 continue
             if current_depth < depth and absolute not in seen:
-                queue.append((absolute, current_depth + 1))
-
-    pdf_records = []
-    if include_pdfs:
-        pdf_records = _download_pdfs(
-            pdf_urls,
-            write_root=staging_root,
-            manifest_root=website_root,
-            host=host,
-            session=session,
-            storage=storage,
-            robots=robots,
-            max_pdfs=max_pdfs,
-            max_pdf_mb=max_pdf_mb,
-        )
+                queue.append((absolute, current_depth + 1, False))
 
     if pages_saved == 0:
         storage.rmtree(staging_root)
@@ -345,7 +409,7 @@ def _crawl_website(
         _render_link_manifest(
             start_url=start_url,
             linkedin_urls=sorted_linkedin_urls,
-            pdf_records=pdf_records,
+            document_records=document_records,
         ),
     )
     try:
@@ -358,7 +422,8 @@ def _crawl_website(
         dataset_slug=dataset_slug,
         website_path=website_root,
         pages_saved=pages_saved,
-        pdfs_saved=len(pdf_records),
+        pdfs_saved=sum(record.local_path.endswith(".pdf") for record in document_records),
+        documents_saved=len(document_records),
         link_manifest_path=f"{website_root}/linkedin-and-resume-links.md",
         linkedin_urls_path=f"{website_root}/linkedin-urls.md",
         linkedin_urls_found=len(sorted_linkedin_urls),
@@ -431,10 +496,6 @@ def _is_excluded_url(url: str) -> bool:
     return any(part in EXCLUDED_PATH_PARTS for part in parts)
 
 
-def _is_pdf_url(url: str, content_type: str) -> bool:
-    return "application/pdf" in content_type or urlparse(url).path.lower().endswith(".pdf")
-
-
 def _is_linkedin_profile_url(url: str) -> bool:
     parsed = urlparse(url)
     return parsed.netloc.lower().endswith("linkedin.com") and "/in/" in parsed.path.lower()
@@ -483,11 +544,14 @@ def _page_storage_path(
     return _unique_storage_path(path, page_url, used_paths)
 
 
-def _pdf_storage_path(website_root: str, pdf_url: str, used_paths: set[str]) -> str:
-    parsed = urlparse(pdf_url)
-    filename = PurePosixPath(parsed.path).name or "document.pdf"
+def _document_storage_path(
+    website_root: str, url: str, extension: str, used_paths: set[str],
+) -> str:
+    parsed = urlparse(url)
+    filename = PurePosixPath(parsed.path).name or "document"
     stem = slugify(PurePosixPath(filename).stem) or "document"
-    return _unique_storage_path(f"{website_root}/pdfs/{stem}.pdf", pdf_url, used_paths)
+    directory = "pdfs" if extension == ".pdf" else "documents"
+    return _unique_storage_path(f"{website_root}/{directory}/{stem}{extension}", url, used_paths)
 
 
 def _unique_storage_path(path: str, source_url: str, used_paths: set[str]) -> str:
@@ -503,56 +567,6 @@ def _unique_storage_path(path: str, source_url: str, used_paths: set[str]) -> st
         counter += 1
     used_paths.add(candidate)
     return candidate
-
-
-def _download_pdfs(
-    urls: Iterable[str],
-    *,
-    write_root: str,
-    manifest_root: str,
-    host: str,
-    session,
-    storage: Storage,
-    robots: RobotFileParser | None,
-    max_pdfs: int,
-    max_pdf_mb: int,
-) -> list[PdfRecord]:
-    records: list[PdfRecord] = []
-    seen: set[str] = set()
-    pdf_paths: set[str] = set()
-    max_bytes = max_pdf_mb * 1024 * 1024
-    for url in urls:
-        if len(records) >= max_pdfs:
-            break
-        url = _normalize_url(url)
-        if url in seen or not _same_host(url, host):
-            continue
-        seen.add(url)
-        if robots and not robots.can_fetch(USER_AGENT, url):
-            continue
-        try:
-            response = _fetch(session, url)
-        except Exception as exc:
-            logger.warning("Failed to download PDF %s: %s", url, exc)
-            continue
-        content_type = response.headers.get("content-type", "").lower()
-        if not _is_pdf_url(url, content_type):
-            continue
-        content = response.content
-        if len(content) > max_bytes:
-            logger.warning("Skipping oversized PDF %s (%s bytes)", url, len(content))
-            continue
-        write_path = _pdf_storage_path(write_root, url, pdf_paths)
-        local_path = f"{manifest_root}/{write_path.removeprefix(write_root).lstrip('/')}"
-        storage.write_bytes(write_path, content)
-        records.append(
-            PdfRecord(
-                url=url,
-                local_path=local_path,
-                possible_resume=bool(RESUME_HINT.search(url)),
-            )
-        )
-    return records
 
 
 def _render_markdown_page(
@@ -579,7 +593,7 @@ def _render_link_manifest(
     *,
     start_url: str,
     linkedin_urls: list[str],
-    pdf_records: list[PdfRecord],
+    document_records: list[DocumentRecord],
 ) -> str:
     lines = [
         "---",
@@ -596,9 +610,9 @@ def _render_link_manifest(
         lines.extend(f"- {url}" for url in linkedin_urls)
     else:
         lines.append("_None found._")
-    lines.extend(["", "## Downloaded PDFs", ""])
-    if pdf_records:
-        for record in pdf_records:
+    lines.extend(["", "## Downloaded Documents", ""])
+    if document_records:
+        for record in document_records:
             marker = " possible resume/CV" if record.possible_resume else ""
             lines.append(f"- [{record.url}]({record.local_path}){marker}")
     else:
