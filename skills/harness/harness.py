@@ -205,6 +205,20 @@ async def _deep_dive_invitation(args: List[str]) -> str:
     ))
 
 
+async def _recruiting(args: List[str]) -> str:
+    parser = _parser("/recruiting")
+    parser.add_argument("dataset")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--criteria")
+    source.add_argument("--criteria-file")
+    ns = parser.parse_args(args)
+    from pathlib import Path
+    from skills.recruiting import recruiting
+
+    criteria = Path(ns.criteria_file).read_text(encoding="utf-8") if ns.criteria_file else ns.criteria
+    return _format_result(await recruiting(ns.dataset, criteria))
+
+
 async def _advocates(args: List[str]) -> str:
     parser = _parser("/advocates")
     parser.add_argument("event")
@@ -360,6 +374,7 @@ def build_registry() -> Dict[str, HarnessCommand]:
             "Create a review-only deep-dive invitation draft.",
             _deep_dive_invitation,
         ),
+        HarnessCommand("/recruiting", '/recruiting <dataset> [--criteria-file <path>]', "Assess recruitment applicants.", _recruiting),
         HarnessCommand("/advocates", '/advocates <event> --description "..."', "Rank event advocates.", _advocates),
         HarnessCommand("/suggested_startups", "/suggested_startups --startups a,b --investors x,y", "Suggest startups for investors.", _suggested_startups),
         HarnessCommand(

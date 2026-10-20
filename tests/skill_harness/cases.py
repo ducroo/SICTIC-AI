@@ -4,6 +4,11 @@ ADMIN_ONLY_HARNESS_COMMANDS = {
     "/dealum_import",
 }
 
+# These commands exercise dispatch with their workflow-specific fixtures.
+FOCUSED_HARNESS_TESTS = {
+    "/recruiting": "tests/skills/test_recruiting.py",
+}
+
 SKILL_COVERAGE = {
     "advocates": "local-smoke",
     "bulk_refresh": "existing-unit",
@@ -28,6 +33,7 @@ SKILL_COVERAGE = {
     "persons_in_dataset": "existing-unit",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
+    "recruiting": "existing-unit",
     "sha_review": "local-smoke",
     "send_gmail": "utility-smoke",
     "standards_and_architecture": "docs-only",

@@ -10,7 +10,9 @@ from lib.people.dossier import (
 
 
 @pytest.fixture(autouse=True)
-def parsed_dataset_path(mocker):
+def parsed_dataset_path(mocker, mock_env):
+    from lib.people.model import Person
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[Person(full_name="Stefan Klauser")])
     mocker.patch(
         "lib.people.dossier.dataset_parsed_path",
         return_value="docling_data/datasets2md/aisot",
@@ -157,3 +159,129 @@ async def test_oversized_personal_document_remains_a_chunk(mocker):
 
     assert dossier == []
     assert mentions == [chunk]
+
+
+def test_unique_ordered_combinations_and_short_exact_names():
+    from lib.people.dossier import _unique_name_phrases
+    names = ("Valentina Carla Mercedes Gasser", "Maarten Lucas Steven du Croo de Jongh", "Li Bo")
+    variants = _unique_name_phrases(names, 8)
+    assert "valentina gasser" in variants[0]
+    assert "lucas du croo de jongh" in variants[1]
+    assert "du de" not in variants[1]
+    assert "li bo" in variants[2]
+    assert "gasser valentina" not in variants[0]
+
+
+def test_all_shared_combinations_are_ambiguous_even_short_exact_names():
+    from lib.people.dossier import _unique_name_phrases
+    variants = _unique_name_phrases(("Valentina Carla Gasser", "Valentina Maria Gasser"), 8)
+    assert all("valentina gasser" not in names for names in variants)
+    assert "valentina carla gasser" in variants[0]
+    assert not _unique_name_phrases(("Li Bo", "Li Ming Bo"), 8)[0]
+    assert not any(_unique_name_phrases(("Stefan Klauser", "Stefan Klauser"), 8))
+
+
+def test_full_word_normalization():
+    from lib.people.dossier import _phrase_pattern, _matches_phrase
+    pattern = _phrase_pattern(frozenset({"valentina gasser"}))
+    assert _matches_phrase(pattern, "CV_VALENTINA-GASSER.pdf")
+    assert _matches_phrase(pattern, "Valentina\nGasser")
+    assert not _matches_phrase(pattern, "Valentina Gassert")
+    assert not _matches_phrase(pattern, "Valentina Gasser2")
+    assert not _matches_phrase(pattern, "NotValentina Gasser")
+    assert not _matches_phrase(pattern, "Valentina is friends with Gasser")
+
+
+@pytest.mark.asyncio
+async def test_scan_recovers_short_names_filenames_and_contacts_without_semantic_search(mocker):
+    from lib.people.dossier import get_filtered_chunks
+    from lib.people.model import Person
+    target = Person(full_name="Valentina Carla Mercedes Gasser", email_addresses=["v@example.com"],
+                    linkedin_id="valentina-gasser")
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[target])
+    sync = mocker.patch("lib.people.dossier.sync_datasets")
+    chunks = [
+        _chunk("CV_Valentina_Gasser.pdf", "Work history without a name"),
+        _chunk("letter.pdf", "Valentina Gasser wrote this."),
+        _chunk("email.pdf", "Contact v@example.com"),
+        _chunk("link.pdf", "https://www.linkedin.com/in/valentina-gasser/"),
+        _chunk("other.pdf", "Valentina Gassert wrote this."),
+    ]
+    mocker.patch("lib.people.dossier.iter_parsed_chunks", return_value=iter(chunks))
+    result = await get_filtered_chunks("aisot", target.full_name, "unused", person=target)
+    assert result == chunks[:4]
+    sync.assert_awaited_once_with(["aisot"], raise_on_error=True)
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_names_need_contact_evidence(mocker):
+    from lib.people.dossier import get_filtered_chunks
+    from lib.people.model import Person
+    one = Person(full_name="Valentina Carla Gasser", email_addresses=["one@example.com"])
+    two = Person(full_name="Valentina Maria Gasser", email_addresses=["two@example.com"])
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[one, two])
+    mocker.patch("lib.people.dossier.sync_datasets")
+    chunks = [_chunk("a.pdf", "Valentina Gasser"),
+              _chunk("b.pdf", "Valentina Gasser one@example.com"),
+              _chunk("c.pdf", "Valentina Gasser two@example.com")]
+    mocker.patch("lib.people.dossier.iter_parsed_chunks", return_value=iter(chunks))
+    assert await get_filtered_chunks("aisot", one.full_name, "", person=one) == [chunks[1]]
+
+
+@pytest.mark.asyncio
+async def test_short_name_document_expands_and_deduplicates(mocker):
+    from lib.people.model import Person
+    person = Person(full_name="Valentina Carla Mercedes Gasser")
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[person])
+    mocker.patch("lib.people.dossier.sync_datasets")
+    cv = _chunk("CV_Valentina_Gasser.pdf", "Professional history")
+    passage = _chunk("meeting.pdf", "Valentina Gasser participated.")
+    second = passage.model_copy(update={"chunk_id": "meeting-2", "page_number": 2})
+    mocker.patch("lib.people.dossier.iter_parsed_chunks", return_value=iter([cv, cv, passage, passage, second]))
+    storage = mocker.patch("lib.people.dossier.get_storage").return_value
+    storage.exists.return_value = True
+    storage.read_text.return_value = "Full resume"
+    dossier, mentions = await build_person_dossier("aisot", person.full_name, "", person=person)
+    assert len(dossier) == 1
+    assert len(mentions) == 2
+    assert {c.chunk_id for c in mentions} == {passage.chunk_id, second.chunk_id}
+    storage.read_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_missing_roster_and_sync_failure_are_not_empty_evidence(mocker):
+    from lib.people.dossier import get_filtered_chunks
+    read = mocker.patch("lib.people.dossier.persons_in_dataset", side_effect=FileNotFoundError("roster"))
+    with pytest.raises(FileNotFoundError):
+        await get_filtered_chunks("aisot", "Stefan Klauser", "")
+    read.side_effect = None
+    read.return_value = []
+    mocker.patch("lib.people.dossier.sync_datasets", side_effect=RuntimeError("ingestion"))
+    with pytest.raises(RuntimeError, match="ingestion"):
+        await get_filtered_chunks("aisot", "Stefan Klauser", "")
+
+
+def test_enriched_person_keeps_roster_identity(mocker):
+    from lib.people.dossier import _identity_filter, _matches_phrase
+    from lib.people.model import Person
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[Person(full_name="Jane Doe")])
+    enriched = Person(full_name="Jane Doe", linkedin_id="jane-doe")
+    target, pattern = _identity_filter("aisot", enriched.full_name, enriched)
+    assert target is enriched
+    assert _matches_phrase(pattern, "Jane Doe")
+
+
+@pytest.mark.asyncio
+async def test_large_named_document_keeps_nameless_pages_once(mocker):
+    mocker.patch("lib.people.dossier.sync_datasets")
+    a = _chunk("Stefan Klauser CV.pdf", "Relevant experience")
+    b = a.model_copy(update={"chunk_id": "second", "page_number": 2, "text": "More experience"})
+    mocker.patch("lib.people.dossier.iter_parsed_chunks", return_value=iter([a, b, a]))
+    storage = mocker.patch("lib.people.dossier.get_storage").return_value
+    storage.exists.return_value = True
+    storage.read_text.return_value = "x" * (MAX_FULL_DOCUMENT_CHARACTERS + 1)
+    dossier, mentions = await build_person_dossier("aisot", "Stefan Klauser", "")
+    assert not dossier
+    assert {c.chunk_id for c in mentions} == {a.chunk_id, b.chunk_id}
+    assert len(mentions) == 2
+    storage.read_text.assert_called_once()

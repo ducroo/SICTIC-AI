@@ -105,6 +105,13 @@ additional columns under their tag.
 Use [build_person_dossier](../../lib/people/dossier.py) for separate dossier and
 incidental-mention lists. Its `get_filtered_chunks`, `person_in_filename` and
 `is_personal_document` own retrieval filtering and document selection.
+Dossier retrieval scans current parsed sources using shared enumeration/chunking,
+matching full-word ordered name combinations unique within the existing roster,
+or exact person contact identifiers. It preserves synchronization, and keeps the
+query argument for caller compatibility rather than semantic ranking. The optional
+Person input supplies enriched contact details without changing identity matching.
+Dossiers deduplicate full documents and remove covered mentions; other mentions
+are deduplicated by chunk ID. Profile synthesis validates attribution.
 Dossiers exclude LinkedIn documents; profiling supplies that evidence separately.
 Preserve source-document and page metadata; do not recreate selection in skills.
 Local discovery uses shared source enumeration/chunking and the person extraction
@@ -288,6 +295,11 @@ through that schema; there is no separate error-scanning validator. Generated
 results are not revalidated before saving. Structural
 validation does not establish expected checklist coverage or citation accuracy. Synthesis belongs to the caller.
 
+Callers may supply an `evidence` prefix and set `retrieve=False` to assess
+only that evidence with shared `generate_json`. Default retrieval is unchanged.
+Non-default evidence/retrieval settings participate in freshness. Different
+applicants use distinct checklist H1 titles; the criteria body can be shared.
+
 Audit reuse is per checklist; technical-error artifacts are ineligible.
 The engine does not synchronize on a cache hit. Callers that require current
 index state synchronize before lookup and document their additional dependencies.
@@ -451,7 +463,7 @@ repairs unambiguous JSON syntax; `validate_json_schema` checks the contract
 without modifying data; an optional `Review` reviewer checks business rules.
 Reviewers receive schema-valid data, and generation validates their returned
 payload again. The provider response format omits unsupported `if`/`then`/`else`
-keywords and regular-expression `pattern` keywords, which local Ollama models
+keywords, `allOf` composition and regular-expression `pattern` keywords, which providers
 reject or stall on; the prompt and local validator retain the full schema,
 including those checks. Put nonblank-text constraints and structural field
 dependencies in schemas. Perform business review once within generation; afterwards only

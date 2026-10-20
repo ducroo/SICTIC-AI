@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "rank": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Unique position among all supplied candidates; 1 is the strongest fit."
+      },
+      "rationale": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S",
+        "description": "A concise comparative rationale for this applicant's position."
+      }
+    },
+    "required": ["rank", "rationale"],
+    "additionalProperties": false
+  }
+}

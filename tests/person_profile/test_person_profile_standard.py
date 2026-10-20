@@ -322,3 +322,15 @@ async def test_invalid_provider_response_still_blocks_profile(local_profiles):
     with pytest.raises(InfrastructureError, match="invalid response"):
         await local_profiles.person_profile("acme")
     local_profiles.generate_markdown.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_roster_change_invalidates_profile_evidence_selection(local_profiles):
+    module = local_profiles
+    await module.person_profile("acme", names="Jane Doe")
+    assert module.generate_markdown.await_count == 1
+    InsightFile("acme", "persons_in_dataset", "manual").save(
+        "| full-name | linkedin-id |\n|---|---|\n| Jane Doe | |\n| Jane Mary Doe | jane-mary |\n"
+    )
+    await module.person_profile("acme", names="Jane Doe")
+    assert module.generate_markdown.await_count == 2
