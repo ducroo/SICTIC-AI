@@ -1,0 +1,1108 @@
+{
+  "provider": "Dealum",
+  "version": "snapshot-2026-10-20",
+  "status": "INCOMPLETE: observed application values, not authoritative full option lists",
+  "sources": [
+    "local-storage/storage/startups/*/datasets/dealum/**/application.raw.json"
+  ],
+  "id_policy": "Local stable keys; PitchBook numeric keys retain historical printed numbering, not current platform IDs.",
+  "components": {
+    "industries": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "aerospace",
+          "name": "Aerospace",
+          "description": "Aircraft, spacecraft and associated systems, components and services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "agriculture-aquaculture-agritech",
+          "name": "Agriculture, Aquaculture & Agritech",
+          "description": "Crop production, aquatic farming and technologies supporting them.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "automotive",
+          "name": "Automotive",
+          "description": "Vehicles, automotive components and supporting vehicle systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "biotechnology",
+          "name": "Biotechnology",
+          "description": "Products based on biological processes, organisms or molecular research.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cleantech",
+          "name": "Cleantech",
+          "description": "Technology reducing environmental impact through energy, resource or pollution improvements.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "construction",
+          "name": "Construction",
+          "description": "Building and civil construction products, processes and services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "consumer-electronics-appliances",
+          "name": "Consumer Electronics & Appliances",
+          "description": "Electronic devices and appliances purchased for personal or household use.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "consumer-services",
+          "name": "Consumer Services",
+          "description": "Services sold principally to individuals or households.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "creative-industries",
+          "name": "Creative Industries",
+          "description": "Commercial creation, design and production of creative content.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "data-analytics",
+          "name": "Data & Analytics",
+          "description": "Data collection, management and analysis as the core offering.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "deep-tech",
+          "name": "Deep tech",
+          "description": "Products based on substantial scientific or engineering innovation. This describes the scientific basis rather than the principal customer application; prefer an evidenced application or offering category as primary when available.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "defence",
+          "name": "Defence",
+          "description": "Products and services whose core application is military defence.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "diagnostics",
+          "name": "Diagnostics",
+          "description": "Tests and tools identifying or characterising diseases and medical conditions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "digital-health",
+          "name": "Digital Health",
+          "description": "Digital products improving healthcare delivery, monitoring or clinical workflows.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "e-commerce",
+          "name": "E-commerce",
+          "description": "Buying and selling goods or services through digital channels.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "edtech",
+          "name": "Edtech",
+          "description": "Technology supporting education, learning or training.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "energy",
+          "name": "Energy",
+          "description": "Generation, storage, distribution and efficient use of energy.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "engineering",
+          "name": "Engineering",
+          "description": "Engineering design, development and technical implementation services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "entertainment",
+          "name": "Entertainment",
+          "description": "Products, experiences and content consumed for entertainment.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "femtech",
+          "name": "Femtech",
+          "description": "Technology addressing female health and related care needs.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "fintech",
+          "name": "Fintech",
+          "description": "Technology for payments, banking, lending, investing and other financial services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "fishing-hunting",
+          "name": "Fishing & Hunting",
+          "description": "Commercial fishing, hunting and associated equipment or services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "food-beverage",
+          "name": "Food & Beverage",
+          "description": "Food and drink production, processing, distribution and consumption.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "gaming",
+          "name": "Gaming",
+          "description": "Video games, gaming platforms and related gaming services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "hardware-electronic-equipment",
+          "name": "Hardware & Electronic Equipment",
+          "description": "Physical computing, electronic equipment and components.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "healthcare",
+          "name": "Healthcare",
+          "description": "Products and services for prevention, diagnosis, treatment and patient care.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "household-personal-products",
+          "name": "Household & Personal Products",
+          "description": "Products for household use, personal care and everyday consumption.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "human-resource-employment",
+          "name": "Human Resource & Employment",
+          "description": "Recruitment, workforce management and employment services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "infrastructure-logistics",
+          "name": "Infrastructure & Logistics",
+          "description": "Essential physical networks and systems, including water and utility infrastructure, and systems for coordinating, handling, storing and distributing goods. Prefer a specialist application where available; prefer Transportation when the core offering is physically moving people or goods, including vehicles and transport services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "legaltech",
+          "name": "Legaltech",
+          "description": "Technology supporting legal services, compliance and legal workflows.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "machinery-electrical",
+          "name": "Machinery & Electrical",
+          "description": "Industrial machinery, electrical equipment and associated systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "manufacturing",
+          "name": "Manufacturing",
+          "description": "Production processes, industrial fabrication and manufacturing operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "maritime",
+          "name": "Maritime",
+          "description": "Ships, marine operations and technology for maritime activities.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "marketing",
+          "name": "Marketing",
+          "description": "Advertising, customer acquisition, sales enablement and marketing analytics.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "materials-chemicals",
+          "name": "Materials & Chemicals",
+          "description": "Development and production of materials, chemicals and chemical processes.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "media",
+          "name": "Media",
+          "description": "Creation, publication, distribution and monetisation of media content.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "medical-devices",
+          "name": "Medical Devices",
+          "description": "Physical instruments and equipment used in medical diagnosis, monitoring or treatment.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mining-metallurgy",
+          "name": "Mining & Metallurgy",
+          "description": "Mineral extraction, metal processing and metallurgical technologies.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "office-services",
+          "name": "Office Services",
+          "description": "Administrative services supporting workplace and office operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "pharmaceutical",
+          "name": "Pharmaceutical",
+          "description": "Development, production and distribution of medicinal drugs.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "proptech",
+          "name": "Proptech",
+          "description": "Technology for property, real estate and associated construction or management.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "public-services-exl-education",
+          "name": "Public services (exl. education)",
+          "description": "Services supporting government and public administration, excluding education.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "research-consulting",
+          "name": "Research & Consulting",
+          "description": "Research services and professional advice supplied to organisations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "retail",
+          "name": "Retail",
+          "description": "Sale of goods to end consumers through physical or digital stores.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "road-rail",
+          "name": "Road & Rail",
+          "description": "Road and railway transport, equipment and infrastructure.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "science-tools-services",
+          "name": "Science Tools & Services",
+          "description": "Instruments, tools and services enabling scientific research.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "software-services",
+          "name": "Software & Services",
+          "description": "Software products and associated IT services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "telecommunication-services",
+          "name": "Telecommunication & Services",
+          "description": "Communications networks, connectivity and telecom services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "textiles-apparel-luxury-goods",
+          "name": "Textiles, Apparel & Luxury Goods",
+          "description": "Textiles, clothing, accessories and luxury consumer goods.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "transportation",
+          "name": "Transportation",
+          "description": "Physically moving people or goods, including vehicles and transport services. Prefer Infrastructure & Logistics when the core offering is infrastructure or systems for coordinating, handling, storing or distributing goods rather than the movement itself.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "travel-hospitality",
+          "name": "Travel & Hospitality",
+          "description": "Travel, accommodation, tourism and hospitality services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "veterinary",
+          "name": "Veterinary",
+          "description": "Animal health, veterinary diagnosis and treatment.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "wellness",
+          "name": "Wellness",
+          "description": "Products and services supporting wellbeing and healthy living.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    },
+    "technologies": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "3d-printing",
+          "name": "3D printing",
+          "description": "Additive manufacture of physical objects from digital designs.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai",
+          "name": "AI",
+          "description": "Broad family of technologies for perception, reasoning, learning and generation. Prefer a supported specialist category when it adequately describes the core capability.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "api-provider",
+          "name": "API provider",
+          "description": "Programmatic access to a product or service through an application interface.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "advanced-driver-assistance-systems",
+          "name": "Advanced Driver Assistance Systems",
+          "description": "Vehicle systems assisting drivers with sensing, warning and control.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "advanced-materials",
+          "name": "Advanced materials",
+          "description": "Materials engineered for novel or improved physical or functional properties.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "agriculture-machines",
+          "name": "Agriculture machines",
+          "description": "Machinery for agricultural production and farm operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "airborne-wind-turbines",
+          "name": "Airborne wind turbines",
+          "description": "Wind-energy generation using airborne devices such as kites or tethered aircraft.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "audio-video-compression",
+          "name": "Audio/Video compression",
+          "description": "Reducing the data needed to store or transmit audio and video.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "augmented-reality-ar",
+          "name": "Augmented Reality (AR)",
+          "description": "Digital content overlaid on a view of the physical world.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "autonomous-systems",
+          "name": "Autonomous systems",
+          "description": "Systems that perceive, decide and act with limited human intervention. Prefer when autonomous operation is the distinctive capability; prefer Drones when the distinctive capability lies in aircraft design, flight or payload handling.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "autonomous-vehicle",
+          "name": "Autonomous vehicle",
+          "description": "Vehicles capable of navigating or driving without continuous human control.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "avionics",
+          "name": "Avionics",
+          "description": "Electronic systems used in aircraft and spacecraft.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "battery-storage",
+          "name": "Battery storage",
+          "description": "Storing electrical energy in electrochemical batteries.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "big-data",
+          "name": "Big Data",
+          "description": "Storage, processing and analysis of large or complex datasets.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "biomaterials",
+          "name": "Biomaterials",
+          "description": "Materials whose biological origin or interaction with living systems is central to their function or value, including bio-based packaging and biomedical materials.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "biometrics",
+          "name": "Biometrics",
+          "description": "Recognition or measurement of biological traits for identification or analysis.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "bioprinting",
+          "name": "Bioprinting",
+          "description": "Additive fabrication using biological materials or living cells.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "blockchain",
+          "name": "Blockchain",
+          "description": "Distributed-ledger infrastructure and applications. Prefer Cryptocurrency when the core capability specifically concerns cryptocurrency assets rather than general-purpose ledger infrastructure.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "body-implants",
+          "name": "Body implants",
+          "description": "Devices or materials placed inside the body for medical purposes.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cad-cam-software",
+          "name": "CAD/CAM software",
+          "description": "Computer-aided design and manufacturing software.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "civil-engineering",
+          "name": "Civil Engineering",
+          "description": "Engineering of buildings, transport and public infrastructure.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cloud-computing",
+          "name": "Cloud computing",
+          "description": "Computing resources and services delivered through remote infrastructure.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "coatings",
+          "name": "Coatings",
+          "description": "Surface layers providing protective or functional properties.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cognitive-robotics",
+          "name": "Cognitive robotics",
+          "description": "Robots using perception, learning and reasoning to adapt their actions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "computer-graphics",
+          "name": "Computer Graphics",
+          "description": "Computational generation and manipulation of visual imagery.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "computer-vision",
+          "name": "Computer Vision",
+          "description": "Specialist area of AI for interpreting images or video, including segmentation and object detection. Prefer over generic AI or Machine Learning for these capabilities; learned models implementing computer vision do not justify an additional Machine Learning label.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "connected-health",
+          "name": "Connected Health",
+          "description": "Networked tools connecting patients, devices and healthcare providers.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "consumer-robotics",
+          "name": "Consumer robotics",
+          "description": "Robotic products intended for personal or household use.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cryptocurrency",
+          "name": "Cryptocurrency",
+          "description": "Technologies for issuing, holding, transferring or using cryptocurrency assets, including wallets, staking and cryptocurrency-based financial products. Prefer over Blockchain when cryptocurrency-specific capabilities are central.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cryptography",
+          "name": "Cryptography",
+          "description": "Mathematical techniques protecting confidentiality, integrity and authenticity.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cultured-animal-products",
+          "name": "Cultured animal products",
+          "description": "Animal-derived products produced through cell culture rather than conventional farming.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cybersecurity",
+          "name": "Cybersecurity",
+          "description": "Protection of computers, networks and information from digital threats.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "data-mining",
+          "name": "Data Mining",
+          "description": "Discovering patterns and relationships in datasets.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "data-analytics",
+          "name": "Data analytics",
+          "description": "Analysing data to produce insights, predictions or decisions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "diagnostics-imaging",
+          "name": "Diagnostics/Imaging",
+          "description": "Medical testing and imaging used to identify or characterise conditions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "drones",
+          "name": "Drones",
+          "description": "Uncrewed aircraft and flight-specific technologies. Prefer when the distinctive capability lies in aircraft design, flight or payload handling; prefer Autonomous systems when autonomous perception, decisions and actions are the distinctive capability.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "e-commerce-tools",
+          "name": "E-commerce tools",
+          "description": "Software enabling online commerce and merchant operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "electric-vehicle",
+          "name": "Electric vehicle",
+          "description": "Vehicles propelled by electric motors and associated vehicle technology.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "embedded-systems",
+          "name": "Embedded systems",
+          "description": "Computing integrated within physical products or equipment.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "expert-systems",
+          "name": "Expert Systems",
+          "description": "Software using an explicit domain knowledge representation and inference or decision rules to reach recommendations or decisions. Domain expertise, a recommendation output or an LLM using domain documents alone does not establish this category.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "flywheel-energy-storage",
+          "name": "Flywheel energy storage",
+          "description": "Storing energy as rotational kinetic energy.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "formal-verification",
+          "name": "Formal Verification",
+          "description": "Mathematical proof that software or hardware satisfies specified properties.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "genetic-engineering",
+          "name": "Genetic engineering",
+          "description": "Modification of genetic material to change biological functions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "genome-sequencing",
+          "name": "Genome sequencing",
+          "description": "Determining the order of genetic material in an organism or sample.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "geoinformatics",
+          "name": "Geoinformatics",
+          "description": "Computing and analysis of spatial or geographic information.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "industrial-robotics",
+          "name": "Industrial robotics",
+          "description": "Robots used in industrial production and related operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "iot",
+          "name": "IoT",
+          "description": "Connected physical devices exchanging data through networks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "lasers",
+          "name": "Lasers",
+          "description": "Coherent light sources and systems built around them.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "logistics-scm",
+          "name": "Logistics & SCM",
+          "description": "Technology managing logistics and supply chains.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "machine-learning",
+          "name": "Machine Learning",
+          "description": "Specialist area of AI using models learned from data. Prefer when the learning method itself is the distinctive capability; prefer Natural language processing, Computer Vision or Predictive Analytics when those more specifically describe it. Do not select alongside a specialist merely because it uses learned models; select separately only for another central capability not covered by that specialist.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "machine-vision-sensing",
+          "name": "Machine vision/sensing",
+          "description": "Machine perception using cameras or other sensing devices.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "magnetic-levitation",
+          "name": "Magnetic levitation",
+          "description": "Suspension or movement using magnetic forces.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "marketplace-services",
+          "name": "Marketplace services",
+          "description": "Platforms facilitating exchanges between buyers and sellers.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "measurement-equipment",
+          "name": "Measurement equipment",
+          "description": "Instruments for measuring physical or other observable quantities.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "medical-devices-instruments",
+          "name": "Medical devices & instruments",
+          "description": "Equipment used in medical diagnosis, monitoring or treatment. Use as primary when no more specific supported category explains the core capability. Prefer the mechanism responsible for distinctive performance or economics, including diagnostic, measurement, design or fabrication technology, over the medical product category.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "metal-processing",
+          "name": "Metal processing",
+          "description": "Processes shaping, treating or refining metals.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "meteorological-sensors",
+          "name": "Meteorological sensors",
+          "description": "Sensors measuring weather and atmospheric conditions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "microphones",
+          "name": "Microphones",
+          "description": "Devices capturing sound and converting it to signals.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mobile-security",
+          "name": "Mobile security",
+          "description": "Protection of mobile devices, applications and data.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "nano-medicines",
+          "name": "Nano medicines",
+          "description": "Medical products using nanoscale materials or delivery mechanisms.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "nanotechnology",
+          "name": "Nanotechnology",
+          "description": "Engineering of materials and devices at nanometre scales.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "natural-language-processing",
+          "name": "Natural language processing",
+          "description": "Specialist area of AI for understanding, analysing or generating human language, including text analysis and generation. Prefer over generic AI or Machine Learning when language processing is the principal distinctive capability; learned models implementing language processing do not justify an additional Machine Learning label.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "network-security",
+          "name": "Network security",
+          "description": "Protection of communications networks and their traffic.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "neuroscience",
+          "name": "Neuroscience",
+          "description": "Study or application of nervous-system structure and function, including interventions using neural mechanisms and neuroplasticity. Prefer when this mechanism produces the principal therapeutic benefit; prediction, personalisation or monitoring software may be supporting technologies.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "online-payment-processing",
+          "name": "Online payment processing",
+          "description": "Technology authorising and handling digital payments.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "optoelectronics",
+          "name": "Optoelectronics",
+          "description": "Devices combining optical and electronic functions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "p2p-networks",
+          "name": "P2P networks",
+          "description": "Distributed networks exchanging resources directly between peers.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "pos-systems",
+          "name": "POS systems",
+          "description": "Technology handling transactions at the point of sale.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "polymer",
+          "name": "Polymer",
+          "description": "Polymeric materials and their production or processing.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "predictive-analytics",
+          "name": "Predictive Analytics",
+          "description": "Forecasting future outcomes, risks or behaviour from data, using statistical or machine-learning methods. Prefer over generic AI or Machine Learning when forecasting is the core capability.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "processors-business-or-consumer",
+          "name": "Processors, business or consumer",
+          "description": "Computing processors designed for enterprise or consumer applications.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "production-machines",
+          "name": "Production machines",
+          "description": "Machinery performing manufacturing and production tasks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "purification-technology",
+          "name": "Purification technology",
+          "description": "Processes removing contaminants from substances or streams.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "quantum-computing",
+          "name": "Quantum computing",
+          "description": "Computing using quantum states and operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "satellite-technology",
+          "name": "Satellite technology",
+          "description": "Satellite platforms, payloads, communications and associated systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "semantic-web",
+          "name": "Semantic Web",
+          "description": "Structured, linked web data designed for machine interpretation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "semiconductor-electronics",
+          "name": "Semiconductor electronics",
+          "description": "Electronic devices based on semiconductor materials.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "servers-networks",
+          "name": "Servers & networks",
+          "description": "Computing servers and network infrastructure.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "service-robotics",
+          "name": "Service robotics",
+          "description": "Robots performing service tasks outside conventional industrial production.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "slam-technology",
+          "name": "Slam technology",
+          "description": "Simultaneous localisation and mapping for autonomous navigation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "smart-city",
+          "name": "Smart city",
+          "description": "Connected technology supporting urban infrastructure and services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "smart-grid",
+          "name": "Smart grid",
+          "description": "Digital sensing and control of electrical networks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "smart-home",
+          "name": "Smart home",
+          "description": "Connected automation and control of household systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "smart-metering",
+          "name": "Smart metering",
+          "description": "Digital measurement and communication of utility consumption.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "smart-mobility",
+          "name": "Smart mobility",
+          "description": "Connected or optimised transport and mobility systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "software-engines",
+          "name": "Software engines",
+          "description": "Reusable core software providing a distinct capability to other applications, such as simulation or rendering. An ordinary software product or SaaS service alone does not qualify. Reusability alone does not determine primacy: prefer a more specific category for the distinctive computational capability when established.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "solar-energy",
+          "name": "Solar energy",
+          "description": "Technology whose core capability is generating, converting, storing or specifically using solar energy. Do not select as primary when solar energy is an input to a core process that can operate on alternative energy sources; equipment that can run on solar energy does not qualify on that fact alone.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "sound-engineering-equipment",
+          "name": "Sound (engineering) equipment",
+          "description": "Equipment for recording, processing or reproducing sound.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "special-purpose-algorithm",
+          "name": "Special purpose algorithm",
+          "description": "Algorithms designed for a specific application or computational task.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "speech-recognition",
+          "name": "Speech Recognition",
+          "description": "Converting spoken language into text or machine-interpretable commands.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "stem-cell",
+          "name": "Stem cell",
+          "description": "Technologies using cells capable of differentiation or self-renewal.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "synthetic-biology",
+          "name": "Synthetic Biology",
+          "description": "Engineering biological systems or organisms for designed functions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "tissue-engineering-printing",
+          "name": "Tissue engineering & printing",
+          "description": "Engineering or printing biological tissues for research or medical use.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "transformers",
+          "name": "Transformers",
+          "description": "Provider label is ambiguous between electrical and AI uses; do not select without a verified definition.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "virtual-reality-vr",
+          "name": "Virtual Reality (VR)",
+          "description": "Immersive computer-generated environments.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "waste-separation-recycling",
+          "name": "Waste separation/recycling",
+          "description": "Sorting and recovering materials from waste streams.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "wearables",
+          "name": "Wearables",
+          "description": "Electronic devices worn on the body.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "web-crawling",
+          "name": "Web Crawling",
+          "description": "Automated discovery and collection of web content.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "web-mobile-tools",
+          "name": "Web/mobile tools",
+          "description": "Tools for developing, deploying or operating web and mobile applications. A business delivered through a website or app does not qualify on that fact alone.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "wind-turbines-blades",
+          "name": "Wind turbines & blades",
+          "description": "Equipment converting wind energy into usable power.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "wireless-sensor-networks",
+          "name": "Wireless Sensor Networks",
+          "description": "Networks of wirelessly connected sensing devices.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "workforce-assistance",
+          "name": "Workforce assistance",
+          "description": "Technology supporting workers in carrying out their tasks.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    }
+  },
+  "derived_components": {},
+  "reporting_groups": []
+}

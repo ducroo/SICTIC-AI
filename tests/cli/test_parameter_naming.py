@@ -68,21 +68,21 @@ def test_selectors_preserve_python_calls(
 
 
 @pytest.mark.parametrize("option", ["--startups", "--startup"])
-def test_startup_profile_batch_keeps_files_order_and_failure_behavior(monkeypatch, option):
+def test_startup_profile_batch_keeps_order_and_failure_behavior(monkeypatch, option):
     module = importlib.import_module("skills.startup_profile.__main__")
     workflow = AsyncMock(side_effect=[RuntimeError("fixture failure"), []])
     monkeypatch.setattr(module, "startup_profile", workflow)
 
     result = CliRunner().invoke(
         module.app,
-        [option, "Example One, , Example Two", "--files", "one.pdf", "--files", "two.pdf"],
+        [option, "Example One, , Example Two"],
     )
 
     assert result.exit_code == 1
     assert "fixture failure" in result.output
     assert [call.args for call in workflow.await_args_list] == [
-        ("Example One", ["one.pdf", "two.pdf"]),
-        ("Example Two", ["one.pdf", "two.pdf"]),
+        ("Example One",),
+        ("Example Two",),
     ]
 
 

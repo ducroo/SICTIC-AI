@@ -179,5 +179,5 @@ def test_bulk_refresh_revised_waits_for_person_profiles():
     from skills.skill_registry import expand_skill_dependencies
 
     assert expand_skill_dependencies(["team-profile-revised"]) == [
-        "startup-profile", "persons-in-dataset", "person-profile", "team-profile-revised",
+        "startup-profile", "startup-sector", "persons-in-dataset", "person-profile", "team-profile-revised",
     ]

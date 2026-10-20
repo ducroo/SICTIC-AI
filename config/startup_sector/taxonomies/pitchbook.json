@@ -1,0 +1,2830 @@
+{
+  "provider": "PitchBook",
+  "version": "snapshot-2026-10-20",
+  "status": "Historical 2017 hierarchy; current taxonomy unverified. Public vertical list is not a verified current platform export.",
+  "sources": [
+    "https://nvca.org/wp-content/uploads/2023/07/NVCA-2017-Yearbook.pdf",
+    "https://pitchbook.com/what-are-industry-verticals"
+  ],
+  "id_policy": "Local stable keys; PitchBook numeric keys retain historical printed numbering, not current platform IDs.",
+  "components": {
+    "industries": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "7.1.1",
+          "name": "Animal Husbandry",
+          "description": "Companies that breed, raise, and market livestock.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.1"
+          ]
+        },
+        {
+          "id": "7.1.2",
+          "name": "Aquaculture",
+          "description": "Companies that cultivate and market aquatic organisms.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.1"
+          ]
+        },
+        {
+          "id": "7.1.3",
+          "name": "Cultivation",
+          "description": "Agricultural cultivation and growing operations.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.1"
+          ]
+        },
+        {
+          "id": "7.1.4",
+          "name": "Horticulture",
+          "description": "Companies that cultivate and market grains, fruits, flowers, and vegetables.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.1"
+          ]
+        },
+        {
+          "id": "7.1.5",
+          "name": "Other Agriculture",
+          "description": "Agriculture outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.1"
+          ]
+        },
+        {
+          "id": "2.1.1",
+          "name": "Accessories",
+          "description": "Fashion accessories complementing clothing.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.1"
+          ]
+        },
+        {
+          "id": "2.1.2",
+          "name": "Clothing",
+          "description": "Manufacturers or designers of clothing.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.1"
+          ]
+        },
+        {
+          "id": "2.1.3",
+          "name": "Footwear",
+          "description": "Shoes and other footwear products.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.1"
+          ]
+        },
+        {
+          "id": "2.1.4",
+          "name": "Luxury Goods",
+          "description": "Manufacturers or designers of luxury goods.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.1"
+          ]
+        },
+        {
+          "id": "2.1.5",
+          "name": "Other Apparel",
+          "description": "Apparel outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.1"
+          ]
+        },
+        {
+          "id": "4.1.1",
+          "name": "Asset Management",
+          "description": "Financial institutions providing management of various securities to meet specified investment goals for the investors.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.1"
+          ]
+        },
+        {
+          "id": "4.1.2",
+          "name": "Brokerage",
+          "description": "Financial Institutions acting as an intermediary between a buyer and seller of securities, usually charging a commission.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.1"
+          ]
+        },
+        {
+          "id": "4.1.3",
+          "name": "Investment Banks",
+          "description": "Financial institutions functioning across all areas of capital markets.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.1"
+          ]
+        },
+        {
+          "id": "4.1.5",
+          "name": "Other Capital Markets/Institutions",
+          "description": "Capital Markets/Institutions outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.1"
+          ]
+        },
+        {
+          "id": "4.1.4",
+          "name": "Private Equity",
+          "description": "Financial institutions engaged in long-term loans with multinational corporations and governments.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.1"
+          ]
+        },
+        {
+          "id": "7.2.1",
+          "name": "Agricultural Chemicals",
+          "description": "Producers of chemicals used primarily in an agricultural setting.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.2"
+          ]
+        },
+        {
+          "id": "7.2.2",
+          "name": "Commodity Chemicals",
+          "description": "Producers of chemicals that are sold in bulk due to their low cost.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.2"
+          ]
+        },
+        {
+          "id": "7.2.3",
+          "name": "Industrial Chemicals",
+          "description": "Producers of chemicals used primarily in industrial applications.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.2"
+          ]
+        },
+        {
+          "id": "7.2.4",
+          "name": "Multi-line Chemicals",
+          "description": "Producers of diversified chemicals.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.2"
+          ]
+        },
+        {
+          "id": "7.2.6",
+          "name": "Other Chemicals and Gases",
+          "description": "Chemicals and Gases outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.2"
+          ]
+        },
+        {
+          "id": "7.2.5",
+          "name": "Specialty Chemicals",
+          "description": "Producers of proprietary or advanced chemical compounds.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.2"
+          ]
+        },
+        {
+          "id": "4.2.1",
+          "name": "International Banks",
+          "description": "Non-investment commercial banks located in more than one country.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.2"
+          ]
+        },
+        {
+          "id": "4.2.2",
+          "name": "National Banks",
+          "description": "Non-investment commercial banks located in one country.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.2"
+          ]
+        },
+        {
+          "id": "4.2.5",
+          "name": "Other Commercial Banks",
+          "description": "Commercial Banks outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.2"
+          ]
+        },
+        {
+          "id": "4.2.3",
+          "name": "Regional Banks",
+          "description": "Non-investment commercial banks located in a particular region.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.2"
+          ]
+        },
+        {
+          "id": "4.2.4",
+          "name": "Thrifts and Mortgage Finance",
+          "description": "Savings institutions and mortgage-finance providers.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.2"
+          ]
+        },
+        {
+          "id": "1.1.1",
+          "name": "Aerospace and Defense",
+          "description": "Manufacturers of equipment, parts or products related to civil or military aerospace and defense.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.1.2",
+          "name": "Building Products",
+          "description": "Manufacturers and distributors of home improvement and construction products and equipment.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.1.3",
+          "name": "Distributors/Wholesale",
+          "description": "Companies engaged in the sale of bulk goods for resale by a retailer.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.1.4",
+          "name": "Electrical Equipment",
+          "description": "Manufacturers of electrical equipment and components.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.1.5",
+          "name": "Industrial Supplies and Parts",
+          "description": "Manufacturers of intermediate goods.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.1.6",
+          "name": "Machinery",
+          "description": "Manufacturers of heavy- duty industrial machinery.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.1.7",
+          "name": "Other Commercial Products",
+          "description": "Commercial Products outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.1"
+          ]
+        },
+        {
+          "id": "1.2.1",
+          "name": "Accounting, Audit and Tax Services",
+          "description": "Accounting, audit and tax services for clients.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.2",
+          "name": "BPO/Outsource Services",
+          "description": "Providers of business process outsourcing (BPO) services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.3",
+          "name": "Construction and Engineering",
+          "description": "Companies engaged in large scale or non- residential construction.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.4",
+          "name": "Consulting Services",
+          "description": "Providers of specialized consulting services to improve a company’s performance.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.5",
+          "name": "Education and Training Services",
+          "description": "Providers of specialized education and training services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.6",
+          "name": "Environmental Services",
+          "description": "Providers of environmental services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.7",
+          "name": "Human Capital Services",
+          "description": "Providers of human resource and employment services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.8",
+          "name": "Legal Services",
+          "description": "Providers of corporate legal services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.9",
+          "name": "Logistics",
+          "description": "Coordination, transport and storage of goods.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.10",
+          "name": "Media and Information Services",
+          "description": "Providers of media and information services to businesses.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.11",
+          "name": "Office Services",
+          "description": "Providers of administrative, office management, and personnel services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.14",
+          "name": "Other Commercial Services",
+          "description": "Commercial Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.12",
+          "name": "Printing Services",
+          "description": "Providers of commercial printing services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "1.2.13",
+          "name": "Security Services",
+          "description": "Provider of residential and commercial security services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.2"
+          ]
+        },
+        {
+          "id": "6.1.1",
+          "name": "Cable Service Providers",
+          "description": "Developers and marketers of television, internet and voice services for cable networks.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.2",
+          "name": "Connectivity Products",
+          "description": "Manufacturers of electronic components used to create networks or link devices.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.3",
+          "name": "Fiberoptic Equipment",
+          "description": "Manufacturers of fiber optic and photonics equipment.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.4",
+          "name": "Internet Service Providers",
+          "description": "Providers of dial-up and DSL access to the internet.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.8",
+          "name": "Other Communications and Networking",
+          "description": "Communications and Networking outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.5",
+          "name": "Telecommunications Service Providers",
+          "description": "Operators providing communications connectivity and services.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.6",
+          "name": "Wireless Communications Equipment",
+          "description": "Equipment enabling wireless communications.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "6.1.7",
+          "name": "Wireless Service Providers",
+          "description": "Providers of wireless telephone networks.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.1"
+          ]
+        },
+        {
+          "id": "7.3.1",
+          "name": "Raw Materials (Non-Wood)",
+          "description": "Harvesters or producers of non-wood construction materials.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.3"
+          ]
+        },
+        {
+          "id": "2.2.1",
+          "name": "Business Equipment and Supplies",
+          "description": "Equipment and supplies supporting workplace operations.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.2"
+          ]
+        },
+        {
+          "id": "2.2.2",
+          "name": "Electronics",
+          "description": "Manufacturers of consumer electronics.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.2"
+          ]
+        },
+        {
+          "id": "2.2.3",
+          "name": "Home Furnishings",
+          "description": "Manufacturers of home furniture and other decorative accessories.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.2"
+          ]
+        },
+        {
+          "id": "2.2.4",
+          "name": "Household Appliances",
+          "description": "Manufacturers of household appliances.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.2"
+          ]
+        },
+        {
+          "id": "2.2.6",
+          "name": "Other Consumer Durables",
+          "description": "Consumer Durables outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.2"
+          ]
+        },
+        {
+          "id": "2.2.5",
+          "name": "Recreational Goods",
+          "description": "Manufacturers of recreational goods.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.2"
+          ]
+        },
+        {
+          "id": "2.3.1",
+          "name": "Beverages",
+          "description": "Producers and distributors of alcoholic and non-alcoholic beverages.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.3"
+          ]
+        },
+        {
+          "id": "2.3.2",
+          "name": "Food Products",
+          "description": "Producers, processors, and distributors of food products.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.3"
+          ]
+        },
+        {
+          "id": "2.3.3",
+          "name": "Household Products",
+          "description": "Manufacturers of household products.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.3"
+          ]
+        },
+        {
+          "id": "2.3.5",
+          "name": "Other Consumer Non-Durables",
+          "description": "Consumer Non-Durables outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.3"
+          ]
+        },
+        {
+          "id": "2.3.4",
+          "name": "Personal Products",
+          "description": "Manufacturers of personal products.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.3"
+          ]
+        },
+        {
+          "id": "7.4.1",
+          "name": "Metal",
+          "description": "Producers of metal containers and packaging materials.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.4"
+          ]
+        },
+        {
+          "id": "7.4.5",
+          "name": "Other Containers and Packaging",
+          "description": "Containers and Packaging outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.4"
+          ]
+        },
+        {
+          "id": "7.4.2",
+          "name": "Paper",
+          "description": "Producers of paper containers and packaging materials.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.4"
+          ]
+        },
+        {
+          "id": "7.4.3",
+          "name": "Plastic",
+          "description": "Producers of plastic containers and packaging materials.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.4"
+          ]
+        },
+        {
+          "id": "7.4.4",
+          "name": "Wood",
+          "description": "Producers of wood containers and packaging materials.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.4"
+          ]
+        },
+        {
+          "id": "5.1.1",
+          "name": "Diagnostic Equipment",
+          "description": "Manufacturers of imaging and non-imaging devices used to assess and diagnose medical conditions.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.1"
+          ]
+        },
+        {
+          "id": "5.1.2",
+          "name": "Medical Supplies",
+          "description": "Manufacturers of medical supplies that would be considered non-durable.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.1"
+          ]
+        },
+        {
+          "id": "5.1.3",
+          "name": "Monitoring Equipment",
+          "description": "Manufacturers of devices used to collect and monitor vital signs.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.1"
+          ]
+        },
+        {
+          "id": "5.1.6",
+          "name": "Other Devices and Supplies",
+          "description": "Devices and Supplies outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "5.1"
+          ]
+        },
+        {
+          "id": "5.1.4",
+          "name": "Surgical Devices",
+          "description": "Manufacturers of devices and equipment used in a surgical setting.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.1"
+          ]
+        },
+        {
+          "id": "5.1.5",
+          "name": "Therapeutic Devices",
+          "description": "Manufacturers of devices for rehabilitation or therapy.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.1"
+          ]
+        },
+        {
+          "id": "3.1.1",
+          "name": "Alternative Energy Equipment",
+          "description": "Manufacturers or providers of alternative energy equipment.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.1"
+          ]
+        },
+        {
+          "id": "3.1.2",
+          "name": "Coal and Consumable Fuels Equipment",
+          "description": "Equipment supporting production or use of coal and consumable fuels.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.1"
+          ]
+        },
+        {
+          "id": "3.1.3",
+          "name": "Oil and Gas Equipment",
+          "description": "Manufacturers or providers of oil and gas equipment.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.1"
+          ]
+        },
+        {
+          "id": "3.1.4",
+          "name": "Other Equipment",
+          "description": "Equipment outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.1"
+          ]
+        },
+        {
+          "id": "3.2.1",
+          "name": "Energy Exploration",
+          "description": "Companies engaged in energy exploration.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.2"
+          ]
+        },
+        {
+          "id": "3.2.2",
+          "name": "Energy Production",
+          "description": "Companies engaged in energy production.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.2"
+          ]
+        },
+        {
+          "id": "3.2.3",
+          "name": "Energy Refining",
+          "description": "Companies engaged in energy refining.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.2"
+          ]
+        },
+        {
+          "id": "7.5.1",
+          "name": "Forestry Development/Harvesting",
+          "description": "Growing, managing and harvesting forests.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.5"
+          ]
+        },
+        {
+          "id": "7.5.2",
+          "name": "Forestry Processing",
+          "description": "Companies engaged in converting raw forest products into marketable materials.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.5"
+          ]
+        },
+        {
+          "id": "7.5.5",
+          "name": "Other Forestry",
+          "description": "Forestry outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.5"
+          ]
+        },
+        {
+          "id": "7.5.3",
+          "name": "Paper/Soft Products",
+          "description": "Paper and related soft forest-derived products.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.5"
+          ]
+        },
+        {
+          "id": "7.5.4",
+          "name": "Wood/Hard Products",
+          "description": "Wood and related hard forest-derived products.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.5"
+          ]
+        },
+        {
+          "id": "6.2.1",
+          "name": "Computers, Parts and Peripherals",
+          "description": "Manufacturers, designers, and distributors of computers and peripherals.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.2"
+          ]
+        },
+        {
+          "id": "6.2.2",
+          "name": "Electronic Components",
+          "description": "Manufacturers, designers, and distributors of electronic parts and components for use in more advanced products.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.2"
+          ]
+        },
+        {
+          "id": "6.2.3",
+          "name": "Electronic Equipment and Instruments",
+          "description": "Electronic equipment and measurement instruments.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.2"
+          ]
+        },
+        {
+          "id": "6.2.4",
+          "name": "Office Electronics",
+          "description": "Manufacturers, designers, and distributors of office equipment.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.2"
+          ]
+        },
+        {
+          "id": "6.2.6",
+          "name": "Other Hardware",
+          "description": "Hardware outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.2"
+          ]
+        },
+        {
+          "id": "6.2.5",
+          "name": "Storage",
+          "description": "Manufacturers, designers, and distributors of electronic storage devices.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.2"
+          ]
+        },
+        {
+          "id": "5.3.1",
+          "name": "Decision/Risk Analysis",
+          "description": "Developers and producers of software or systems used to expedite the medical decision and risk management process.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.3"
+          ]
+        },
+        {
+          "id": "5.3.2",
+          "name": "Enterprise Systems",
+          "description": "Developers and producers of software and systems that cover multiple areas of the healthcare organization.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.3"
+          ]
+        },
+        {
+          "id": "5.3.3",
+          "name": "Medical Records Systems",
+          "description": "Developers and producers of software or systems to organize medical records.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.3"
+          ]
+        },
+        {
+          "id": "5.3.5",
+          "name": "Other Healthcare Technology Systems",
+          "description": "Healthcare Technology Systems outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "5.3"
+          ]
+        },
+        {
+          "id": "5.3.4",
+          "name": "Outcome Management",
+          "description": "Developers and producers of software or systems used to analyze the effectiveness of treatments prescribed by doctors.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.3"
+          ]
+        },
+        {
+          "id": "4.3.1",
+          "name": "Automotive Insurance",
+          "description": "Providers of insurance for cars, trucks, and other vehicles.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.2",
+          "name": "Commercial/Professional Insurance",
+          "description": "Insurance covering commercial activities and professional risks.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.3",
+          "name": "Insurance Brokers",
+          "description": "Companies sourcing contracts of insurance on behalf of their customers.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.4",
+          "name": "Life and Health Insurance",
+          "description": "Providers of life and health insurance.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.5",
+          "name": "Multi-line Insurance",
+          "description": "Providers of diversified insurance services with multiple interests in life, health, and property insurance.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.8",
+          "name": "Other insurance",
+          "description": "insurance outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.6",
+          "name": "Property and Casualty Insurance",
+          "description": "Providers of property and casualty risks insurance.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "4.3.7",
+          "name": "Re-Insurance",
+          "description": "Providers of insurance to insurance companies.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.3"
+          ]
+        },
+        {
+          "id": "2.4.1",
+          "name": "Broadcasting, Radio and Television",
+          "description": "Radio and television broadcasting services.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.4"
+          ]
+        },
+        {
+          "id": "2.4.2",
+          "name": "Information Services",
+          "description": "Providers of information and content services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.4"
+          ]
+        },
+        {
+          "id": "2.4.3",
+          "name": "Movies, Music and Entertainment",
+          "description": "Production and distribution of film, music and entertainment.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.4"
+          ]
+        },
+        {
+          "id": "2.4.6",
+          "name": "Other Media",
+          "description": "Media outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.4"
+          ]
+        },
+        {
+          "id": "2.4.4",
+          "name": "Publishing",
+          "description": "Production and distribution of written or digital publications.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.4"
+          ]
+        },
+        {
+          "id": "2.4.5",
+          "name": "Social Content",
+          "description": "Owners and operators of social content websites.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.4"
+          ]
+        },
+        {
+          "id": "7.6.1",
+          "name": "Aluminum",
+          "description": "Miners, producers and marketers of aluminum.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "7.6.2",
+          "name": "Coal",
+          "description": "Miners, producers and marketers of coal.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "7.6.3",
+          "name": "Gold",
+          "description": "Miners, producers and marketers of gold.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "7.6.4",
+          "name": "Iron and Steel",
+          "description": "Miners, producers and marketers of iron and steel.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "7.6.5",
+          "name": "Multi-line",
+          "description": "Miners, producers and marketers of diversified metals and minerals.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "7.6.7",
+          "name": "Other Metals, Minerals and Mining",
+          "description": "Metals, Minerals and Mining outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "7.6.6",
+          "name": "Precious Metals and Minerals",
+          "description": "Miners, producers and marketers of precious metals and minerals.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.6"
+          ]
+        },
+        {
+          "id": "1.4.1",
+          "name": "Buildings and Property",
+          "description": "Owners of buildings and property.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.4"
+          ]
+        },
+        {
+          "id": "1.4.2",
+          "name": "Conglomerates",
+          "description": "Companies engaged in multiple and unrelated industrial sectors.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.4"
+          ]
+        },
+        {
+          "id": "1.4.3",
+          "name": "Government",
+          "description": "Providers of products and services to government agencies.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.4"
+          ]
+        },
+        {
+          "id": "1.4.4",
+          "name": "Other Business Products and Services",
+          "description": "Business Products and Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.4"
+          ]
+        },
+        {
+          "id": "2.9.1",
+          "name": "Other Consumer Products and Services",
+          "description": "Consumer Products and Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.9"
+          ]
+        },
+        {
+          "id": "3.5.1",
+          "name": "Other Energy",
+          "description": "Energy outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.5"
+          ]
+        },
+        {
+          "id": "4.4.1",
+          "name": "Consumer Finance",
+          "description": "Companies engaged in any kind of lending to consumers.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.4"
+          ]
+        },
+        {
+          "id": "4.4.2",
+          "name": "Holding Companies",
+          "description": "Companies that do not produce goods or provide services, but instead own shares of other companies.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.4"
+          ]
+        },
+        {
+          "id": "4.4.5",
+          "name": "Other Financial Services",
+          "description": "Financial Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.4"
+          ]
+        },
+        {
+          "id": "4.4.3",
+          "name": "Real Estate Investment Trusts (REITs)",
+          "description": "Investment vehicles holding income-generating real estate assets.",
+          "description_source": "local scope note",
+          "parents": [
+            "4.4"
+          ]
+        },
+        {
+          "id": "4.4.4",
+          "name": "Specialized Finance",
+          "description": "Companies engaged in providing specialized finance to both public and private enterprises.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "4.4"
+          ]
+        },
+        {
+          "id": "5.5.1",
+          "name": "Other Healthcare",
+          "description": "Healthcare outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "5.5"
+          ]
+        },
+        {
+          "id": "6.6.1",
+          "name": "Other Information Technology",
+          "description": "Information Technology outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.6"
+          ]
+        },
+        {
+          "id": "7.8.1",
+          "name": "Other Materials",
+          "description": "Materials outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.8"
+          ]
+        },
+        {
+          "id": "5.4.1",
+          "name": "Biotechnology",
+          "description": "Companies engaged in research, development, and production of biotechnology.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.4"
+          ]
+        },
+        {
+          "id": "5.4.2",
+          "name": "Discovery Tools",
+          "description": "Researchers and developers of tools used in drug discovery and drug delivery research.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.4"
+          ]
+        },
+        {
+          "id": "5.4.3",
+          "name": "Drug Delivery",
+          "description": "Researchers and developers of medication delivery methods.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.4"
+          ]
+        },
+        {
+          "id": "5.4.4",
+          "name": "Drug Discovery",
+          "description": "Researchers and developers of new drugs.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.4"
+          ]
+        },
+        {
+          "id": "5.4.6",
+          "name": "Other Pharmaceuticals and Biotechnology",
+          "description": "Pharmaceuticals and Biotechnology outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "5.4"
+          ]
+        },
+        {
+          "id": "5.4.5",
+          "name": "Pharmaceuticals",
+          "description": "Manufacturers and distributors of established drugs/ pharmaceuticals.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.4"
+          ]
+        },
+        {
+          "id": "2.5.1",
+          "name": "Casinos and Gaming",
+          "description": "Owners and operators of casinos and other gaming operations.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.5"
+          ]
+        },
+        {
+          "id": "2.5.2",
+          "name": "Cruise Lines",
+          "description": "Owners and operators of cruise lines.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.5"
+          ]
+        },
+        {
+          "id": "2.5.3",
+          "name": "Hotels and Resorts",
+          "description": "Owners and operators of hotels and resorts.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.5"
+          ]
+        },
+        {
+          "id": "2.5.4",
+          "name": "Leisure Facilities",
+          "description": "Owners and operators of leisure facilities.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.5"
+          ]
+        },
+        {
+          "id": "2.5.6",
+          "name": "Other Restaurants, Hotels and Leisure",
+          "description": "Restaurants, Hotels and Leisure outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.5"
+          ]
+        },
+        {
+          "id": "2.5.5",
+          "name": "Restaurants and Bars",
+          "description": "Owners and operators of restaurants and bars.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.5"
+          ]
+        },
+        {
+          "id": "2.6.1",
+          "name": "Catalog Retail",
+          "description": "Provider of retail services through mail order and TV home shopping.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "2.6.2",
+          "name": "Department Stores",
+          "description": "Owners and operators of large stores with a wide variety of products in distinct departments.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "2.6.3",
+          "name": "Distributors/Wholesale",
+          "description": "Companies engaged in the sale of bulk goods to individual consumers.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "2.6.4",
+          "name": "General Merchandise Stores",
+          "description": "Owners and operators of stores offering a wide variety of general merchandise.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "2.6.5",
+          "name": "Internet Retail",
+          "description": "Providers of retail services primarily through the internet.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "2.6.7",
+          "name": "Other Retail",
+          "description": "Retail outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "2.6.6",
+          "name": "Specialty Retail",
+          "description": "Owners and operators of retail stores specializing in the sale of goods in a particular industry or sector.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.6"
+          ]
+        },
+        {
+          "id": "6.3.1",
+          "name": "Application Specific",
+          "description": "Manufacturers and designers of application specific semiconductors and integrated circuits.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.3"
+          ]
+        },
+        {
+          "id": "6.3.2",
+          "name": "General Purpose",
+          "description": "Manufacturers and designers of generic or general purpose semiconductors and integrated circuits.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.3"
+          ]
+        },
+        {
+          "id": "6.3.4",
+          "name": "Other Semiconductors",
+          "description": "Semiconductors outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.3"
+          ]
+        },
+        {
+          "id": "6.3.3",
+          "name": "Production",
+          "description": "Owners and operators of semiconductor foundries.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.3"
+          ]
+        },
+        {
+          "id": "5.2.1",
+          "name": "Clinics/Outpatient Services",
+          "description": "Facilities and services for short-term, outpatient care and procedures.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "6.4.1",
+          "name": "Consulting and Outsourcing",
+          "description": "Providers of outside consulting, outsourcing, or offshoring services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.4"
+          ]
+        },
+        {
+          "id": "5.2.2",
+          "name": "Distributors",
+          "description": "Distributors of healthcare equipment and supplies.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "5.2.3",
+          "name": "Elder and Disabled Care",
+          "description": "Facilities and services for the care of senior citizens.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "3.3.1",
+          "name": "Energy Marketing",
+          "description": "Companies engaged in energy marketing.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.3"
+          ]
+        },
+        {
+          "id": "3.3.2",
+          "name": "Energy Storage",
+          "description": "Storage of energy for later use.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.3"
+          ]
+        },
+        {
+          "id": "3.3.3",
+          "name": "Energy Traders and Brokers",
+          "description": "Companies engaged in energy trading and brokerage services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.3"
+          ]
+        },
+        {
+          "id": "3.3.4",
+          "name": "Energy Transportation",
+          "description": "Companies engaged in energy transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.3"
+          ]
+        },
+        {
+          "id": "5.2.4",
+          "name": "Hospitals/Inpatient Services",
+          "description": "Facilities and services for long-term care, and inpatient care and procedures.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "3.3.5",
+          "name": "Infrastructure",
+          "description": "Systems and assets supporting economic and public activity.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.3"
+          ]
+        },
+        {
+          "id": "5.2.5",
+          "name": "Laboratory Services",
+          "description": "Providers of medical laboratory services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "5.2.6",
+          "name": "Managed Care",
+          "description": "Owners and operators of managed health plans.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "3.3.6",
+          "name": "Other Energy Services",
+          "description": "Energy Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.3"
+          ]
+        },
+        {
+          "id": "5.2.8",
+          "name": "Other Healthcare Services",
+          "description": "Healthcare Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "6.4.3",
+          "name": "Other IT Services",
+          "description": "IT Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.4"
+          ]
+        },
+        {
+          "id": "5.2.7",
+          "name": "Practice Management",
+          "description": "Providers of consulting and management services to medical practices.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "5.2"
+          ]
+        },
+        {
+          "id": "6.4.2",
+          "name": "Systems and Information",
+          "description": "Management Providers of systems and information management services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.4"
+          ]
+        },
+        {
+          "id": "2.7.1",
+          "name": "Accounting, Audit and Tax Services",
+          "description": "Accounting, audit and tax services for clients.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.7"
+          ]
+        },
+        {
+          "id": "2.7.2",
+          "name": "Educational and Training Services",
+          "description": "Providers of educational and professional training services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.7"
+          ]
+        },
+        {
+          "id": "2.7.3",
+          "name": "Legal Services",
+          "description": "Providers of legal services to individuals.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.7"
+          ]
+        },
+        {
+          "id": "2.7.5",
+          "name": "Other Services (Non-Financial)",
+          "description": "Services (Non-Financial) outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.7"
+          ]
+        },
+        {
+          "id": "2.7.4",
+          "name": "Real Estate Services",
+          "description": "Services supporting property ownership, use and transactions.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.7"
+          ]
+        },
+        {
+          "id": "6.5.1",
+          "name": "Application Software",
+          "description": "Developers and producers of software for specific tasks or applications.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.2",
+          "name": "Automation/Workflow Software",
+          "description": "Developers and producers of software for automation and workflow management.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.3",
+          "name": "Business/Productivity Software",
+          "description": "Developers and producers of software for the enterprise where the focus is on process management and automation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.4",
+          "name": "Communication Software",
+          "description": "Developers and producers of software for communicating electronically through voice, video or text.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.5",
+          "name": "Database Software",
+          "description": "Developers and producers of software to manage and utilize information in databases.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.6",
+          "name": "Educational Software",
+          "description": "Developers and producers of educational software.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.7",
+          "name": "Entertainment Software",
+          "description": "Developers of consumer-oriented gaming software and applications.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.8",
+          "name": "Financial Software",
+          "description": "Developers and producers of software for managing accounting and financial processes.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.9",
+          "name": "Internet Software",
+          "description": "Developers and producers of software for accessing and manipulating internet content.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.10",
+          "name": "Multimedia and Design Software",
+          "description": "Software for media creation, design and visual production.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.11",
+          "name": "Network Management Software",
+          "description": "Software managing and monitoring communications networks.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.12",
+          "name": "Operating Systems Software",
+          "description": "Developers and producers of computer operating systems.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.16",
+          "name": "Other Software",
+          "description": "Software outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.13",
+          "name": "Social/Platform Software",
+          "description": "Developers and producers of software that facilitates the production, distribution or following of social content.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.14",
+          "name": "Software Development Applications",
+          "description": "Software tools used to develop applications.",
+          "description_source": "local scope note",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "6.5.15",
+          "name": "Vertical Market Software",
+          "description": "Developers and producers of vertical market software.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "6.5"
+          ]
+        },
+        {
+          "id": "7.7.1",
+          "name": "Animal",
+          "description": "Manufacturers of animal- based textiles.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.7"
+          ]
+        },
+        {
+          "id": "7.7.3",
+          "name": "Mineral",
+          "description": "Manufacturers of mineral- based textiles.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.7"
+          ]
+        },
+        {
+          "id": "7.7.5",
+          "name": "Other Textiles",
+          "description": "Textiles outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.7"
+          ]
+        },
+        {
+          "id": "7.7.2",
+          "name": "Plant",
+          "description": "Plant-based textile materials; historical PitchBook textiles category.",
+          "description_source": "local scope note",
+          "parents": [
+            "7.7"
+          ]
+        },
+        {
+          "id": "7.7.4",
+          "name": "Synthetic",
+          "description": "Manufacturers of synthetic textiles.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "7.7"
+          ]
+        },
+        {
+          "id": "1.3.1",
+          "name": "Air",
+          "description": "Providers of products or services related to commercial air transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.3"
+          ]
+        },
+        {
+          "id": "2.8.1",
+          "name": "Air",
+          "description": "Providers of air transportation to consumers.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.8"
+          ]
+        },
+        {
+          "id": "2.8.2",
+          "name": "Automotive",
+          "description": "Providers of products and services related to automotives.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.8"
+          ]
+        },
+        {
+          "id": "1.3.5",
+          "name": "Infrastructure",
+          "description": "Systems and assets supporting economic and public activity.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.3"
+          ]
+        },
+        {
+          "id": "1.3.2",
+          "name": "Marine",
+          "description": "Providers of products or services related to commercial water transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.3"
+          ]
+        },
+        {
+          "id": "2.8.3",
+          "name": "Marine",
+          "description": "Providers of products and services related to water transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.8"
+          ]
+        },
+        {
+          "id": "1.3.6",
+          "name": "Other Transportation",
+          "description": "Transportation outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "1.3"
+          ]
+        },
+        {
+          "id": "2.8.5",
+          "name": "Other Transportation",
+          "description": "Transportation outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2.8"
+          ]
+        },
+        {
+          "id": "1.3.3",
+          "name": "Rail",
+          "description": "Providers of products or services related to commercial rail transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.3"
+          ]
+        },
+        {
+          "id": "2.8.4",
+          "name": "Rail",
+          "description": "Providers of products and services related to rail transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "2.8"
+          ]
+        },
+        {
+          "id": "1.3.4",
+          "name": "Road",
+          "description": "Providers of products or services related to commercial land transportation.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "1.3"
+          ]
+        },
+        {
+          "id": "3.4.1",
+          "name": "Electric Utilities",
+          "description": "Companies engaged in the generation, transmission, and distribution of energy for sale in the regulated market.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.4"
+          ]
+        },
+        {
+          "id": "3.4.2",
+          "name": "Gas Utilities",
+          "description": "Companies engaged in the production, distribution and marketing of natural gas and related services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.4"
+          ]
+        },
+        {
+          "id": "3.4.3",
+          "name": "Multi-Utilities",
+          "description": "Companies engaged in the generation, transmission, distribution, and sale of water, electricity and natural gas to residential, commercial, industrial, and wholesale customers.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.4"
+          ]
+        },
+        {
+          "id": "3.4.5",
+          "name": "Other Utilities",
+          "description": "Utilities outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "3.4"
+          ]
+        },
+        {
+          "id": "3.4.4",
+          "name": "Water Utilities",
+          "description": "Companies engaged in providing water or wastewater services.",
+          "description_source": "Historical 2017 definition excerpt",
+          "parents": [
+            "3.4"
+          ]
+        }
+      ],
+      "parent_component": "industry_groups"
+    },
+    "verticals": {
+      "max_secondary": 4,
+      "categories": [
+        {
+          "id": "3d-printing",
+          "name": "3D printing",
+          "description": "Additive manufacture of physical objects from digital designs.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "adtech",
+          "name": "Adtech",
+          "description": "Technology for buying, delivering and measuring advertising.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "advanced-manufacturing",
+          "name": "Advanced manufacturing",
+          "description": "Innovative production processes, automation and manufacturing technologies.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "agtech",
+          "name": "Agtech",
+          "description": "Technology improving agriculture and agricultural operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "artificial-intelligence-and-machine-learning-ai-ml",
+          "name": "Artificial intelligence and machine learning (AI/ML)",
+          "description": "Systems learning from data or performing intelligent computational tasks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "audiotech",
+          "name": "Audiotech",
+          "description": "Technology for creating, processing or delivering audio.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "augmented-reality-ar",
+          "name": "Augmented reality (AR)",
+          "description": "Products and services within Augmented reality (AR).",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "autonomous-cars",
+          "name": "Autonomous cars",
+          "description": "Road vehicles capable of driving without continuous human control.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "b2b-payments",
+          "name": "B2B payments",
+          "description": "Payments between businesses and supporting infrastructure.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "beauty",
+          "name": "Beauty",
+          "description": "Beauty, cosmetics and personal appearance products or services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "big-data",
+          "name": "Big Data",
+          "description": "Storage, processing and analysis of large or complex datasets.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cannabis",
+          "name": "Cannabis",
+          "description": "Cannabis cultivation, products and supporting services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "carsharing",
+          "name": "Carsharing",
+          "description": "Shared access to vehicles without individual ownership.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cleantech",
+          "name": "Cleantech",
+          "description": "Technology reducing environmental impact through energy, resource or pollution improvements.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "climate-tech",
+          "name": "Climate tech",
+          "description": "Technology mitigating climate change or supporting adaptation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cloudtech-and-devops",
+          "name": "Cloudtech and DevOps",
+          "description": "Cloud computing and tools supporting software delivery and operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "construction-technology",
+          "name": "Construction technology",
+          "description": "Technology improving building and construction processes.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cryptocurrency-and-blockchain",
+          "name": "Cryptocurrency and blockchain",
+          "description": "Digital assets and applications of distributed ledger technology.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "cybersecurity",
+          "name": "Cybersecurity",
+          "description": "Protection of computers, networks and information from digital threats.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "digital-health",
+          "name": "Digital health",
+          "description": "Digital technology supporting health and healthcare delivery.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ecommerce",
+          "name": "Ecommerce",
+          "description": "Digital sale of goods or services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "edtech",
+          "name": "Edtech",
+          "description": "Technology supporting education, learning or training.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ephemeral-content",
+          "name": "Ephemeral content",
+          "description": "Digital content designed to disappear after a limited time.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "esports",
+          "name": "eSports",
+          "description": "Competitive organised video gaming and associated services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "femtech",
+          "name": "Femtech",
+          "description": "Technology addressing female health and related care needs.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "fintech",
+          "name": "Fintech",
+          "description": "Technology for payments, banking, lending, investing and other financial services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "foodtech",
+          "name": "Foodtech",
+          "description": "Technology for food production, products and distribution.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "gaming",
+          "name": "Gaming",
+          "description": "Video games, gaming platforms and related gaming services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "healthtech",
+          "name": "Healthtech",
+          "description": "Technology improving health and healthcare services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "hrtech",
+          "name": "HRtech",
+          "description": "Technology supporting human resources and workforce management.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "impact-investing",
+          "name": "Impact investing",
+          "description": "Investment activity seeking measurable social or environmental outcomes.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "industrials",
+          "name": "Industrials",
+          "description": "Industrial production, equipment and related business services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "infrastructure",
+          "name": "Infrastructure",
+          "description": "Systems and assets supporting economic and public activity.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "insurtech",
+          "name": "Insurtech",
+          "description": "Technology supporting insurance products and operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "internet-of-things-iot",
+          "name": "Internet of Things (IoT)",
+          "description": "Connected physical devices collecting and exchanging data.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "legal-tech",
+          "name": "Legal tech",
+          "description": "Technology supporting legal work and services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "life-sciences",
+          "name": "Life sciences",
+          "description": "Biological and medical research and related products or services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "lifestyles-of-health-and-sustainability-lohas-and-wellness",
+          "name": "Lifestyles of Health and Sustainability (LOHAS) and wellness",
+          "description": "Products and services for healthy, sustainable lifestyles and wellbeing.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "manufacturing",
+          "name": "Manufacturing",
+          "description": "Production processes, industrial fabrication and manufacturing operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "marketing-tech",
+          "name": "Marketing tech",
+          "description": "Technology supporting marketing workflows and customer engagement.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "micro-mobility",
+          "name": "Micro-mobility",
+          "description": "Lightweight personal transport such as shared bikes and scooters.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mobile",
+          "name": "Mobile",
+          "description": "Products and services centred on mobile computing or communication.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mobile-commerce",
+          "name": "Mobile commerce",
+          "description": "Commerce conducted through mobile devices.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mobility-tech",
+          "name": "Mobility tech",
+          "description": "Technology improving transportation and movement of people or goods.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mortgage-tech",
+          "name": "Mortgage tech",
+          "description": "Technology supporting mortgage origination and administration.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "nanotechnology",
+          "name": "Nanotechnology",
+          "description": "Engineering of materials and devices at nanometre scales.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "oil-and-gas",
+          "name": "Oil and gas",
+          "description": "Oil and natural-gas production, equipment and services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "oncology",
+          "name": "Oncology",
+          "description": "Cancer research, diagnosis and treatment.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "pet-tech",
+          "name": "Pet tech",
+          "description": "Technology supporting pets and pet ownership.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "real-estate-tech",
+          "name": "Real estate tech",
+          "description": "Technology supporting property markets and management.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "restaurant-tech",
+          "name": "Restaurant tech",
+          "description": "Technology supporting restaurant operations and service.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ridesharing",
+          "name": "Ridesharing",
+          "description": "Platforms coordinating shared or on-demand passenger rides.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "robotics-and-drones",
+          "name": "Robotics and drones",
+          "description": "Robotic systems and uncrewed aircraft.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "software-as-a-service-saas",
+          "name": "Software as a service (SaaS)",
+          "description": "Software delivered as a hosted subscription service.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "space-tech",
+          "name": "Space tech",
+          "description": "Technology enabling or using space operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "supply-chain-technology",
+          "name": "Supply chain technology",
+          "description": "Technology managing sourcing, logistics and distribution.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "technology-media-and-telecommunications-tmt",
+          "name": "Technology, media and telecommunications (TMT)",
+          "description": "Businesses across technology, media and communications.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "virtual-reality-vr",
+          "name": "Virtual reality (VR)",
+          "description": "Immersive computer-generated environments.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "wearables-and-quantified-self",
+          "name": "Wearables and quantified self",
+          "description": "Body-worn devices and tools measuring personal activity or health.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    }
+  },
+  "derived_components": {
+    "industry_groups": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "7.1",
+          "name": "Agriculture",
+          "description": "Products and services within Agriculture.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "2.1",
+          "name": "Apparel and Accessories",
+          "description": "Products and services within Apparel and Accessories.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "4.1",
+          "name": "Capital Markets/Institutions",
+          "description": "Products and services within Capital Markets/Institutions.",
+          "description_source": "local scope note",
+          "parents": [
+            "4"
+          ]
+        },
+        {
+          "id": "7.2",
+          "name": "Chemicals and Gases",
+          "description": "Products and services within Chemicals and Gases.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "4.2",
+          "name": "Commercial Banks",
+          "description": "Products and services within Commercial Banks.",
+          "description_source": "local scope note",
+          "parents": [
+            "4"
+          ]
+        },
+        {
+          "id": "1.1",
+          "name": "Commercial Products",
+          "description": "Products and services within Commercial Products.",
+          "description_source": "local scope note",
+          "parents": [
+            "1"
+          ]
+        },
+        {
+          "id": "1.2",
+          "name": "Commercial Services",
+          "description": "Products and services within Commercial Services.",
+          "description_source": "local scope note",
+          "parents": [
+            "1"
+          ]
+        },
+        {
+          "id": "6.1",
+          "name": "Communications and Networking",
+          "description": "Products and services within Communications and Networking.",
+          "description_source": "local scope note",
+          "parents": [
+            "6"
+          ]
+        },
+        {
+          "id": "7.3",
+          "name": "Construction (Non-Wood)",
+          "description": "Products and services within Construction (Non-Wood).",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "2.2",
+          "name": "Consumer Durables",
+          "description": "Products and services within Consumer Durables.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "2.3",
+          "name": "Consumer Non-Durables",
+          "description": "Products and services within Consumer Non-Durables.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "7.4",
+          "name": "Containers and Packaging",
+          "description": "Products and services within Containers and Packaging.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "5.1",
+          "name": "Devices and Supplies",
+          "description": "Products and services within Devices and Supplies.",
+          "description_source": "local scope note",
+          "parents": [
+            "5"
+          ]
+        },
+        {
+          "id": "3.1",
+          "name": "Equipment",
+          "description": "Products and services within Equipment.",
+          "description_source": "local scope note",
+          "parents": [
+            "3"
+          ]
+        },
+        {
+          "id": "3.2",
+          "name": "Exploration, Production and Refining",
+          "description": "Products and services within Exploration, Production and Refining.",
+          "description_source": "local scope note",
+          "parents": [
+            "3"
+          ]
+        },
+        {
+          "id": "7.5",
+          "name": "Forestry",
+          "description": "Products and services within Forestry.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "6.2",
+          "name": "Hardware",
+          "description": "Physical devices, equipment or electronic components.",
+          "description_source": "local scope note",
+          "parents": [
+            "6"
+          ]
+        },
+        {
+          "id": "5.3",
+          "name": "Healthcare Technology Systems",
+          "description": "Products and services within Healthcare Technology Systems.",
+          "description_source": "local scope note",
+          "parents": [
+            "5"
+          ]
+        },
+        {
+          "id": "4.3",
+          "name": "Insurance",
+          "description": "Risk coverage, underwriting, distribution and insurance administration.",
+          "description_source": "local scope note",
+          "parents": [
+            "4"
+          ]
+        },
+        {
+          "id": "2.4",
+          "name": "Media",
+          "description": "Creation, publication, distribution and monetisation of media content.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "7.6",
+          "name": "Metals, Minerals and Mining",
+          "description": "Products and services within Metals, Minerals and Mining.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "1.4",
+          "name": "Other Business Products and Services",
+          "description": "Business Products and Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "1"
+          ]
+        },
+        {
+          "id": "2.9",
+          "name": "Other Consumer Products and Services",
+          "description": "Consumer Products and Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "3.5",
+          "name": "Other Energy",
+          "description": "Energy outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "3"
+          ]
+        },
+        {
+          "id": "4.4",
+          "name": "Other Financial Services",
+          "description": "Financial Services outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "4"
+          ]
+        },
+        {
+          "id": "5.5",
+          "name": "Other Healthcare",
+          "description": "Healthcare outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "5"
+          ]
+        },
+        {
+          "id": "6.6",
+          "name": "Other Information Technology",
+          "description": "Information Technology outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "6"
+          ]
+        },
+        {
+          "id": "7.8",
+          "name": "Other Materials",
+          "description": "Materials outside the more specific categories in this parent group.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "5.4",
+          "name": "Pharmaceuticals and Biotechnology",
+          "description": "Products and services within Pharmaceuticals and Biotechnology.",
+          "description_source": "local scope note",
+          "parents": [
+            "5"
+          ]
+        },
+        {
+          "id": "2.5",
+          "name": "Restaurants, Hotels and Leisure",
+          "description": "Products and services within Restaurants, Hotels and Leisure.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "2.6",
+          "name": "Retail",
+          "description": "Sale of goods to end consumers through physical or digital stores.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "6.3",
+          "name": "Semiconductors",
+          "description": "Chip design, fabrication and semiconductor components or equipment.",
+          "description_source": "local scope note",
+          "parents": [
+            "6"
+          ]
+        },
+        {
+          "id": "5.2",
+          "name": "Services",
+          "description": "Products and services within Services.",
+          "description_source": "local scope note",
+          "parents": [
+            "5"
+          ]
+        },
+        {
+          "id": "6.4",
+          "name": "Services",
+          "description": "Products and services within Services.",
+          "description_source": "local scope note",
+          "parents": [
+            "6"
+          ]
+        },
+        {
+          "id": "3.3",
+          "name": "Services",
+          "description": "Products and services within Services.",
+          "description_source": "local scope note",
+          "parents": [
+            "3"
+          ]
+        },
+        {
+          "id": "2.7",
+          "name": "Services (Non-Financial)",
+          "description": "Products and services within Services (Non-Financial).",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "6.5",
+          "name": "Software",
+          "description": "Products and services within Software.",
+          "description_source": "local scope note",
+          "parents": [
+            "6"
+          ]
+        },
+        {
+          "id": "7.7",
+          "name": "Textiles",
+          "description": "Products and services within Textiles.",
+          "description_source": "local scope note",
+          "parents": [
+            "7"
+          ]
+        },
+        {
+          "id": "1.3",
+          "name": "Transportation",
+          "description": "Movement of people or goods and associated vehicles and services.",
+          "description_source": "local scope note",
+          "parents": [
+            "1"
+          ]
+        },
+        {
+          "id": "2.8",
+          "name": "Transportation",
+          "description": "Movement of people or goods and associated vehicles and services.",
+          "description_source": "local scope note",
+          "parents": [
+            "2"
+          ]
+        },
+        {
+          "id": "3.4",
+          "name": "Utilities",
+          "description": "Products and services within Utilities.",
+          "description_source": "local scope note",
+          "parents": [
+            "3"
+          ]
+        }
+      ],
+      "parent_component": "broad_sectors"
+    },
+    "broad_sectors": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "7",
+          "name": "Materials & Resources",
+          "description": "Products and services within Materials & Resources.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "2",
+          "name": "Consumer Products & Services",
+          "description": "Products and services within Consumer Products & Services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "4",
+          "name": "Financial Services",
+          "description": "Products and services within Financial Services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "1",
+          "name": "Business Products & Services",
+          "description": "Products and services within Business Products & Services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "6",
+          "name": "Information Technology",
+          "description": "Products and services within Information Technology.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "5",
+          "name": "Healthcare",
+          "description": "Products and services for prevention, diagnosis, treatment and patient care.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "3",
+          "name": "Energy",
+          "description": "Generation, storage, distribution and efficient use of energy.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    }
+  },
+  "reporting_groups": []
+}

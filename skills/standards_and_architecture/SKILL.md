@@ -347,6 +347,32 @@ Application data uses `LOCAL_STORAGE_PATH`. `cache/` and `docling_data/`
 use the configured machine-local storage root. Docling output is durable
 parsed data, not disposable cache.
 
+### Temporary datasets
+
+Temporary datasets may hold documents or text supplied directly by the user
+through CLI, Google Chat or another interface. Save supplied text as a source
+file and use `lib.ephemeral_dataset.prepare_ephemeral_dataset` with those files;
+then invoke skills using the returned dataset name.
+
+Preparing a new temporary dataset resets that name in the `generated` domain:
+clear its complete dossier (source files, insights including manual overrides,
+and metadata), parsed data and search index before ingesting the new material.
+Never reset a permanent startup or community dataset through this workflow.
+Index-cleanup failures must stop preparation so old evidence cannot carry over.
+
+Prepare once per investigation. Subsequent skills use the same dataset name
+without preparing it again; their insights and manual edits remain available
+throughout that investigation. Use distinct names for concurrent investigations.
+Input files must be outside the directories being reset. This reset rule is an
+explicit exception to retaining manual insights across separate investigations;
+ordinary skill calls still preserve manual precedence.
+
+If additional documents are provided for the same startup, add them to its
+existing `datasets/` folder and run any insight skill against that dataset.
+This continues the same investigation: no wipe or call to
+`prepare_ephemeral_dataset` is needed. Use normal dataset synchronization and
+insight freshness handling; preserve existing sources and manual insights.
+
 ### Sources and document references
 
 Use `list_source_files` and `snapshot_source_files` for ingestible

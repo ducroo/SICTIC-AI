@@ -68,7 +68,7 @@ def parse_industry_type(
     allowed_industry_types: set[str],
     response_schema: dict[str, Any],
 ) -> str:
-    """Repair and validate a structured industry classification."""
+    """Repair and validate a structured product-type classification."""
     effective_schema = _industry_response_schema(
         response_schema,
         allowed_industry_types,
@@ -77,7 +77,7 @@ def parse_industry_type(
     validate_json_schema(
         result,
         effective_schema,
-        label="DD industry-classification response",
+        label="DD product-type classification response",
     )
     review = _review_industry_type(result)
     if review.problems:
@@ -95,7 +95,7 @@ def _industry_type_from_result(
     industry_type = result["industry_type"]
     if industry_type is None:
         logger.warning(
-            "Industry classification had insufficient evidence; "
+            "Product-type classification had insufficient evidence; "
             "defaulting to general."
         )
         return allowed_by_lower.get("general", "general")
@@ -107,7 +107,7 @@ def _review_industry_type(output: dict | list) -> Review[dict | list]:
         item.strip() for item in output["evidence"]
     ):
         return Review(output, (
-            "Industry classification requires evidence when a type is selected.",
+            "Product-type classification requires evidence when a type is selected.",
         ))
     return Review(output)
 
@@ -136,7 +136,7 @@ async def find_industry_type(
     )
     if result is None:
         logger.warning(
-            "[%s] No industry evidence returned; defaulting to general.",
+            "[%s] No product-type evidence returned; defaulting to general.",
             startup_name_lower,
         )
         return "general"
@@ -144,7 +144,7 @@ async def find_industry_type(
 
 
 def audit_instructions_with_context(dd_config: dict, industry_type: str) -> str:
-    """Add the startup's industry and what matters most for it to the audit instructions.
+    """Add the startup's product type and what matters most for it to the audit instructions.
 
     Every check receives this text, so it only contains stable, configured
     values. A generated summary would change between runs and invalidate all
@@ -159,7 +159,7 @@ def audit_instructions_with_context(dd_config: dict, industry_type: str) -> str:
     return (
         f"{dd_config['audit_instructions']}\n\n"
         "## Startup context\n\n"
-        f"Industry type: {industry_type}\n\n"
+        f"Product type: {industry_type}\n\n"
         f"{industry_focus[industry_type]}"
     )
 
@@ -274,7 +274,7 @@ async def chapter_by_chapter(
 
 async def dd_checks(startup: str) -> InsightResult:
     """
-    Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, industry-aware checklists. It automatically identifies the startup's industry, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
+    Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, product-type-aware checklists. It automatically identifies the startup's product type, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
     """
     startup_slug = slugify(startup)
     from lib.startups.sources import ensure_startup_dataset
@@ -329,7 +329,7 @@ async def dd_checks(startup: str) -> InsightResult:
     )
     report = (
         f"# M&A Due Diligence Checks for {startup}\n\n"
-        f"**Industry type:** {industry_type}\n\n"
+        f"**Product type:** {industry_type}\n\n"
         + "\n\n".join([top_findings, *(chapter.section for chapter in chapter_audits)])
         + "\n"
     )

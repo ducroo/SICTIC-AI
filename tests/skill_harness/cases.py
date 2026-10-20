@@ -38,6 +38,7 @@ SKILL_COVERAGE = {
     "send_gmail": "utility-smoke",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
+    "startup_sector": "existing-unit",
     "startup_traction": "local-smoke",
     "startup_website_import": "utility-smoke",
     "suggested_startups": "local-smoke",
@@ -56,6 +57,7 @@ SKILL_COVERAGE_REASONS = {
 HARNESS_SMOKE_COMMANDS = {
     "/dataset_chat": "/dataset_chat example-startup What is the fixture?",
     "/startup_profile": "/startup_profile example-startup",
+    "/startup_sector": "/startup_sector example-startup",
     "/startup_traction": "/startup_traction example-startup",
     "/persons_in_dataset": "/persons_in_dataset sictic-members",
     "/person_profile": "/person_profile sictic-members Jane Doe",

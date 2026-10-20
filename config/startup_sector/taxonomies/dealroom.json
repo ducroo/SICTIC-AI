@@ -1,0 +1,1632 @@
+{
+  "provider": "Dealroom",
+  "version": "snapshot-2026-10-20",
+  "status": "Public taxonomy snapshot; subindustry list follows taxonomy page rather than glossary; tags are a partial example list.",
+  "sources": [
+    "https://dealroom.co/our-data/taxonomy/",
+    "https://dealroom.co/knowledge/glossary/glossary-industries"
+  ],
+  "id_policy": "Local stable keys; PitchBook numeric keys retain historical printed numbering, not current platform IDs.",
+  "components": {
+    "industries": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "health",
+          "name": "Health",
+          "description": "Prevention, diagnosis and treatment of disease and delivery of healthcare.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "fintech",
+          "name": "Fintech",
+          "description": "Technology for payments, banking, lending, investing and other financial services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "media",
+          "name": "Media",
+          "description": "Creation, publication, distribution and monetisation of media content.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "food",
+          "name": "Food",
+          "description": "Agriculture, food production, food delivery and restaurant technology.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "energy",
+          "name": "Energy",
+          "description": "Generation, storage, distribution and efficient use of energy.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "marketing",
+          "name": "Marketing",
+          "description": "Advertising, customer acquisition, sales enablement and marketing analytics.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "transportation",
+          "name": "Transportation",
+          "description": "Movement of people or goods and associated vehicles and services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "security",
+          "name": "Security",
+          "description": "Protection of people, assets, systems and information.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "enterprise-software",
+          "name": "Enterprise Software",
+          "description": "Software supporting business processes and organisational operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "real-estate",
+          "name": "Real Estate",
+          "description": "Property construction, ownership, transactions and management.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "education",
+          "name": "Education",
+          "description": "Learning, teaching, training and education management.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "gaming",
+          "name": "Gaming",
+          "description": "Video games, gaming platforms and related gaming services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "fashion",
+          "name": "Fashion",
+          "description": "Clothing, footwear, accessories and fashion commerce.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "travel",
+          "name": "Travel",
+          "description": "Travel planning, booking, accommodation and travel services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "sports",
+          "name": "Sports",
+          "description": "Sports participation, equipment, media and sports organisations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "legal",
+          "name": "Legal",
+          "description": "Legal services, legal information and legal workflow tools.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "robotics",
+          "name": "Robotics",
+          "description": "Machines capable of automated physical action and robotic systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "wellness-beauty",
+          "name": "Wellness & Beauty",
+          "description": "Personal wellbeing, fitness, beauty and associated products or services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "telecom",
+          "name": "Telecom",
+          "description": "Communication networks, connectivity and telecommunications services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "home-living",
+          "name": "Home Living",
+          "description": "Products and services for domestic life and the home.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "jobs-recruitment",
+          "name": "Jobs & Recruitment",
+          "description": "Employment marketplaces, recruitment and workforce services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "kids",
+          "name": "Kids",
+          "description": "Products and services specifically intended for children and families.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "semiconductors",
+          "name": "Semiconductors",
+          "description": "Chip design, fabrication and semiconductor components or equipment.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "music",
+          "name": "Music",
+          "description": "Music creation, distribution, listening and associated services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "event-tech",
+          "name": "Event Tech",
+          "description": "Technology supporting organisation and participation in events.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "engineering-manufacturing",
+          "name": "Engineering & Manufacturing",
+          "description": "Engineering systems, industrial equipment and manufacturing processes.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "chemicals",
+          "name": "Chemicals",
+          "description": "Chemical products, production processes and related materials.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "space",
+          "name": "Space",
+          "description": "Spacecraft, launch, satellites and space-based products or services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "hosting",
+          "name": "Hosting",
+          "description": "Hosting, cloud infrastructure and related computing services.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "consumer-electronics",
+          "name": "Consumer Electronics",
+          "description": "Electronic devices intended for individual consumers.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "dating",
+          "name": "Dating",
+          "description": "Services helping people find romantic partners.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    },
+    "subindustries": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "biotechnology",
+          "name": "BioTechnology",
+          "description": "Products based on biological processes, organisms or molecular research.",
+          "description_source": "local scope note",
+          "parents": [
+            "health",
+            "wellness-beauty",
+            "chemicals"
+          ]
+        },
+        {
+          "id": "health-platform",
+          "name": "Health Platform",
+          "description": "Digital platforms connecting or coordinating healthcare services and users.",
+          "description_source": "local scope note",
+          "parents": [
+            "health",
+            "enterprise-software",
+            "wellness-beauty",
+            "home-living",
+            "jobs-recruitment",
+            "kids"
+          ]
+        },
+        {
+          "id": "medical-devices",
+          "name": "Medical Devices",
+          "description": "Physical instruments and equipment used in medical diagnosis, monitoring or treatment.",
+          "description_source": "local scope note",
+          "parents": [
+            "health",
+            "robotics",
+            "wellness-beauty",
+            "semiconductors",
+            "engineering-manufacturing",
+            "consumer-electronics"
+          ]
+        },
+        {
+          "id": "pharmaceutical",
+          "name": "Pharmaceutical",
+          "description": "Development, production and distribution of medicinal drugs.",
+          "description_source": "local scope note",
+          "parents": [
+            "health"
+          ]
+        },
+        {
+          "id": "payments",
+          "name": "Payments",
+          "description": "Technology and services for transferring money and completing transactions.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech"
+          ]
+        },
+        {
+          "id": "financial-management",
+          "name": "Financial Management",
+          "description": "Tools managing financial records, planning and business finances.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech",
+            "enterprise-software"
+          ]
+        },
+        {
+          "id": "crypto-defi",
+          "name": "Crypto & DeFi",
+          "description": "Cryptocurrency and decentralised financial applications.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech"
+          ]
+        },
+        {
+          "id": "lending",
+          "name": "Lending",
+          "description": "Credit provision and technology supporting lending processes.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech"
+          ]
+        },
+        {
+          "id": "wealth-management",
+          "name": "Wealth Management",
+          "description": "Investment and personal-wealth management services and technology.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech"
+          ]
+        },
+        {
+          "id": "insurance",
+          "name": "Insurance",
+          "description": "Risk coverage, underwriting, distribution and insurance administration.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech"
+          ]
+        },
+        {
+          "id": "banking",
+          "name": "Banking",
+          "description": "Banking services and supporting financial infrastructure.",
+          "description_source": "local scope note",
+          "parents": [
+            "fintech"
+          ]
+        },
+        {
+          "id": "content-production",
+          "name": "Content Production",
+          "description": "Tools and services creating media content.",
+          "description_source": "local scope note",
+          "parents": [
+            "media",
+            "enterprise-software",
+            "telecom",
+            "music",
+            "event-tech",
+            "hosting",
+            "dating"
+          ]
+        },
+        {
+          "id": "social-media",
+          "name": "Social Media",
+          "description": "Platforms for sharing content and social interaction.",
+          "description_source": "local scope note",
+          "parents": [
+            "media",
+            "telecom",
+            "event-tech",
+            "dating"
+          ]
+        },
+        {
+          "id": "publishing",
+          "name": "Publishing",
+          "description": "Production and distribution of written or digital publications.",
+          "description_source": "local scope note",
+          "parents": [
+            "media"
+          ]
+        },
+        {
+          "id": "streaming",
+          "name": "Streaming",
+          "description": "Continuous delivery of audio or video over networks.",
+          "description_source": "local scope note",
+          "parents": [
+            "media",
+            "music"
+          ]
+        },
+        {
+          "id": "agritech",
+          "name": "AgriTech",
+          "description": "Technology supporting agriculture and agricultural production.",
+          "description_source": "local scope note",
+          "parents": [
+            "food",
+            "robotics",
+            "space"
+          ]
+        },
+        {
+          "id": "innovative-food",
+          "name": "Innovative Food",
+          "description": "Novel food products, ingredients and production approaches.",
+          "description_source": "local scope note",
+          "parents": [
+            "food"
+          ]
+        },
+        {
+          "id": "food-delivery",
+          "name": "Food Delivery",
+          "description": "Ordering and delivering prepared meals or food products.",
+          "description_source": "local scope note",
+          "parents": [
+            "food",
+            "home-living"
+          ]
+        },
+        {
+          "id": "restaurant-tech",
+          "name": "Restaurant Tech",
+          "description": "Technology for restaurant operations and customer service.",
+          "description_source": "local scope note",
+          "parents": [
+            "food"
+          ]
+        },
+        {
+          "id": "kitchen-tech",
+          "name": "Kitchen Tech",
+          "description": "Tools and equipment improving food preparation and kitchen operations.",
+          "description_source": "local scope note",
+          "parents": [
+            "food"
+          ]
+        },
+        {
+          "id": "clean-energy",
+          "name": "Clean Energy",
+          "description": "Energy generation with reduced environmental impact.",
+          "description_source": "local scope note",
+          "parents": [
+            "energy",
+            "semiconductors",
+            "engineering-manufacturing",
+            "chemicals",
+            "space"
+          ]
+        },
+        {
+          "id": "energy-efficiency",
+          "name": "Energy Efficiency",
+          "description": "Reducing energy required to provide a service or output.",
+          "description_source": "local scope note",
+          "parents": [
+            "energy",
+            "consumer-electronics"
+          ]
+        },
+        {
+          "id": "waste-solution",
+          "name": "Waste Solution",
+          "description": "Waste prevention, collection, treatment and resource recovery.",
+          "description_source": "local scope note",
+          "parents": [
+            "energy",
+            "chemicals",
+            "consumer-electronics"
+          ]
+        },
+        {
+          "id": "energy-storage",
+          "name": "Energy Storage",
+          "description": "Storage of energy for later use.",
+          "description_source": "local scope note",
+          "parents": [
+            "energy"
+          ]
+        },
+        {
+          "id": "water",
+          "name": "Water",
+          "description": "Water supply, treatment, management and associated technology.",
+          "description_source": "local scope note",
+          "parents": [
+            "energy"
+          ]
+        },
+        {
+          "id": "oil-gas",
+          "name": "Oil & Gas",
+          "description": "Exploration, production and services for oil and natural gas.",
+          "description_source": "local scope note",
+          "parents": [
+            "energy"
+          ]
+        },
+        {
+          "id": "crm-sales",
+          "name": "CRM & Sales",
+          "description": "Customer-relationship management and sales-process tools.",
+          "description_source": "local scope note",
+          "parents": [
+            "marketing",
+            "enterprise-software",
+            "telecom"
+          ]
+        },
+        {
+          "id": "adtech",
+          "name": "Adtech",
+          "description": "Technology for buying, delivering and measuring advertising.",
+          "description_source": "local scope note",
+          "parents": [
+            "marketing"
+          ]
+        },
+        {
+          "id": "ecommerce-solutions",
+          "name": "Ecommerce Solutions",
+          "description": "Tools enabling online sales and merchant operations.",
+          "description_source": "local scope note",
+          "parents": [
+            "marketing"
+          ]
+        },
+        {
+          "id": "marketing-analytics",
+          "name": "Marketing Analytics",
+          "description": "Measurement and analysis of marketing activity and outcomes.",
+          "description_source": "local scope note",
+          "parents": [
+            "marketing",
+            "enterprise-software"
+          ]
+        },
+        {
+          "id": "logistics-delivery",
+          "name": "Logistics & Delivery",
+          "description": "Movement, storage and delivery of goods.",
+          "description_source": "local scope note",
+          "parents": [
+            "transportation"
+          ]
+        },
+        {
+          "id": "mobility",
+          "name": "Mobility",
+          "description": "Transport services and technology for movement of people.",
+          "description_source": "local scope note",
+          "parents": [
+            "transportation"
+          ]
+        },
+        {
+          "id": "vehicle-production",
+          "name": "Vehicle Production",
+          "description": "Manufacturing vehicles and associated vehicle systems.",
+          "description_source": "local scope note",
+          "parents": [
+            "transportation",
+            "space"
+          ]
+        },
+        {
+          "id": "search-buy-rent",
+          "name": "Search, Buy & Rent",
+          "description": "Platforms for finding, buying or renting assets in the selected industry.",
+          "description_source": "local scope note",
+          "parents": [
+            "transportation",
+            "real-estate"
+          ]
+        },
+        {
+          "id": "navigation-mapping",
+          "name": "Navigation & Mapping",
+          "description": "Geographic mapping, positioning and route guidance.",
+          "description_source": "local scope note",
+          "parents": [
+            "transportation"
+          ]
+        },
+        {
+          "id": "autonomous-tech",
+          "name": "Autonomous Tech",
+          "description": "Technology enabling systems or vehicles to act without continuous human control.",
+          "description_source": "local scope note",
+          "parents": [
+            "transportation",
+            "robotics",
+            "semiconductors"
+          ]
+        },
+        {
+          "id": "public-safety",
+          "name": "Public Safety",
+          "description": "Protection of people and communities from physical hazards and threats.",
+          "description_source": "local scope note",
+          "parents": [
+            "security",
+            "robotics"
+          ]
+        },
+        {
+          "id": "cloud-infrastructure",
+          "name": "Cloud & Infrastructure",
+          "description": "Cloud computing and digital infrastructure products and services.",
+          "description_source": "local scope note",
+          "parents": [
+            "security",
+            "enterprise-software",
+            "hosting"
+          ]
+        },
+        {
+          "id": "data-protection",
+          "name": "Data Protection",
+          "description": "Safeguarding data confidentiality, integrity and privacy.",
+          "description_source": "local scope note",
+          "parents": [
+            "security"
+          ]
+        },
+        {
+          "id": "identity-access",
+          "name": "Identity & Access",
+          "description": "Verifying identities and controlling access to systems or assets.",
+          "description_source": "local scope note",
+          "parents": [
+            "security"
+          ]
+        },
+        {
+          "id": "device-security",
+          "name": "Device Security",
+          "description": "Protection of physical computing and connected devices.",
+          "description_source": "local scope note",
+          "parents": [
+            "security"
+          ]
+        },
+        {
+          "id": "construction",
+          "name": "Construction",
+          "description": "Building and civil construction products, processes and services.",
+          "description_source": "local scope note",
+          "parents": [
+            "real-estate",
+            "home-living",
+            "engineering-manufacturing"
+          ]
+        },
+        {
+          "id": "real-estate-software",
+          "name": "Real Estate Software",
+          "description": "Software for property transactions, management and workflows.",
+          "description_source": "local scope note",
+          "parents": [
+            "real-estate"
+          ]
+        },
+        {
+          "id": "real-estate-services",
+          "name": "Real Estate Services",
+          "description": "Services supporting property ownership, use and transactions.",
+          "description_source": "local scope note",
+          "parents": [
+            "real-estate"
+          ]
+        },
+        {
+          "id": "workspaces",
+          "name": "Workspaces",
+          "description": "Provision or management of workplaces and shared working environments.",
+          "description_source": "local scope note",
+          "parents": [
+            "real-estate"
+          ]
+        },
+        {
+          "id": "learning-tools",
+          "name": "Learning Tools",
+          "description": "Products supporting learning and instruction.",
+          "description_source": "local scope note",
+          "parents": [
+            "education",
+            "jobs-recruitment",
+            "kids"
+          ]
+        },
+        {
+          "id": "education-providers",
+          "name": "Education Providers",
+          "description": "Organisations delivering education or training.",
+          "description_source": "local scope note",
+          "parents": [
+            "education",
+            "jobs-recruitment"
+          ]
+        },
+        {
+          "id": "education-management",
+          "name": "Education Management",
+          "description": "Administration and management of education institutions or programmes.",
+          "description_source": "local scope note",
+          "parents": [
+            "education"
+          ]
+        },
+        {
+          "id": "mobile-gaming",
+          "name": "Mobile Gaming",
+          "description": "Games and gaming services on mobile devices.",
+          "description_source": "local scope note",
+          "parents": [
+            "gaming"
+          ]
+        },
+        {
+          "id": "console-pc",
+          "name": "Console & PC",
+          "description": "Games and gaming services for consoles and personal computers.",
+          "description_source": "local scope note",
+          "parents": [
+            "gaming"
+          ]
+        },
+        {
+          "id": "esports",
+          "name": "eSports",
+          "description": "Competitive organised video gaming and associated services.",
+          "description_source": "local scope note",
+          "parents": [
+            "gaming"
+          ]
+        },
+        {
+          "id": "betting-gambling",
+          "name": "Betting & Gambling",
+          "description": "Wagering, gambling and supporting platforms or services.",
+          "description_source": "local scope note",
+          "parents": [
+            "gaming"
+          ]
+        },
+        {
+          "id": "apparel",
+          "name": "Apparel",
+          "description": "Clothing and garments.",
+          "description_source": "local scope note",
+          "parents": [
+            "fashion",
+            "kids"
+          ]
+        },
+        {
+          "id": "accessories",
+          "name": "Accessories",
+          "description": "Fashion accessories complementing clothing.",
+          "description_source": "local scope note",
+          "parents": [
+            "fashion"
+          ]
+        },
+        {
+          "id": "luxury",
+          "name": "Luxury",
+          "description": "Premium fashion and luxury goods.",
+          "description_source": "local scope note",
+          "parents": [
+            "fashion"
+          ]
+        },
+        {
+          "id": "footwear",
+          "name": "Footwear",
+          "description": "Shoes and other footwear products.",
+          "description_source": "local scope note",
+          "parents": [
+            "fashion"
+          ]
+        },
+        {
+          "id": "online-travel-agency",
+          "name": "Online Travel Agency",
+          "description": "Digital intermediaries selling travel services.",
+          "description_source": "local scope note",
+          "parents": [
+            "travel"
+          ]
+        },
+        {
+          "id": "booking-search",
+          "name": "Booking & Search",
+          "description": "Finding and reserving travel or accommodation services.",
+          "description_source": "local scope note",
+          "parents": [
+            "travel",
+            "event-tech"
+          ]
+        },
+        {
+          "id": "accommodation",
+          "name": "Accommodation",
+          "description": "Lodging and associated accommodation services.",
+          "description_source": "local scope note",
+          "parents": [
+            "travel"
+          ]
+        },
+        {
+          "id": "travel-analytics",
+          "name": "Travel Analytics",
+          "description": "Data and analysis supporting travel businesses or decisions.",
+          "description_source": "local scope note",
+          "parents": [
+            "travel"
+          ]
+        },
+        {
+          "id": "sport-platform",
+          "name": "Sport Platform",
+          "description": "Digital platforms connecting sports participants, organisations or audiences.",
+          "description_source": "local scope note",
+          "parents": [
+            "sports"
+          ]
+        },
+        {
+          "id": "fitness",
+          "name": "Fitness",
+          "description": "Exercise and physical fitness products and services.",
+          "description_source": "local scope note",
+          "parents": [
+            "sports"
+          ]
+        },
+        {
+          "id": "sporting-equipment",
+          "name": "Sporting Equipment",
+          "description": "Equipment used in sport and physical activity.",
+          "description_source": "local scope note",
+          "parents": [
+            "sports"
+          ]
+        },
+        {
+          "id": "sport-media",
+          "name": "Sport Media",
+          "description": "Content, broadcasting and media focused on sport.",
+          "description_source": "local scope note",
+          "parents": [
+            "sports"
+          ]
+        },
+        {
+          "id": "league-club",
+          "name": "League & Club",
+          "description": "Sports leagues, clubs and their management.",
+          "description_source": "local scope note",
+          "parents": [
+            "sports"
+          ]
+        },
+        {
+          "id": "document-management",
+          "name": "Document Management",
+          "description": "Tools storing, organising and processing documents.",
+          "description_source": "local scope note",
+          "parents": [
+            "legal"
+          ]
+        },
+        {
+          "id": "regtech-compliance",
+          "name": "RegTech & Compliance",
+          "description": "Technology supporting regulatory compliance.",
+          "description_source": "local scope note",
+          "parents": [
+            "legal"
+          ]
+        },
+        {
+          "id": "lawyer-marketplace",
+          "name": "Lawyer Marketplace",
+          "description": "Platforms connecting clients with legal professionals.",
+          "description_source": "local scope note",
+          "parents": [
+            "legal"
+          ]
+        },
+        {
+          "id": "matter-management",
+          "name": "Matter Management",
+          "description": "Tools organising legal cases and legal work.",
+          "description_source": "local scope note",
+          "parents": [
+            "legal"
+          ]
+        },
+        {
+          "id": "legal-information",
+          "name": "Legal Information",
+          "description": "Legal research, information and knowledge services.",
+          "description_source": "local scope note",
+          "parents": [
+            "legal"
+          ]
+        },
+        {
+          "id": "logistics",
+          "name": "Logistics",
+          "description": "Coordination, transport and storage of goods.",
+          "description_source": "local scope note",
+          "parents": [
+            "robotics"
+          ]
+        }
+      ],
+      "parent_component": "industries"
+    },
+    "technologies": {
+      "max_secondary": 2,
+      "categories": [
+        {
+          "id": "3d-technology",
+          "name": "3D Technology",
+          "description": "Three-dimensional modelling, capture, display or fabrication technology.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "artificial-intelligence",
+          "name": "Artificial Intelligence",
+          "description": "Systems performing learned prediction, generation, perception or decision tasks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "augmented-reality",
+          "name": "Augmented Reality",
+          "description": "Digital information overlaid on a view of the physical world.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "autonomous-sensor-tech",
+          "name": "Autonomous & Sensor Tech",
+          "description": "Sensing and control systems enabling autonomous operation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "big-data",
+          "name": "Big Data",
+          "description": "Storage, processing and analysis of large or complex datasets.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "blockchain",
+          "name": "Blockchain",
+          "description": "Distributed ledgers and cryptographically verified transaction systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "computer-vision",
+          "name": "Computer Vision",
+          "description": "Automated interpretation of images or video.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "connected-device",
+          "name": "Connected Device",
+          "description": "Physical devices with network connectivity and data exchange.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "deep-learning",
+          "name": "Deep Learning",
+          "description": "Machine learning using multilayer neural networks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "deep-tech",
+          "name": "Deep Tech",
+          "description": "Products based on substantial scientific or engineering innovation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "hardware",
+          "name": "Hardware",
+          "description": "Physical devices, equipment or electronic components.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "iot",
+          "name": "IoT",
+          "description": "Connected physical devices exchanging data through networks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "machine-learning",
+          "name": "Machine Learning",
+          "description": "Algorithms that learn predictive or decision patterns from data.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mobile-app",
+          "name": "Mobile app",
+          "description": "Software applications designed for mobile devices.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "nanotech",
+          "name": "Nanotech",
+          "description": "Manipulation and engineering of materials at nanometre scales.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "natural-language-processing",
+          "name": "Natural Language Processing",
+          "description": "Computational understanding or generation of human language.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "quantum-technologies",
+          "name": "Quantum Technologies",
+          "description": "Technology using quantum effects for computing, sensing or communication.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "recognition-technology",
+          "name": "Recognition Technology",
+          "description": "Automatic identification of patterns, objects, speech or identity.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "virtual-reality",
+          "name": "Virtual Reality",
+          "description": "Immersive computer-generated environments.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    },
+    "tags": {
+      "max_secondary": 4,
+      "categories": [
+        {
+          "id": "ai-agents",
+          "name": "AI Agents",
+          "description": "AI systems executing tasks through sequences of actions or tool use.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-applications",
+          "name": "AI Applications",
+          "description": "Products applying AI to end-user tasks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-chips-and-processors",
+          "name": "AI Chips and Processors",
+          "description": "Computing chips designed for AI workloads.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-computing-infrastructure",
+          "name": "AI Computing Infrastructure",
+          "description": "Computing infrastructure supporting AI workloads.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-data-preparation-and-generation",
+          "name": "AI Data Preparation and Generation",
+          "description": "Tools preparing or generating data for AI systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-model-deployment-and-monitoring",
+          "name": "AI Model Deployment and Monitoring",
+          "description": "Tools deploying AI models and observing their operation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-model-layer",
+          "name": "AI Model Layer",
+          "description": "Models serving as a foundation for AI applications.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-model-training-and-development",
+          "name": "AI Model Training and Development",
+          "description": "Tools and processes building or training AI models.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-safety",
+          "name": "AI Safety",
+          "description": "Methods reducing harmful or unreliable behaviour of AI systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "ai-security",
+          "name": "AI Security",
+          "description": "Protection of AI systems and their data against attacks or misuse.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "analytics",
+          "name": "Analytics",
+          "description": "Products analysing data to support decisions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "biotech-and-pharma",
+          "name": "Biotech and Pharma",
+          "description": "Biotechnology and pharmaceutical products or development.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "biotechnology",
+          "name": "Biotechnology",
+          "description": "Products based on biological processes, organisms or molecular research.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "chips-and-processors",
+          "name": "Chips and Processors",
+          "description": "Integrated circuits and computing processors.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "climate-tech",
+          "name": "Climate Tech",
+          "description": "Technology mitigating climate change or supporting adaptation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "core-ai",
+          "name": "Core AI",
+          "description": "Underlying models and technology enabling AI capabilities.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "defence",
+          "name": "Defence",
+          "description": "Products and services whose core application is military defence.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "defence-applications",
+          "name": "Defence Applications",
+          "description": "Products with evidenced military-defence applications.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "drones",
+          "name": "Drones",
+          "description": "Uncrewed aircraft and their control, sensing or mission systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "dt-and-ls",
+          "name": "DT and LS",
+          "description": "Published tag whose meaning is not verified; do not select until defined.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "electronic-health-records-ehr",
+          "name": "Electronic Health Records (EHR)",
+          "description": "Digital systems storing and managing patient health records.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "genai-applications",
+          "name": "GenAI Applications",
+          "description": "End-user applications of generative AI.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "genai-computing-layer",
+          "name": "GenAI Computing Layer",
+          "description": "Computing infrastructure for generative AI.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "genai-model-maker",
+          "name": "GenAI Model Maker",
+          "description": "Development of generative AI models.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "genai-operation-layer",
+          "name": "GenAI Operation Layer",
+          "description": "Tools operating, deploying and managing generative AI systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "generative-ai",
+          "name": "Generative AI",
+          "description": "AI generating content such as text, images, audio or code.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "hard-tech",
+          "name": "Hard Tech",
+          "description": "Science and engineering innovation embodied in physical products.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "humanoid",
+          "name": "Humanoid",
+          "description": "Robots with human-like physical form.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "industrial-robotics",
+          "name": "Industrial Robotics",
+          "description": "Robots for industrial production and operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "investment-research",
+          "name": "Investment Research",
+          "description": "Information and analysis supporting investment decisions.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "manufacturing-and-assembly-robots",
+          "name": "Manufacturing and Assembly Robots",
+          "description": "Robots performing manufacturing and assembly tasks.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "mlops",
+          "name": "MLOps",
+          "description": "Tools managing the development and operation of machine-learning systems.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "no-code-and-low-code-software",
+          "name": "No-Code and Low-Code Software",
+          "description": "Software creation with limited or no conventional programming.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "nuclear-fission",
+          "name": "Nuclear Fission",
+          "description": "Energy and technology based on splitting atomic nuclei.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "nuclear-fusion",
+          "name": "Nuclear Fusion",
+          "description": "Energy and technology based on combining atomic nuclei.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "photonics-tech",
+          "name": "Photonics Tech",
+          "description": "Technology generating, manipulating or detecting light.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "platform",
+          "name": "Platform",
+          "description": "An offering enabling third parties or users to build, connect or transact.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "propulsion-systems",
+          "name": "Propulsion Systems",
+          "description": "Systems generating thrust or motive power.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "quantum-computers-and-processors",
+          "name": "Quantum Computers and Processors",
+          "description": "Hardware for quantum computation.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "quantum-computing",
+          "name": "Quantum Computing",
+          "description": "Computation using quantum states and operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "radar-sensors",
+          "name": "Radar Sensors",
+          "description": "Radio-wave sensing of objects, distance or motion.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "retail",
+          "name": "Retail",
+          "description": "Sale of goods to end consumers through physical or digital stores.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "risk-management",
+          "name": "Risk Management",
+          "description": "Identification, assessment and management of business or financial risk.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "saas",
+          "name": "SaaS",
+          "description": "Software provided as a hosted service.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "semiconductor-engineering-equipment",
+          "name": "Semiconductor Engineering Equipment",
+          "description": "Equipment for designing, fabricating or testing semiconductors.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "social",
+          "name": "Social",
+          "description": "Offerings centred on social connection or interaction.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "space-upstream",
+          "name": "Space Upstream",
+          "description": "Launch, spacecraft and other infrastructure enabling space operations.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "spinout",
+          "name": "Spinout",
+          "description": "Company originating from another organisation or research institution; require direct evidence.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "sustainable-development-goals",
+          "name": "Sustainable Development Goals",
+          "description": "Explicit contribution to UN Sustainable Development Goals; require direct evidence.",
+          "description_source": "local scope note",
+          "parents": []
+        },
+        {
+          "id": "woman-founder",
+          "name": "Woman Founder",
+          "description": "Company with a woman founder explicitly identified in evidence; never infer gender from names or images.",
+          "description_source": "local scope note",
+          "parents": []
+        }
+      ]
+    }
+  },
+  "derived_components": {},
+  "reporting_groups": [
+    {
+      "id": "ai",
+      "name": "AI",
+      "description": "Include: Industry: Enterprise software; Technology: Artificial intelligence. Exclude: Industry: Robotics; Industry: Transportation; Industry: Security; Industry: Health; Industry: Space; Industry: Energy",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "aviation",
+      "name": "Aviation",
+      "description": "Include: Tags: Aviation and aerospace; Tags: Sustainable aviation. Exclude: Tags: Defence; Tags: Defence applications; Industry: Space",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "biotech-life-sciences",
+      "name": "Biotech & Life Sciences",
+      "description": "Include: Industry: Health; Sub-industry: Biotechnology; Sub-industry: Pharmaceutical",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "consumer-services",
+      "name": "Consumer Services",
+      "description": "Include: Industry: Gaming; Industry: Music; Industry: Media; Industry: Education. Exclude: Industry: Hosting; Industry: Robotics; Industry: Space; Industry: Security; Industry: Energy; Industry: Semiconductors; Industry: Health; Industry: Fintech; Industry: Food; Industry: Transportation; Industry: Marketing; Industry: Enterprise software; Business model: Marketplace & eCommerce",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "cybersecurity",
+      "name": "Cybersecurity",
+      "description": "Include: Industry: Security. Exclude: Sub-industry: Public safety; Industry: Robotics",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "defence",
+      "name": "Defence",
+      "description": "Include: Tags: Defence; Tags: Defence applications. Exclude: Industry: Space",
+      "rule": {
+        "any": [
+          {
+            "component": "tags",
+            "id": "defence"
+          },
+          {
+            "component": "tags",
+            "id": "defence-applications"
+          }
+        ],
+        "exclude": [
+          {
+            "component": "industries",
+            "id": "space"
+          }
+        ]
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "ecommerce-marketplaces",
+      "name": "eCommerce & Marketplaces",
+      "description": "Include: Business model: Marketplace & eCommerce. Exclude: Industry: Gaming; Industry: Fintech; Industry: Robotics; Industry: Transportation; Industry: Security; Industry: Health; Industry: Space; Industry: Energy",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "edtech",
+      "name": "Edtech",
+      "description": "Include: Industry: Education",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "education"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "energy",
+      "name": "Energy",
+      "description": "Include: Industry: Energy",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "energy"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "fintech",
+      "name": "Fintech",
+      "description": "Include: Industry: Fintech",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "fintech"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "food",
+      "name": "Food",
+      "description": "Include: Industry: Food",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "food"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "health-tech-medtech",
+      "name": "Health Tech & Medtech",
+      "description": "Include: Industry: Health; Sub-industry: Health platform; Sub-industry: Medical devices",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "marketing",
+      "name": "Marketing",
+      "description": "Include: Industry: Marketing. Exclude: Industry: Food; Business model: Marketplace & eCommerce",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "other-b2b-software",
+      "name": "Other B2B Software",
+      "description": "Include: Industry: Enterprise software. Exclude: Technology: Artificial intelligence; Industry: Food; Industry: Fintech; Industry: Hosting; Industry: Robotics; Industry: Transportation; Industry: Security; Industry: Health; Industry: Space; Industry: Energy; Business model: Marketplace & eCommerce",
+      "rule": null,
+      "unavailable_reason": "Published rule needs additional fields or clarification of mixed inclusion semantics."
+    },
+    {
+      "id": "robotics",
+      "name": "Robotics",
+      "description": "Include: Industry: Robotics",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "robotics"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "semiconductors",
+      "name": "Semiconductors",
+      "description": "Include: Industry: Semiconductors",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "semiconductors"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "space",
+      "name": "Space",
+      "description": "Include: Industry: Space",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "space"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    },
+    {
+      "id": "transportation",
+      "name": "Transportation",
+      "description": "Include: Industry: Transportation",
+      "rule": {
+        "any": [
+          {
+            "component": "industries",
+            "id": "transportation"
+          }
+        ],
+        "exclude": []
+      },
+      "unavailable_reason": null
+    }
+  ]
+}

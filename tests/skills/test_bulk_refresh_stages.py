@@ -173,7 +173,8 @@ def test_named_missing_scope_creates_only_selected_active_startups(mock_env, dea
     assert find_dataset_location("unrelated") is None
     assert [call.args[0] for call in imported.call_args_list] == list(selected)
     _, planned, _ = bulk._plan_jobs(scope, None)
-    assert len(planned) == 15
+    assert len(planned) == 20
+    assert {(name, "startup-sector") for name in selected} <= planned
 
 
 @pytest.mark.parametrize("stage", [None, "Application", "Pitched @ SICTIC", "Rejected by Jury", "Unexpected"])
@@ -267,10 +268,10 @@ def test_mandatory_skills_are_selected_per_dataset_with_domain_restrictions():
     )
     nodes = bulk._nodes(scope, set(bulk.SKILL_REGISTRY))
     selected = bulk._planned_nodes(scope, None, bulk._dependency_graph(scope, nodes))
-    assert {skill for name, skill in selected if name == "review"} == {"startup-profile", "persons-in-dataset", "submission-ready"}
-    assert {skill for name, skill in selected if name == "jury"} == {"startup-profile", "persons-in-dataset", "startup-website-import"}
-    assert {skill for name, skill in selected if name == "pitched"} == {"startup-profile", "persons-in-dataset", "startup-traction", "startup-website-import"}
-    assert {skill for name, skill in selected if name == "local"} == {"startup-profile", "persons-in-dataset", "startup-traction"}
+    assert {skill for name, skill in selected if name == "review"} == {"startup-profile", "startup-sector", "persons-in-dataset", "submission-ready"}
+    assert {skill for name, skill in selected if name == "jury"} == {"startup-profile", "startup-sector", "persons-in-dataset", "startup-website-import"}
+    assert {skill for name, skill in selected if name == "pitched"} == {"startup-profile", "startup-sector", "persons-in-dataset", "startup-traction", "startup-website-import"}
+    assert {skill for name, skill in selected if name == "local"} == {"startup-profile", "startup-sector", "persons-in-dataset", "startup-traction"}
     assert {skill for name, skill in selected if name == "members"} == {"persons-in-dataset"}
 
 
@@ -343,6 +344,37 @@ async def test_failed_optional_website_does_not_skip_insights(mock_env, dealum, 
     assert "Skill startup-website-import failed; bulk refresh will continue" in caplog.text
     for skill in ("startup-profile", "persons-in-dataset", "person-profile"):
         assert f"| example | {skill} | skipped:" not in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sector_fails", [False, True])
+async def test_profile_waits_for_sector_and_skips_on_failure(mock_env, dealum, mocker, sector_fails):
+    from dataclasses import replace
+
+    dossier("example", timestamp=RECENT)
+    calls = []
+
+    async def sector(dataset):
+        calls.append("sector")
+        if sector_fails:
+            raise RuntimeError("Classification failed")
+
+    async def profile(dataset):
+        assert calls == ["sector"]
+        calls.append("profile")
+
+    mocker.patch.object(bulk, "sync_datasets", return_value=[])
+    mocker.patch.dict(bulk.SKILL_REGISTRY, {
+        "startup-sector": replace(bulk.SKILL_REGISTRY["startup-sector"], func=sector),
+        "startup-profile": replace(bulk.SKILL_REGISTRY["startup-profile"], func=profile),
+    })
+    if sector_fails:
+        with pytest.raises(bulk.BulkRefreshError):
+            await bulk.bulk_refresh(datasets="example", skills="startup-profile")
+        assert calls == ["sector"]
+    else:
+        await bulk.bulk_refresh(datasets="example", skills="startup-profile")
+        assert calls == ["sector", "profile"]
 
 
 def test_community_inactivity_does_not_query_dealum(mock_env, dealum):

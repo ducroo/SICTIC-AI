@@ -195,6 +195,13 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
                 "confidence": 80,
                 "evidence": ["Fixture company evidence."],
             }
+        if "sector" in properties:
+            return {
+                "sector": "Other",
+                "sector_confidence": "M",
+                "rationale": "The fixture describes human-delivered consulting.",
+                "evidence": ["fixture.md: consulting services."],
+            }
         if "names" in properties:
             return {"names": [fixtures.person_name]}
         raise AssertionError("Unexpected dataset-chat JSON schema")
@@ -363,6 +370,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
         "skills.potential_investors.potential_investors"
     )
     startup_profile_mod = importlib.import_module("skills.startup_profile.startup_profile")
+    startup_sector_mod = importlib.import_module("skills.startup_sector.startup_sector")
     startup_traction_mod = importlib.import_module("skills.startup_traction.startup_traction")
     suggested_startups_mod = importlib.import_module(
         "skills.suggested_startups.suggested_startups"
@@ -385,6 +393,8 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
 
 
     monkeypatch.setattr(startup_sources, "ensure_startup_dataset", fake_ensure_startup_dataset)
+    monkeypatch.setattr(startup_sector_mod, "ensure_startup_dataset", fake_ensure_startup_dataset)
+    monkeypatch.setattr(startup_sector_mod, "dataset_search", fake_dataset_search)
     monkeypatch.setattr(people_discovery, "persons_in_dataset", fake_persons_in_dataset)
     monkeypatch.setattr(
         suggested_startups_inputs,
@@ -394,6 +404,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
 
     for module in [
         startup_profile_mod,
+        startup_sector_mod,
         startup_traction_mod,
         person_profile_mod,
         team_profile_mod,

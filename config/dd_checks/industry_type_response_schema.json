@@ -4,7 +4,7 @@
   "properties": {
     "industry_type": {
       "type": ["string", "null"],
-      "description": "Best matching configured industry type, or null when evidence is insufficient."
+      "description": "Best matching configured product type, or null when evidence is insufficient."
     },
     "confidence": {
       "type": "integer",

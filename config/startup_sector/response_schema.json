@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "classifications": {"type": "object", "additionalProperties": false, "properties": {}, "required": []},
+    "confidence": {"type": "string", "enum": ["H", "M", "L"]},
+    "rationale": {"type": "string", "pattern": "\\S"},
+    "evidence": {"type": "array", "maxItems": 3, "items": {"type": "string", "pattern": "\\S"}}
+  },
+  "required": ["classifications", "confidence", "rationale", "evidence"]
+}

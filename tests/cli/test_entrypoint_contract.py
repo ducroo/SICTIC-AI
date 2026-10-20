@@ -235,8 +235,8 @@ def test_startup_profile_cli_accepts_comma_separated_startups(monkeypatch):
     module = importlib.import_module("skills.startup_profile.__main__")
     captured = []
 
-    async def fake_startup_profile(startup, files):
-        captured.append((startup, files))
+    async def fake_startup_profile(startup):
+        captured.append(startup)
         return []
 
     monkeypatch.setattr(module, "startup_profile", fake_startup_profile)
@@ -247,15 +247,15 @@ def test_startup_profile_cli_accepts_comma_separated_startups(monkeypatch):
     )
 
     assert result.exit_code == 0
-    assert captured == [("Avientus", None), ("DAAV", None)]
+    assert captured == ["Avientus", "DAAV"]
 
 
 def test_startup_profile_cli_continues_after_startup_failure(monkeypatch):
     module = importlib.import_module("skills.startup_profile.__main__")
     captured = []
 
-    async def fake_startup_profile(startup, files):
-        captured.append((startup, files))
+    async def fake_startup_profile(startup):
+        captured.append(startup)
         if startup == "Scanvio":
             raise RuntimeError("dataset sync timed out")
         return []
@@ -267,7 +267,7 @@ def test_startup_profile_cli_continues_after_startup_failure(monkeypatch):
         ["--startup", "Scanvio, Unisers"],
     )
 
-    assert captured == [("Scanvio", None), ("Unisers", None)]
+    assert captured == ["Scanvio", "Unisers"]
     assert result.exit_code == 1
     assert "Failed startups:" in result.output
     assert "Scanvio: dataset sync timed out" in result.output
