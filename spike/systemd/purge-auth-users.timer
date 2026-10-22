@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily purge of Firebase Auth profiles older than 60 days
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

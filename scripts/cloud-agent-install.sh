@@ -94,6 +94,10 @@ seed_cloud_env() {
 ensure_conda
 seed_cloud_env
 
+# shellcheck disable=SC1091
+source "$REPO_ROOT/scripts/cloud-agent-ssh.sh"
+materialize_vps_ssh_key
+
 SKILLS_TARGET="${INSTALLED_SKILLS_PATH:-$REPO_ROOT/.openclaw-skills}"
 mkdir -p "$SKILLS_TARGET"
 
