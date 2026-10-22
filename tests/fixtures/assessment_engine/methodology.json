@@ -1,0 +1,45 @@
+{
+  "id": "fictional-lantern-methodology",
+  "version": "v1",
+  "general_variant": "general",
+  "policy": {
+    "classification_vocabulary": {
+      "general": "general",
+      "moonlit": "moonlit"
+    },
+    "confidence_vocabulary": ["high", "medium", "low"],
+    "applicability_vocabulary": ["applicable", "not_applicable", "unknown"],
+    "evidence_reference_policy": {"required": true, "allow_unreferenced": false},
+    "applicability_decision_policy": {
+      "basis_vocabulary": ["default", "evidence", "policy", "override"],
+      "evidence_required_for_non_default": true,
+      "evidence_required_for_exclusion": true,
+      "provenance_required": true
+    },
+    "unknown_is_incomplete": true,
+    "ambiguity_reason_required": true,
+    "override_reason_required": true
+  },
+  "applicability_rules": {
+    "fable-team-echo": {"allowed_states": ["applicable", "not_applicable", "unknown"], "default_state": "applicable"},
+    "fable-market-whisper": {"allowed_states": ["applicable", "not_applicable", "unknown"], "default_state": "applicable"},
+    "fable-product-kite": {"allowed_states": ["applicable", "not_applicable", "unknown"], "default_state": "applicable"},
+    "fable-docs-lantern": {"allowed_states": ["applicable", "not_applicable", "unknown"], "default_state": "applicable"},
+    "fable-moonlit-echo": {"allowed_states": ["applicable", "not_applicable", "unknown"], "default_state": "applicable"}
+  },
+  "variants": {
+    "general": {
+      "checks": [
+        {"id": "fable-team-echo", "section": "Team", "label": "Synthetic team signal"},
+        {"id": "fable-market-whisper", "section": "Business opportunity", "label": "Synthetic market signal"},
+        {"id": "fable-product-kite", "section": "Product", "label": "Synthetic product signal"},
+        {"id": "fable-docs-lantern", "section": "Documentation", "label": "Synthetic documentation signal"}
+      ]
+    },
+    "moonlit": {
+      "checks": [
+        {"id": "fable-moonlit-echo", "section": "Team", "label": "Synthetic moonlit signal"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "producer": {"id": "synthetic-finding-producer", "version": "v1", "config": {}},
+  "items": [
+    {
+      "id": "fable-team-echo",
+      "state": "supported",
+      "summary": "Synthetic team finding material.",
+      "evidence_ids": ["synthetic-evidence-01"],
+      "follow_up_questions": ["What synthetic team signal should the jury verify?"]
+    },
+    {
+      "id": "fable-market-whisper",
+      "state": "uncertain",
+      "summary": "Synthetic business finding material.",
+      "evidence_ids": ["synthetic-evidence-02"],
+      "follow_up_questions": []
+    },
+    {
+      "id": "fable-product-kite",
+      "state": "supported",
+      "summary": "Synthetic product finding material.",
+      "evidence_ids": ["synthetic-evidence-03"],
+      "follow_up_questions": ["Which fictional product detail needs confirmation?"]
+    },
+    {
+      "id": "fable-docs-lantern",
+      "state": "not_observed",
+      "summary": "Synthetic documentation finding material.",
+      "evidence_ids": ["synthetic-evidence-04"],
+      "follow_up_questions": []
+    }
+  ]
+}
