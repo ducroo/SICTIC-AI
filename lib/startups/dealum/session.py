@@ -14,7 +14,8 @@ if TYPE_CHECKING:
 @dataclass
 class DealumSession:
     applications: list[dict[str, Any]] | None = None
-    imports: dict[tuple[str, bool], "DealumImportResult"] = field(default_factory=dict)
+    imports: dict[tuple[str, tuple[str, ...], bool, bool], "DealumImportResult"] = field(default_factory=dict)
+    application_imports: dict[tuple[str, str, bool], "DealumImportResult"] = field(default_factory=dict)
     checked: set[str] = field(default_factory=set)
     source_imports_disabled: set[str] = field(default_factory=set)
 

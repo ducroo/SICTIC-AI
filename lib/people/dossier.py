@@ -1,13 +1,21 @@
 """Assemble dedicated documents and incidental mentions for a person."""
 
+import asyncio
 import re
+import unicodedata
+from functools import lru_cache
+from itertools import combinations
 from pathlib import PurePath
 from typing import List, Tuple
 
 from lib.datasets.models import Chunk
 from lib.datasets.paths import dataset_parsed_path
-from lib.datasets.search import dataset_search
-from lib.datasets.source import parsed_filepath
+from lib.datasets.ingestion import sync_datasets
+from lib.datasets.source import iter_parsed_chunks, parsed_filepath
+from lib.infrastructure.configuration import load_repository_config
+from lib.people.discovery import persons_in_dataset
+from lib.people.model import Person, extract_email_addresses
+from lib.people.linkedin.identity import extract_linkedin_ids
 from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from lib.storage import get_storage
@@ -61,35 +69,99 @@ def is_personal_document(filename: str) -> bool:
     return any(pattern.search(normalized) for pattern in _PERSONAL_DOCUMENT_PATTERNS)
 
 
-async def get_filtered_chunks(dataset_name: str, name: str, query: str) -> list:
-    """
-    Retrieve chunks for a person from a dataset and apply a content filter 
-    to ensure the person is actually mentioned.
-    """
-    logger.info(f"Collating profile chunks for '{name}' in dataset '{dataset_name}'...")
-    
-    chunks = await dataset_search(
-        dataset_name=dataset_name,
-        query=query,
-        max_chunks=500
-    )
-    
-    if not chunks:
-        return []
+def _name_tokens(text: str) -> tuple[str, ...]:
+    # Keep digits within words so e.g. Anna2 cannot match Anna. Underscores and
+    # punctuation separate words, including in filenames. Preserve diacritics.
+    return tuple(re.findall(r"[^\W_]+", unicodedata.normalize("NFKC", text).casefold()))
 
-    # Filter chunks based on name words
-    filter_words = [w.lower() for w in name.split() if w.strip()]
-    
-    content_filtered = []
-    for chunk in chunks:
-        if all(fw in chunk.text.lower() for fw in filter_words):
-            content_filtered.append(chunk)
 
-    return content_filtered
+@lru_cache(maxsize=32)
+def _unique_name_phrases(names: tuple[str, ...], min_letters: int) -> tuple[frozenset[str], ...]:
+    """Cache only immutable roster-derived combinations, never dataset evidence."""
+    owners: dict[str, set[int]] = {}
+    for index, name in enumerate(names):
+        tokens = _name_tokens(name)
+        variants = {" ".join(parts)
+                    for size in range(1, len(tokens) + 1)
+                    for parts in combinations(tokens, size)}
+        for variant in variants:
+            owners.setdefault(variant, set()).add(index)
+    return tuple(frozenset(
+        phrase for phrase, indices in owners.items()
+        if indices == {index} and (
+            phrase == " ".join(_name_tokens(names[index]))
+            or (len(phrase.split()) >= 2 and sum(c.isalpha() for c in phrase) >= min_letters)
+        )
+    ) for index in range(len(names)))
 
-async def build_person_dossier(dataset_name: str, person_name: str, query: str) -> Tuple[List[Chunk], List[Chunk]]:
+
+def _phrase_pattern(phrases: frozenset[str]):
+    if not phrases:
+        return None
+    return re.compile(r"(?<!\w)(?:" + "|".join(re.escape(p) for p in sorted(phrases)) + r")(?!\w)")
+
+
+def _matches_phrase(pattern, text: str) -> bool:
+    return pattern is not None and pattern.search(" ".join(_name_tokens(text))) is not None
+
+
+def _identity_filter(dataset_name: str, name: str, person: Person | None):
+    roster = persons_in_dataset(dataset_name)
+    matches = person.find_matches(roster) if person is not None else []
+    target_indices = ([i for i, candidate in enumerate(roster)
+                       if any(candidate is match for match in matches)] if person is not None else
+                      [i for i, candidate in enumerate(roster)
+                       if _name_tokens(candidate.full_name) == _name_tokens(name)])
+    if len(target_indices) == 1:
+        index = target_indices[0]
+        target = person or roster[index]
+    else:
+        # Explicit out-of-roster profiling is supported. Duplicate names remain
+        # separate owners and therefore cannot produce unique name matches.
+        target = person or Person(full_name=name)
+        index = len(roster)
+        roster = [*roster, target]
+    names = tuple(candidate.full_name for candidate in roster)
+    config = load_repository_config("people", "dossier")
+    phrases = _unique_name_phrases(names, config["minimum_combination_letters"])[index]
+    # An enriched display name may differ from the saved roster name. Add its
+    # combinations without treating the same person as a competing identity.
+    if target.full_name != names[index]:
+        enriched = (*names[:index], target.full_name, *names[index + 1:])
+        phrases |= _unique_name_phrases(enriched, config["minimum_combination_letters"])[index]
+    return target, _phrase_pattern(phrases)
+
+
+def _scan_person_chunks(dataset_name: str, target: Person, pattern) -> list[Chunk]:
+    emails = set(target.email_addresses)
+    selected = {}
+    for chunk in iter_parsed_chunks(dataset_name):
+        filename = PurePath(chunk.document_name.replace("\\", "/")).name
+        if (_matches_phrase(pattern, filename) or _matches_phrase(pattern, chunk.text)
+                or emails.intersection(extract_email_addresses(chunk.text))
+                or (target.linkedin_id and target.linkedin_id in extract_linkedin_ids(chunk.text))):
+            selected.setdefault(chunk.chunk_id, chunk)
+    return list(selected.values())
+
+
+async def get_filtered_chunks(
+    dataset_name: str, name: str, query: str, *, person: Person | None = None,
+) -> list[Chunk]:
+    """Scan all current parsed chunks for unique name phrases or exact contacts.
+
+    query is retained for compatibility; selection is now lexical, not semantic.
+    As before, synchronization errors propagate rather than implying no evidence.
     """
-    Retrieves and logically splits Qdrant chunks into a dedicated 'dossier' (full docs)
+    target, pattern = _identity_filter(dataset_name, name, person)
+    await sync_datasets([slugify(dataset_name)], raise_on_error=True)
+    return await asyncio.to_thread(_scan_person_chunks, dataset_name, target, pattern)
+
+
+async def build_person_dossier(
+    dataset_name: str, person_name: str, query: str, *, person: Person | None = None,
+) -> Tuple[List[Chunk], List[Chunk]]:
+    """
+    Retrieves and logically splits parsed chunks into a dedicated 'dossier' (full docs)
     and 'mentions' (isolated chunks), excluding any LinkedIn data.
     """
     logger.info(f"[{dataset_name}] Building dossier for '{person_name}'...")
@@ -99,16 +171,19 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
     dossier: List[Chunk] = []
     mentions: List[Chunk] = []
     
-    filtered_chunks = await get_filtered_chunks(dataset_name, person_name, query)
+    _, pattern = _identity_filter(dataset_name, person_name, person)
+    filtered_chunks = await get_filtered_chunks(dataset_name, person_name, query, person=person)
     
     if not filtered_chunks:
         return dossier, mentions
         
-    # Reverse to get chronological/least-to-most relevant order based on how Qdrant returns them
+    # Retain the existing dossier output order.
     filtered_chunks.reverse()
     
     storage = get_storage()
     seen_dossier_docs = set()
+    document_texts = {}
+    seen_mentions = set()
     
     for c in filtered_chunks:
         doc_name = c.document_name
@@ -122,15 +197,17 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
             continue
             
         should_expand = (
-            person_in_filename(doc_name, person_name)
+            _matches_phrase(pattern, PurePath(doc_name.replace("\\", "/")).name)
             or is_personal_document(doc_name)
         )
-        # Qdrant stores the original document name. Resolve its parsed path
+        # Chunks retain the original document name. Resolve its parsed path
         # through the same convention used by conversion and indexing.
         full_md_path = parsed_filepath(parsed_root, doc_name)
         
         if should_expand and storage.exists(full_md_path):
-            full_text = storage.read_text(full_md_path)
+            if doc_name not in document_texts:
+                document_texts[doc_name] = storage.read_text(full_md_path)
+            full_text = document_texts[doc_name]
             if len(full_text) <= MAX_FULL_DOCUMENT_CHARACTERS:
                 full_chunk = Chunk(
                     chunk_id=f"{doc_name}-all",
@@ -142,10 +219,12 @@ async def build_person_dossier(dataset_name: str, person_name: str, query: str) 
                 )
                 dossier.append(full_chunk)
                 seen_dossier_docs.add(doc_name)
-            else:
+            elif c.chunk_id not in seen_mentions:
                 mentions.append(c)
-        else:
+                seen_mentions.add(c.chunk_id)
+        elif c.chunk_id not in seen_mentions:
             mentions.append(c)
+            seen_mentions.add(c.chunk_id)
             
     logger.info(f"[{dataset_name}] Dossier built: {len(dossier)} full docs, {len(mentions)} mentions.")
     return dossier, mentions

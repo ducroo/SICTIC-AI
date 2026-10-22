@@ -217,7 +217,7 @@ async def test_find_industry_type_supplies_business_reviewer(monkeypatch):
 
     assert result == "software"
     assert reviews[0].problems == (
-        "Industry classification requires evidence when a type is selected.",
+        "Product-type classification requires evidence when a type is selected.",
     )
 
 
@@ -404,7 +404,7 @@ def test_every_dd_industry_type_has_a_configured_focus(mock_env):
     for industry_type in industry_types:
         instructions = audit_instructions_with_context(config, industry_type)
         assert instructions.startswith(config["audit_instructions"])
-        assert f"Industry type: {industry_type}" in instructions
+        assert f"Product type: {industry_type}" in instructions
         assert instructions.endswith(config["industry_focus"][industry_type])
 
 
@@ -455,7 +455,7 @@ async def test_dd_report_lists_most_important_findings_before_chapters(
 
     config = load_repository_config("dd_checks")
     assert chapters.await_args.args[4] == audit_instructions_with_context(config, "biology")
-    assert "**Industry type:** biology" in report
+    assert "**Product type:** biology" in report
     top_findings = most_important_findings(report)
     assert top_findings is not None
     assert (

@@ -11,6 +11,7 @@ from skills.skill_registry import SKILL_REGISTRY
 from lib.insights import InsightFile
 from tests.skill_harness.cases import (
     ADMIN_ONLY_HARNESS_COMMANDS,
+    FOCUSED_HARNESS_TESTS,
     HARNESS_SMOKE_COMMANDS,
     SKILL_COVERAGE,
     SKILL_COVERAGE_REASONS,
@@ -42,11 +43,13 @@ def test_every_skill_main_renders_typer_help():
         assert "Usage:" in result.output
 
 
-def test_harness_registry_commands_are_smoked_or_marked_admin_only():
+def test_harness_registry_commands_have_coverage_or_are_admin_only():
     registered = set(build_registry())
-    covered = set(HARNESS_SMOKE_COMMANDS) | ADMIN_ONLY_HARNESS_COMMANDS
+    covered = set(HARNESS_SMOKE_COMMANDS) | set(FOCUSED_HARNESS_TESTS) | ADMIN_ONLY_HARNESS_COMMANDS
 
     assert registered <= covered
+    for path in FOCUSED_HARNESS_TESTS.values():
+        assert (REPO_ROOT / path).is_file()
 
 
 def test_skill_registry_dependencies_reference_existing_keys():
@@ -80,6 +83,7 @@ def test_insight_skill_apis_declare_uniform_result_contract():
         "potential_investors": "skills.potential_investors.potential_investors",
         "sha_review": "skills.sha_review.sha_review",
         "startup_profile": "skills.startup_profile.startup_profile",
+        "startup_sector": "skills.startup_sector.startup_sector",
         "startup_traction": "skills.startup_traction.startup_traction",
         "submission_ready": "skills.submission_ready.submission_ready",
         "suggested_startups": "skills.suggested_startups.suggested_startups",

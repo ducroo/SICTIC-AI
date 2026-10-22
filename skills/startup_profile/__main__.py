@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import List, Optional
 
 import typer
 
@@ -24,7 +23,6 @@ class StartupProfileBatchResult:
 
 async def _profile_startups(
     startups: list[str],
-    files: Optional[List[str]],
 ) -> StartupProfileBatchResult:
     insights: list[InsightFile] = []
     successful_startups: list[str] = []
@@ -32,7 +30,7 @@ async def _profile_startups(
     for startup in startups:
         logger.info("Starting profile generation for startup: %s", startup)
         try:
-            insights.extend(await startup_profile(startup, files))
+            insights.extend(await startup_profile(startup))
         except Exception as error:
             logger.exception(
                 "Startup profile failed for %s; continuing with the next "
@@ -59,19 +57,13 @@ def profile_startup(
         "-s",
         help="Comma-separated startup names",
     ),
-    files: Optional[List[str]] = typer.Option(
-        None,
-        "--files",
-        "-f",
-        help="Optional list of PDF/document files",
-    ),
 ):
     startups = [name.strip() for name in startup.split(",") if name.strip()]
     if not startups:
         raise typer.BadParameter("Provide at least one startup name.")
 
     batch_result = run_command(
-        lambda: _profile_startups(startups, files),
+        lambda: _profile_startups(startups),
         logger=logger,
         error_prefix="Execution failed",
     )

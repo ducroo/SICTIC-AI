@@ -1,6 +1,6 @@
 ## Objective
 
-Using only the provided context, classify the startup into exactly one of these industry types:
+Using only the provided context, classify the startup into exactly one of these product types:
 
 * Software
 * Hardware

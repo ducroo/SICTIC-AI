@@ -82,7 +82,11 @@ async def _workflow(dataset_name: str) -> tuple[InsightResult, list[Person]]:
         await asyncio.to_thread(resolver.resolve_pending_profiles)
     except InfrastructureError as error:
         acquisition_failed(error)
-    config = load_repository_config("persons_in_dataset", "discovery")
+    config = dict(load_repository_config("persons_in_dataset", "discovery"))
+    location = dataset_location(dataset)
+    if location.domain != "startups":
+        config["instructions"] = config["general_instructions"]
+        config["queries"] = config["general_queries"]
     insight = _roster_insight(dataset, config)
     reusable = insight.find(selection="reusable")
     if reusable:

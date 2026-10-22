@@ -18,6 +18,7 @@ from lib.storage import get_storage
 
 APPLICATION = {
     "id": 491739,
+    "createDate": "2026-05-01T09:00:00Z",
     "name": "Avientus",
     "code": "JHXM-QZHJ-8684",
     "step": "Jury",
@@ -106,7 +107,8 @@ def test_dealum_markdown_paths_manifest_and_repeat_import(mock_env):
     }
     adapter = FakeDealumAdapter(application)
     storage = get_storage()
-    root = "storage/startups/avientus/datasets/dealum"
+    root = "storage/startups/avientus/datasets/dealum/2026-05-01"
+    storage.write_text(f"{root}/manifest.json", json.dumps({"dealum_id": APPLICATION["id"]}))
     storage.write_text(f"{root}/application.md", "legacy application")
     storage.write_text(f"{root}/documents/notes.md", "legacy attachment")
 
@@ -156,11 +158,11 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     assert result.application_code == "JHXM-QZHJ-8684"
     assert result.match_method == "normalized_name"
     assert result.downloaded_files == 2
-    assert storage.exists("storage/startups/avientus/datasets/dealum/application.md.txt")
-    assert storage.exists("storage/startups/avientus/datasets/dealum/documents/Avientus_Deck.pdf")
+    assert storage.exists("storage/startups/avientus/datasets/dealum/2026-05-01/application.md.txt")
+    assert storage.exists("storage/startups/avientus/datasets/dealum/2026-05-01/documents/Avientus_Deck.pdf")
     assert storage.exists("storage/startups/avientus/datasets/__active_dataset__.md")
 
-    manifest = json.loads(storage.read_text("storage/startups/avientus/datasets/dealum/manifest.json"))
+    manifest = json.loads(storage.read_text("storage/startups/avientus/datasets/dealum/2026-05-01/manifest.json"))
     assert manifest["dealum_id"] == 491739
     assert manifest["dealum_url"] == (
         "https://app.dealum.com/#/dealroom/19180?application=491739"
@@ -168,7 +170,7 @@ def test_dealum_import_creates_dataset_and_manifest(mock_env):
     assert manifest["step"] == "Jury"
     assert len(manifest["files"]) == 2
     application_md = storage.read_text(
-        "storage/startups/avientus/datasets/dealum/application.md.txt"
+        "storage/startups/avientus/datasets/dealum/2026-05-01/application.md.txt"
     )
     assert (
         "- Dealum URL: https://app.dealum.com/#/dealroom/19180?application=491739"
@@ -235,7 +237,7 @@ def test_dealum_import_removes_files_deleted_from_dealum(mock_env):
 
     manifest = json.loads(
         get_storage().read_text(
-            "storage/startups/avientus/datasets/dealum/manifest.json"
+            "storage/startups/avientus/datasets/dealum/2026-05-01/manifest.json"
         )
     )
     assert result.changed is True
@@ -243,7 +245,7 @@ def test_dealum_import_removes_files_deleted_from_dealum(mock_env):
     assert len(manifest["files"]) == 1
     assert manifest["files"][0]["filename"] == "Avientus_Deck.pdf"
     assert not get_storage().exists(
-        "storage/startups/avientus/datasets/dealum/documents/"
+        "storage/startups/avientus/datasets/dealum/2026-05-01/documents/"
         "financialplan.xlsx"
     )
 
@@ -286,7 +288,7 @@ def test_dealum_import_failure_preserves_previous_snapshot_and_timestamp(
     assert storage.read_text(first.manifest_path) == previous_manifest
     assert storage.read_text(first.application_path) == previous_application
     assert storage.exists(
-        "storage/startups/avientus/datasets/dealum/documents/"
+        "storage/startups/avientus/datasets/dealum/2026-05-01/documents/"
         "financialplan.xlsx"
     )
 
@@ -321,7 +323,7 @@ def test_dealum_stage_and_operational_dates_do_not_change_snapshot(
 def test_unchanged_dealum_sources_are_not_replaced(mock_env, mocker):
     first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
     storage = get_storage()
-    source = "storage/startups/avientus/datasets/dealum/documents/financialplan.xlsx"
+    source = "storage/startups/avientus/datasets/dealum/2026-05-01/documents/financialplan.xlsx"
     storage.set_mtime(first.application_path, 1_000_000_000)
     storage.set_mtime(source, 1_000_000_001)
     from pathlib import Path
@@ -340,7 +342,7 @@ def test_partial_dealum_update_reuses_unchanged_attachments(mock_env):
     from pathlib import Path
     first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
     storage = get_storage()
-    source = "storage/startups/avientus/datasets/dealum/documents/financialplan.xlsx"
+    source = "storage/startups/avientus/datasets/dealum/2026-05-01/documents/financialplan.xlsx"
     storage.set_mtime(source, 1_000_000_001)
     before_inode = Path(storage.local_path(source)).stat().st_ino
     old_application = storage.read_text(first.application_path)
@@ -567,6 +569,7 @@ def test_reconcile_dealum_startup_selects_latest_duplicate_name(mock_env, caplog
             "id": 1,
             "name": "NovoViz",
             "code": "NOVO-1",
+            "createDate": None,
             "applicationDate": "2026-01-15T09:00:00Z",
         },
         {
@@ -574,6 +577,7 @@ def test_reconcile_dealum_startup_selects_latest_duplicate_name(mock_env, caplog
             "id": 2,
             "name": "novoviz",
             "code": "NOVO-2",
+            "createDate": None,
             "applicationDate": "2026-04-20T09:00:00Z",
         },
     ]
@@ -621,8 +625,8 @@ def test_reconcile_dealum_startup_selects_latest_duplicate_create_date_millis(mo
 
 def test_reconcile_dealum_startup_rejects_duplicate_name_without_dates(mock_env, caplog):
     applications = [
-        {**APPLICATION, "id": 1, "name": "NovoViz", "code": "NOVO-1"},
-        {**APPLICATION, "id": 2, "name": "novoviz", "code": "NOVO-2"},
+        {**APPLICATION, "createDate": None, "id": 1, "name": "NovoViz", "code": "NOVO-1"},
+        {**APPLICATION, "createDate": None, "id": 2, "name": "novoviz", "code": "NOVO-2"},
     ]
 
     with pytest.raises(DealumApplicationAmbiguousError, match="latest cannot be determined"):
@@ -641,14 +645,14 @@ def test_dealum_import_manifest_records_selected_application_date(mock_env):
             "id": 1,
             "name": "Avientus",
             "code": "OLD",
-            "applicationDate": "2026-01-15T09:00:00Z",
+            "createDate": "2026-01-15T09:00:00Z",
         },
         {
             **APPLICATION,
             "id": 2,
             "name": "Avientus",
             "code": "NEW",
-            "applicationDate": "2026-04-20T09:00:00Z",
+            "createDate": "2026-04-20T09:00:00Z",
         },
     ]
 
@@ -664,3 +668,211 @@ def test_dealum_import_manifest_records_selected_application_date(mock_env):
     assert manifest["dealum_id"] == 2
     assert manifest["application_date"] == "2026-04-20T09:00:00Z"
     assert manifest["selection_method"] == "latest_application_date"
+
+
+def dated_applications():
+    return [
+        {**APPLICATION, "id": 1, "code": "OLD", "createDate": "2025-01-06T09:00:00Z", "step": "Rejected by Jury"},
+        {**APPLICATION, "id": 2, "code": "NEW", "createDate": "2026-06-30T09:00:00Z", "step": "Jury"},
+    ]
+
+
+def test_vocating_alias_import_uses_merged_dossier(mock_env):
+    application = {**APPLICATION, "name": "Vocating.ai"}
+    result = import_startup_from_dealum("vocating", adapter=FakeDealumAdapter(application))
+    assert result.dataset_slug == "vocating-ai"
+    assert result.match_method == "startup_alias"
+    assert get_storage().exists(result.application_path)
+    assert not get_storage().exists(dataset_location_for_domain("vocating", "startups").raw_rel)
+
+
+def test_import_all_applications_and_update_only_one(mock_env):
+    from lib.startups.dealum.manifest import dealum_url_for_startup, read_manifest
+    from skills.deep_dive_invitation.deep_dive_invitation import _dealum_contact
+
+    applications = dated_applications()
+    adapter = FakeDealumAdapter(applications=applications)
+    result = import_startup_from_dealum("Avientus", adapter=adapter)
+    storage = get_storage()
+    root = "storage/startups/avientus/datasets/dealum"
+    old_path = f"{root}/2025-01-06/application.md.txt"
+    assert result.applications_imported == 2
+    assert result.downloaded_files == 4
+    assert result.dealum_id == 2
+    assert result.step == "Jury"
+    assert result.application_path == f"{root}/2026-06-30/application.md.txt"
+    assert read_manifest("avientus")["dealum_id"] == 2
+    assert dealum_url_for_startup("avientus").endswith("application=2")
+    contact = _dealum_contact(result.application_path)
+    assert contact.full_name == "Johannes Aicher"
+    assert contact.email_addresses == ["johannes@avientus.ch"]
+    storage.set_mtime(old_path, 1_000_000_000)
+    old_text = storage.read_text(old_path)
+    applications[1] = {**applications[1], "answers": {"oneliner": "New company evidence"}}
+    updated = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications))
+    assert updated.changed
+    assert updated.stale_files == 2
+    assert storage.read_text(old_path) == old_text
+    assert storage.mtime(old_path) == 1_000_000_000
+    assert storage.exists(f"{root}/2025-01-06/documents/financialplan.xlsx")
+    assert not storage.exists(f"{root}/2026-06-30/documents/financialplan.xlsx")
+    unchanged = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications))
+    assert not unchanged.changed
+    sources = snapshot_source_files(storage, root)
+    assert len([source for source in sources if source.filename.endswith("application.md.txt")]) == 2
+    assert not any(source.filename.endswith(".json") for source in sources)
+
+
+def test_code_import_keeps_latest_url_and_does_not_satisfy_full_import(mock_env):
+    from lib.startups.dealum.manifest import dealum_url_for_startup
+    from lib.startups.dealum.session import dealum_session
+
+    adapter = FakeDealumAdapter(applications=dated_applications())
+    with dealum_session():
+        old = import_startup_from_dealum("OLD", adapter=adapter)
+        assert old.applications_imported == 1
+        assert old.dealum_id == 1
+        assert _dealum_sync_due("avientus")
+        result = import_startup_from_dealum("Avientus", adapter=adapter)
+        assert result.applications_imported == 2
+        assert result.dealum_id == 2
+        assert adapter.downloads == 4  # old application reused
+        assert not _dealum_sync_due("avientus")
+        assert import_startup_from_dealum("Avientus", adapter=adapter) is result
+    import_startup_from_dealum("OLD", adapter=adapter)
+    assert dealum_url_for_startup("avientus").endswith("application=2")
+    assert _dealum_sync_due("avientus")
+
+
+def test_missing_historical_application_in_response_is_retained(mock_env):
+    applications = dated_applications()
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications))
+    old_path = first.application_path.replace("2026-06-30", "2025-01-06")
+    old_text = get_storage().read_text(old_path)
+    result = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications[1:]))
+    assert not result.changed
+    assert get_storage().read_text(old_path) == old_text
+
+
+@pytest.mark.parametrize("bad_date", [None, "", "invalid", "99999999999999999999999999"])
+def test_import_requires_create_date_without_fallback(mock_env, bad_date):
+    from lib.startups.dealum.matching import DealumReconciliationError
+    adapter = FakeDealumAdapter({**APPLICATION, "createDate": bad_date, "joinDate": "2026-01-01"})
+    with pytest.raises(DealumReconciliationError, match="no valid createDate"):
+        import_startup_from_dealum("Avientus", adapter=adapter)
+    assert adapter.downloads == 0
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_same_day_collision_preserves_existing_application(mock_env, existing):
+    from lib.startups.dealum.matching import DealumReconciliationError
+    applications = dated_applications()
+    applications[1]["createDate"] = "2025-01-06T12:00:00Z"
+    storage = get_storage()
+    if existing:
+        first = import_startup_from_dealum("OLD", adapter=FakeDealumAdapter(applications=applications))
+        previous = storage.read_text(first.application_path)
+    adapter = FakeDealumAdapter(applications=applications)
+    with pytest.raises(DealumReconciliationError, match="share createDate day"):
+        import_startup_from_dealum("NEW" if existing else "Avientus", adapter=adapter)
+    assert adapter.downloads == 0
+    if existing:
+        assert storage.read_text(first.application_path) == previous
+
+
+def test_changed_creation_date_does_not_duplicate_application(mock_env):
+    from lib.startups.dealum.matching import DealumReconciliationError
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    adapter = FakeDealumAdapter({**APPLICATION, "createDate": "2026-08-01"})
+    with pytest.raises(DealumReconciliationError, match="changed createDate"):
+        import_startup_from_dealum("Avientus", adapter=adapter)
+    assert get_storage().exists(first.application_path)
+    assert adapter.downloads == 0
+
+
+def test_partial_refresh_does_not_mark_collection_fresh(mock_env):
+    from lib.startups.dealum.manifest import read_manifest
+    applications = dated_applications()
+    import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications))
+    storage = get_storage()
+    root = "storage/startups/avientus/datasets/dealum"
+    latest_path = f"{root}/2026-06-30/application.md.txt"
+    latest_text = storage.read_text(latest_path)
+    assert not _dealum_sync_due("avientus")
+    applications[0] = {**applications[0], "answers": {"oneliner": "Updated older evidence"}}
+    applications[1] = {**applications[1], "answers": {"pitch_deck": "https://files.dealum.com/token/fail.pdf"}}
+
+    class FailingAdapter(FakeDealumAdapter):
+        def download_file(self, url):
+            raise RuntimeError("download failed")
+
+    with pytest.raises(RuntimeError, match="download failed"):
+        import_startup_from_dealum("Avientus", adapter=FailingAdapter(applications=applications))
+    assert "Updated older evidence" in storage.read_text(f"{root}/2025-01-06/application.md.txt")
+    assert storage.read_text(latest_path) == latest_text
+    assert read_manifest("avientus")["dealum_id"] == 2
+    assert _dealum_sync_due("avientus")
+
+
+def flatten_snapshot(result):
+    """Model the previous supported layout, with its actual manifest and raw data."""
+    from pathlib import Path
+    storage = get_storage()
+    folder = Path(result.manifest_path).parent
+    root = str(folder.parent)
+    manifest = json.loads(storage.read_text(result.manifest_path))
+    for item in manifest["files"]:
+        item["path"] = item["path"].replace(str(folder), root)
+    storage.write_text(result.manifest_path, json.dumps(manifest))
+    for path in Path(storage.local_path(str(folder))).iterdir():
+        path.replace(Path(storage.local_path(root)) / path.name)
+    Path(storage.local_path(str(folder))).rmdir()
+    return root
+
+
+def test_migrate_flat_snapshot_preserves_content_mtime_and_manifest_paths(mock_env):
+    from pathlib import Path
+    from lib.startups.dealum.manifest import read_manifest
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    root = flatten_snapshot(first)
+    storage = get_storage()
+    source = f"{root}/documents/financialplan.xlsx"
+    storage.set_mtime(source, 1_000_000_001)
+    inode = Path(storage.local_path(source)).stat().st_ino
+    second = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    assert second.changed  # source paths moved, so synchronize normally
+    moved = f"{root}/2026-05-01/documents/financialplan.xlsx"
+    assert storage.mtime(moved) == 1_000_000_001
+    assert Path(storage.local_path(moved)).stat().st_ino == inode
+    assert not storage.exists(source)
+    assert all("/2026-05-01/" in item["path"] for item in read_manifest("avientus")["files"])
+    assert not import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter()).changed
+
+
+def test_migration_retains_legacy_application_missing_from_current_response(mock_env):
+    applications = dated_applications()
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications[:1]))
+    root = flatten_snapshot(first)
+    original = get_storage().read_text(f"{root}/application.md.txt")
+    import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter(applications=applications[1:]))
+    assert get_storage().read_text(f"{root}/2025-01-06/application.md.txt") == original
+    assert get_storage().exists(f"{root}/2026-06-30/application.md.txt")
+
+
+def test_failed_migration_publication_restores_flat_snapshot(mock_env, mocker):
+    from lib.infrastructure.filesystem import os
+    first = import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    root = flatten_snapshot(first)
+    storage = get_storage()
+    original = storage.read_text(f"{root}/application.md.txt")
+    replace = os.replace
+
+    def fail_publish(source, target):
+        if str(source).split("/")[-1].startswith(".dealum-migration-"):
+            raise OSError("cannot publish migration")
+        return replace(source, target)
+
+    mocker.patch("lib.infrastructure.filesystem.os.replace", side_effect=fail_publish)
+    with pytest.raises(OSError, match="cannot publish migration"):
+        import_startup_from_dealum("Avientus", adapter=FakeDealumAdapter())
+    assert storage.read_text(f"{root}/application.md.txt") == original

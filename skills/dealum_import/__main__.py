@@ -5,7 +5,7 @@ import typer
 from lib.startups.dealum import DealumReconciliationError
 from skills.dealum_import.dealum_import import dealum_import
 
-app = typer.Typer(help="Import a startup application and linked documents from Dealum.")
+app = typer.Typer(help="Import startup applications and linked documents from Dealum.")
 
 
 @app.command()
@@ -34,6 +34,7 @@ def main(startup: str = typer.Argument(..., metavar="STARTUPS", help="Comma-sepa
 
         typer.echo(
             f"Imported {result.dataset_slug}: changed={result.changed}, "
+            f"applications={result.applications_imported}, "
             f"downloaded={result.downloaded_files}, skipped={result.skipped_files}, "
             f"step={result.step}"
         )

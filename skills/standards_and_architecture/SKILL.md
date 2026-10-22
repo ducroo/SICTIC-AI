@@ -105,6 +105,13 @@ additional columns under their tag.
 Use [build_person_dossier](../../lib/people/dossier.py) for separate dossier and
 incidental-mention lists. Its `get_filtered_chunks`, `person_in_filename` and
 `is_personal_document` own retrieval filtering and document selection.
+Dossier retrieval scans current parsed sources using shared enumeration/chunking,
+matching full-word ordered name combinations unique within the existing roster,
+or exact person contact identifiers. It preserves synchronization, and keeps the
+query argument for caller compatibility rather than semantic ranking. The optional
+Person input supplies enriched contact details without changing identity matching.
+Dossiers deduplicate full documents and remove covered mentions; other mentions
+are deduplicated by chunk ID. Profile synthesis validates attribution.
 Dossiers exclude LinkedIn documents; profiling supplies that evidence separately.
 Preserve source-document and page metadata; do not recreate selection in skills.
 Local discovery uses shared source enumeration/chunking and the person extraction
@@ -288,6 +295,11 @@ through that schema; there is no separate error-scanning validator. Generated
 results are not revalidated before saving. Structural
 validation does not establish expected checklist coverage or citation accuracy. Synthesis belongs to the caller.
 
+Callers may supply an `evidence` prefix and set `retrieve=False` to assess
+only that evidence with shared `generate_json`. Default retrieval is unchanged.
+Non-default evidence/retrieval settings participate in freshness. Different
+applicants use distinct checklist H1 titles; the criteria body can be shared.
+
 Audit reuse is per checklist; technical-error artifacts are ineligible.
 The engine does not synchronize on a cache hit. Callers that require current
 index state synchronize before lookup and document their additional dependencies.
@@ -334,6 +346,36 @@ integration requires an OS path.
 Application data uses `LOCAL_STORAGE_PATH`. `cache/` and `docling_data/`
 use the configured machine-local storage root. Docling output is durable
 parsed data, not disposable cache.
+
+### Temporary datasets
+
+Temporary datasets may hold documents or text supplied directly by the user
+through CLI, Google Chat or another interface. Save supplied text as a source
+file and use `lib.ephemeral_dataset.prepare_ephemeral_dataset` with those files;
+then invoke skills using the returned dataset name.
+
+Preparing a new temporary dataset resets that name in the `generated` domain:
+clear its complete dossier (source files, insights including manual overrides,
+and metadata), parsed data and search index before ingesting the new material.
+Never reset a permanent startup or community dataset through this workflow.
+Index-cleanup failures must stop preparation so old evidence cannot carry over.
+
+`discard_ephemeral_dataset` performs this same guarded cleanup without preparing
+or ingesting replacement files. It raises on cleanup failure; the pitch-deck
+service logs that failure separately while retaining the completed review.
+
+Prepare once per investigation. Subsequent skills use the same dataset name
+without preparing it again; their insights and manual edits remain available
+throughout that investigation. Use distinct names for concurrent investigations.
+Input files must be outside the directories being reset. This reset rule is an
+explicit exception to retaining manual insights across separate investigations;
+ordinary skill calls still preserve manual precedence.
+
+If additional documents are provided for the same startup, add them to its
+existing `datasets/` folder and run any insight skill against that dataset.
+This continues the same investigation: no wipe or call to
+`prepare_ephemeral_dataset` is needed. Use normal dataset synchronization and
+insight freshness handling; preserve existing sources and manual insights.
 
 ### Sources and document references
 
@@ -451,7 +493,7 @@ repairs unambiguous JSON syntax; `validate_json_schema` checks the contract
 without modifying data; an optional `Review` reviewer checks business rules.
 Reviewers receive schema-valid data, and generation validates their returned
 payload again. The provider response format omits unsupported `if`/`then`/`else`
-keywords and regular-expression `pattern` keywords, which local Ollama models
+keywords, `allOf` composition and regular-expression `pattern` keywords, which providers
 reject or stall on; the prompt and local validator retain the full schema,
 including those checks. Put nonblank-text constraints and structural field
 dependencies in schemas. Perform business review once within generation; afterwards only

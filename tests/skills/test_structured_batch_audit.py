@@ -188,6 +188,8 @@ Is the registered office documented?
         check,
         _llm_instructions,
         _response_schema,
+        evidence="",
+        retrieve=True,
     ):
         started.append(check.number)
         if len(started) == 3:

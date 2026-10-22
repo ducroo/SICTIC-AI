@@ -2,6 +2,12 @@ ADMIN_ONLY_HARNESS_COMMANDS = {
     "/config",
     "/sync",
     "/dealum_import",
+    "/import_companyresearch",
+}
+
+# These commands exercise dispatch with their workflow-specific fixtures.
+FOCUSED_HARNESS_TESTS = {
+    "/recruiting": "tests/skills/test_recruiting.py",
 }
 
 SKILL_COVERAGE = {
@@ -18,6 +24,7 @@ SKILL_COVERAGE = {
     "dd_checks": "local-smoke",
     "dd_priorities": "local-smoke",
     "dealum_import": "utility-smoke",
+    "import_companyresearch": "existing-unit",
     "expert_search": "local-smoke",
     "harness": "existing-unit",
     "investor_profile": "local-smoke",
@@ -29,10 +36,12 @@ SKILL_COVERAGE = {
     "persons_in_dataset": "existing-unit",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
+    "recruiting": "existing-unit",
     "sha_review": "local-smoke",
     "send_gmail": "utility-smoke",
     "standards_and_architecture": "docs-only",
     "startup_profile": "local-smoke",
+    "startup_sector": "existing-unit",
     "startup_traction": "local-smoke",
     "startup_website_import": "utility-smoke",
     "suggested_startups": "local-smoke",
@@ -51,6 +60,7 @@ SKILL_COVERAGE_REASONS = {
 HARNESS_SMOKE_COMMANDS = {
     "/dataset_chat": "/dataset_chat example-startup What is the fixture?",
     "/startup_profile": "/startup_profile example-startup",
+    "/startup_sector": "/startup_sector example-startup",
     "/startup_traction": "/startup_traction example-startup",
     "/persons_in_dataset": "/persons_in_dataset sictic-members",
     "/person_profile": "/person_profile sictic-members Jane Doe",

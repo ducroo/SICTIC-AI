@@ -1,0 +1,20 @@
+{
+  "excluded_company_hosts": [
+    "amazon.com", "amazon.in", "amazon.de", "amazon.fr", "amazon.it",
+    "amazon.es", "amazon.co.uk", "amazon.ca", "amazon.com.au", "amazon.co.jp",
+    "amazon.com.br", "amazon.com.mx", "amazon.nl", "amazon.se", "amazon.pl",
+    "amazon.com.be", "amazon.ie", "amazon.sg", "amazon.ae", "amazon.sa",
+    "amazon.eg", "amazon.com.tr", "amazon.co.za", "amzn.to", "a.co"
+  ],
+  "approved_redirect_hosts": {},
+  "gambling_spam_patterns": [
+    "\\bslot[ -]*gacor\\b", "\\bjudi[ -]+online\\b", "\\bbandar[ -]+togel\\b",
+    "\\b(?:koitoto|badak88|dazbet|rajajp88|hokigacor|slot88|slot777|idnslot|mawar88|spv88)\\b"
+  ],
+  "gambling_promotion_heading_patterns": [
+    "\\b(?:online casino|casino en ligne|casino online)\\b.{0,80}\\b(?:bonus|jackpot|free spins|spins gratuits)\\b",
+    "\\b(?:bonus|jackpot|free spins|spins gratuits)\\b.{0,80}\\b(?:online casino|casino en ligne|casino online)\\b"
+  ],
+  "max_spam_label_words": 8,
+  "minimum_clean_page_characters": 80
+}

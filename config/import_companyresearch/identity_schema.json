@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uid": {"type": ["string", "null"]},
+    "rationale": {"type": "string", "minLength": 1}
+  },
+  "required": ["uid", "rationale"]
+}

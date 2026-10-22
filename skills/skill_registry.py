@@ -16,6 +16,7 @@ from skills.person_profile.person_profile import person_profile
 from skills.persons_in_dataset.persons_in_dataset import persons_in_dataset
 from skills.potential_investors.potential_investors import potential_investors
 from skills.startup_profile.startup_profile import startup_profile
+from skills.startup_sector import startup_sector
 from skills.startup_traction.startup_traction import startup_traction
 from skills.suggested_startups.suggested_startups import suggested_startups
 from skills.team_profile.team_profile import team_profile
@@ -45,7 +46,12 @@ SKILL_REGISTRY = {
     "startup-profile": SkillSpec(
         func=startup_profile,
         domains=frozenset({"startups"}),
+        depends_on=("startup-sector",),
         mandatory_stages=frozenset({"*"}),
+    ),
+    "startup-sector": SkillSpec(
+        func=startup_sector,
+        domains=frozenset({"startups", "generated"}),
     ),
     "persons-in-dataset": SkillSpec(
         func=persons_in_dataset,

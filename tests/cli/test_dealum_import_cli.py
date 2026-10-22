@@ -11,11 +11,12 @@ def _result(name: str, *, found: bool = True):
         dataset_slug=slug,
         changed=True,
         downloaded_files=2,
+        applications_imported=2,
         skipped_files=0,
         step="Jury",
         dealum_url=f"https://app.dealum.com/#/dealroom/19180?application={slug}",
-        application_path=f"storage/startups/{slug}/datasets/dealum/application.md",
-        manifest_path=f"storage/startups/{slug}/datasets/dealum/manifest.json",
+        application_path=f"storage/startups/{slug}/datasets/dealum/2026-05-01/application.md.txt",
+        manifest_path=f"storage/startups/{slug}/datasets/dealum/2026-05-01/manifest.json",
     )
 
 
@@ -40,6 +41,7 @@ def test_dealum_import_cli_imports_comma_separated_startups(mocker):
     assert "Imported avientus" in result.output
     assert "Imported daav" in result.output
     assert "Imported prevision-medicine" in result.output
+    assert "applications=2" in result.output
     assert "DEALUM_URL: https://app.dealum.com/#/dealroom/19180?application=avientus" in result.output
 
 

@@ -36,6 +36,7 @@ dependencies:
   - docling=2.96.1
   - markdown-it-py
   - beautifulsoup4
+  - filetype
 
   # Temporary compatibility constraints required by Docling 2.96.1.
   # Remove these after a newer Docling release has been tested.

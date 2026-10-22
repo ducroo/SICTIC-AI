@@ -1,0 +1,2777 @@
+{
+  "$defs": {
+    "Problem": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "format": "uri-reference"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "detail": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "additionalProperties": false
+    },
+    "ResearchReceipt": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled",
+            "expired"
+          ]
+        },
+        "companyUid": {
+          "type": "string",
+          "pattern": "^CHE-[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}$",
+          "example": "CHE-408.608.101"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reportUrl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri-reference"
+        },
+        "billing": {
+          "type": "object",
+          "properties": {
+            "disposition": {
+              "type": "string",
+              "enum": [
+                "free",
+                "reserved",
+                "settled",
+                "released"
+              ]
+            },
+            "credits": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Credits held while the request is reserved, charged once it is settled; 0 when free or released."
+            }
+          },
+          "required": [
+            "disposition",
+            "credits"
+          ],
+          "additionalProperties": false
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Problem"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partial": {
+          "$ref": "#/$defs/ResearchPartial",
+          "description": "Present during active research when the account is active and the key has reports:read: the instant report, limited to the plan. Polling does not charge another lookup."
+        }
+      },
+      "required": [
+        "requestId",
+        "status",
+        "companyUid",
+        "runId",
+        "reportUrl",
+        "billing",
+        "createdAt",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "ResearchRequest": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^CHE-[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}$",
+          "example": "CHE-408.608.101"
+        },
+        "refresh": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set true to request new research instead of the stored report, using the account's credits when starting a new run. Joins research already in progress. Use a new Idempotency-Key for a new refresh operation."
+        }
+      },
+      "required": [
+        "uid"
+      ],
+      "additionalProperties": false
+    },
+    "CompanySuggestion": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^CHE-[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}$",
+          "example": "CHE-408.608.101"
+        },
+        "name": {
+          "type": "string"
+        },
+        "legalSeat": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "uid",
+        "name",
+        "legalSeat",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "Usage": {
+      "type": "object",
+      "description": "The account's credits this month, shared across its keys and with the website.",
+      "properties": {
+        "balance": {
+          "type": "integer",
+          "description": "Monthly and extra credits left; below zero when research cost more than the account had."
+        },
+        "available": {
+          "type": "integer",
+          "description": "The balance less the credits held for research in progress: what new requests may use."
+        },
+        "held": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "monthly": {
+          "type": "integer",
+          "description": "Monthly credits left; they end when the month does."
+        },
+        "extra": {
+          "type": "integer",
+          "description": "Extra credits left; they carry over."
+        },
+        "granted": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monthly credits granted this month."
+        },
+        "renewsOn": {
+          "type": "string",
+          "format": "date",
+          "description": "When the next month's credits are granted (Europe/Zurich)."
+        }
+      },
+      "required": [
+        "balance",
+        "available",
+        "held",
+        "monthly",
+        "extra",
+        "granted",
+        "renewsOn"
+      ],
+      "additionalProperties": false
+    },
+    "CompanyReport": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "CompanyResearchResult",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "companyIdentity",
+        "overview",
+        "sizeAndStage",
+        "financials",
+        "peopleAndRoles",
+        "ownershipAndSuccession",
+        "market",
+        "technology",
+        "recentDevelopments",
+        "acquisitionAssessment",
+        "goingConcernAssessment",
+        "riskFlags",
+        "structuredClaims",
+        "extendedProfile",
+        "premiumExtensions",
+        "sources",
+        "evidence",
+        "localizedPassages",
+        "researchMetadata",
+        "contentProjection"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": [
+            "1.1.0",
+            "1.2.0",
+            "1.3.0",
+            "1.4.0",
+            "1.5.0",
+            "1.6.0",
+            "1.7.0",
+            "1.8.0"
+          ],
+          "description": "Original research snapshot schema version. Report fields use the normalized public API shape."
+        },
+        "companyIdentity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "legalName",
+            "country",
+            "uid",
+            "chid",
+            "ehraid",
+            "legalForm",
+            "status",
+            "legalSeat",
+            "address",
+            "website",
+            "aliases"
+          ],
+          "properties": {
+            "legalName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "country": {
+              "const": "CH"
+            },
+            "uid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "chid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ehraid": {
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "legalForm": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "legalSeat": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "address": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "website": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uri"
+            },
+            "aliases": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "overview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "summary",
+            "officialPurpose",
+            "activities",
+            "industries"
+          ],
+          "properties": {
+            "summary": {
+              "type": "string"
+            },
+            "officialPurpose": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "activities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "industries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "sizeAndStage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "employeeCount",
+            "employeeCountStatus",
+            "employeeCountUnit",
+            "employeeCountScope",
+            "locations",
+            "stage"
+          ],
+          "properties": {
+            "employeeCount": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "employeeCountStatus": {
+              "$ref": "#/$defs/CompanyReport/$defs/factStatus"
+            },
+            "employeeCountAsOf": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "employeeCountBasis": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "official",
+                "company_reported",
+                "third_party",
+                "estimated",
+                null
+              ],
+              "description": "Where the headcount comes from: an official filing, the company itself, a third party such as the press, or an estimate."
+            },
+            "employeeCountUnit": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "employees",
+                "full_time_equivalents",
+                null
+              ],
+              "description": "Whether the headcount counts people or full-time positions; null without a headcount."
+            },
+            "employeeCountScope": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The entity the headcount describes, as its source names it: the company itself or, for example, its group."
+            },
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "stage": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "financials": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "shareCapital",
+            "revenue",
+            "funding",
+            "indicators"
+          ],
+          "properties": {
+            "shareCapital": {
+              "$ref": "#/$defs/CompanyReport/$defs/moneyFact"
+            },
+            "revenue": {
+              "$ref": "#/$defs/CompanyReport/$defs/revenueFact"
+            },
+            "funding": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/labeledFact"
+              }
+            },
+            "indicators": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/labeledFact"
+              }
+            }
+          }
+        },
+        "peopleAndRoles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "roles",
+              "relationship",
+              "publicationClass",
+              "sourceIds"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "relationship": {
+                "type": "string"
+              },
+              "publicationClass": {
+                "$ref": "#/$defs/CompanyReport/$defs/publicationClass"
+              },
+              "sourceIds": {
+                "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+              }
+            }
+          }
+        },
+        "ownershipAndSuccession": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ownershipSummary",
+            "shareholders",
+            "successionSignals",
+            "keyPersonDependency"
+          ],
+          "properties": {
+            "ownershipSummary": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "shareholders": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/labeledFact"
+              }
+            },
+            "successionSignals": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/labeledFact"
+              }
+            },
+            "keyPersonDependency": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "market": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "customers",
+            "competitors",
+            "positioning",
+            "geographies"
+          ],
+          "properties": {
+            "customers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "competitors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "positioning": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "geographies": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "technology": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "summary",
+            "technologies",
+            "intellectualProperty"
+          ],
+          "properties": {
+            "summary": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "technologies": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "intellectualProperty": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "recentDevelopments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompanyReport/$defs/development"
+          }
+        },
+        "acquisitionAssessment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "rationale",
+            "strengths",
+            "risks",
+            "contactPath",
+            "confidence"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "unknown",
+                "no_signal",
+                "potential",
+                "explicitly_for_sale"
+              ]
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "strengths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "risks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "contactPath": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "confidence": {
+              "$ref": "#/$defs/CompanyReport/$defs/confidence"
+            }
+          }
+        },
+        "goingConcernAssessment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "rationale",
+            "positiveSignals",
+            "concernSignals",
+            "confidence"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "appears_active",
+                "concerns",
+                "inactive",
+                "insufficient_evidence"
+              ]
+            },
+            "rationale": {
+              "type": "string"
+            },
+            "positiveSignals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "concernSignals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "confidence": {
+              "$ref": "#/$defs/CompanyReport/$defs/confidence"
+            }
+          }
+        },
+        "riskFlags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompanyReport/$defs/riskFlag"
+          }
+        },
+        "structuredClaims": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "people",
+            "events",
+            "metrics",
+            "mandates",
+            "mandateLookups",
+            "registerNotices"
+          ],
+          "properties": {
+            "people": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/structuredPersonClaim"
+              }
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/structuredEventClaim"
+              }
+            },
+            "metrics": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/structuredMetricClaim"
+              }
+            },
+            "mandates": {
+              "description": "Roles the company's registered officers hold or held at other companies, from those companies' commercial register notices. Filled from the register only; empty in reports before it was looked up.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/structuredMandateClaim"
+              }
+            },
+            "registerNotices": {
+              "description": "Every commercial register (SOGC) notice of the company, newest first. Filled from the register only; empty in reports before it.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/registerNotice"
+              }
+            },
+            "mandateLookups": {
+              "description": "How far each registered officer's roles at other companies were looked up; empty when they were not looked up.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/mandateLookup"
+              }
+            }
+          }
+        },
+        "extendedProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "certificationsAndLicences",
+            "partnersAndSuppliers",
+            "corporateStructure",
+            "digitalActivity",
+            "esgAndSustainability",
+            "employerReputation",
+            "openPositions",
+            "workplaceBenefits",
+            "workplaceCulture"
+          ],
+          "properties": {
+            "certificationsAndLicences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/certificationLicence"
+              }
+            },
+            "partnersAndSuppliers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/partnerSupplier"
+              }
+            },
+            "corporateStructure": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/corporateRelationship"
+              }
+            },
+            "digitalActivity": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/digitalActivity"
+              }
+            },
+            "esgAndSustainability": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/esgClaim"
+              }
+            },
+            "employerReputation": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/employerReputation"
+              }
+            },
+            "openPositions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/openPosition"
+              }
+            },
+            "workplaceBenefits": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/workplaceBenefit"
+              }
+            },
+            "workplaceCulture": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CompanyReport/$defs/workplaceCulture"
+              }
+            }
+          }
+        },
+        "premiumExtensions": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "businessModel",
+            "professionalContacts"
+          ],
+          "properties": {
+            "businessModel": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "rationale",
+                "confidence",
+                "sourceIds"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "b2b",
+                    "b2c",
+                    "b2b2c",
+                    "marketplace",
+                    "public_sector",
+                    "mixed",
+                    "unknown"
+                  ]
+                },
+                "rationale": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "$ref": "#/$defs/CompanyReport/$defs/confidence"
+                },
+                "sourceIds": {
+                  "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+                }
+              }
+            },
+            "professionalContacts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "personName",
+                  "channel",
+                  "role",
+                  "email",
+                  "phone",
+                  "publicationClass",
+                  "sourceIds"
+                ],
+                "properties": {
+                  "personName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "description": "The person the source names with these details; null for a channel of the company or one of its departments."
+                  },
+                  "channel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "description": "For details that reach the company or a department rather than a named person: what they reach, such as \"Main office\", \"Media\", \"Investor relations\", \"Customer service\" or \"Human resources\"; null for a person. Null in reports before channels were recorded."
+                  },
+                  "role": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "email": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "publicationClass": {
+                    "enum": [
+                      "business_public",
+                      "official_register"
+                    ]
+                  },
+                  "sourceIds": {
+                    "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompanyReport/$defs/source"
+          },
+          "minItems": 1
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompanyReport/$defs/evidence"
+          }
+        },
+        "localizedPassages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompanyReport/$defs/localizedPassage"
+          }
+        },
+        "researchMetadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "researchedAt",
+            "country",
+            "schemaVersion"
+          ],
+          "properties": {
+            "researchedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "country": {
+              "const": "CH"
+            },
+            "schemaVersion": {
+              "type": "string",
+              "enum": [
+                "1.1.0",
+                "1.2.0",
+                "1.3.0",
+                "1.4.0",
+                "1.5.0",
+                "1.6.0",
+                "1.7.0",
+                "1.8.0"
+              ],
+              "description": "Original research snapshot schema version. Report fields use the normalized public API shape."
+            }
+          }
+        },
+        "completion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "const": "incomplete",
+              "type": "string"
+            },
+            "warning": {
+              "type": "string"
+            },
+            "reasonCodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "status",
+            "warning",
+            "reasonCodes"
+          ]
+        },
+        "contentProjection": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "catalogVersion": {
+              "type": "string"
+            },
+            "planId": {
+              "type": "string",
+              "enum": [
+                "free",
+                "researcher",
+                "team"
+              ]
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "access": {
+                    "type": "string",
+                    "enum": [
+                      "full",
+                      "preview",
+                      "hidden"
+                    ]
+                  },
+                  "availability": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "researched_not_found",
+                      "not_researched",
+                      "not_applicable"
+                    ]
+                  },
+                  "preview": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "leaves": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": [
+                            "full",
+                            "preview",
+                            "hidden"
+                          ]
+                        },
+                        "availability": {
+                          "type": "string",
+                          "enum": [
+                            "available",
+                            "researched_not_found",
+                            "not_researched",
+                            "not_applicable"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "label",
+                        "access",
+                        "availability"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "description",
+                  "access",
+                  "availability",
+                  "preview",
+                  "leaves"
+                ]
+              }
+            }
+          },
+          "required": [
+            "catalogVersion",
+            "planId",
+            "categories"
+          ]
+        }
+      },
+      "$defs": {
+        "evidencedDate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "precision",
+            "originalText"
+          ],
+          "properties": {
+            "value": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "precision": {
+              "enum": [
+                "day",
+                "month",
+                "year",
+                "unknown"
+              ]
+            },
+            "originalText": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "factStatus": {
+          "enum": [
+            "verified",
+            "estimated",
+            "not_found",
+            "not_applicable"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "publicationClass": {
+          "enum": [
+            "business_public",
+            "official_register",
+            "personal_sensitive",
+            "unverified_personal"
+          ]
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "nonEmptyIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "moneyFact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "currency",
+            "status",
+            "sourceIds"
+          ],
+          "properties": {
+            "amount": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "currency": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Z]{3}$",
+              "description": "ISO 4217 currency code. The amount must be expressed in base currency units; do not put scales such as million or billion in this field."
+            },
+            "status": {
+              "$ref": "#/$defs/CompanyReport/$defs/factStatus"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            }
+          }
+        },
+        "revenueFact": {
+          "description": "The company's revenue: the most recent full financial year found, with the period it describes and where it comes from.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "amount",
+            "currency",
+            "status",
+            "sourceIds"
+          ],
+          "properties": {
+            "amount": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "currency": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Z]{3}$",
+              "description": "ISO 4217 currency code. The amount must be expressed in base currency units; do not put scales such as million or billion in this field."
+            },
+            "status": {
+              "$ref": "#/$defs/CompanyReport/$defs/factStatus"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            },
+            "asOf": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "basis": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "official",
+                "company_reported",
+                "third_party",
+                "estimated",
+                null
+              ],
+              "description": "Where the figure comes from: an official filing, the company itself, a third party such as the press, or an estimate."
+            }
+          }
+        },
+        "labeledFact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "label",
+            "value",
+            "status",
+            "sourceIds"
+          ],
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            "status": {
+              "$ref": "#/$defs/CompanyReport/$defs/factStatus"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            }
+          }
+        },
+        "development": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "eventId",
+            "date",
+            "title",
+            "summary",
+            "sourceIds"
+          ],
+          "properties": {
+            "eventId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "date": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            }
+          }
+        },
+        "riskFlag": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code",
+            "severity",
+            "summary",
+            "sourceIds"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "summary": {
+              "type": "string"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            }
+          }
+        },
+        "structuredMandateClaim": {
+          "description": "firstSeenOn is the earliest register notice found naming the person there: the role existed by then even when its entry was not found.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "personName",
+            "entityName",
+            "entityUid",
+            "roleTitle",
+            "currentStatus",
+            "appointedOn",
+            "leftOn",
+            "firstSeenOn",
+            "sogcIds",
+            "sourceIds"
+          ],
+          "properties": {
+            "personName": {
+              "description": "The officer, as named in this report's people.",
+              "type": "string",
+              "minLength": 1
+            },
+            "entityName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entityUid": {
+              "type": "string",
+              "pattern": "^CHE-\\d{3}\\.\\d{3}\\.\\d{3}$"
+            },
+            "roleTitle": {
+              "description": "The function as the other company's register notice states it; null when the notice states only a signature.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "currentStatus": {
+              "enum": [
+                "current",
+                "former",
+                "unknown"
+              ]
+            },
+            "appointedOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "leftOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "firstSeenOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "sogcIds": {
+              "description": "The other company's SOGC notices that name the person.",
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "registerNotice": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sogcId",
+            "publishedOn",
+            "journalDate",
+            "changes",
+            "text",
+            "sourceIds"
+          ],
+          "properties": {
+            "sogcId": {
+              "type": "integer"
+            },
+            "publishedOn": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "journalDate": {
+              "description": "The register entry date.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "changes": {
+              "description": "What the notice changed, from its official change codes.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "text": {
+              "type": "string"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            }
+          }
+        },
+        "mandateLookup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "personName",
+            "status"
+          ],
+          "properties": {
+            "personName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "description": "complete: every notice naming the person with the Heimatort was read; partial: only the newest, or some could not be read; failed: none could be read; not_searchable: no Heimatort or given name to search and match by; not_searched: beyond the number of officers looked up per report.",
+              "enum": [
+                "complete",
+                "partial",
+                "failed",
+                "not_searchable",
+                "not_searched"
+              ]
+            }
+          }
+        },
+        "structuredPersonClaim": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "personName",
+            "roleType",
+            "roleTitle",
+            "relationshipType",
+            "currentStatus",
+            "entityScope",
+            "appointedOn",
+            "leftOn",
+            "leafIds",
+            "sourceIds"
+          ],
+          "properties": {
+            "personName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "roleType": {
+              "enum": [
+                "board_member",
+                "ceo",
+                "cfo",
+                "executive",
+                "founder",
+                "owner",
+                "employee",
+                "other"
+              ]
+            },
+            "roleTitle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "relationshipType": {
+              "enum": [
+                "registered_officer",
+                "executive_management",
+                "employment",
+                "ownership",
+                "founding",
+                "advisory",
+                "other"
+              ]
+            },
+            "currentStatus": {
+              "enum": [
+                "current",
+                "former",
+                "unknown"
+              ]
+            },
+            "entityScope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "leafIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            },
+            "appointedOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "leftOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            }
+          }
+        },
+        "structuredEventClaim": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "eventId",
+            "eventType",
+            "proceedingStage",
+            "severity",
+            "occurredOn",
+            "disclosedOn",
+            "title",
+            "summary",
+            "impact",
+            "leafIds",
+            "sourceIds"
+          ],
+          "properties": {
+            "eventId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "eventType": {
+              "enum": [
+                "corporate_action",
+                "governance",
+                "ownership",
+                "insolvency",
+                "legal_regulatory",
+                "partnership",
+                "product_market",
+                "financial_announcement",
+                "operations",
+                "esg",
+                "press",
+                "other"
+              ]
+            },
+            "proceedingStage": {
+              "enum": [
+                "allegation",
+                "investigation",
+                "proceeding",
+                "decision",
+                "final_outcome",
+                "company_announcement",
+                "not_applicable"
+              ]
+            },
+            "severity": {
+              "enum": [
+                "info",
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "occurredOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "disclosedOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "impact": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "leafIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "structuredMetricClaim": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "claimId",
+            "metricType",
+            "label",
+            "value",
+            "unit",
+            "currency",
+            "periodStart",
+            "periodEnd",
+            "asOfDate",
+            "basis",
+            "entityScope",
+            "confidence",
+            "preferred",
+            "conflictGroupId",
+            "leafIds",
+            "sourceIds"
+          ],
+          "properties": {
+            "claimId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "metricType": {
+              "enum": [
+                "employee_count",
+                "share_capital",
+                "revenue",
+                "funding",
+                "profit",
+                "ebitda",
+                "debt",
+                "cash_flow",
+                "liquidity",
+                "other"
+              ]
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "currency": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Z]{3}$",
+              "description": "ISO 4217 currency code. Put a separately evidenced scale or measurement label in unit, not in currency."
+            },
+            "periodStart": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "periodEnd": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "asOfDate": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "basis": {
+              "enum": [
+                "official",
+                "company_reported",
+                "third_party",
+                "estimated"
+              ]
+            },
+            "entityScope": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "$ref": "#/$defs/CompanyReport/$defs/confidence"
+            },
+            "preferred": {
+              "type": "boolean"
+            },
+            "conflictGroupId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "leafIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "certificationLicence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "kind",
+            "issuer",
+            "jurisdiction",
+            "scope",
+            "status",
+            "validFrom",
+            "validUntil",
+            "sourceIds"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "enum": [
+                "certification",
+                "licence",
+                "permit",
+                "accreditation",
+                "other"
+              ]
+            },
+            "issuer": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "jurisdiction": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "scope": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "enum": [
+                "current",
+                "expired",
+                "revoked",
+                "unknown"
+              ]
+            },
+            "validFrom": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "validUntil": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "partnerSupplier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "organizationName",
+            "relationshipType",
+            "description",
+            "currentStatus",
+            "announcedAt",
+            "sourceIds"
+          ],
+          "properties": {
+            "organizationName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "relationshipType": {
+              "enum": [
+                "partner",
+                "supplier",
+                "distributor",
+                "technology_partner",
+                "research_partner",
+                "other"
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "currentStatus": {
+              "enum": [
+                "current",
+                "former",
+                "unknown"
+              ]
+            },
+            "announcedAt": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "corporateRelationship": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "entityName",
+            "relationshipType",
+            "direction",
+            "jurisdiction",
+            "ownershipPercent",
+            "currentStatus",
+            "startedOn",
+            "endedOn",
+            "sourceIds"
+          ],
+          "properties": {
+            "entityName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "relationshipType": {
+              "enum": [
+                "parent",
+                "subsidiary",
+                "sister_company",
+                "joint_venture",
+                "branch",
+                "affiliate",
+                "other"
+              ]
+            },
+            "direction": {
+              "enum": [
+                "upstream",
+                "downstream",
+                "peer"
+              ]
+            },
+            "jurisdiction": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ownershipPercent": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100
+            },
+            "currentStatus": {
+              "enum": [
+                "current",
+                "former",
+                "unknown"
+              ]
+            },
+            "startedOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "endedOn": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "digitalActivity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "channelType",
+            "name",
+            "url",
+            "status",
+            "description",
+            "sourceIds"
+          ],
+          "properties": {
+            "channelType": {
+              "enum": [
+                "website",
+                "ecommerce",
+                "mobile_app",
+                "social_media",
+                "developer_platform",
+                "customer_portal",
+                "other"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "status": {
+              "enum": [
+                "active",
+                "inactive",
+                "unknown"
+              ]
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "esgClaim": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "topic",
+            "claimType",
+            "statement",
+            "value",
+            "unit",
+            "periodStart",
+            "periodEnd",
+            "asOfDate",
+            "verificationBasis",
+            "status",
+            "sourceIds"
+          ],
+          "properties": {
+            "topic": {
+              "enum": [
+                "environmental",
+                "social",
+                "governance",
+                "sustainability",
+                "climate",
+                "workforce",
+                "supply_chain",
+                "other"
+              ]
+            },
+            "claimType": {
+              "enum": [
+                "commitment",
+                "target",
+                "metric",
+                "certification",
+                "policy",
+                "controversy",
+                "independent_assessment",
+                "other"
+              ]
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "unit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "periodStart": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "periodEnd": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "asOfDate": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "verificationBasis": {
+              "enum": [
+                "company_reported",
+                "official",
+                "independent",
+                "estimated"
+              ]
+            },
+            "status": {
+              "enum": [
+                "current",
+                "historical",
+                "unknown"
+              ]
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "url",
+            "title",
+            "publisher",
+            "sourceType",
+            "accessedAt",
+            "publishedAt"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "title": {
+              "type": "string"
+            },
+            "publisher": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceType": {
+              "enum": [
+                "official_register",
+                "company",
+                "news",
+                "database",
+                "professional_network",
+                "other"
+              ]
+            },
+            "accessedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "publishedAt": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reliabilityScore": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Backend-assigned source weight. Official register 100, company homepage 80, everything else 60. Model output must include the field; the backend overwrites it."
+            }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fieldPath",
+            "sourceIds",
+            "status",
+            "confidence"
+          ],
+          "properties": {
+            "fieldPath": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            },
+            "status": {
+              "$ref": "#/$defs/CompanyReport/$defs/factStatus"
+            },
+            "confidence": {
+              "$ref": "#/$defs/CompanyReport/$defs/confidence"
+            }
+          }
+        },
+        "localizedPassage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fieldPath",
+            "language",
+            "originalText",
+            "sourceIds",
+            "eventId"
+          ],
+          "properties": {
+            "fieldPath": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "language": {
+              "enum": [
+                "de",
+                "fr",
+                "it"
+              ]
+            },
+            "originalText": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/sourceIds"
+            },
+            "eventId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "employerReputation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "platform",
+            "profileUrl",
+            "score",
+            "scoreScale",
+            "reviewCount",
+            "recommendationPercent",
+            "categoryScores",
+            "summary",
+            "sourceIds"
+          ],
+          "properties": {
+            "platform": {
+              "enum": [
+                "kununu",
+                "jobs_ch",
+                "jobup_ch",
+                "glassdoor",
+                "other"
+              ]
+            },
+            "profileUrl": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uri"
+            },
+            "score": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 10
+            },
+            "scoreScale": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 10
+            },
+            "reviewCount": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "recommendationPercent": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100
+            },
+            "categoryScores": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "category",
+                  "score"
+                ],
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "score": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 5
+                  }
+                }
+              }
+            },
+            "summary": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "openPosition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "location",
+            "employmentType",
+            "postedAt",
+            "url",
+            "sourcePlatform",
+            "employerLegalName",
+            "description",
+            "sourceIds"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "location": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "employmentType": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "postedAt": {
+              "$ref": "#/$defs/CompanyReport/$defs/evidencedDate"
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uri"
+            },
+            "sourcePlatform": {
+              "enum": [
+                "jobs_ch",
+                "jobup_ch",
+                "company_career",
+                "kununu",
+                "other"
+              ]
+            },
+            "employerLegalName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "workplaceBenefit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "category",
+            "description",
+            "prevalencePercent",
+            "sourceIds"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "category": {
+              "enum": [
+                "compensation",
+                "flexibility",
+                "health",
+                "retirement",
+                "development",
+                "family",
+                "perks",
+                "other"
+              ]
+            },
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "prevalencePercent": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 100
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        },
+        "workplaceCulture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "aspect",
+            "rating",
+            "ratingScale",
+            "statement",
+            "sourceIds"
+          ],
+          "properties": {
+            "aspect": {
+              "enum": [
+                "overall",
+                "work_life_balance",
+                "management",
+                "career_development",
+                "salary_benefits",
+                "team_atmosphere",
+                "diversity",
+                "interesting_work",
+                "communication",
+                "other"
+              ]
+            },
+            "rating": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 5
+            },
+            "ratingScale": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 10
+            },
+            "statement": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceIds": {
+              "$ref": "#/$defs/CompanyReport/$defs/nonEmptyIds"
+            }
+          }
+        }
+      }
+    },
+    "ResearchPartial": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provisional": {
+          "type": "boolean",
+          "const": true
+        },
+        "registry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "uid": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "legalSeat": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "legalForm": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "address": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "purpose": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sourceUrl": {
+              "type": "string"
+            },
+            "retrievedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "uid",
+            "name",
+            "legalSeat",
+            "legalForm",
+            "status",
+            "address",
+            "purpose",
+            "sourceUrl",
+            "retrievedAt"
+          ]
+        },
+        "publications": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "sogcId": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "publishedOn": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "sogcId",
+                  "publishedOn",
+                  "text",
+                  "truncated"
+                ]
+              }
+            }
+          },
+          "required": [
+            "total",
+            "items"
+          ]
+        },
+        "shab": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "ready": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "complete": {
+                  "type": "boolean"
+                },
+                "events": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "sogcId": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "publishedOn": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "sogcId",
+                      "publishedOn",
+                      "summary"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "ready",
+                "total",
+                "complete",
+                "events"
+              ]
+            }
+          ]
+        },
+        "leaves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "categoryId": {
+                "type": "string"
+              },
+              "leafId": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "sourced",
+                  "not_found",
+                  "not_applicable",
+                  "not_researched"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "sourceUrls": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "findings": {
+                "type": "array",
+                "description": "Provisional findings: official register facts and the classifications settled so far from the sources read, each with its confidence. Replace with each snapshot; not verification or completeness.",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "statement",
+                    "sourceUrls",
+                    "origin"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "statement": {
+                      "type": "string"
+                    },
+                    "sourceUrls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    },
+                    "origin": {
+                      "type": "string",
+                      "description": "register: official commercial-register fact. classification: a classification settled from the sources read, labelled with its confidence (clear indication, likely, uncertain). extraction: text written from selected source passages, citation-checked.",
+                      "enum": [
+                        "register",
+                        "classification",
+                        "extraction"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "categoryId",
+              "leafId",
+              "label",
+              "status",
+              "summary",
+              "sourceUrls"
+            ]
+          }
+        },
+        "sourceReading": {
+          "description": "Whether every source read so far could be assessed. attention_required: some could not; research continues and the completed report replaces this snapshot.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "failedDocuments",
+            "failedLeaves"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "running",
+                "attention_required"
+              ]
+            },
+            "failedDocuments": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failedLeaves": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "runId",
+        "revision",
+        "updatedAt",
+        "provisional",
+        "registry",
+        "publications",
+        "shab",
+        "leaves"
+      ],
+      "description": "Instant report during research, never a completed report. Provisional findings may change or disappear; do not merge revisions. Personal research leaves are withheld until final verification. Latest revision replaces the previous one; the completed report supersedes all previews."
+    }
+  }
+}
