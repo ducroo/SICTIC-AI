@@ -68,7 +68,7 @@ async def test_api_review_accepts_a_valid_app_check_token(monkeypatch, mocker):
 
     assert payload["done"] is True
     assert "report_html" in payload
-    assert 'class="status-fine"' in payload["report_html"]
+    assert 'class="status-pill status-fine"' in payload["report_html"]
 
 
 @pytest.mark.asyncio

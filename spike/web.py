@@ -122,9 +122,14 @@ def _table(lines: list[str]) -> str:
         rendered = []
         for index, cell in enumerate(cells):
             status_class = _STATUS_CLASS.get(cell, "")
-            class_attr = f' class="{status_class}"' if status_class else ""
             tag = "th" if index == 0 else "td"
-            rendered.append(f"<{tag}{class_attr}>{_inline(cell)}</{tag}>")
+            if status_class:
+                rendered.append(
+                    f'<{tag}><span class="status-pill {status_class}">'
+                    f"{_inline(cell)}</span></{tag}>"
+                )
+            else:
+                rendered.append(f"<{tag}>{_inline(cell)}</{tag}>")
         body_html.append("<tr>" + "".join(rendered) + "</tr>")
     return (
         '<div class="table-wrap"><table><thead><tr>'
@@ -310,11 +315,20 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
     th:nth-child(4), td:nth-child(4) {{ width: 34%; }}
     th:nth-child(5), td:nth-child(5) {{ width: 16%; }}
     thead th {{ background: #f6f6f6; }}
-    .status-fine {{ color: #0b6e4f; font-weight: 600; }}
-    .status-sufficient {{ color: #0070ad; font-weight: 600; }}
-    .status-borderline {{ color: #f17e00; font-weight: 600; }}
-    .status-critical {{ color: var(--red); font-weight: 600; }}
-    .status-missing {{ color: var(--muted); font-weight: 600; }}
+    .status-pill {{
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.3;
+      white-space: nowrap;
+    }}
+    .status-fine {{ color: #0b6e4f; background: #e8f6f0; }}
+    .status-sufficient {{ color: #0070ad; background: #e8f3fa; }}
+    .status-borderline {{ color: #b85f00; background: #fff1e0; }}
+    .status-critical {{ color: var(--red); background: #fdecee; }}
+    .status-missing {{ color: var(--muted); background: #eef1f4; }}
     footer {{
       background: var(--card);
       border-top: 1px solid var(--line);
@@ -515,10 +529,13 @@ def _job_status(job: ReviewJob) -> dict:
         "error": job.error,
     }
     if job.done and not job.error:
+        label = escape(job.filename)
         body["report_html"] = (
-            f'<section class="report"><h2>Review of {escape(job.filename)}</h2>'
+            f'<section class="report" data-deck="{label}">'
+            f"<h2>Review of {label}</h2>"
             f"{render_report(job.report)}</section>"
         )
+        body["deck_filename"] = job.filename
     return body
 
 

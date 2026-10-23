@@ -163,13 +163,85 @@ async function pollStatus(jobId, headers) {
   }
 }
 
+function deckLabelFromReport(reportHtml, fallback = "your deck") {
+  const match = String(reportHtml || "").match(/data-deck="([^"]+)"/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  const heading = String(reportHtml || "").match(/<h2>\s*Review of\s+([^<]+)<\/h2>/i);
+  if (heading && heading[1]) {
+    return heading[1].trim();
+  }
+  return fallback;
+}
+
+function reportBodyHtml(reportHtml) {
+  const wrapped = String(reportHtml || "");
+  const match = wrapped.match(/<section[^>]*class="report"[^>]*>([\s\S]*)<\/section>/i);
+  let inner = match ? match[1] : wrapped;
+  inner = inner.replace(/<h2>\s*Review of\s+[^<]+<\/h2>/i, "");
+  // Drop the internal model line from shared batch-audit markdown.
+  inner = inner.replace(/<p>\s*<strong>\s*Model:\s*<\/strong>\s*[^<]*<\/p>/gi, "");
+  inner = inner.replace(/<p>\s*\*\*Model:\*\*[^<]*<\/p>/gi, "");
+  // Restore intentional line breaks that the markdown renderer escaped.
+  inner = inner.replace(/&lt;br\s*\/?&gt;/gi, "<br>");
+  return inner.trim();
+}
+
+function presentReport(reportHtml, deckName) {
+  const label = deckLabelFromReport(reportHtml, deckName || "your deck");
+  const body = reportBodyHtml(reportHtml);
+  const safeName = label.replace(/[^\w.\-]+/g, "_").replace(/^_+|_+$/g, "") || "pitch-deck";
+  reportEl.innerHTML = `
+    <div class="report-shell">
+      <div class="report-actions">
+        <button type="button" id="print-report">Print / Save as PDF</button>
+      </div>
+      <article id="report-print" class="report-document" data-download-name="${safeName}">
+        <div class="report-masthead">
+          <img class="report-logo" src="/static/sictic-logo.svg" alt="SICTIC" width="156" height="42">
+          <div>
+            <p class="report-kicker">SICTIC pitch deck review</p>
+            <h2>Review of ${label}</h2>
+          </div>
+        </div>
+        <div class="report-body">${body}</div>
+        <p class="report-footnote">This is an automated document check against SICTIC Investor Day criteria. It is not a jury decision and does not submit an application.</p>
+      </article>
+    </div>
+  `;
+  const printButton = document.getElementById("print-report");
+  if (printButton) {
+    printButton.addEventListener("click", () => printOrSaveReport());
+  }
+}
+
+function printOrSaveReport() {
+  // One dialog: print the page, or choose “Save as PDF” in the system picker.
+  // (In-browser PDF libraries clip the wide checklist table.)
+  const source = document.getElementById("report-print");
+  if (!source) {
+    return;
+  }
+  const baseName = source.dataset.downloadName || "pitch-deck-review";
+  const previousTitle = document.title;
+  document.title = `${baseName}-sictic-review`;
+  const restoreTitle = () => {
+    document.title = previousTitle;
+    window.removeEventListener("afterprint", restoreTitle);
+  };
+  window.addEventListener("afterprint", restoreTitle);
+  window.print();
+  window.setTimeout(restoreTitle, 2000);
+}
+
 async function followJob(jobId) {
   beginBusy(WORKING_MESSAGE);
   try {
     const headers = await apiHeaders();
     const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
-      reportEl.innerHTML = finished.report_html;
+      presentReport(finished.report_html, finished.deck_filename);
     }
     showWorking("The review is ready.");
   } catch (error) {
@@ -269,7 +341,7 @@ form.addEventListener("submit", async (event) => {
     }
     const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
-      reportEl.innerHTML = finished.report_html;
+      presentReport(finished.report_html, finished.deck_filename || file.name);
     }
     showWorking("The review is ready.");
   } catch (error) {
