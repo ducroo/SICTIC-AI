@@ -140,12 +140,6 @@
       border: 1px solid var(--line);
     }
     .report-actions button.secondary:hover { background: #f6f6f6; }
-    .report-export-hint {
-      margin: 0 0 0.85rem;
-      color: var(--muted);
-      font-size: 0.88rem;
-      text-align: right;
-    }
     .report-document {
       background: var(--card);
       border: 1px solid var(--line);
@@ -284,8 +278,16 @@
     }
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
-      body { background: #fff; }
-      header, footer, .card, .lead, h1, main > p, .report-actions, .report-export-hint, #auth-loading {
+      body { background: #fff; color: #000; }
+      /* Only the site chrome — do not hide .report-masthead (logo + title). */
+      body > header,
+      body > footer,
+      .card,
+      .lead,
+      main > h1,
+      main > p,
+      .report-actions,
+      #auth-loading {
         display: none !important;
       }
       main { padding: 0; max-width: none; }
@@ -294,6 +296,20 @@
         border: 0;
         box-shadow: none;
         padding: 0;
+      }
+      .report-masthead {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .report-logo {
+        height: 34px;
+        width: auto;
+        display: block !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
       .table-wrap { overflow: visible; }
       table { font-size: 0.7rem; }
@@ -305,7 +321,10 @@
       th:nth-child(5), td:nth-child(5) { width: 25%; }
       th:nth-child(6), td:nth-child(6) { width: 25%; }
       tr { break-inside: avoid; page-break-inside: avoid; }
-      .report-logo { height: 34px; }
+      .status-pill {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
     }
   </style>
 </head>

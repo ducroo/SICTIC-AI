@@ -195,36 +195,30 @@ function presentReport(reportHtml, deckName) {
   reportEl.innerHTML = `
     <div class="report-shell">
       <div class="report-actions">
-        <button type="button" class="secondary" id="print-report">Print</button>
-        <button type="button" id="download-report">Save as PDF</button>
+        <button type="button" id="print-report">Print / Save as PDF</button>
       </div>
-      <p class="report-export-hint">Save as PDF opens the print dialog — choose “Save as PDF” / “Microsoft Print to PDF”. That path matches the on-screen table; in-browser PDF capture was clipping the last column.</p>
       <article id="report-print" class="report-document" data-download-name="${safeName}">
-        <header class="report-masthead">
-          <img class="report-logo" src="/static/sictic-logo.svg" alt="SICTIC">
+        <div class="report-masthead">
+          <img class="report-logo" src="/static/sictic-logo.svg" alt="SICTIC" width="156" height="42">
           <div>
             <p class="report-kicker">SICTIC pitch deck review</p>
             <h2>Review of ${label}</h2>
           </div>
-        </header>
+        </div>
         <div class="report-body">${body}</div>
         <p class="report-footnote">This is an automated document check against SICTIC Investor Day criteria. It is not a jury decision and does not submit an application.</p>
       </article>
     </div>
   `;
-  const downloadButton = document.getElementById("download-report");
   const printButton = document.getElementById("print-report");
-  if (downloadButton) {
-    downloadButton.addEventListener("click", () => downloadReportPdf());
-  }
   if (printButton) {
-    printButton.addEventListener("click", () => window.print());
+    printButton.addEventListener("click", () => printOrSaveReport());
   }
 }
 
-function downloadReportPdf() {
-  // html2pdf/html2canvas rasterizes the wide checklist table and clips the last
-  // column. Native print pagination is what already looks correct for users.
+function printOrSaveReport() {
+  // One dialog: print the page, or choose “Save as PDF” in the system picker.
+  // (In-browser PDF libraries clip the wide checklist table.)
   const source = document.getElementById("report-print");
   if (!source) {
     return;
@@ -238,7 +232,6 @@ function downloadReportPdf() {
   };
   window.addEventListener("afterprint", restoreTitle);
   window.print();
-  // Fallback if afterprint never fires (some browsers).
   window.setTimeout(restoreTitle, 2000);
 }
 
