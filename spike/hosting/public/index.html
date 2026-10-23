@@ -140,6 +140,12 @@
       border: 1px solid var(--line);
     }
     .report-actions button.secondary:hover { background: #f6f6f6; }
+    .report-export-hint {
+      margin: 0 0 0.85rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+      text-align: right;
+    }
     .report-document {
       background: var(--card);
       border: 1px solid var(--line);
@@ -229,25 +235,6 @@
     }
     tbody tr:nth-child(even) { background: #fcfcfc; }
     tbody tr:hover { background: #fff7f8; }
-    .report-document.pdf-export {
-      width: 1400px;
-      max-width: none;
-      box-shadow: none;
-      border: 0;
-      padding: 12px 16px 20px;
-    }
-    .report-document.pdf-export .table-wrap { overflow: visible; }
-    .report-document.pdf-export table { font-size: 0.72rem; }
-    .report-document.pdf-export th,
-    .report-document.pdf-export td { padding: 0.35rem 0.4rem; }
-    .report-document.pdf-export tr {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-    .report-document.pdf-export .report-logo {
-      height: 36px;
-      width: auto;
-    }
     .status-pill {
       display: inline-block;
       padding: 0.2rem 0.55rem;
@@ -298,7 +285,7 @@
     @media print {
       @page { size: A4 landscape; margin: 10mm; }
       body { background: #fff; }
-      header, footer, .card, .lead, h1, main > p, .report-actions, #auth-loading {
+      header, footer, .card, .lead, h1, main > p, .report-actions, .report-export-hint, #auth-loading {
         display: none !important;
       }
       main { padding: 0; max-width: none; }
@@ -367,7 +354,6 @@
       </a>
     </div>
   </footer>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/config.js"></script>
   <script type="module" src="/app.js"></script>
 </body>

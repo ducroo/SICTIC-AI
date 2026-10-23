@@ -188,41 +188,6 @@ function reportBodyHtml(reportHtml) {
   return inner.trim();
 }
 
-let cachedLogoPng = null;
-
-async function sicticLogoPngDataUrl() {
-  if (cachedLogoPng) {
-    return cachedLogoPng;
-  }
-  const response = await fetch("/static/sictic-logo.svg");
-  if (!response.ok) {
-    throw new Error("Could not load the SICTIC logo.");
-  }
-  const svg = await response.text();
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    const image = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Could not decode the SICTIC logo."));
-      img.src = objectUrl;
-    });
-    const canvas = document.createElement("canvas");
-    const scale = 3;
-    canvas.width = Math.max(1, image.naturalWidth * scale);
-    canvas.height = Math.max(1, image.naturalHeight * scale);
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-    cachedLogoPng = canvas.toDataURL("image/png");
-    return cachedLogoPng;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
 function presentReport(reportHtml, deckName) {
   const label = deckLabelFromReport(reportHtml, deckName || "your deck");
   const body = reportBodyHtml(reportHtml);
@@ -231,8 +196,9 @@ function presentReport(reportHtml, deckName) {
     <div class="report-shell">
       <div class="report-actions">
         <button type="button" class="secondary" id="print-report">Print</button>
-        <button type="button" id="download-report">Download PDF</button>
+        <button type="button" id="download-report">Save as PDF</button>
       </div>
+      <p class="report-export-hint">Save as PDF opens the print dialog — choose “Save as PDF” / “Microsoft Print to PDF”. That path matches the on-screen table; in-browser PDF capture was clipping the last column.</p>
       <article id="report-print" class="report-document" data-download-name="${safeName}">
         <header class="report-masthead">
           <img class="report-logo" src="/static/sictic-logo.svg" alt="SICTIC">
@@ -254,68 +220,26 @@ function presentReport(reportHtml, deckName) {
   if (printButton) {
     printButton.addEventListener("click", () => window.print());
   }
-  sicticLogoPngDataUrl().catch(() => {});
 }
 
-async function downloadReportPdf() {
+function downloadReportPdf() {
+  // html2pdf/html2canvas rasterizes the wide checklist table and clips the last
+  // column. Native print pagination is what already looks correct for users.
   const source = document.getElementById("report-print");
   if (!source) {
     return;
   }
-  if (typeof html2pdf === "undefined") {
-    window.print();
-    return;
-  }
-  const downloadButton = document.getElementById("download-report");
   const baseName = source.dataset.downloadName || "pitch-deck-review";
-  if (downloadButton) {
-    downloadButton.disabled = true;
-    downloadButton.textContent = "Preparing PDF…";
-  }
-  const host = document.createElement("div");
-  host.style.position = "fixed";
-  host.style.left = "-10000px";
-  host.style.top = "0";
-  host.style.width = "1400px";
-  host.style.background = "#ffffff";
-  host.setAttribute("aria-hidden", "true");
-  const clone = source.cloneNode(true);
-  clone.classList.add("pdf-export");
-  host.appendChild(clone);
-  document.body.appendChild(host);
-  try {
-    const logoUrl = await sicticLogoPngDataUrl();
-    clone.querySelectorAll(".report-logo").forEach((img) => {
-      img.setAttribute("src", logoUrl);
-    });
-    await html2pdf()
-      .set({
-        margin: [8, 8, 8, 8],
-        filename: `${baseName}-sictic-review.pdf`,
-        image: { type: "jpeg", quality: 0.96 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-          windowWidth: 1400,
-          scrollX: 0,
-          scrollY: 0,
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
-        pagebreak: { mode: ["css", "legacy"], avoid: "tr" },
-      })
-      .from(clone)
-      .save();
-  } catch (_error) {
-    window.print();
-  } finally {
-    host.remove();
-    if (downloadButton) {
-      downloadButton.disabled = false;
-      downloadButton.textContent = "Download PDF";
-    }
-  }
+  const previousTitle = document.title;
+  document.title = `${baseName}-sictic-review`;
+  const restoreTitle = () => {
+    document.title = previousTitle;
+    window.removeEventListener("afterprint", restoreTitle);
+  };
+  window.addEventListener("afterprint", restoreTitle);
+  window.print();
+  // Fallback if afterprint never fires (some browsers).
+  window.setTimeout(restoreTitle, 2000);
 }
 
 async function followJob(jobId) {
