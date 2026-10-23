@@ -185,7 +185,7 @@
     }
     .report-body p,
     .report-body ul {
-      max-width: 48rem;
+      max-width: 52rem;
     }
     .report-body ul {
       padding-left: 1.2rem;
@@ -200,32 +200,54 @@
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 40rem;
+      min-width: 0;
       table-layout: fixed;
-      font-size: 0.92rem;
+      font-size: 0.88rem;
     }
     th, td {
       text-align: left;
       vertical-align: top;
-      padding: 0.7rem 0.75rem;
+      padding: 0.55rem 0.5rem;
       border-bottom: 1px solid var(--line);
       overflow-wrap: anywhere;
+      word-break: break-word;
     }
-    th:first-child, td:first-child { width: 3.2rem; }
-    th:nth-child(2), td:nth-child(2) { width: 14%; }
-    th:nth-child(3), td:nth-child(3) { width: 8.5rem; }
-    th:nth-child(4), td:nth-child(4) { width: 34%; }
-    th:nth-child(5), td:nth-child(5) { width: 16%; }
+    /* No / Check / Status stay compact; text columns take the rest. */
+    th:nth-child(1), td:nth-child(1) { width: 3.5%; }
+    th:nth-child(2), td:nth-child(2) { width: 11%; }
+    th:nth-child(3), td:nth-child(3) { width: 7.5%; }
+    th:nth-child(4), td:nth-child(4) { width: 28%; }
+    th:nth-child(5), td:nth-child(5) { width: 25%; }
+    th:nth-child(6), td:nth-child(6) { width: 25%; }
     thead th {
       background: #fafafa;
       font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
-      font-size: 0.8rem;
+      font-size: 0.72rem;
       letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--muted);
     }
     tbody tr:nth-child(even) { background: #fcfcfc; }
     tbody tr:hover { background: #fff7f8; }
+    .report-document.pdf-export {
+      width: 1400px;
+      max-width: none;
+      box-shadow: none;
+      border: 0;
+      padding: 12px 16px 20px;
+    }
+    .report-document.pdf-export .table-wrap { overflow: visible; }
+    .report-document.pdf-export table { font-size: 0.72rem; }
+    .report-document.pdf-export th,
+    .report-document.pdf-export td { padding: 0.35rem 0.4rem; }
+    .report-document.pdf-export tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .report-document.pdf-export .report-logo {
+      height: 36px;
+      width: auto;
+    }
     .status-pill {
       display: inline-block;
       padding: 0.2rem 0.55rem;
@@ -274,16 +296,29 @@
       .sponsor { align-items: flex-start; flex-direction: column; }
     }
     @media print {
+      @page { size: A4 landscape; margin: 10mm; }
       body { background: #fff; }
       header, footer, .card, .lead, h1, main > p, .report-actions, #auth-loading {
         display: none !important;
       }
       main { padding: 0; max-width: none; }
+      .report-shell { margin: 0; }
       .report-document {
         border: 0;
         box-shadow: none;
         padding: 0;
       }
+      .table-wrap { overflow: visible; }
+      table { font-size: 0.7rem; }
+      th, td { padding: 0.3rem 0.35rem; }
+      th:nth-child(1), td:nth-child(1) { width: 3.5%; }
+      th:nth-child(2), td:nth-child(2) { width: 11%; }
+      th:nth-child(3), td:nth-child(3) { width: 7.5%; }
+      th:nth-child(4), td:nth-child(4) { width: 28%; }
+      th:nth-child(5), td:nth-child(5) { width: 25%; }
+      th:nth-child(6), td:nth-child(6) { width: 25%; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+      .report-logo { height: 34px; }
     }
   </style>
 </head>

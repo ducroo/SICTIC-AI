@@ -180,7 +180,47 @@ function reportBodyHtml(reportHtml) {
   const match = wrapped.match(/<section[^>]*class="report"[^>]*>([\s\S]*)<\/section>/i);
   let inner = match ? match[1] : wrapped;
   inner = inner.replace(/<h2>\s*Review of\s+[^<]+<\/h2>/i, "");
+  // Drop the internal model line from shared batch-audit markdown.
+  inner = inner.replace(/<p>\s*<strong>\s*Model:\s*<\/strong>\s*[^<]*<\/p>/gi, "");
+  inner = inner.replace(/<p>\s*\*\*Model:\*\*[^<]*<\/p>/gi, "");
+  // Restore intentional line breaks that the markdown renderer escaped.
+  inner = inner.replace(/&lt;br\s*\/?&gt;/gi, "<br>");
   return inner.trim();
+}
+
+let cachedLogoPng = null;
+
+async function sicticLogoPngDataUrl() {
+  if (cachedLogoPng) {
+    return cachedLogoPng;
+  }
+  const response = await fetch("/static/sictic-logo.svg");
+  if (!response.ok) {
+    throw new Error("Could not load the SICTIC logo.");
+  }
+  const svg = await response.text();
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Could not decode the SICTIC logo."));
+      img.src = objectUrl;
+    });
+    const canvas = document.createElement("canvas");
+    const scale = 3;
+    canvas.width = Math.max(1, image.naturalWidth * scale);
+    canvas.height = Math.max(1, image.naturalHeight * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    cachedLogoPng = canvas.toDataURL("image/png");
+    return cachedLogoPng;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function presentReport(reportHtml, deckName) {
@@ -214,6 +254,7 @@ function presentReport(reportHtml, deckName) {
   if (printButton) {
     printButton.addEventListener("click", () => window.print());
   }
+  sicticLogoPngDataUrl().catch(() => {});
 }
 
 async function downloadReportPdf() {
@@ -231,21 +272,45 @@ async function downloadReportPdf() {
     downloadButton.disabled = true;
     downloadButton.textContent = "Preparing PDF…";
   }
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.left = "-10000px";
+  host.style.top = "0";
+  host.style.width = "1400px";
+  host.style.background = "#ffffff";
+  host.setAttribute("aria-hidden", "true");
+  const clone = source.cloneNode(true);
+  clone.classList.add("pdf-export");
+  host.appendChild(clone);
+  document.body.appendChild(host);
   try {
+    const logoUrl = await sicticLogoPngDataUrl();
+    clone.querySelectorAll(".report-logo").forEach((img) => {
+      img.setAttribute("src", logoUrl);
+    });
     await html2pdf()
       .set({
-        margin: [12, 12, 14, 12],
+        margin: [8, 8, 8, 8],
         filename: `${baseName}-sictic-review.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
+        image: { type: "jpeg", quality: 0.96 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+          windowWidth: 1400,
+          scrollX: 0,
+          scrollY: 0,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
+        pagebreak: { mode: ["css", "legacy"], avoid: "tr" },
       })
-      .from(source)
+      .from(clone)
       .save();
   } catch (_error) {
     window.print();
   } finally {
+    host.remove();
     if (downloadButton) {
       downloadButton.disabled = false;
       downloadButton.textContent = "Download PDF";
