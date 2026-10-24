@@ -164,6 +164,87 @@ firebase deploy --only hosting --project review-deck-a3c26
 
 The Hosting app sends visitors to `/login.html` first (Google or email/password), then calls `https://api.sictic.ch/api/review` with App Check and Auth tokens. `/privacy.html` states the retention rules (account details 60 days; uploaded decks deleted after review).
 
+## Email reports via `gws` (optional, testing)
+
+When `SPIKE_EMAIL_REPORTS=1`, a finished `/api/review` job emails the HTML report
+to the signed-in Firebase Auth address using the Google Workspace CLI (`gws`).
+
+### Install `gws` on the VPS
+
+```bash
+mkdir -p "$HOME/bin"
+curl -fsSL -o /tmp/gws.tar.gz \
+  https://github.com/googleworkspace/cli/releases/download/v0.22.5/google-workspace-cli-x86_64-unknown-linux-gnu.tar.gz
+mkdir -p /tmp/gws-extract && tar -xzf /tmp/gws.tar.gz -C /tmp/gws-extract
+cp /tmp/gws-extract/gws "$HOME/bin/gws"
+chmod +x "$HOME/bin/gws"
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.profile
+"$HOME/bin/gws" --version
+```
+
+Prefer a newer release tag from https://github.com/googleworkspace/cli/releases when available.
+
+### OAuth (one-time)
+
+Desktop OAuth cannot complete its localhost callback from a laptop against a
+process on the VPS. Authenticate where a browser can reach `localhost`, then
+export credentials onto the VPS:
+
+1. In GCP (e.g. `review-deck-a3c26`): enable **Gmail API**, OAuth consent
+   (External + Testing), add your Google account as a **Test user**, create an
+   OAuth client of type **Desktop app**, download JSON to
+   `~/.config/gws/client_secret.json` on the machine where you log in.
+2. On a machine with a browser (laptop or Cloud Agent desktop):
+
+```bash
+export PATH="$HOME/bin:$PATH"
+export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
+gws auth login -s gmail
+gws auth export --unmasked > ~/gws-credentials.json
+chmod 600 ~/gws-credentials.json
+```
+
+3. Copy `gws-credentials.json` to the VPS (e.g. `/home/ubuntu/.config/gws/credentials.export.json`).
+4. On the VPS `.env`:
+
+```
+SPIKE_EMAIL_REPORTS=1
+SPIKE_GWS_BIN=/home/ubuntu/bin/gws
+GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/home/ubuntu/.config/gws/credentials.export.json
+GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
+```
+
+5. Ensure `spike-web.service` sees `$HOME/bin` (set `SPIKE_GWS_BIN` as above) and restart:
+
+```bash
+sudo systemctl restart spike-web.service
+```
+
+6. Smoke test as the same Google account that completed OAuth:
+
+```bash
+export PATH="$HOME/bin:$PATH"
+export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/home/ubuntu/.config/gws/credentials.export.json
+export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
+gws gmail +send --to 'you@example.com' --subject 'gws test' --body 'hello from the VPS'
+```
+
+Mail is sent **as the Google account that ran `gws auth login`**, not as the
+review end-user. For testing that is usually fine.
+
+### Cursor Cloud Agents
+
+Store `VPS_SSH_PRIVATE_KEY` as today. To use `gws` from a Cloud Agent:
+
+1. Install the Linux binary into `$HOME/bin` (same commands as the VPS).
+2. Complete `gws auth login -s gmail` in the agent environment (browser on that
+   machine), **or** copy an exported credentials file into the agent and set
+   `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE`.
+3. Set `GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file` so credentials work without
+   an OS keychain.
+4. Agent insight emails still go through [skills/send_gmail](../skills/send_gmail/SKILL.md);
+   the review API uses `spike/email_report.py` instead.
+
 ## Auth profile purge (daily)
 
 Firebase Auth has no built-in 60-day purge for email/Google accounts. The VPS runs a systemd timer that calls `python -m spike.purge_auth_users --days 60`. Unit files live in `spike/systemd/`. The service uses `WorkingDirectory=/home/ubuntu/app`, so point that path at the repo checkout (symlink is fine):

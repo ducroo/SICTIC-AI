@@ -25,6 +25,7 @@ from spike.auth import (
     id_token_from_headers,
     verify_id_token,
 )
+from spike.email_report import email_reports_enabled, send_report_email
 from spike.purge_auth_users import DEFAULT_RETENTION_DAYS, purge_auth_users_older_than
 from spike.runtime import (
     SpikeStatus,
@@ -474,18 +475,44 @@ async def handle_static(request: web.Request) -> web.Response:
 
 
 class ReviewJob:
-    def __init__(self, job_id: str, filename: str) -> None:
+    def __init__(self, job_id: str, filename: str, recipient_email: str = "") -> None:
         self.id = job_id
         self.filename = filename
+        self.recipient_email = recipient_email
         self.step = "receive"
         self.started = time.monotonic()
         self.done = False
         self.error = ""
         self.report = ""
         self.status = 200
+        self.email_sent = False
+        self.email_error = ""
 
 
 _jobs: dict[str, ReviewJob] = {}
+
+
+def _maybe_email_report(job: ReviewJob) -> None:
+    if not email_reports_enabled():
+        return
+    if not job.recipient_email:
+        logger.info("Review %s finished but no recipient email on the job.", job.id)
+        return
+    try:
+        send_report_email(
+            to_email=job.recipient_email,
+            deck_filename=job.filename,
+            report_markdown=job.report,
+            report_html=render_report(job.report),
+        )
+        job.email_sent = True
+    except Exception as error:
+        job.email_error = str(error)
+        logger.exception(
+            "Failed to email review %s to %s",
+            job.id,
+            job.recipient_email,
+        )
 
 
 def _job_status(job: ReviewJob) -> dict:
@@ -515,10 +542,17 @@ def _job_status(job: ReviewJob) -> dict:
         "error": job.error,
     }
     if job.done and not job.error:
+        label = escape(job.filename)
         body["report_html"] = (
-            f'<section class="report"><h2>Review of {escape(job.filename)}</h2>'
+            f'<section class="report" data-deck="{label}">'
+            f"<h2>Review of {label}</h2>"
             f"{render_report(job.report)}</section>"
         )
+        body["deck_filename"] = job.filename
+        if email_reports_enabled():
+            body["email_sent"] = job.email_sent
+            if job.email_error:
+                body["email_error"] = job.email_error
     return body
 
 
@@ -549,6 +583,7 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
         )
         job.step = "report"
         job.done = True
+        await asyncio.to_thread(_maybe_email_report, job)
     except ValueError as error:
         job.error = str(error)
         job.status = 400
@@ -572,7 +607,9 @@ async def handle_review_start(request: web.Request) -> web.Response:
     except ValueError as error:
         return web.json_response({"error": str(error)}, status=400)
     _prune_jobs()
-    job = ReviewJob(uuid.uuid4().hex, filename)
+    claims = request.get("firebase_claims") or {}
+    recipient = str(claims.get("email") or "").strip()
+    job = ReviewJob(uuid.uuid4().hex, filename, recipient_email=recipient)
     _jobs[job.id] = job
     asyncio.create_task(_finish_job(job, filename, payload))
     return web.json_response(_job_status(job))
@@ -854,7 +891,10 @@ async def auth_middleware(request: web.Request, handler):
         return await handler(request)
     token = id_token_from_headers(request.headers)
     try:
-        verify_id_token(token, project_id=firebase_project_id())
+        request["firebase_claims"] = verify_id_token(
+            token,
+            project_id=firebase_project_id(),
+        )
     except ValueError as error:
         return _apply_cors(
             request,
