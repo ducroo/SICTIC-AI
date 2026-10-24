@@ -229,8 +229,9 @@ export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
 gws gmail +send --to 'you@example.com' --subject 'gws test' --body 'hello from the VPS'
 ```
 
-Mail is sent **as the Google account that ran `gws auth login`**, not as the
-review end-user. For testing that is usually fine.
+Mail is sent **as the Google account that ran `gws auth login`** (for SICTIC:
+`ai@sictic.ch`), not as each review end-user. The recipient is the signed-in
+Firebase Auth address.
 
 ### Cursor Cloud Agents
 
