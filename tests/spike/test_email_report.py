@@ -47,6 +47,7 @@ def test_send_report_email_invokes_gws(monkeypatch, mocker):
         deck_filename="deck.pdf",
         report_markdown="# Report",
         report_html="<p>ok</p>",
+        pdf_bytes=b"%PDF-1.4",
     )
 
     command = run.call_args.args[0]
@@ -54,6 +55,7 @@ def test_send_report_email_invokes_gws(monkeypatch, mocker):
     assert command[1:3] == ["gmail", "+send"]
     assert "--to" in command and "urs@gubser.ch" in command
     assert "--html" in command
+    assert "--attach" in command
     assert run.call_args.kwargs["check"] is False
 
 

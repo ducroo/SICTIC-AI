@@ -40,6 +40,7 @@ def build_report_email_html(*, deck_filename: str, report_markdown: str, report_
     return (
         f"<h1>{title}</h1>"
         "<p>Your SICTIC pitch deck review is ready. "
+        "The PDF report is attached. "
         "This is an automated document check. It is not a jury decision "
         "and does not submit an application.</p>"
         f"{body}"
@@ -55,6 +56,7 @@ def send_report_email(
     deck_filename: str,
     report_markdown: str,
     report_html: str,
+    pdf_bytes: bytes | None = None,
     subject: str | None = None,
 ) -> None:
     """Send one report email via `gws gmail +send`. Raises on failure."""
@@ -72,14 +74,20 @@ def send_report_email(
     )
     gws = gws_binary()
     env = os.environ.copy()
-    # Prefer an explicit credentials file when set (headless / VPS export flow).
     creds = (os.environ.get("GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE") or "").strip()
     if creds:
         env["GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE"] = creds
     env.setdefault("GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND", "file")
 
+    safe_stem = "".join(
+        char if char.isalnum() or char in "._-" else "_"
+        for char in Path(deck_filename).stem
+    ).strip("._") or "pitch-deck"
+    attach_name = f"{safe_stem}-sictic-review.pdf"
+
     with tempfile.TemporaryDirectory(prefix="spike-email-") as tmp:
-        body_path = Path(tmp) / "body.html"
+        tmp_path = Path(tmp)
+        body_path = tmp_path / "body.html"
         body_path.write_text(html, encoding="utf-8")
         command = [
             gws,
@@ -93,14 +101,23 @@ def send_report_email(
             "--body",
             body_path.read_text(encoding="utf-8"),
         ]
-        logger.info("Sending review email to %s via %s", recipient, gws)
+        if pdf_bytes:
+            pdf_path = tmp_path / attach_name
+            pdf_path.write_bytes(pdf_bytes)
+            command.extend(["--attach", str(pdf_path)])
+        logger.info(
+            "Sending review email to %s via %s (pdf=%s)",
+            recipient,
+            gws,
+            bool(pdf_bytes),
+        )
         completed = subprocess.run(
             command,
             check=False,
             capture_output=True,
             text=True,
             env=env,
-            timeout=120,
+            timeout=180,
         )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()

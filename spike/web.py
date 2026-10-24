@@ -27,6 +27,7 @@ from spike.auth import (
 )
 from spike.email_report import email_reports_enabled, send_report_email
 from spike.purge_auth_users import DEFAULT_RETENTION_DAYS, purge_auth_users_older_than
+from spike.report_pdf import render_report_pdf
 from spike.runtime import (
     SpikeStatus,
     check_pitch_deck_upload,
@@ -123,9 +124,14 @@ def _table(lines: list[str]) -> str:
         rendered = []
         for index, cell in enumerate(cells):
             status_class = _STATUS_CLASS.get(cell, "")
-            class_attr = f' class="{status_class}"' if status_class else ""
             tag = "th" if index == 0 else "td"
-            rendered.append(f"<{tag}{class_attr}>{_inline(cell)}</{tag}>")
+            if status_class:
+                rendered.append(
+                    f'<{tag}><span class="status-pill {status_class}">'
+                    f"{_inline(cell)}</span></{tag}>"
+                )
+            else:
+                rendered.append(f"<{tag}>{_inline(cell)}</{tag}>")
         body_html.append("<tr>" + "".join(rendered) + "</tr>")
     return (
         '<div class="table-wrap"><table><thead><tr>'
@@ -311,11 +317,20 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
     th:nth-child(4), td:nth-child(4) {{ width: 34%; }}
     th:nth-child(5), td:nth-child(5) {{ width: 16%; }}
     thead th {{ background: #f6f6f6; }}
-    .status-fine {{ color: #0b6e4f; font-weight: 600; }}
-    .status-sufficient {{ color: #0070ad; font-weight: 600; }}
-    .status-borderline {{ color: #f17e00; font-weight: 600; }}
-    .status-critical {{ color: var(--red); font-weight: 600; }}
-    .status-missing {{ color: var(--muted); font-weight: 600; }}
+    .status-pill {{
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.3;
+      white-space: nowrap;
+    }}
+    .status-fine {{ color: #0b6e4f; background: #e8f6f0; }}
+    .status-sufficient {{ color: #0070ad; background: #e8f3fa; }}
+    .status-borderline {{ color: #b85f00; background: #fff1e0; }}
+    .status-critical {{ color: var(--red); background: #fdecee; }}
+    .status-missing {{ color: var(--muted); background: #eef1f4; }}
     footer {{
       background: var(--card);
       border-top: 1px solid var(--line);
@@ -475,10 +490,18 @@ async def handle_static(request: web.Request) -> web.Response:
 
 
 class ReviewJob:
-    def __init__(self, job_id: str, filename: str, recipient_email: str = "") -> None:
+    def __init__(
+        self,
+        job_id: str,
+        filename: str,
+        recipient_email: str = "",
+        *,
+        email_requested: bool = False,
+    ) -> None:
         self.id = job_id
         self.filename = filename
         self.recipient_email = recipient_email
+        self.email_requested = email_requested
         self.step = "receive"
         self.started = time.monotonic()
         self.done = False
@@ -487,23 +510,49 @@ class ReviewJob:
         self.status = 200
         self.email_sent = False
         self.email_error = ""
+        self.pdf_bytes = b""
+        self.pdf_error = ""
 
 
 _jobs: dict[str, ReviewJob] = {}
 
 
-def _maybe_email_report(job: ReviewJob) -> None:
+def _truthy_form_flag(post, name: str) -> bool:
+    raw = post.get(name)
+    if raw is None:
+        return False
+    if hasattr(raw, "file"):
+        return False
+    text = str(raw).strip().lower()
+    return text in {"1", "true", "yes", "on"}
+
+
+def _build_report_artifacts(job: ReviewJob) -> None:
+    report_html = render_report(job.report)
+    try:
+        job.pdf_bytes = render_report_pdf(
+            deck_filename=job.filename,
+            report_body_html=report_html,
+        )
+    except Exception as error:
+        job.pdf_error = str(error)
+        logger.exception("Failed to build PDF for review %s", job.id)
+
+    if not job.email_requested:
+        return
     if not email_reports_enabled():
+        job.email_error = "Email delivery is not enabled on this host."
         return
     if not job.recipient_email:
-        logger.info("Review %s finished but no recipient email on the job.", job.id)
+        job.email_error = "No signed-in email address was available."
         return
     try:
         send_report_email(
             to_email=job.recipient_email,
             deck_filename=job.filename,
             report_markdown=job.report,
-            report_html=render_report(job.report),
+            report_html=report_html,
+            pdf_bytes=job.pdf_bytes or None,
         )
         job.email_sent = True
     except Exception as error:
@@ -549,10 +598,12 @@ def _job_status(job: ReviewJob) -> dict:
             f"{render_report(job.report)}</section>"
         )
         body["deck_filename"] = job.filename
-        if email_reports_enabled():
+        body["email_requested"] = job.email_requested
+        if job.email_requested or job.email_sent or job.email_error:
             body["email_sent"] = job.email_sent
             if job.email_error:
                 body["email_error"] = job.email_error
+        body["pdf_ready"] = bool(job.pdf_bytes)
     return body
 
 
@@ -583,7 +634,7 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
         )
         job.step = "report"
         job.done = True
-        await asyncio.to_thread(_maybe_email_report, job)
+        await asyncio.to_thread(_build_report_artifacts, job)
     except ValueError as error:
         job.error = str(error)
         job.status = 400
@@ -596,7 +647,8 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
 
 
 async def handle_review_start(request: web.Request) -> web.Response:
-    filename, payload = _upload_file(await request.post())
+    post = await request.post()
+    filename, payload = _upload_file(post)
     if not filename or not payload:
         return web.json_response(
             {"error": "Choose a PDF or PowerPoint pitch deck."},
@@ -609,7 +661,13 @@ async def handle_review_start(request: web.Request) -> web.Response:
     _prune_jobs()
     claims = request.get("firebase_claims") or {}
     recipient = str(claims.get("email") or "").strip()
-    job = ReviewJob(uuid.uuid4().hex, filename, recipient_email=recipient)
+    email_requested = _truthy_form_flag(post, "email_results")
+    job = ReviewJob(
+        uuid.uuid4().hex,
+        filename,
+        recipient_email=recipient,
+        email_requested=email_requested,
+    )
     _jobs[job.id] = job
     asyncio.create_task(_finish_job(job, filename, payload))
     return web.json_response(_job_status(job))
@@ -620,6 +678,29 @@ async def handle_review_status(request: web.Request) -> web.Response:
     if job is None:
         return web.json_response({"error": "That review is no longer available."}, status=404)
     return web.json_response(_job_status(job))
+
+
+async def handle_review_pdf(request: web.Request) -> web.Response:
+    job = _jobs.get(request.match_info["job_id"])
+    if job is None:
+        return web.json_response({"error": "That review is no longer available."}, status=404)
+    if not job.done or job.error:
+        return web.json_response({"error": "The review PDF is not ready yet."}, status=409)
+    if not job.pdf_bytes:
+        detail = job.pdf_error or "The review PDF could not be generated."
+        return web.json_response({"error": detail}, status=503)
+    safe = "".join(
+        char if char.isalnum() or char in "._-" else "_"
+        for char in Path(job.filename).stem
+    ).strip("._") or "pitch-deck"
+    filename = f"{safe}-sictic-review.pdf"
+    return web.Response(
+        body=job.pdf_bytes,
+        content_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 async def handle_review(request: web.Request) -> web.Response:
@@ -738,6 +819,11 @@ async def handle_api_review_status(request: web.Request) -> web.Response:
     return await handle_review_status(request)
 
 
+async def handle_api_review_pdf(request: web.Request) -> web.Response:
+    """Download the generated PDF for a finished review job."""
+    return await handle_review_pdf(request)
+
+
 def _admin_token() -> str:
     return (os.environ.get("SPIKE_ADMIN_TOKEN") or "").strip()
 
@@ -809,6 +895,7 @@ ROUTES = (
     web.post("/api/skill", handle_api_skill),
     web.post("/api/review", handle_api_review_start),
     web.get("/api/review/{job_id}", handle_api_review_status),
+    web.get("/api/review/{job_id}/pdf", handle_api_review_pdf),
     web.post("/api/admin/purge-auth-users", handle_api_purge_auth_users),
 )
 

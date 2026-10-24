@@ -166,8 +166,17 @@ The Hosting app sends visitors to `/login.html` first (Google or email/password)
 
 ## Email reports via `gws` (optional, testing)
 
-When `SPIKE_EMAIL_REPORTS=1`, a finished `/api/review` job emails the HTML report
-to the signed-in Firebase Auth address using the Google Workspace CLI (`gws`).
+When `SPIKE_EMAIL_REPORTS=1`, a finished `/api/review` job can email the report
+(with PDF attachment) to the signed-in Firebase Auth address using `gws`, but
+only when the upload includes `email_results=1` (Hosting checkbox).
+
+PDF files are generated with WeasyPrint (`spike/report_pdf.py`) and available at
+`GET /api/review/{job_id}/pdf`. Install WeasyPrint in `sictic-env` on the VPS:
+
+```bash
+conda activate sictic-env
+conda install -y -c conda-forge weasyprint
+```
 
 ### Install `gws` on the VPS
 
