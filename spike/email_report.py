@@ -85,10 +85,10 @@ def send_report_email(
     ).strip("._") or "pitch-deck"
     attach_name = f"{safe_stem}-sictic-review.pdf"
 
-    with tempfile.TemporaryDirectory(prefix="spike-email-") as tmp:
+    # gws rejects --attach paths outside the process cwd. Run from a temp
+    # directory under the service cwd and attach by relative filename.
+    with tempfile.TemporaryDirectory(prefix="spike-email-", dir=".") as tmp:
         tmp_path = Path(tmp)
-        body_path = tmp_path / "body.html"
-        body_path.write_text(html, encoding="utf-8")
         command = [
             gws,
             "gmail",
@@ -99,12 +99,11 @@ def send_report_email(
             mail_subject,
             "--html",
             "--body",
-            body_path.read_text(encoding="utf-8"),
+            html,
         ]
         if pdf_bytes:
-            pdf_path = tmp_path / attach_name
-            pdf_path.write_bytes(pdf_bytes)
-            command.extend(["--attach", str(pdf_path)])
+            (tmp_path / attach_name).write_bytes(pdf_bytes)
+            command.extend(["--attach", attach_name])
         logger.info(
             "Sending review email to %s via %s (pdf=%s)",
             recipient,
@@ -117,6 +116,7 @@ def send_report_email(
             capture_output=True,
             text=True,
             env=env,
+            cwd=str(tmp_path),
             timeout=180,
         )
     if completed.returncode != 0:

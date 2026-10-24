@@ -56,7 +56,10 @@ def test_send_report_email_invokes_gws(monkeypatch, mocker):
     assert "--to" in command and "urs@gubser.ch" in command
     assert "--html" in command
     assert "--attach" in command
+    assert command[command.index("--attach") + 1].endswith("-sictic-review.pdf")
+    assert "/" not in command[command.index("--attach") + 1]
     assert run.call_args.kwargs["check"] is False
+    assert Path(run.call_args.kwargs["cwd"]).name.startswith("spike-email-")
 
 
 def test_send_report_email_surfaces_gws_failure(monkeypatch, mocker):
