@@ -46,7 +46,7 @@ def test_report_renderer_marks_status_cells():
 
     assert "<h1>Pitch deck review</h1>" in html
     assert "<li>Fine. Clear.</li>" in html
-    assert 'class="status-critical"' in html
+    assert 'class="status-pill status-critical"' in html
     assert "Valuation cap" in html
 
 
@@ -90,7 +90,7 @@ async def test_review_form_returns_the_report(monkeypatch, mocker):
 
     assert response.status == 200
     assert "Review of deck.pdf" in text
-    assert 'class="status-fine"' in text
+    assert 'class="status-pill status-fine"' in text
     assert "Hosting sponsored by Safe Swiss Cloud" in text
     assert logo.status == 200
     assert b"<svg" in logo_body
