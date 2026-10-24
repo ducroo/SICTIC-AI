@@ -17,10 +17,19 @@ def test_build_report_document_html_includes_masthead_and_body():
     assert "A4 landscape" in html
 
 
-def test_render_report_pdf_uses_weasyprint(mocker):
-    fake_html = mocker.Mock()
-    fake_html.write_pdf.return_value = b"%PDF-1.4 fake"
-    html_cls = mocker.patch("weasyprint.HTML", return_value=fake_html)
+def test_normalize_report_body_html_restores_breaks():
+    assert (
+        report_pdf.normalize_report_body_html("a&lt;br&gt;b&lt;br/&gt;c")
+        == "a<br>b<br>c"
+    )
+
+
+def test_render_report_pdf_prefers_playwright(mocker):
+    mocker.patch(
+        "spike.report_pdf._pdf_via_playwright",
+        return_value=b"%PDF-1.4 chrome",
+    )
+    weasy = mocker.patch("spike.report_pdf._pdf_via_weasyprint")
 
     pdf = report_pdf.render_report_pdf(
         deck_filename="deck.pdf",
@@ -28,15 +37,37 @@ def test_render_report_pdf_uses_weasyprint(mocker):
     )
 
     assert pdf.startswith(b"%PDF")
-    html_cls.assert_called_once()
-    fake_html.write_pdf.assert_called_once()
+    weasy.assert_not_called()
 
 
-def test_render_report_pdf_requires_weasyprint(monkeypatch):
-    import sys
+def test_render_report_pdf_falls_back_to_weasyprint(mocker):
+    mocker.patch(
+        "spike.report_pdf._pdf_via_playwright",
+        side_effect=RuntimeError("no browser"),
+    )
+    mocker.patch(
+        "spike.report_pdf._pdf_via_weasyprint",
+        return_value=b"%PDF-1.4 weasy",
+    )
 
-    monkeypatch.setitem(sys.modules, "weasyprint", None)
-    with pytest.raises(RuntimeError, match="WeasyPrint is not installed"):
+    pdf = report_pdf.render_report_pdf(
+        deck_filename="deck.pdf",
+        report_body_html="<p>ok</p>",
+    )
+
+    assert pdf == b"%PDF-1.4 weasy"
+
+
+def test_render_report_pdf_raises_when_both_engines_fail(mocker):
+    mocker.patch(
+        "spike.report_pdf._pdf_via_playwright",
+        side_effect=RuntimeError("no browser"),
+    )
+    mocker.patch(
+        "spike.report_pdf._pdf_via_weasyprint",
+        side_effect=RuntimeError("no weasy"),
+    )
+    with pytest.raises(RuntimeError, match="PDF generation failed"):
         report_pdf.render_report_pdf(
             deck_filename="deck.pdf",
             report_body_html="<p>ok</p>",

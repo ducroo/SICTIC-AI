@@ -34,19 +34,12 @@ def gws_binary() -> str:
 
 
 def build_report_email_html(*, deck_filename: str, report_markdown: str, report_html: str) -> str:
-    """Build an HTML fragment for `gws gmail +send --html`."""
+    """Short HTML body; the full report is the attached PDF."""
+    del report_markdown, report_html  # kept for call-site compatibility
     title = f"Review of {deck_filename}"
-    body = report_html.strip() or f"<pre>{report_markdown}</pre>"
     return (
         f"<h1>{title}</h1>"
-        "<p>Your SICTIC pitch deck review is ready. "
-        "The PDF report is attached. "
-        "This is an automated document check. It is not a jury decision "
-        "and does not submit an application.</p>"
-        f"{body}"
-        '<p style="color:#607382;font-size:0.9rem">'
-        "Sent from the SICTIC pitch deck review service."
-        "</p>"
+        "<p>Your SICTIC pitch deck review is ready. The PDF report is attached.</p>"
     )
 
 

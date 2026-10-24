@@ -170,11 +170,16 @@ When `SPIKE_EMAIL_REPORTS=1`, a finished `/api/review` job can email the report
 (with PDF attachment) to the signed-in Firebase Auth address using `gws`, but
 only when the upload includes `email_results=1` (Hosting checkbox).
 
-PDF files are generated with WeasyPrint (`spike/report_pdf.py`) and available at
-`GET /api/review/{job_id}/pdf`. Install WeasyPrint in `sictic-env` on the VPS:
+PDF files are generated with Chromium print via Playwright (`spike/report_pdf.py`),
+matching the Hosting print layout, and are available at
+`GET /api/review/{job_id}/pdf`. WeasyPrint remains a fallback. On the VPS:
 
 ```bash
 conda activate sictic-env
+pip install playwright
+playwright install-deps chromium
+playwright install chromium
+# optional fallback:
 conda install -y -c conda-forge weasyprint
 ```
 

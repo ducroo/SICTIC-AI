@@ -17,14 +17,15 @@ def test_email_reports_enabled_flag(monkeypatch):
     assert email_report.email_reports_enabled() is True
 
 
-def test_build_report_email_html_includes_deck_and_body():
+def test_build_report_email_html_is_short_and_points_to_attachment():
     html = email_report.build_report_email_html(
         deck_filename="deck.pdf",
         report_markdown="# unused",
         report_html="<table><tr><td>Fine</td></tr></table>",
     )
     assert "Review of deck.pdf" in html
-    assert "<table><tr><td>Fine</td></tr></table>" in html
+    assert "PDF report is attached" in html
+    assert "<table>" not in html
 
 
 def test_send_report_email_requires_enabled(monkeypatch):
