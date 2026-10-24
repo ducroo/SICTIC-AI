@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import re
 from html import escape
 from pathlib import Path
@@ -127,6 +128,24 @@ def logo_path() -> Path | None:
     return None
 
 
+def logo_data_uri(logo: Path | None = None) -> str | None:
+    """Inline the logo so Chromium print does not depend on file:// URLs."""
+    logo_file = logo if logo is not None else logo_path()
+    if logo_file is None or not logo_file.is_file():
+        return None
+    payload = base64.standard_b64encode(logo_file.read_bytes()).decode("ascii")
+    suffix = logo_file.suffix.lower()
+    if suffix == ".svg":
+        mime = "image/svg+xml"
+    elif suffix == ".png":
+        mime = "image/png"
+    elif suffix in {".jpg", ".jpeg"}:
+        mime = "image/jpeg"
+    else:
+        mime = "application/octet-stream"
+    return f"data:{mime};base64,{payload}"
+
+
 def normalize_report_body_html(report_body_html: str) -> str:
     """Restore line breaks escaped by the markdown table renderer."""
     text = report_body_html or ""
@@ -142,11 +161,10 @@ def build_report_document_html(
 ) -> str:
     """Full HTML document styled like Hosting print output."""
     title = escape(f"Review of {deck_filename}")
-    logo_file = logo if logo is not None else logo_path()
-    if logo_file is not None:
-        logo_uri = logo_file.resolve().as_uri()
+    logo_uri = logo_data_uri(logo)
+    if logo_uri is not None:
         logo_html = (
-            f'<img class="report-logo" src="{escape(logo_uri)}" alt="SICTIC">'
+            f'<img class="report-logo" src="{logo_uri}" alt="SICTIC">'
         )
     else:
         logo_html = '<p class="report-logo-text">SICTIC</p>'

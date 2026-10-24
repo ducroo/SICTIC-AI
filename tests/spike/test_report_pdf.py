@@ -9,12 +9,21 @@ def test_build_report_document_html_includes_masthead_and_body():
     html = report_pdf.build_report_document_html(
         deck_filename="deck.pdf",
         report_body_html="<table><tr><td>Fine</td></tr></table>",
-        logo=None,
     )
     assert "Review of deck.pdf" in html
     assert "SICTIC pitch deck review" in html
     assert "<table><tr><td>Fine</td></tr></table>" in html
     assert "A4 landscape" in html
+    assert 'src="data:image/svg+xml;base64,' in html
+    assert "file://" not in html
+
+
+def test_logo_data_uri_reads_svg(tmp_path):
+    logo = tmp_path / "mark.svg"
+    logo.write_text('<svg xmlns="http://www.w3.org/2000/svg"></svg>', encoding="utf-8")
+    uri = report_pdf.logo_data_uri(logo)
+    assert uri is not None
+    assert uri.startswith("data:image/svg+xml;base64,")
 
 
 def test_normalize_report_body_html_restores_breaks():
