@@ -190,22 +190,26 @@ Desktop OAuth cannot complete its localhost callback from a laptop against a
 process on the VPS. Authenticate where a browser can reach `localhost`, then
 export credentials onto the VPS:
 
-1. In GCP (e.g. `review-deck-a3c26`): enable **Gmail API**, OAuth consent
-   (External + Testing), add your Google account as a **Test user**, create an
-   OAuth client of type **Desktop app**, download JSON to
+1. In GCP project **`ai-sictic`** (current Desktop OAuth client): enable
+   **Gmail API**, OAuth consent (External + Testing), add **`ai@sictic.ch`**
+   as a **Test user**. Reuse the existing Desktop OAuth client JSON as
    `~/.config/gws/client_secret.json` on the machine where you log in.
-2. On a machine with a browser (laptop or Cloud Agent desktop):
+2. On your **laptop** (preferred — browser + localhost callback). Sign in as
+   **`ai@sictic.ch`** (sender), not a personal test inbox:
 
 ```bash
 export PATH="$HOME/bin:$PATH"
 export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
-gws auth login -s gmail
+gws auth login -s gmail          # choose ai@sictic.ch
 gws auth export --unmasked > ~/gws-credentials.json
 chmod 600 ~/gws-credentials.json
 ```
 
-3. Copy `gws-credentials.json` to the VPS (e.g. `/home/ubuntu/.config/gws/credentials.export.json`).
-4. On the VPS `.env`:
+3. Copy `gws-credentials.json` to the VPS as
+   `/home/ubuntu/.config/gws/credentials.export.json` (mode `600`).
+   Optionally also set Cloud Agent secret `GWS_CREDENTIALS_JSON` to that file’s
+   contents so agents can install it automatically.
+4. On the VPS `.env` (keys are already stubbed; set the flag when ready):
 
 ```
 SPIKE_EMAIL_REPORTS=1
@@ -214,24 +218,23 @@ GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/home/ubuntu/.config/gws/credentials.expor
 GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
 ```
 
-5. Ensure `spike-web.service` sees `$HOME/bin` (set `SPIKE_GWS_BIN` as above) and restart:
+5. Restart the API:
 
 ```bash
 sudo systemctl restart spike-web.service
 ```
 
-6. Smoke test as the same Google account that completed OAuth:
+6. Smoke test (From: `ai@sictic.ch`, To: your inbox, e.g. `urs@gubser.ch`):
 
 ```bash
 export PATH="$HOME/bin:$PATH"
 export GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE=/home/ubuntu/.config/gws/credentials.export.json
 export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
-gws gmail +send --to 'you@example.com' --subject 'gws test' --body 'hello from the VPS'
+gws gmail +send --to 'urs@gubser.ch' --subject 'gws test' --body 'hello from ai@sictic.ch'
 ```
 
-Mail is sent **as the Google account that ran `gws auth login`** (for SICTIC:
-`ai@sictic.ch`), not as each review end-user. The recipient is the signed-in
-Firebase Auth address.
+Mail is always sent **as `ai@sictic.ch`**. The review API recipient is the
+signed-in Firebase Auth address.
 
 ### Cursor Cloud Agents
 
