@@ -15,6 +15,8 @@ const ACTIVE_JOB_KEY = "sictic.review.activeJob";
 const config = window.REVIEW_CONFIG;
 const form = document.getElementById("review-form");
 const fileInput = document.getElementById("deck");
+const emailResultsInput = document.getElementById("email-results");
+const emailResultsHint = document.getElementById("email-results-hint");
 const submit = document.getElementById("submit");
 const errorEl = document.getElementById("error");
 const workingPanel = document.getElementById("working");
@@ -33,6 +35,7 @@ let busy = false;
 let timer = null;
 let readyUser = null;
 let resumeStarted = false;
+let activeJobId = null;
 
 function showError(message) {
   errorEl.hidden = !message;
@@ -163,15 +166,140 @@ async function pollStatus(jobId, headers) {
   }
 }
 
+function deckLabelFromReport(reportHtml, fallback = "your deck") {
+  const match = String(reportHtml || "").match(/data-deck="([^"]+)"/);
+  if (match && match[1]) {
+    return match[1];
+  }
+  const heading = String(reportHtml || "").match(/<h2>\s*Review of\s+([^<]+)<\/h2>/i);
+  if (heading && heading[1]) {
+    return heading[1].trim();
+  }
+  return fallback;
+}
+
+function reportBodyHtml(reportHtml) {
+  const wrapped = String(reportHtml || "");
+  const match = wrapped.match(/<section[^>]*class="report"[^>]*>([\s\S]*)<\/section>/i);
+  let inner = match ? match[1] : wrapped;
+  inner = inner.replace(/<h2>\s*Review of\s+[^<]+<\/h2>/i, "");
+  // Drop the internal model line from shared batch-audit markdown.
+  inner = inner.replace(/<p>\s*<strong>\s*Model:\s*<\/strong>\s*[^<]*<\/p>/gi, "");
+  inner = inner.replace(/<p>\s*\*\*Model:\*\*[^<]*<\/p>/gi, "");
+  // Restore intentional line breaks that the markdown renderer escaped.
+  inner = inner.replace(/&lt;br\s*\/?&gt;/gi, "<br>");
+  return inner.trim();
+}
+
+function presentReport(reportHtml, deckName, jobId) {
+  const label = deckLabelFromReport(reportHtml, deckName || "your deck");
+  const body = reportBodyHtml(reportHtml);
+  const safeName = label.replace(/[^\w.\-]+/g, "_").replace(/^_+|_+$/g, "") || "pitch-deck";
+  if (jobId) {
+    activeJobId = jobId;
+  }
+  reportEl.innerHTML = `
+    <div class="report-shell">
+      <div class="report-actions">
+        <button type="button" class="secondary" id="print-report">Print</button>
+        <button type="button" id="download-report" ${jobId ? "" : "disabled"}>Download PDF</button>
+      </div>
+      <article id="report-print" class="report-document" data-download-name="${safeName}" data-job-id="${jobId || ""}">
+        <div class="report-masthead">
+          <img class="report-logo" src="/static/sictic-logo.svg" alt="SICTIC" width="156" height="42">
+          <div>
+            <p class="report-kicker">SICTIC pitch deck review</p>
+            <h2>Review of ${label}</h2>
+          </div>
+        </div>
+        <div class="report-body">${body}</div>
+        <p class="report-footnote">This is an automated document check against SICTIC Investor Day criteria. It is not a jury decision and does not submit an application.</p>
+      </article>
+    </div>
+  `;
+  const printButton = document.getElementById("print-report");
+  const downloadButton = document.getElementById("download-report");
+  if (printButton) {
+    printButton.addEventListener("click", () => window.print());
+  }
+  if (downloadButton && jobId) {
+    downloadButton.addEventListener("click", () => downloadReportPdf(jobId, safeName, downloadButton));
+  }
+}
+
+async function downloadReportPdf(jobId, baseName, button) {
+  if (!jobId) {
+    return;
+  }
+  const previous = button ? button.textContent : "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Preparing PDF…";
+  }
+  try {
+    const headers = await apiHeaders();
+    const response = await fetch(`${config.apiBaseUrl}/api/review/${jobId}/pdf`, {
+      headers,
+    });
+    if (!response.ok) {
+      let detail = "The PDF could not be downloaded.";
+      try {
+        const payload = await response.json();
+        detail = payload.error || detail;
+      } catch (_error) {
+        // keep default
+      }
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${baseName}-sictic-review.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    showError(error.message || String(error));
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previous || "Download PDF";
+    }
+  }
+}
+
+function updateEmailHint() {
+  if (!emailResultsHint) {
+    return;
+  }
+  const email = (readyUser && readyUser.email) || "your signed-in email";
+  if (emailResultsInput && emailResultsInput.checked) {
+    emailResultsHint.textContent =
+      `We’ll email the PDF to ${email} when the review finishes. You can close this window.`;
+  } else {
+    emailResultsHint.textContent =
+      "Leave this checked if you want the PDF emailed when the review finishes.";
+  }
+}
+
 async function followJob(jobId) {
   beginBusy(WORKING_MESSAGE);
   try {
     const headers = await apiHeaders();
     const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
-      reportEl.innerHTML = finished.report_html;
+      presentReport(finished.report_html, finished.deck_filename, jobId);
     }
-    showWorking("The review is ready.");
+    if (finished.email_requested && finished.email_sent) {
+      showWorking("The review is ready. We also emailed you the PDF.");
+    } else if (finished.email_requested && finished.email_error) {
+      showWorking("The review is ready, but emailing failed.");
+      showError(finished.email_error);
+    } else {
+      showWorking("The review is ready.");
+    }
   } catch (error) {
     const message = error.message || String(error);
     showError(message);
@@ -210,8 +338,13 @@ watchAuth((user) => {
   sessionEl.hidden = false;
   appMain.hidden = false;
   authLoading.hidden = true;
+  updateEmailHint();
   resumeActiveJobIfAny();
 });
+
+if (emailResultsInput) {
+  emailResultsInput.addEventListener("change", updateEmailHint);
+}
 
 signOutButton.addEventListener("click", async () => {
   clearActiveJob();
@@ -244,11 +377,15 @@ form.addEventListener("submit", async (event) => {
   }
 
   beginBusy(WORKING_MESSAGE);
+  const emailResults = Boolean(emailResultsInput && emailResultsInput.checked);
 
   try {
     const headers = await apiHeaders();
     const body = new FormData();
     body.append("deck", file, file.name);
+    if (emailResults) {
+      body.append("email_results", "1");
+    }
     const start = await fetch(`${config.apiBaseUrl}/api/review`, {
       method: "POST",
       headers,
@@ -262,16 +399,30 @@ form.addEventListener("submit", async (event) => {
     if (!jobId) {
       throw new Error("The review could not be started.");
     }
+    activeJobId = jobId;
     saveActiveJob(jobId);
     setSteps(started.steps);
     if (typeof started.elapsed_seconds === "number") {
       tick(started.elapsed_seconds);
     }
+    if (emailResults) {
+      const email = readyUser.email || "your email";
+      showWorking(
+        `Review started. We’ll email the PDF to ${email} when it’s ready — you can close this window.`,
+      );
+    }
     const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
-      reportEl.innerHTML = finished.report_html;
+      presentReport(finished.report_html, finished.deck_filename || file.name, jobId);
     }
-    showWorking("The review is ready.");
+    if (finished.email_requested && finished.email_sent) {
+      showWorking("The review is ready. We also emailed you the PDF.");
+    } else if (finished.email_requested && finished.email_error) {
+      showWorking("The review is ready, but emailing failed.");
+      showError(finished.email_error);
+    } else {
+      showWorking("The review is ready.");
+    }
   } catch (error) {
     const message = error.message || String(error);
     showError(message);
