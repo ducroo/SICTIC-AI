@@ -208,13 +208,23 @@ export credentials onto the VPS:
    **Gmail API**, OAuth consent (External + Testing), add **`ai@sictic.ch`**
    as a **Test user**. Reuse the existing Desktop OAuth client JSON as
    `~/.config/gws/client_secret.json` on the machine where you log in.
-2. On your **laptop** (preferred — browser + localhost callback). Sign in as
-   **`ai@sictic.ch`** (sender), not a personal test inbox:
+2. On your **laptop** or a Cursor Cloud Agent (browser + localhost callback).
+   Sign in as **`ai@sictic.ch`** (sender), not a personal test inbox.
+
+   Request **`gmail.send` only**. Do **not** use `--full`, and do **not** use
+   `gws auth login -s gmail` if the picker (or defaults) also grants
+   `cloud-platform` — that scope puts the refresh token under Google Cloud
+   Session Control and leads to `invalid_rapt` / “Failed to get token” after
+   a few hours. A working OpenClaw install for the same mailbox uses six
+   scopes: `gmail.send` plus openid/profile/email aliases, with **no**
+   `cloud-platform`.
 
 ```bash
 export PATH="$HOME/bin:$PATH"
 export GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file
-gws auth login -s gmail          # choose ai@sictic.ch
+gws auth login --scopes https://www.googleapis.com/auth/gmail.send
+# choose ai@sictic.ch
+gws auth status   # confirm scopes: gmail.send, no cloud-platform
 gws auth export --unmasked > ~/gws-credentials.json
 chmod 600 ~/gws-credentials.json
 ```
@@ -255,9 +265,12 @@ signed-in Firebase Auth address.
 Store `VPS_SSH_PRIVATE_KEY` as today. To use `gws` from a Cloud Agent:
 
 1. Install the Linux binary into `$HOME/bin` (same commands as the VPS).
-2. Complete `gws auth login -s gmail` in the agent environment (browser on that
-   machine), **or** copy an exported credentials file into the agent and set
-   `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE`.
+2. Complete
+   `gws auth login --scopes https://www.googleapis.com/auth/gmail.send`
+   in the agent environment (browser callback on that machine), **or** copy an
+   exported credentials file into the agent and set
+   `GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE`. Confirm `gws auth status` has no
+   `cloud-platform` scope.
 3. Set `GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file` so credentials work without
    an OS keychain.
 4. Agent insight emails still go through [skills/send_gmail](../skills/send_gmail/SKILL.md);
