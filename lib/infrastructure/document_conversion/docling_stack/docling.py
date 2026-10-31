@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import platform
 import threading
+from pathlib import Path
 from urllib.parse import urlparse
 
 from lib.infrastructure.configuration import get_env_var
@@ -23,6 +24,9 @@ def build_converter(*, force_full_page_ocr: bool = False):
 
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
+    from lib.infrastructure.document_conversion.docling_stack.selective_ocr import (
+        SelectiveOcrPipeline,
+    )
     from docling.datamodel.pipeline_options import (
         OcrMacOptions,
         PdfPipelineOptions,
@@ -67,6 +71,7 @@ def build_converter(*, force_full_page_ocr: bool = False):
     return DocumentConverter(
         format_options={
             InputFormat.PDF: PdfFormatOption(
+                pipeline_cls=SelectiveOcrPipeline,
                 pipeline_options=pipeline_options
             )
         }
@@ -127,13 +132,15 @@ def export_document_markdown(document) -> str:
 
 def convert_document(filepath: str) -> str:
     converter = get_converter()
-    result = converter.convert(filepath)
+    # Keep a real local path: Docling turns string inputs into streams, losing
+    # the source location needed by page-selective vector inspection.
+    result = converter.convert(Path(filepath))
     return export_document_markdown(result.document)
 
 
 def convert_document_force_ocr(filepath: str) -> str:
     converter = get_force_ocr_converter()
-    result = converter.convert(filepath)
+    result = converter.convert(Path(filepath))
     return export_document_markdown(result.document)
 
 

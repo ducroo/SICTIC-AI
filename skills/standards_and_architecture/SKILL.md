@@ -527,6 +527,19 @@ It returns `DocumentConversion(markdown, warnings)`. Preserve warnings,
 normalization and shared format handling. Dataset ingestion owns
 source selection, persistence and indexing.
 
+PDF conversion uses a page-selective OCR stage before Docling layout analysis.
+A PDFium geometry heuristic detects multiple uncovered text-like vector rows;
+only flagged pages receive full-page OCR. Ordinary pages keep the standard OCR
+path. Native PDF inspection shares Docling's PDFium lock; OCR model options are
+not mutated across concurrent documents. Empty, severely reduced or failed
+selective OCR logs a warning and restores the original cells before normal OCR.
+Successful selective OCR keeps native text and adds uncovered OCR cells through
+Docling's standard overlap filter, preserving precise native numbers and URLs.
+Detection is heuristic: isolated outlined labels can be missed and complex
+diagrams can cause extra OCR. Existing parsed PDFs remain cached; targeted
+reconversion removes only the selected derived Markdown and then uses normal
+dataset synchronization, preserving raw sources and other parsing checkpoints.
+
 ### Scheduling and retries
 
 Shared services own their scheduler integration. Skills must not add
