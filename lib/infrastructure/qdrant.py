@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-from datetime import date
 from typing import Optional
 from uuid import NAMESPACE_URL, uuid5
 
@@ -42,7 +41,6 @@ DENSE_VECTOR_NAME = ""
 SPARSE_VECTOR_NAME = "bm25"
 DATASET_PAYLOAD_KEY = "dataset_slug"
 SHARED_COLLECTION_PREFIX = "sictic-ai-datasets"
-LEGACY_MIGRATION_REMOVE_AFTER = date(2026, 10, 23)
 
 _INDEX_STATE_KEYS = (
     "indexed_parsed_sha256",
@@ -162,9 +160,10 @@ class QdrantAdapter:
                         self.collection_name,
                     )
                 logger.warning(
-                    "Temporary Qdrant legacy migration is scheduled for "
-                    "removal after %s.",
-                    LEGACY_MIGRATION_REMOVE_AFTER.isoformat(),
+                    "Legacy Qdrant collections required migration. Synchronize "
+                    "the affected datasets to rebuild their indexes. Retain this "
+                    "compatibility path until all installations have migrated; "
+                    "see docs/installation-and-operations.md#qdrant-legacy-migration.",
                 )
             elif self.collection_name in existing:
                 if not self.sparse_enabled():

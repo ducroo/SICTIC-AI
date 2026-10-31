@@ -19,8 +19,8 @@ without an open application raises before any review.
   insights folder. A draft contains only that startup's own information.
 - **Summary:** one timestamped file per run under
   `storage/generated/application-feedback-runs/insights/`, for SICTIC
-  operations only. It shows new or changed drafts with their Dealum link and
-  full text, and lists drafts reused unchanged from an earlier run, the
+  operations only. It shows new, changed or undelivered drafts with their Dealum
+  link and full text, and lists drafts reused unchanged from an earlier run, the
   applications without concerns and the failures.
 - **Email preview:** with `email="dry-run"`, the finished email with its
   recipients and subject as `email-preview-<model>.html` next to the summary.
@@ -41,17 +41,22 @@ Read the action with `submission_ready.proposed_action`. Only `Send concerns to
 startup` gets a draft: `generate_markdown` writes it in English, following
 `config/application_feedback/email_instructions.md`. The model only receives
 the concerns read with `submission_ready.stated_concerns`, not the checklist,
-so it cannot raise other points. The draft is signed with `SCREENER_SIGNATURE`
+to reduce unsupported additions. The draft is signed with `SCREENER_SIGNATURE`
 from `.env`, or with the placeholder `[Screener name]` for the screener to
 replace when it is empty. A reviewer requires between one and as many numbered
-points as there are concerns, and that signature. A stored or manual draft is
-reused while the instructions, the signature and the concerns are unchanged.
+points as there are concerns, and that signature. These are formatting checks;
+they do not establish that every concern is covered or that no concern was
+invented. The screener must verify the draft against the review before sending.
+Generated drafts are reused while their inputs and indexed sources are fresh;
+manual drafts retain the standard precedence.
 
 `email` decides how the summary reaches the screener: `off` (default), `dry-run`
 or `send`. The recipients are the comma-separated `SCREENER_EMAILS` in `.env`;
 they are checked before the review run starts. An email is only prepared when
-the run has new or changed drafts or failures. Its HTML body is the complete
-summary, converted with `send_gmail`'s `markdown_to_email`. `send` uses the
+there are drafts not yet delivered to these recipients, changed draft contents,
+or failures. Preview and email-off runs never acknowledge delivery. Its HTML body
+is the complete summary, including the full text of cached but undelivered drafts,
+converted with `send_gmail`'s `markdown_to_email`. `send` uses the
 shared `send_html_email` from `lib.infrastructure.gmail`, which sends through
 `gws` as described in the
 [gws setup](../../spike/SETUP.md#email-reports-via-gws-optional-testing).
@@ -66,8 +71,21 @@ Google Drive; Drive synchronization stays external.
 
 A failed application is recorded in the summary while the others continue.
 After the summary is saved and the email delivered, any failure raises with the
-summary path. A failed send also raises and is not retried, because the email
-may still have been delivered.
+summary path. A failed send also raises. A missing `gws` executable is known to
+precede sending, so a later run may try again after setup is fixed. Other send failures and
+interrupted attempts remain uncertain and are not automatically resent.
+
+Delivery receipts are separate from InsightFile freshness, in
+`storage/generated/application-feedback-runs/insights/email-delivery.json`.
+They track the application, recipient set, exact draft content and summary path.
+Updates use the shared file lock and atomic writer. A successful send acknowledges
+the included drafts; changed content or recipients becomes eligible again.
+For an uncertain entry, inspect Sent mail against the recorded summary. Once
+confirmed, set its status to `sent`; if confirmed not sent, remove only that entry
+before rerunning. Do this with the scheduled job stopped. Never clear uncertain
+entries without checking: the message might already have been delivered.
+Existing drafts without receipts are eligible for a first delivery after upgrade;
+check any previously sent drafts before enabling the updated nightly sender.
 
 ## Usage
 

@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "properties": {
+      "status": {"type": "string", "enum": ["sent", "uncertain"]},
+      "digest": {"type": "string", "minLength": 1},
+      "summary": {"type": "string", "minLength": 1}
+    },
+    "required": ["status", "digest", "summary"],
+    "additionalProperties": false
+  }
+}

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from enum import StrEnum
+from hashlib import sha256
 from html import escape
 from typing import Any
 
@@ -18,6 +19,7 @@ from lib.infrastructure.configuration import (
     load_repository_config,
 )
 from lib.infrastructure.dealum import DealumAdapter
+from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 from lib.infrastructure.gmail import send_html_email
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile, InsightResult
@@ -27,6 +29,7 @@ from lib.startups.dealum import dealum_application_url
 from lib.startups.dealum.session import dealum_session, list_applications
 from lib.startups.dealum.stages import APPLICATION_STAGE, canonical_stage
 from lib.storage import get_storage
+from skills.application_feedback.delivery import delivery_journal
 from skills.send_gmail.render_email import markdown_to_email
 from skills.submission_ready.submission_ready import (
     SEND_CONCERNS_ACTION,
@@ -75,8 +78,8 @@ class ApplicationOutcome:
     response: InsightFile | None = None
     # Drafted feedback email; only for applications with concerns.
     draft: InsightFile | None = None
-    # True when the draft was written in this run, False when an earlier one was reused.
-    draft_is_new: bool = False
+    # Include the full draft: newly generated, or not yet delivered to these recipients.
+    draft_needs_attention: bool = False
     # Error text when the review or the draft failed.
     error: str | None = None
 
@@ -195,9 +198,9 @@ async def _draft_email(
 ) -> tuple[InsightFile, bool]:
     """Draft the feedback email, reusing the stored draft while the concerns are unchanged.
 
-    The model only receives the review's stated concerns, so the draft cannot
-    raise points from elsewhere in the review. Returns the draft and whether it
-    was written in this run.
+    The model receives only stated concerns to reduce unsupported additions.
+    The formatting reviewer does not verify factual fidelity or completeness.
+    Returns the draft and whether it was written in this run.
     """
     eligibility, missing = stated_concerns(response.content())
     concern_count = len(eligibility) + len(missing)
@@ -261,9 +264,9 @@ async def _process_application(
             raise RuntimeError(
                 f"The submission review {response.path} has no proposed action."
             )
-        draft, draft_is_new = None, False
+        draft, draft_needs_attention = None, False
         if action == SEND_CONCERNS_ACTION:
-            draft, draft_is_new = await _draft_email(
+            draft, draft_needs_attention = await _draft_email(
                 startup, response, instructions, signature,
             )
         return replace(
@@ -271,7 +274,7 @@ async def _process_application(
             action=action,
             response=response,
             draft=draft,
-            draft_is_new=draft_is_new,
+            draft_needs_attention=draft_needs_attention,
         )
     except Exception as error:
         logger.exception("[%s] Application feedback failed", startup)
@@ -300,9 +303,9 @@ def _summary_markdown(
     run_id: str,
     signature: str,
 ) -> str:
-    new_drafts = [outcome for outcome in outcomes if outcome.draft and outcome.draft_is_new]
+    new_drafts = [outcome for outcome in outcomes if outcome.draft and outcome.draft_needs_attention]
     unchanged_drafts = [
-        outcome for outcome in outcomes if outcome.draft and not outcome.draft_is_new
+        outcome for outcome in outcomes if outcome.draft and not outcome.draft_needs_attention
     ]
     complete = [
         outcome
@@ -316,11 +319,11 @@ def _summary_markdown(
         f"Run: {run_id}",
         "",
         f"Open applications in the Dealum stage \"{APPLICATION_STAGE}\": "
-        f"{len(outcomes)}. New or changed drafts: {len(new_drafts)}. "
+        f"{len(outcomes)}. New, changed or undelivered drafts: {len(new_drafts)}. "
         f"Unchanged drafts: {len(unchanged_drafts)}. Without concerns: "
         f"{len(complete)}. Failed: {len(failures)}.",
         "",
-        "Nothing was sent to the startups. Proofread each new or changed draft"
+        "Nothing was sent to the startups. Proofread each included draft"
         + (
             f", replace {PLACEHOLDER_SIGNATURE}"
             if signature == PLACEHOLDER_SIGNATURE
@@ -329,7 +332,7 @@ def _summary_markdown(
         + " and paste it into the Dealum messages of the application.",
     ]
     if new_drafts:
-        lines += ["", "## New or changed drafts"]
+        lines += ["", "## New, changed or undelivered drafts"]
     for outcome in new_drafts:
         lines += [
             "",
@@ -346,8 +349,8 @@ def _summary_markdown(
             "",
             "## Unchanged drafts",
             "",
-            "The application has not changed since this draft was written in an "
-            "earlier run.",
+            "These drafts were reused; in email modes they have already been "
+            "delivered to the configured recipients.",
             "",
         ]
         lines += [
@@ -400,11 +403,11 @@ def _screener_emails() -> list[str]:
 
 
 def _email_subject(outcomes: list[ApplicationOutcome]) -> str:
-    new_drafts = sum(1 for outcome in outcomes if outcome.draft and outcome.draft_is_new)
+    new_drafts = sum(1 for outcome in outcomes if outcome.draft and outcome.draft_needs_attention)
     failures = sum(1 for outcome in outcomes if outcome.error is not None)
     return (
         "SICTIC feedback drafts for open applications: "
-        f"{new_drafts} new or changed, {failures} failed"
+        f"{new_drafts} new, changed or undelivered, {failures} failed"
     )
 
 
@@ -414,21 +417,48 @@ def _deliver_email(
     outcomes: list[ApplicationOutcome],
     summary_markdown: str,
     run_id: str,
+    *,
+    entries: dict[str, dict[str, str]],
+    save_delivery: Callable[[], None],
+    summary_path: str,
 ) -> InsightFile | None:
     """Send or preview the summary email. Returns the preview file of a dry run."""
     has_news = any(
-        (outcome.draft and outcome.draft_is_new) or outcome.error is not None
+        (outcome.draft and outcome.draft_needs_attention) or outcome.error is not None
         for outcome in outcomes
     )
     if mode == EmailMode.OFF:
         return None
     if not has_news:
-        logger.info("No new or changed drafts and no failures; no email to the screener")
+        logger.info("No new, changed or undelivered drafts and no failures; no email to the screener")
         return None
     subject = _email_subject(outcomes)
     html = markdown_to_email(summary_markdown)
     if mode == EmailMode.SEND:
-        send_html_email(recipients, subject, html)
+        pending = {
+            _delivery_key(outcome, recipients): {
+                "status": "uncertain",
+                "digest": _draft_digest(outcome),
+                "summary": summary_path,
+            }
+            for outcome in outcomes
+            if outcome.draft and outcome.draft_needs_attention
+        }
+        entries.update(pending)
+        save_delivery()  # Write before sending: a crash must not trigger a duplicate.
+        try:
+            send_html_email(recipients, subject, html)
+        except InfrastructureError as error:
+            if error.kind == InfrastructureErrorKind.CONFIGURATION:
+                # The shared sender reports this when the gws executable was
+                # not found. No mail was attempted; a later run may try again.
+                for key in pending:
+                    entries.pop(key, None)
+                save_delivery()
+            raise
+        for key in pending:
+            entries[key]["status"] = "sent"
+        save_delivery()
         logger.info("Summary emailed to %s", ", ".join(recipients))
         return None
     preview = _summary_insight("email-preview", run_id, extension="html")
@@ -452,8 +482,8 @@ async def application_feedback(
 
     Returns the run summary, the email preview of a dry run, and the drafts.
     Only reads from Dealum. `email` decides whether the summary is emailed to
-    the screener; an email is only sent when there are new or changed drafts
-    or failures. The screener sends the proofread drafts to the startups.
+    the screener; an email is only sent when there are new, changed or undelivered
+    drafts or failures. The screener sends the proofread drafts to the startups.
     """
     email = EmailMode(email)
     adapter = DealumAdapter()
@@ -477,6 +507,60 @@ async def application_feedback(
             for application in selected
         ]
 
+    location = dataset_location_for_domain(SUMMARY_DATASET, "generated")
+    journal_path = f"{location.insights_rel}/email-delivery.json"
+    with delivery_journal(journal_path) as (entries, save_delivery):
+        if email != EmailMode.OFF:
+            outcomes = _pending_deliveries(outcomes, recipients, entries, journal_path)
+        return _finish_run(
+            outcomes, run_id, signature, email, recipients, entries, save_delivery,
+        )
+
+
+def _delivery_key(outcome: ApplicationOutcome, recipients: list[str]) -> str:
+    return config_cache_key(
+        {"application": outcome.dealum_url or outcome.code or outcome.startup,
+         "recipients": sorted({address.casefold() for address in recipients})},
+    )
+
+
+def _draft_digest(outcome: ApplicationOutcome) -> str:
+    return sha256(outcome.draft.content().encode("utf-8")).hexdigest()
+
+
+def _pending_deliveries(
+    outcomes: list[ApplicationOutcome],
+    recipients: list[str],
+    entries: dict[str, dict[str, str]],
+    journal_path: str,
+) -> list[ApplicationOutcome]:
+    updated = []
+    for outcome in outcomes:
+        if outcome.draft is None:
+            updated.append(outcome)
+            continue
+        receipt = entries.get(_delivery_key(outcome, recipients), {})
+        if receipt.get("status") == "uncertain":
+            raise RuntimeError(
+                f"Email delivery for {outcome.startup} is uncertain; check Sent mail "
+                f"against {receipt['summary']} before resolving its entry in "
+                f"{journal_path}. It will not be resent automatically."
+            )
+        updated.append(replace(
+            outcome, draft_needs_attention=receipt.get("digest") != _draft_digest(outcome),
+        ))
+    return updated
+
+
+def _finish_run(
+    outcomes: list[ApplicationOutcome],
+    run_id: str,
+    signature: str,
+    email: EmailMode,
+    recipients: list[str],
+    entries: dict[str, dict[str, str]],
+    save_delivery: Callable[[], None],
+) -> list[InsightFile]:
     summary_markdown = _summary_markdown(outcomes, run_id, signature)
     summary = _summary_insight("summary", run_id)
     summary.save(summary_markdown)
@@ -484,7 +568,10 @@ async def application_feedback(
     # Failures are news for the screener, so deliver the email before raising.
     preview, email_error = None, None
     try:
-        preview = _deliver_email(email, recipients, outcomes, summary_markdown, run_id)
+        preview = _deliver_email(
+            email, recipients, outcomes, summary_markdown, run_id,
+            entries=entries, save_delivery=save_delivery, summary_path=summary.path,
+        )
     except Exception as error:
         logger.exception("Emailing the application feedback summary failed")
         email_error = error

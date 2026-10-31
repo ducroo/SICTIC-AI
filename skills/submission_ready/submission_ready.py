@@ -301,9 +301,13 @@ def stated_concerns(response_report: str) -> tuple[list[str], list[str]]:
         if line.startswith("## "):
             current = sections.get(line.strip())
             continue
-        item = re.match(r"^\d+\.\s+(.+)$", line.strip())
+        item = re.match(r"^\d+\.\s+(.+)$", line)
         if current is not None and item:
             current.append(item.group(1).strip())
+        elif current and line.strip():
+            # Preserve wrapped text, sub-bullets and qualifications belonging
+            # to the preceding concern, including unindented continuation lines.
+            current[-1] += "\n" + line.rstrip()
     return sections[ELIGIBILITY_HEADING], sections[MISSING_INFORMATION_HEADING]
 
 

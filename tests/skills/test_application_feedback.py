@@ -181,10 +181,10 @@ async def test_feedback_drafts_only_for_applications_with_concerns(feedback_run)
     )
     text = summary.content()
     assert (
-        "New or changed drafts: 1. Unchanged drafts: 0. Without concerns: 1. "
+        "New, changed or undelivered drafts: 1. Unchanged drafts: 0. Without concerns: 1. "
         "Failed: 0." in text
     )
-    assert "## New or changed drafts\n\n### Alpha Bio (CODE-1)" in text
+    assert "## New, changed or undelivered drafts\n\n### Alpha Bio (CODE-1)" in text
     assert "- [Open the application in Dealum](https://app.dealum.com/" in text
     # The draft is a code block, so its line breaks and numbering survive copying.
     assert "```text\nDear Alpha Bio team,\n\n1. Please upload your cap table.\n```" in text
@@ -203,8 +203,8 @@ async def test_unchanged_review_reuses_the_stored_draft(feedback_run):
 
     assert len(calls["prompts"]) == 1
     text = summary.content()
-    assert "New or changed drafts: 0. Unchanged drafts: 1." in text
-    assert "## New or changed drafts" not in text
+    assert "New, changed or undelivered drafts: 0. Unchanged drafts: 1." in text
+    assert "## New, changed or undelivered drafts" not in text
     assert "## Unchanged drafts" in text
     assert "- Alpha Bio (CODE-1): [Open the application in Dealum](https://app.dealum.com/" in text
     assert f"Draft file: {draft.path}" in text
@@ -222,7 +222,7 @@ async def test_failed_review_is_reported_after_the_summary_is_saved(feedback_run
     summary_path = str(error.value).split("see ", 1)[1].split(":", 1)[0]
     text = get_storage().read_text(summary_path)
     assert (
-        "New or changed drafts: 1. Unchanged drafts: 0. Without concerns: 0. "
+        "New, changed or undelivered drafts: 1. Unchanged drafts: 0. Without concerns: 0. "
         "Failed: 1." in text
     )
     assert "- Beta Labs (CODE-2): review failed for CODE-2" in text
@@ -265,7 +265,7 @@ async def test_email_dry_run_saves_the_email_instead_of_sending(feedback_run, se
     assert "Dry run: this email was not sent." in text
     assert text.index("<body") < text.index("Dry run: this email was not sent.")
     assert "To: screener@sictic.ch, second@sictic.ch" in text
-    assert "Subject: SICTIC feedback drafts for open applications: 1 new or changed, 0 failed" in text
+    assert "Subject: SICTIC feedback drafts for open applications: 1 new, changed or undelivered, 0 failed" in text
     assert "Please upload your cap table." in text
     assert draft.dataset == "alpha-bio"
 
@@ -279,7 +279,7 @@ async def test_email_is_sent_only_when_there_is_news(feedback_run, sent_emails):
     assert len(sent_emails) == 1
     recipients, subject, html = sent_emails[0]
     assert recipients == ["screener@sictic.ch", "second@sictic.ch"]
-    assert subject == "SICTIC feedback drafts for open applications: 1 new or changed, 0 failed"
+    assert subject == "SICTIC feedback drafts for open applications: 1 new, changed or undelivered, 0 failed"
     assert "Please upload your cap table." in html
     assert [insight.identifier for insight in returned] == ["summary", None]
     assert returned[1].dataset == "alpha-bio"
@@ -295,7 +295,7 @@ async def test_failures_are_emailed_before_the_run_raises(feedback_run, sent_ema
         await application_feedback(email="send")
 
     assert len(sent_emails) == 2
-    assert sent_emails[1][1].endswith("0 new or changed, 1 failed")
+    assert sent_emails[1][1].endswith("0 new, changed or undelivered, 1 failed")
     assert "review failed for CODE-2" in sent_emails[1][2]
 
 
@@ -352,3 +352,148 @@ async def test_empty_signature_keeps_the_placeholder(feedback_run, monkeypatch):
 
     assert 'followed by "[Screener name]" and "SICTIC"' in calls["prompts"][0]
     assert "replace [Screener name] and paste it" in summary.content()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initial_mode", ["off", "dry-run"])
+async def test_preview_or_off_does_not_consume_delivery(feedback_run, sent_emails, initial_mode):
+    _reviews, calls = feedback_run
+    await application_feedback(email=initial_mode)
+    await application_feedback(email="send")
+    await application_feedback(email="send")
+
+    assert len(calls["prompts"]) == 1
+    assert len(sent_emails) == 1
+    assert "Please upload your cap table." in sent_emails[0][2]
+
+
+@pytest.mark.asyncio
+async def test_missing_gws_can_be_retried_on_a_later_run(feedback_run, sent_emails, monkeypatch):
+    from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+
+    sender = module.send_html_email
+
+    def missing_gws(*_args):
+        raise InfrastructureError("gws not found", provider="gws", operation="send_email",
+                                  kind=InfrastructureErrorKind.CONFIGURATION)
+
+    monkeypatch.setattr(module, "send_html_email", missing_gws)
+    with pytest.raises(InfrastructureError, match="gws not found"):
+        await application_feedback(email="send")
+    monkeypatch.setattr(module, "send_html_email", sender)
+    await application_feedback(email="send")
+    assert len(sent_emails) == 1
+    assert "Please upload your cap table." in sent_emails[0][2]
+
+
+@pytest.mark.asyncio
+async def test_uncertain_send_remains_visible_and_is_not_retried(feedback_run, sent_emails, monkeypatch):
+    from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
+
+    attempts = []
+
+    def timeout(*args):
+        attempts.append(args)
+        raise InfrastructureError("timed out", provider="gws", operation="send_email",
+                                  kind=InfrastructureErrorKind.TIMEOUT)
+
+    monkeypatch.setattr(module, "send_html_email", timeout)
+    with pytest.raises(InfrastructureError, match="timed out"):
+        await application_feedback(email="send")
+    with pytest.raises(RuntimeError, match="delivery for Alpha Bio is uncertain"):
+        await application_feedback(email="send")
+    assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_changed_recipients_receive_cached_draft(feedback_run, sent_emails, monkeypatch):
+    await application_feedback(email="send")
+    monkeypatch.setenv("SCREENER_EMAILS", "new@sictic.ch")
+    await application_feedback(email="send")
+    assert len(sent_emails) == 2
+    assert sent_emails[1][0] == ["new@sictic.ch"]
+    assert "Please upload your cap table." in sent_emails[1][2]
+
+
+@pytest.mark.asyncio
+async def test_recipient_order_does_not_resend(feedback_run, sent_emails, monkeypatch):
+    await application_feedback(email="send")
+    monkeypatch.setenv("SCREENER_EMAILS", "second@sictic.ch, screener@sictic.ch")
+    await application_feedback(email="send")
+    assert len(sent_emails) == 1
+
+
+@pytest.mark.asyncio
+async def test_changed_manual_draft_is_delivered_without_generation(feedback_run, sent_emails):
+    _reviews, calls = feedback_run
+    [_, draft] = await application_feedback(email="send")
+    manual = InsightFile(dataset=draft.dataset, skill="application_feedback", model="manual")
+    manual.save("Dear team,\n\n1. Please clarify the ownership of the IP.\n")
+    await application_feedback(email="send")
+    await application_feedback(email="send")
+    assert len(sent_emails) == 2
+    assert "ownership of the IP" in sent_emails[1][2]
+    assert len(calls["prompts"]) == 1
+
+
+def test_stated_concerns_preserves_continuations_and_nested_lists():
+    report = (
+        "## Eligibility concerns\n\n"
+        "1. Confirm the company's registered office.\n"
+        "It must be in Switzerland.\n\n"
+        "2. Explain the operating activity.\n"
+        "  - Include the location of the team.\n"
+        "  1. Describe local operations.\n"
+        "## Missing or inconsistent information\n\n"
+        "1. Upload the cap table.\n"
+        "  Include convertible loans.\n"
+        "## Other section\n\n1. Not a concern.\n"
+    )
+    eligibility, missing = stated_concerns(report)
+    assert eligibility == [
+        "Confirm the company's registered office.\nIt must be in Switzerland.",
+        "Explain the operating activity.\n  - Include the location of the team.\n"
+        "  1. Describe local operations.",
+    ]
+    assert missing == ["Upload the cap table.\n  Include convertible loans."]
+
+
+@pytest.mark.asyncio
+async def test_multiline_qualifications_reach_draft_prompt(feedback_run):
+    reviews, calls = feedback_run
+    reviews["CODE-1"] = ("Send concerns to startup", [
+        "Confirm the cap table.\nInclude outstanding convertible loans.",
+    ])
+    await application_feedback()
+    assert "Include outstanding convertible loans." in calls["prompts"][0]
+
+
+@pytest.mark.asyncio
+async def test_failed_receipt_save_does_not_allow_duplicate_send(feedback_run, sent_emails, monkeypatch):
+    import json
+    from skills.application_feedback import delivery
+
+    writer = delivery.write_if_changed
+
+    def fail_acknowledgement(storage, path, content):
+        if any(entry["status"] == "sent" for entry in json.loads(content).values()):
+            raise OSError("receipt disk write failed")
+        writer(storage, path, content)
+
+    monkeypatch.setattr(delivery, "write_if_changed", fail_acknowledgement)
+    with pytest.raises(OSError, match="receipt disk write failed"):
+        await application_feedback(email="send")
+    assert len(sent_emails) == 1
+    monkeypatch.setattr(delivery, "write_if_changed", writer)
+    with pytest.raises(RuntimeError, match="is uncertain"):
+        await application_feedback(email="send")
+    assert len(sent_emails) == 1
+
+
+@pytest.mark.asyncio
+async def test_invalid_receipt_state_fails_closed(feedback_run, sent_emails):
+    location = dataset_location_for_domain("application-feedback-runs", "generated")
+    get_storage().write_text(f"{location.insights_rel}/email-delivery.json", '{"bad": {}}')
+    with pytest.raises(ValueError):
+        await application_feedback(email="send")
+    assert sent_emails == []

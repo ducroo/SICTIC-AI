@@ -35,8 +35,8 @@ def run_application_feedback(
         "--email",
         case_sensitive=False,
         help=(
-            "Email the summary to SCREENER_EMAILS when there are new or "
-            "changed drafts or failures: off, dry-run (save the email instead) "
+            "Email the summary to SCREENER_EMAILS when there are new, "
+            "changed or undelivered drafts or failures: off, dry-run (save the email instead) "
             "or send."
         ),
     ),
