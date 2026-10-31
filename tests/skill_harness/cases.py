@@ -12,6 +12,7 @@ FOCUSED_HARNESS_TESTS = {
 
 SKILL_COVERAGE = {
     "advocates": "local-smoke",
+    "application_feedback": "existing-unit",
     "bulk_refresh": "existing-unit",
     "captable_analysis": "harness-smoke",
     "captable": "harness-smoke",

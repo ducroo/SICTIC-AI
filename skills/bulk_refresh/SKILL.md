@@ -54,8 +54,11 @@ Active datasets outside the four always-active stages expire when their latest e
 reaches the cutoff. An archived marker takes precedence over every stage: new source
 material and later stage changes never reactivate it. Only manual activation removes
 that block. An unmarked dataset defaults to archived unless an always-active stage
-applies. Renaming the active marker to archived is not a qualifying source edit.
-Archiving changes eligibility only; it does not delete or zip anything.
+applies. An unmarked dossier at stage `Application`, as created by
+[application_feedback](../application_feedback/SKILL.md), stays unmarked, so
+it is activated once it reaches an always-active stage. Renaming the active
+marker to archived is not a qualifying source edit. Archiving changes
+eligibility only; it does not delete or zip anything.
 
 Application data is never downloaded by bulk refresh, including through composed
 skills selected with `--skills all` or explicit lists. Existing Application dossiers

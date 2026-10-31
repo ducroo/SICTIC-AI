@@ -7,7 +7,7 @@ from lib.infrastructure.dealum import DealumAdapter
 from lib.infrastructure.logging import get_logger
 from lib.startups.dealum import DealumApplicationNotFoundError, import_startup_from_dealum, reconcile_dealum_startup
 from lib.startups.dealum.session import current_session, list_applications
-from lib.startups.dealum.stages import ALWAYS_ACTIVE_STAGES, canonical_stage
+from lib.startups.dealum.stages import ALWAYS_ACTIVE_STAGES, APPLICATION_STAGE, canonical_stage
 from lib.startups.identity import canonical_startup_slug
 from lib.startups.dossier import ensure_startup_dossier
 
@@ -90,12 +90,16 @@ def update_dataset_states(
                         ensure_startup_dossier(name, activate=True)
                     else:
                         activate_dataset(name)
+                elif stage == APPLICATION_STAGE and not is_active_dataset(name):
+                    # A dossier made by the application review has no marker yet.
+                    # Keep it unmarked, so it is activated once it is under review.
+                    pass
                 else:
                     update_dataset_inactivity(name, months=months)
 
                 # Activity is decided from the current local data before acquiring
                 # anything. Downloads cannot extend the life of an expired dossier.
-                if not is_active_dataset(name) or stage == "Application":
+                if not is_active_dataset(name) or stage == APPLICATION_STAGE:
                     session = current_session()
                     if session is not None:
                         session.source_imports_disabled.add(name)
