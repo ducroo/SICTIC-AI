@@ -153,6 +153,8 @@ def test_resolve_candidates_excludes_jury_and_later_stages():
         _application("Alpha", "Application", 1),
         _application("Beta", "UNDER REVIEW", 2),
         _application("Gamma", "Jury", 3),
+        _application("Delta", "Rejected", 4),
+        _application("Epsilon", None, 5),
     ]
     adapter = FakeAdapter(applications)
 
@@ -169,8 +171,9 @@ def test_resolve_candidates_excludes_jury_and_later_stages():
     assert statuses == []
 
 
-def test_resolve_explicit_out_of_scope_startup_returns_status():
-    applications = [_application("Gamma", "Jury", 3)]
+@pytest.mark.parametrize("stage", ["Jury", "Pitched @ SICTIC", "Rejected", None, ""])
+def test_resolve_explicit_startup_accepts_any_stage(stage):
+    applications = [_application("Gamma", stage, 3)]
 
     candidates, statuses = _resolve_candidates(
         applications,
@@ -178,10 +181,10 @@ def test_resolve_explicit_out_of_scope_startup_returns_status():
         ["Gamma"],
     )
 
-    assert candidates == []
-    assert statuses[0].status == (
-        "outside submission-ready stages; no action"
-    )
+    assert [(match.matched_name, resolved_stage) for match, resolved_stage in candidates] == [
+        ("Gamma", stage or "Unknown")
+    ]
+    assert statuses == []
 
 
 @pytest.mark.parametrize("counts", [(5, 4), (9, 0), (0, 9), (10, 12)])
@@ -225,7 +228,17 @@ def test_proposed_action_markdown_uses_fixed_structure_and_none_identified():
 
 
 @pytest.mark.asyncio
-async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
+@pytest.mark.parametrize(
+    ("stage", "allowed"),
+    [
+        ("Application", ["Move to Under review", "Send concerns to startup"]),
+        ("Under review", ["Move to Jury", "Send concerns to startup"]),
+        ("Jury", ["Assessment only"]),
+        ("Rejected", ["Assessment only"]),
+        ("Unknown", ["Assessment only"]),
+    ],
+)
+async def test_proposed_action_uses_stage_specialized_schema(monkeypatch, stage, allowed):
     calls = []
 
     async def fake_generate_json(prompt, schema, reviewer):
@@ -237,7 +250,7 @@ async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
             }
         )
         return {
-            "proposed_action": "Move to Jury",
+            "proposed_action": allowed[0],
             "rationale": "The submission is complete.",
             "eligibility_concerns": [],
             "missing_or_inconsistent_information": [],
@@ -249,23 +262,29 @@ async def test_proposed_action_uses_stage_specialized_schema(monkeypatch):
     )
 
     report, _prompt = await _generate_proposed_action(
-        stage="Under review",
+        stage=stage,
         checklist_report="All checks pass.",
         response_instructions="Recommend an action.",
         response_schema=_check_config()["response_schema"],
     )
 
     schema = calls[-1]["schema"]
-    assert schema["properties"]["proposed_action"]["enum"] == [
-        "Move to Jury",
-        "Send concerns to startup",
-    ]
+    assert schema["properties"]["proposed_action"]["enum"] == allowed
     assert len(calls) == 1
     from lib.infrastructure.ai_text_generation.json import validate_json_schema
 
     with pytest.raises(ValueError):
         validate_json_schema({"proposed_action": "Move to Jury"}, schema)
-    assert "Move to Jury" in report
+    assert allowed[0] in report
+    if allowed == ["Assessment only"]:
+        for forbidden in ("Move to Jury", "Move to Under review", "Send concerns to startup"):
+            with pytest.raises(ValueError):
+                validate_json_schema({
+                    "proposed_action": forbidden,
+                    "rationale": "Some information is missing.",
+                    "eligibility_concerns": [],
+                    "missing_or_inconsistent_information": ["Confirm the valuation."],
+                }, schema)
 
 
 @pytest.mark.asyncio
@@ -308,8 +327,9 @@ async def test_batch_invocation_uses_six_hour_processing_mode(
 
 
 @pytest.mark.asyncio
-async def test_explicit_invocation_forces_fresh_import(monkeypatch):
-    applications = [_application("Alpha", "Application", 1)]
+@pytest.mark.parametrize("stage", ["Application", "Under review", "Jury", "Rejected", None])
+async def test_explicit_invocation_forces_fresh_import(monkeypatch, stage):
+    applications = [_application("Alpha", stage, 1)]
     adapter = FakeAdapter(applications)
     force_modes = []
 

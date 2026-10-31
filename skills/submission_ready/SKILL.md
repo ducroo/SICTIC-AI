@@ -1,6 +1,6 @@
 ---
 name: submission_ready
-description: Screen Dealum applications in Application or Under review for completeness and initial eligibility, and draft an internal proposed action. Use for named submissions or a batch of in-scope applications.
+description: Screen named Dealum applications at any stage, or automatically select Application and Under review submissions, for completeness and initial eligibility.
 ---
 
 # Submission ready
@@ -10,14 +10,16 @@ Produce an Ops screening report and proposed action for human review.
 ## Inputs and outputs
 
 The async `submission_ready(startups=None)` accepts startup names or codes.
-Omission processes in-scope applications. Named out-of-scope startups produce no
-artifacts. On success, return a flat `list[InsightFile]`: checklist then response
+Omission processes Application and Under review applications. Explicit names or
+codes run at any stage, including an unknown stage. On success, return a flat
+`list[InsightFile]`: checklist then response
 for each startup. Canonical JSON audits remain internal; final Markdown artifacts
 are timestamped.
 
 ## Workflow and dependencies
 
-Select only Application and Under review. Named requests force a Dealum import;
+Automatic batches select only Application and Under review. Named requests
+ignore the stage filter and force a Dealum import;
 automatic batches apply the six-hour per-startup gate and run sequentially.
 Within bulk refresh, reuse that run's application snapshot and successful import
 instead of acquiring the same submission twice. Standalone named calls still import.
@@ -34,10 +36,13 @@ render its table, and generate a schema-validated action allowed for the current
 stage. Missing or ambiguous evidence is Unclear; technical errors are failures.
 
 The response separates **Eligibility concerns** from **Missing or inconsistent
-information**. Confirmed wrong geography is an eligibility concern. Policy
-rejection routes describe the underlying eligibility decision; the proposed-action
-field remains limited to progression or sending concerns for the current stage.
-The skill does not propose an additional rejection action.
+information**. Confirmed wrong geography is an eligibility concern; missing or
+ambiguous evidence is not confirmed ineligibility. The proposed-action field
+remains limited to progression or sending concerns for Application and Under review.
+At other or unknown stages, the schema permits only `Assessment only`: report
+findings without recommending a stage transition or outreach.
+The skill does not propose an additional rejection action. Consolidate duplicate
+concerns and do not block progression solely for missing optional routing details.
 
 Audit reuse follows indexed revisions and configuration. A stage-only change can
 reuse the audit and create a new response; unrelated indexed changes can invalidate

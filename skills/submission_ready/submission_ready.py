@@ -190,7 +190,7 @@ def _specialize_proposed_action_schema(
             "Move to Jury",
             "Send concerns to startup",
         ],
-    }[stage]
+    }.get(stage, ["Assessment only"])
     specialized = copy_schema(response_schema)
     try:
         specialized["properties"]["proposed_action"]["enum"] = (
@@ -318,15 +318,9 @@ def _resolve_candidates(
 
         stage = _canonical_stage(match.step)
         if stage is None:
-            if requested_startups is not None:
-                statuses.append(
-                    SubmissionReadyResult(
-                        startup=match.matched_name,
-                        stage=str(match.step or "") or None,
-                        status="outside submission-ready stages; no action",
-                    )
-                )
-            continue
+            if requested_startups is None:
+                continue
+            stage = str(match.step or "").strip() or "Unknown"
         identity = str(match.dealum_id)
         if identity in seen_ids:
             continue
