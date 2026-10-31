@@ -57,6 +57,7 @@ def workflow(mock_env, monkeypatch):
     retrieve = AsyncMock(return_value=[chunk])
 
     async def generate(prompt, schema, reviewer, **kwargs):
+        assert 'cacheable_prompt_prefix' not in kwargs
         reference = json.loads(prompt.split('Provider taxonomy:\n', 1)[1])
         result = classification(reference)
         validate_json_schema(result, schema)
@@ -114,6 +115,8 @@ def test_references_are_complete_for_the_agreed_snapshots_and_internally_consist
         assert ref == original
     assert 'unverified' in config['taxonomies']['pitchbook']['status']
     assert 'INCOMPLETE' in config['taxonomies']['dealum']['status']
+    assert 'sectors' not in config
+    assert 'legacy_response_schema' not in config
     assert 'product_types' not in config
     assert 'company_category' not in config['taxonomies']['dealum']['components']
 
@@ -134,7 +137,8 @@ async def test_one_provider_with_balanced_evidence_and_independent_cache(workflo
         dict(max_chunks=n, raise_on_error=True) for n in (9, 8, 8)]
     workflow.generate.assert_awaited_once()
     call = workflow.generate.await_args
-    prefix = call.kwargs['cacheable_prompt_prefix']
+    assert 'cacheable_prompt_prefix' not in call.kwargs
+    prefix = call.args[0]
     assert workflow.chunk.to_md() in prefix
     assert 'startup_profile' not in prefix
     ref = workflow.config['taxonomies'][selected]
@@ -160,7 +164,7 @@ async def test_product_and_customer_passages_survive_technical_results(workflow)
     workflow.retrieve.side_effect = [[product], [customer, product], [product, *technical]]
     await module.startup_sector('example-co')
     for call in workflow.generate.await_args_list:
-        prefix = call.kwargs['cacheable_prompt_prefix']
+        prefix = call.args[0]
         assert prefix.count(product.to_md()) == 1
         assert prefix.count(customer.to_md()) == 1
         assert prefix.index(product.text) < prefix.index(customer.text) < prefix.index(technical[0].text)
@@ -176,7 +180,7 @@ async def test_missing_evidence_section_is_explicit_without_discarding_other_res
     workflow.retrieve.side_effect = results
     await module.startup_sector('example-co')
     assert workflow.generate.await_count == 1
-    prefix = workflow.generate.await_args_list[0].kwargs['cacheable_prompt_prefix']
+    prefix = workflow.generate.await_args_list[0].args[0]
     assert f"{workflow.config['queries'][missing]}\n\nNo source passages retrieved" in prefix
     assert prefix.count(workflow.chunk.to_md()) == 1
 
@@ -205,7 +209,7 @@ async def test_latest_application_proposition_is_included_even_without_search_hi
     await module.startup_sector('example-co')
     assert workflow.generate.await_count == 1
     for call in workflow.generate.await_args_list:
-        prefix = call.kwargs['cacheable_prompt_prefix']
+        prefix = call.args[0]
         assert 'dealum/2026-01-01/application.md.txt' in prefix
         assert 'Cognitive training reduces cravings' in prefix
         assert 'Clinics buy this intervention.' in prefix
@@ -248,7 +252,7 @@ async def test_shared_search_integrates_three_queries_and_deduplicates(workflow,
         workflow.generate.assert_not_awaited()
     else:
         assert workflow.generate.await_count == 1
-        assert all(c.kwargs['cacheable_prompt_prefix'].count(workflow.chunk.text) == 1
+        assert all(c.args[0].count(workflow.chunk.text) == 1
                    for c in workflow.generate.await_args_list)
 
 
@@ -407,7 +411,7 @@ async def test_manual_still_rejects_invalid_decisions(workflow, problem):
 
 
 @pytest.mark.asyncio
-async def test_profile_uses_resolved_manual_ids_and_preserves_legacy_reuse(workflow, monkeypatch):
+async def test_profile_uses_resolved_manual_ids_and_reuses_profile(workflow, monkeypatch):
     profile = importlib.import_module('skills.startup_profile.startup_profile')
     install_dataset('temp-manual-profile', domain='generated')
     monkeypatch.setattr(profile, 'sync_datasets', workflow.sync)
@@ -424,36 +428,13 @@ async def test_profile_uses_resolved_manual_ids_and_preserves_legacy_reuse(workf
     assert manual.content() == original
     assert workflow.generate.await_count == 1
 
-    manual.save(json.dumps(legacy(product_type='Hardware', product_type_confidence='H')))
-    [report] = await profile.startup_profile('temp-manual-profile')
-    assert '  - **SICTIC sector:** EnergyTech' in report.content()
-    calls = chat.await_count
-    manual.save(json.dumps(legacy(product_type='Software', product_type_confidence='M')))
-    original = manual.content()
     [reused] = await profile.startup_profile('temp-manual-profile')
     assert reused.content() == report.content()
-    assert chat.await_count == calls
+    assert chat.await_count == 1
     assert manual.content() == original
 
-
 @pytest.mark.asyncio
-@pytest.mark.parametrize('retired', [False, True])
-async def test_legacy_manual_preserved_without_fake_provider_translation(workflow, retired):
-    manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
-    payload = legacy()
-    if retired: payload.update(product_type='Hardware', product_type_confidence='M')
-    manual.save(json.dumps(payload, indent=2))
-    original = manual.content()
-    [selected] = await module.startup_sector('example-co')
-    assert selected.path == manual.path
-    assert selected.content() == original
-    assert await module.startup_sector_as_dict('example-co') == legacy()
-    workflow.retrieve.assert_not_awaited()
-    workflow.generate.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize('content', ['{broken', json.dumps(legacy(sector='Unknown')),
+@pytest.mark.parametrize('content', ['{broken', json.dumps(legacy()), json.dumps(legacy(sector='Unknown')),
                                     json.dumps(legacy(unrelated='invalid'))])
 async def test_invalid_manual_raises_without_regeneration(workflow, content):
     manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
@@ -614,13 +595,13 @@ async def test_invalid_provider_rejected_before_preparation(workflow):
 @pytest.mark.asyncio
 async def test_independent_provider_files_and_caches(workflow):
     paths = set()
-    prefixes = set()
+    contexts = set()
     for provider in workflow.config['taxonomies']:
         [insight] = await module.startup_sector('example-co', provider=provider)
         paths.add(insight.path)
-        prefixes.add(workflow.generate.await_args.kwargs['cacheable_prompt_prefix'])
+        contexts.add(workflow.generate.await_args.args[0].split(workflow.config['llm_instructions'])[0])
     assert len(paths) == 4
-    assert len(prefixes) == 1
+    assert len(contexts) == 1
     assert workflow.generate.await_count == 4
     for provider in workflow.config['taxonomies']:
         await module.startup_sector('example-co', provider=provider)
@@ -679,8 +660,8 @@ async def test_provider_manual_precedes_old_combined_manual_and_generated_cache(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('old_payload', [legacy(), {'providers': {'pitchbook': {'invalid': True}}}])
-async def test_old_manual_without_requested_provider_allows_generation(workflow, old_payload):
+async def test_old_manual_without_requested_provider_allows_generation(workflow):
+    old_payload = {'providers': {'pitchbook': {'invalid': True}}}
     manual = InsightFile('example-co', 'startup_sector', 'manual', extension='json')
     manual.save(json.dumps(old_payload))
     original = manual.content()

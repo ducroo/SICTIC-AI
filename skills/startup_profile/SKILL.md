@@ -18,8 +18,6 @@ are **Primary-industry**, **Secondary-industries**, **Primary-technology** and
 The current Dealum reference has no subindustry hierarchy.
 Unresolved primary selections are shown as insufficient evidence; empty secondary
 lists are shown as "None selected".
-Legacy manual SICTIC classifications retain
-their explicit SICTIC label; they are not translated into Dealum industries.
 Product type is owned by dd_checks and is not added to this profile.
 The configured LLM framework covers oneliner, technology, business model and
 current challenges; it does not classify the startup.
@@ -34,10 +32,7 @@ Include the Dealum record, rendered classification bullet and profile
 configuration in config_key before checking generated-profile reuse; InsightFile
 owns hashing and freshness. Classification freshness belongs to startup_sector.
 Other providers are neither generated nor validated by this call; their failures
-or reference changes do not block or invalidate this profile. For a
-legacy manual SICTIC classification, include that legacy classification instead.
-Retired product-type fields in older manual classification files are ignored
-for profile rendering and freshness, without modifying those files.
+or reference changes do not block or invalidate this profile.
 Existing generated datasets bypass startup preparation and external imports;
 their profiles are saved within that generated dossier.
 
@@ -48,8 +43,7 @@ to its existing `datasets/` folder without resetting it. The skill accepts no
 file-input argument.
 
 Use `dataset_chat` with the four configured questions and prompt, then append
-the fifth classification bullet in Python (or the legacy SICTIC sector, with
-technologies explicitly unavailable). This adds no LLM call and no separate header.
+the fifth classification bullet in Python. This adds no LLM call and no separate header.
 The registry declares
 startup-sector as a prerequisite, using default Dealum; direct calls invoke the same public skill.
 Direct preparation may import Dealum source data.

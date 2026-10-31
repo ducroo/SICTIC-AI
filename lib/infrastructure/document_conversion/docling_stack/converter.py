@@ -12,6 +12,7 @@ from lib.infrastructure.document_conversion.docling_stack.docling import (
     convert_document_force_ocr,
 )
 from lib.infrastructure.document_conversion.docling_stack.pdf import (
+    bounded_pdf,
     repair_pdf,
 )
 from lib.infrastructure.document_conversion.docling_stack.rtf import convert_rtf
@@ -79,6 +80,9 @@ async def _scheduled_docling_call(
 
 def _execute_docling(*, filepath: str, force_ocr: bool) -> str:
     operation = convert_document_force_ocr if force_ocr else convert_with_docling
+    if Path(filepath).suffix.lower() == ".pdf":
+        with bounded_pdf(filepath) as prepared_path:
+            return operation(prepared_path)
     return operation(filepath)
 
 

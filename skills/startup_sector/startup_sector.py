@@ -11,7 +11,7 @@ from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, find_dataset_location
 from lib.datasets.search import dataset_search
 from lib.infrastructure.ai_text_generation import generate_json
-from lib.infrastructure.ai_text_generation.json import copy_schema, validate_json_schema
+from lib.infrastructure.ai_text_generation.json import validate_json_schema
 from lib.infrastructure.configuration import config_cache_key, load_repository_config
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile, InsightResult
@@ -25,7 +25,6 @@ from lib.storage import get_storage
 from .taxonomy import provider_record, response_schema, review_classification
 
 logger = get_logger(__name__)
-INSUFFICIENT_EVIDENCE = "insufficient evidence"
 
 
 def _application_proposition(dataset: str, fields: list[str]) -> str:
@@ -83,15 +82,6 @@ def _response_schema(config: dict, provider: str, *, manual: bool = False) -> di
 def _read_result(insight: InsightFile, config: dict, provider: str) -> dict[str, Any]:
     result = json.loads(insight.content())
     manual = insight.model == "manual"
-    if manual and isinstance(result, dict) and "sector" in result and provider == "dealum":
-        # Preserve old SICTIC decisions without relabelling them as Dealum.
-        result.pop("product_type", None)
-        result.pop("product_type_confidence", None)
-        schema = copy_schema(config["legacy_response_schema"])
-        schema["properties"]["sector"]["enum"] = [*config["sectors"], INSUFFICIENT_EVIDENCE]
-        validate_json_schema(result, schema, label=f"Legacy manual classification {insight.path}")
-        logger.info("[%s] Retaining legacy manual SICTIC classification; Dealum generation skipped.", insight.dataset)
-        return result
     if manual and not insight.subdir and isinstance(result, dict) and "providers" in result:
         # Only the requested provider matters; unrelated manual decisions cannot block it.
         result = result["providers"][provider]
@@ -117,15 +107,13 @@ def _manual_override(insight: InsightFile, provider: str) -> InsightFile | None:
     preferred = insight.find(selection="any")
     if preferred is not None and preferred.model == "manual":
         return preferred
-    # Read-only compatibility for the former combined/legacy manual path.
+    # Read-only compatibility for the former combined manual path.
     old = InsightFile(insight.dataset, "startup_sector", insight.model,
                       extension="json").find(selection="any")
     if old is None or old.model != "manual":
         return None
     payload = json.loads(old.content())
     if isinstance(payload, dict):
-        if "sector" in payload and provider != "dealum":
-            return None
         if isinstance(payload.get("providers"), dict) and provider not in payload["providers"]:
             return None
     return old
@@ -190,14 +178,13 @@ async def startup_sector(startup: str, provider: str = "dealum") -> InsightResul
             body = "\n\n---\n\n".join(passages)
         sections.append(f"## Evidence question: {query}\n\n{body}")
     evidence = "\n\n".join(sections)
-    prefix = f"Startup dataset: {dataset}\n\nSource evidence:\n{evidence}"
+    context = f"Startup dataset: {dataset}\n\nSource evidence:\n{evidence}"
     schema = response_schema(reference, config["response_schema"])
     if proposition or seen_chunk_ids:
-        prompt = (f"{config['llm_instructions']}\n\nProvider taxonomy:\n"
+        prompt = (f"{context}\n\n{config['llm_instructions']}\n\nProvider taxonomy:\n"
                   + json.dumps(reference, ensure_ascii=False))
         classified = await generate_json(
             prompt, schema, partial(review_classification, reference=reference),
-            cacheable_prompt_prefix=prefix,
         )
     else:
         logger.warning("[%s] No classification evidence retrieved.", dataset)

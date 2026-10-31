@@ -1,311 +1,297 @@
 # Submission Readiness
 
-## Submission provenance and usability
+## Minimum eligibility
 
-### Founder submission [ELIGIBILITY GATE]
+### Founder application [ELIGIBILITY GATE]
 
-Was the funding application submitted directly by a founder rather than an advisor, consultant, intermediary, or fundraising agent?
+Was the funding application submitted directly by a founder?
 
-Pass only with explicit founder status. Fail explicit non-founder submission and route to Rejected for other reason. Otherwise Unclear and request the applicant's role.
+An explicitly non-founder applicant, such as an advisor, consultant or
+fundraising agent, does not qualify. If the applicant's role is unknown,
+request clarification.
 
-**Keywords:** applicant contact founder role submitted by application contact.
+**Keywords:** applicant, application contact, founder, submitted by, fundraising agent
 
-### Application identity
+### Founder based in Switzerland [ELIGIBILITY GATE]
 
-Are the startup name, legal name, applicant name, founder role, email, country, city, website, and LinkedIn URL supplied and mutually coherent?
+Is at least one active founder based in Switzerland?
 
-Treat missing or conflicting identity fields as Unclear and request corrections.
+More founders based in Switzerland are preferable but not required.
+A Swiss company address alone does not establish a founder's location.
+Fail only when the submission confirms that no active founder is based
+in Switzerland.
 
-**Keywords:** name legal_name contact country address_city website linkedin.
+**Keywords:** founder, residence, work location, Switzerland, founders_commitments
 
-### Submitted Dealum record
+### Swiss company and equity investment [ELIGIBILITY GATE]
 
-Is there a populated Dealum application record with substantive answers rather than a draft-like, empty, placeholder, or test submission?
+Is the startup incorporated, or explicitly committed to incorporate before
+investment, as a stock corporation (AG/SA) in Switzerland?
 
-Fail only when the record explicitly establishes an empty or unusable submission; otherwise use Unclear for missing evidence.
+Will the proposed funding provide equity, or convert into equity, in that
+Swiss company?
 
-**Keywords:** Dealum Application answers application status placeholder test lorem ipsum.
+An entity that will remain outside Switzerland does not qualify, including
+one in Liechtenstein. A vague incorporation intention is Unclear.
+Financing without a path to equity does not qualify.
 
-### Pitch deck attachment
+Distinguish incorporation status from the remaining eligibility requirements.
+If the submission explicitly states that the company is not yet incorporated
+and gives a Swiss incorporation plan, accept those facts. Ask only about
+unresolved requirements, such as the AG/SA legal form or incorporation before
+investment. Do not ask the applicant to reconfirm its current incorporation status.
 
-Is a pitch deck attached through Dealum and retrievable as a readable document?
+**Keywords:** legal_name, company_registered, incorporation, AG, SA, Switzerland, equity, convertible, raise_instrument
 
-A bare URL with no retrievable submitted file is Unclear. An explicitly empty or corrupt attachment is Fail. Request a readable deck.
+### Committed operating team [ELIGIBILITY GATE]
 
-**Keywords:** pitch_deck pitch deck presentation attachment.
+Does the startup have at least one full-time active founder and at least
+one additional full-time operating co-founder or employee with a key role
+and equity participation?
 
-### Financial plan attachment
+Identify the qualifying people, their roles, commitments and equity
+participation. Advisors, consultants and planned hires do not count.
 
-Is the requested financial plan attached through Dealum and retrievable in a readable form?
+A solo founder may qualify through the exception for serial founders with
+a strong exit track record. Apply this exception only when the submitted
+evidence establishes that track record, and state that the exception was
+used. It does not waive other eligibility requirements.
 
-A confirmation without a retrievable file is Unclear. Request the missing or readable file.
+**Keywords:** founder, cofounder, employee, full-time, FTE, equity, shareholder, serial entrepreneur, exit, founders_commitments
 
-**Keywords:** sictic_financials sictic_confirm_financial_plan financial plan forecast budget spreadsheet attachment.
+### Innovative scalable component [ELIGIBILITY GATE]
 
-### Core answer coverage
+Does the submission explain an innovative technology, science or IP
+component that enables scalable business growth?
 
-Do the Dealum answers substantively cover problem, solution, business model, market, customers or users, team, technology, milestones, and funding request?
+A generic innovation claim without explanation is Unclear. Fail only when
+the submitted business explicitly lacks a qualifying component.
+Do not require proven scalability or assess competitive superiority.
 
-Do not judge persuasiveness. Identify fields that are empty, placeholders, or too indeterminate to screen.
+**Keywords:** technology, science, innovation, intellectual property, scalability, business_model_scalability
 
-**Keywords:** problem_summary solution_summary business_summary market_summary customers_and_users founders_commitments technologies road_map_next_milestone capital_seeking.
+### Company age [ELIGIBILITY GATE]
 
-## Swiss or Liechtenstein core
+Is the startup no more than five years old, measured from incorporation?
 
-### Core-team location [ELIGIBILITY GATE]
+An explicit statement that the startup is not yet incorporated passes this age
+check. Do not request an incorporation date or reconfirmation of that status.
+Assess the planned Swiss incorporation separately.
 
-Is the core team, including key C-level roles, based in Switzerland or Liechtenstein?
+For an incorporated company, use its incorporation date: no more than five years
+passes; more than five years fails. Missing or conflicting evidence is Unclear.
 
-Fail only when the submission confirms the entire core team is outside Switzerland and Liechtenstein; route to Rejected due to foreign country. Missing individual locations are Unclear.
+**Keywords:** incorporation date, registration date, founded, company_registered, company age
 
-**Keywords:** CEO CTO COO founder location residence work location Switzerland Swiss Liechtenstein.
+### Revenue potential [ELIGIBILITY GATE]
 
-### Core-team main activity [ELIGIBILITY GATE]
+Does the submission provide an understandable, internally coherent basis
+for reaching at least CHF 5m annual revenue within five years after
+investment?
 
-Does the evidence show that the core team works on the startup as its main activity?
+Existing revenue and proven scalability are not required. Unsupported
+assertions or insufficient forecasts are Unclear. Fail only when the
+submitted evidence explicitly indicates that the threshold will not
+be reached.
 
-Fail explicit absence of a qualifying full-time core team and route to Rejected for other reason. Otherwise request commitment percentages and other roles.
+**Keywords:** annual revenue, revenue forecast, five years, CHF 5m, financial plan, pricing, customers
 
-**Keywords:** founders_commitments full-time main activity FTE employment dedication side job.
+### Valuation [ELIGIBILITY GATE]
 
-### Swiss or Liechtenstein AG [ELIGIBILITY GATE]
+Is the proposed pre-money valuation no higher than CHF 8m?
 
-Is the startup incorporated, or does it explicitly commit to incorporate, as an AG in Switzerland or Liechtenstein?
+An explicit pre-money CHF valuation at or below CHF 8m passes.
+Above CHF 8m fails.
 
-A foreign entity without an explicit qualifying reincorporation commitment fails and routes to Rejected due to foreign country. A merely vague intention is Unclear.
+A post-money figure, range crossing the threshold, convertible valuation
+cap without a clear basis, or foreign-currency amount without a submitted
+CHF equivalent is Unclear. Request the applicable valuation and its basis.
 
-**Keywords:** company_registered registered legal_name legal form AG stock corporation incorporation country Switzerland Liechtenstein.
+**Keywords:** valuation, pre-money, post-money, CHF, valuation cap, convertible
 
-### Swiss equity issuer [ELIGIBILITY GATE]
+### Total round size [ELIGIBILITY GATE]
 
-Will the proposed investment be made against equity, or an equity-converting instrument, in a company registered in Switzerland?
+Is the total current investment round no higher than CHF 2m?
 
-Fail an explicitly non-equity financing or an issuer that will remain foreign; route foreign cases to Rejected due to foreign country and other cases to Rejected for other reason.
+Use an explicit total round target where available. Otherwise, interpret the
+amount sought together with amounts already raised in the current round. If the
+amount sought is explicitly the remaining ask, add amounts already raised or
+committed without double counting.
 
-**Keywords:** equity raise_instrument SAFE CLA convertible equity sharing Swiss company registered.
+Accept a stated range and assess its upper bound. Do not assume undisclosed
+commitments or request confirmation that none exist unless the submission
+indicates additional funding.
 
-## Team eligibility and completeness
+A clear total or upper bound at or below CHF 2m passes; a total above CHF 2m
+fails. Material ambiguity about amounts, round scope or currency is Unclear.
 
-### Non-solo operation [ELIGIBILITY GATE]
+**Keywords:** capital_seeking, capital_raised_current_round, total round, committed, remaining, CHF 2m
 
-Is the startup more than a one-person operation?
+## Submission completeness
 
-Fail an explicitly solo-operated startup and route to Rejected for other reason. A claimed team size without identifiable people is Unclear.
+### Identity and contact
 
-**Keywords:** team_size founder cofounder employee active team member.
+Are the startup name, legal entity or planned entity, incorporation status,
+applicant identity and founder contact details clear?
 
-### Qualifying second team member [ELIGIBILITY GATE]
+Are supplied addresses, website and LinkedIn links attributable to the
+same startup and people?
 
-Besides the submitting founder, is at least one other full-time, active team member identified with a key operating role and equity participation?
+A missing legal name is acceptable before incorporation if that status
+is explicit. A website or LinkedIn profile is not itself an eligibility
+requirement.
 
-Advisors and consultants do not qualify. Fail only when the submission explicitly confirms no qualifying second member; otherwise request name, role, FTE, location, and equity status.
+**Keywords:** startup name, legal_name, contact, email, address, website, LinkedIn, incorporation status
 
-**Keywords:** cofounder key role full-time active equity shareholder advisor consultant.
+### Usable application and attachments
 
-### Founder and team roster
+Is the Dealum application substantive and readable, with a readable pitch
+deck and financial plan submitted through Dealum?
 
-Are all founders and key team members named consistently across the Dealum form and pitch deck?
+Identify placeholders, empty submissions, inaccessible files and corrupt
+attachments. A confirmation that a file exists does not establish that
+it was submitted and is readable.
 
-Missing names, founders mentioned but not listed, or contradictory rosters are Unclear and require a corrected roster.
+A retrieval failure does not prove that the applicant omitted a file.
 
-**Keywords:** founders team management leadership pitch deck founders_commitments team_size.
+**Keywords:** Dealum Application, pitch_deck, attachment, sictic_financials, sictic_confirm_financial_plan, financial plan
 
-### Roles, location, commitment, and equity
+### Team background
 
-For each founder and key team member, are operating role, work location, commitment level, and equity participation clear?
+Are the founders and key operating team members identified, with enough
+relevant experience and achievements to understand their contributions?
 
-Do not infer these attributes from titles or team size.
+Distinguish current team members from planned hires and advisors.
+Full CVs are not required at submission. Assess disclosure of background,
+not team quality.
 
-**Keywords:** CEO CTO COO role location FTE commitment full-time equity shares options.
+**Keywords:** founders, management, team, experience, education, achievements, advisors, planned hires
 
-## Venture eligibility
+### Problem, solution and business model
 
-### Innovative scalable tech component [ELIGIBILITY GATE]
+Is it clear what problem the startup addresses, for whom, what it offers,
+who pays and how it earns revenue?
 
-Does the submission explicitly identify innovative technology, science, or IP that enables scalable business growth?
+Are the principal cost drivers and the proposed mechanism for scaling
+described?
 
-Fail only when the submission explicitly describes a non-tech, non-science, non-IP business with no qualifying component; route to Rejected for other reason. Generic claims without explanation are Unclear.
+Assess whether the explanation is understandable and sufficiently complete,
+not whether the business model is attractive.
 
-**Keywords:** technologies innovation science intellectual property IP scalability business_model_scalability.
+**Keywords:** problem_summary, solution_summary, business_summary, customers, pricing, revenue model, business_cost_structure, scalability
 
-### Incorporation age [ELIGIBILITY GATE]
+### Market and competition
 
-Is the startup no more than five years old measured from its incorporation date?
+Are the target market, geographic scope, market-size estimate and its
+basis, competing alternatives and claimed differentiation described?
 
-Calculate only from an explicit incorporation date. More than five years fails and routes to Rejected for other reason, even if operations started later; flag conflicting dates as Unclear.
+A market-size number without understandable units, scope or basis requires
+clarification. Do not require a particular market size or judge whether
+the differentiation is compelling.
 
-**Keywords:** registered incorporation date founded company age company_registered.
+**Keywords:** market_summary, market_estimation, market_unique_value, market size, geography, competition, alternatives
 
-### CHF 5M revenue potential [ELIGIBILITY GATE]
+### Go-to-market
 
-Does the submission contain enough explicit, internally coherent information to support a reasonable chance of at least CHF 5M yearly revenue within five years after investment?
+Does the submission explain how the startup intends to reach and acquire
+customers?
 
-This is an eligibility plausibility check, not investment-quality scoring. Unsupported assertions or missing forecasts are Unclear; fail only if the submitted forecast explicitly remains below the threshold.
+Identify the intended buyers, principal sales or distribution channels,
+and any material commercial partners on which the approach depends.
 
-**Keywords:** financial plan revenue forecast yearly revenue five years market size pricing customers scalability.
+An early-stage plan is acceptable. Assess whether the approach is described,
+not whether its effectiveness has already been demonstrated.
 
-## Funding-round eligibility and completeness
+**Keywords:** go-to-market, customer acquisition, sales, distribution, channels, commercial partners, buyers
 
-### Valuation cap [ELIGIBILITY GATE]
+### Product status, traction and milestones
 
-Is the startup's pre-money valuation no higher than CHF 8M?
+Are the current product or development status, measurable progress,
+customers or users, and relevant commercial results disclosed?
 
-Pass only with an explicit pre-money CHF valuation at or below CHF 8M. Above CHF 8M fails and routes to Rejected for other reason. A post-money value, valuation range, cap without clear basis, or foreign currency without submitted CHF equivalent is Unclear.
+Are the next material product, regulatory, commercial or hiring milestones
+and their timing stated?
 
-**Keywords:** valuation pre-money post-money CHF company valuation cap raise terms.
+Figures should identify their reporting periods where relevant.
+Explicitly being pre-product, pre-customer or pre-revenue is acceptable.
 
-### Round-size cap [ELIGIBILITY GATE]
+**Keywords:** product status, prototype, MVP, customers_and_users, revenue_mrr, accomplishment_summary, road_map_next_milestone, timeline
 
-Is the total current round size no higher than CHF 2M?
+### Financial information and assumptions
 
-Assess total round size, not only the amount still open. Above CHF 2M fails and routes to Rejected for other reason. Ambiguous amount or currency is Unclear.
+Does the financial plan provide available historical results and a forward
+view of revenue, major costs, staffing and cash needs?
 
-**Keywords:** capital_seeking capital_raised_current_round current round target total round size CHF.
+Are the forecast horizon and principal assumptions clear enough to
+understand the figures? Distinguish recurring from non-recurring revenue
+where relevant.
 
-### Funding ask reconciliation
+Do not request history from before the startup existed. Assess completeness
+and interpretability rather than the investment quality of the projections.
 
-Are total round size, amount already committed or raised, and amount still sought stated separately and mathematically coherent?
+**Keywords:** financial plan, actuals, forecast, revenue, recurring revenue, costs, staffing, FTE, cash flow, assumptions
 
-Show any arithmetic conflict; do not invent a definition for ambiguous fields.
+### Funding plan, use of funds and runway
 
-**Keywords:** capital_seeking capital_raised_current_round committed raised open remaining round.
+Are the round target or target range, funding already raised or committed,
+remaining ask, instrument and intended closing date understandable?
 
-### Instrument and equity path
+Accept amounts that follow directly from the submitted figures; they need not
+be stated separately. A target range is acceptable. Request reconciliation only
+where figures conflict or their meaning is materially ambiguous.
 
-Is the proposed funding instrument identified and is its path to equity in the Swiss issuer clear?
+Are previous financing and funding sources disclosed, or explicitly stated
+to be absent?
 
-Missing terms are Unclear. Apply the Swiss equity issuer gate separately from general financing completeness.
+Explain how proceeds will be spent, which milestones they fund, how long
+the funding is expected to last, and whether further financing will be
+needed to reach subsequent milestones or break-even.
 
-**Keywords:** raise_instrument equity shares SAFE CLA convertible note loan grant token.
+**Keywords:** capital_seeking, capital_raised_current_round, raise_instrument, round_close_date_intentions, investments_received, use of funds, runway, next round, break-even
 
-### Round timing
+### Known challenges and dependencies
 
-Is the intended closing date or fundraising timetable supplied and still current at the application or review date?
+Does the startup disclose its main known obstacles and material technical,
+commercial or third-party dependencies?
 
-An expired or contradictory date is Unclear unless the submission explicitly says the round is closed or inactive.
+Are its claimed IP or protection approach and any known ownership,
+licensing, legal or regulatory issues described?
 
-**Keywords:** round_close_date_intentions application date close date timeline fundraising active round.
+An explicit statement that no material issues are known is acceptable.
+The absence of formal IP protection does not itself make the submission
+incomplete.
 
-### Financing history
+Request disclosure, not a legal opinion, freedom-to-operate report,
+completed regulatory approval or other due-diligence evidence.
 
-Are previous equity funding, non-dilutive funding, investors or funding sources, and total investments received clearly disclosed and mutually consistent?
+**Keywords:** challenges, risks, dependencies, third parties, ip_protection_type, ownership, licensing, legal issues, regulatory requirements
 
-Do not require prior funding; require a clear zero or a coherent disclosure.
+### Application context
 
-**Keywords:** investments_received investments_received_has equity_funding_sources non_dilutive_funding_received financing history.
+If this is a repeat application, are the material changes since the previous
+application explained?
 
-## Business-information completeness
+Are stage, industry and technology classifications sufficiently consistent
+with the narrative for operational routing? Record any event preference.
 
-### Problem and solution
+Do not assume a previous application without evidence. Missing optional
+routing details, including event preference, should not block progression
+on their own.
 
-Are the problem, target user or customer, and proposed solution stated clearly enough to identify what is being solved and for whom?
+**Keywords:** sictic_already_applied, sictic_changes_since_last_application, company_stage, industries, technologies, sictic_pitch_event
 
-Assess screenability and completeness, not attractiveness.
+## Cross-document consistency
 
-**Keywords:** problem_summary solution_summary customers_and_users.
+### Consistency, freshness and understandability
 
-### Product, technology, and IP
+Do the Dealum application, pitch deck and financial plan provide a coherent
+account of the company, team, product, traction and funding?
 
-Are the product or service, enabling technologies, development status, and claimed IP or protection approach described?
+Are time-sensitive figures dated or attributable to reporting periods?
+Are material claims understandable to a non-specialist?
 
-A legitimate statement that no formal IP protection exists may still be complete.
+Account for different reporting periods and financing rounds before calling
+figures contradictory. Do not impose an arbitrary maximum document age or
+resolve conflicts by selecting the more favourable source.
 
-**Keywords:** solution technologies ip_protection_type product prototype patent software know-how.
-
-### Business model and scalability
-
-Are the revenue model, principal cost drivers, and scalability mechanism described?
-
-Do not score the model; identify information gaps.
-
-**Keywords:** business_summary business_types business_cost_structure business_model_scalability pricing revenue model.
-
-### Market and differentiation
-
-Are target market, market-size basis, competitive alternatives, and unique value proposition covered?
-
-A market-size number without method or units is Unclear.
-
-**Keywords:** market_summary market_estimation market_unique_value competition alternatives TAM SAM SOM.
-
-### Customers, traction, and revenue
-
-Are customers or users, relevant usage or commercial traction, current revenue or MRR, and notable accomplishments disclosed with dates or periods where applicable?
-
-Pre-revenue is acceptable if explicitly stated; do not equate zero traction with incompleteness.
-
-**Keywords:** customers_and_users revenue_mrr accomplishment_summary traction pilots LOI revenue users.
-
-### Roadmap and milestones
-
-Are the next material product, regulatory, commercial, hiring, or financing milestones and expected timing supplied?
-
-Request dates or sequencing when a milestone is too vague to screen.
-
-**Keywords:** road_map_next_milestone roadmap milestone timeline regulatory approval launch.
-
-### Classification fields
-
-Are company stage, company category, industry, business type, and technology classifications present and consistent with the narrative and deck?
-
-Treat taxonomy mismatch as Unclear, not as an eligibility failure.
-
-**Keywords:** company_stage company_category industries business_types technologies.
-
-### Prior SICTIC application
-
-If the startup applied previously, does it disclose the prior application and material changes since then?
-
-If it explicitly never applied, Pass. If prior application status is missing, use Unclear only when other evidence suggests a prior application.
-
-**Keywords:** sictic_already_applied sictic_changes_since_last_application reapplied changes improvements.
-
-### Event preference
-
-Is any specific SICTIC event preference supplied, or is it clear that no specific event was requested?
-
-This is an Ops-routing field, not an eligibility gate.
-
-**Keywords:** sictic_pitch_event event vertical SID preference.
-
-## Cross-document consistency and freshness
-
-### Legal and location consistency
-
-Are legal name, registration status, legal form, incorporation country, address, and team locations consistent across the application and attachments?
-
-Cite every conflicting source and request one corrected statement with supporting evidence.
-
-**Keywords:** legal_name registered company_registered country address pitch deck footer imprint.
-
-### Team consistency
-
-Are founder names, roles, team size, locations, commitment, and equity claims consistent across all submitted materials?
-
-Never resolve discrepancies by choosing the more favorable source.
-
-**Keywords:** founders_commitments team_size team slide founder role FTE equity.
-
-### Funding consistency
-
-Are valuation, round size, amount raised, amount sought, instrument, and closing date consistent across the Dealum form, deck, and financial plan?
-
-Identify whether values may refer to different rounds; if not explicit, use Unclear.
-
-**Keywords:** valuation capital_seeking capital_raised_current_round raise_instrument close date pitch deck financial plan.
-
-### Commercial and financial consistency
-
-Are customer, user, revenue, MRR, forecast, burn, and milestone figures consistent across the application, deck, and financial plan?
-
-Account for clearly labeled reporting periods; do not treat different dates as contradictions without checking them.
-
-**Keywords:** revenue_mrr customers users forecast financial plan pitch deck accomplishments.
-
-### Information freshness
-
-Are time-sensitive figures and claims dated or attributable to a reporting period recent enough to understand their status at review time?
-
-Do not impose a fixed maximum age. Mark Unclear when undated data could materially change eligibility or screening.
-
-**Keywords:** as of date current latest updated application date MRR customers valuation round.
+**Keywords:** consistency, discrepancy, reporting period, as of, updated, application, pitch deck, financial plan

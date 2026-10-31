@@ -1,3 +1,5 @@
+import copy
+
 import pytest
 
 from lib.storage import get_storage
@@ -10,11 +12,17 @@ from skills.startup_profile.__main__ import app
 
 @pytest.fixture(autouse=True)
 def classification_skill(mocker):
-    classification = {
-        "sector": "EnergyTech",
-        "sector_confidence": "H",
-        "rationale": "Energy equipment.", "evidence": ["Deck, page 1"],
-    }
+    from lib.infrastructure.configuration import load_repository_config
+    from skills.startup_sector.taxonomy import provider_record
+
+    reference = load_repository_config('startup_sector')['taxonomies']['dealum']
+    classification = provider_record({
+        'classifications': {
+            'industries': {'primary': 'energy', 'secondary': []},
+            'technologies': {'primary': None, 'secondary': []},
+        },
+        'confidence': 'H', 'rationale': 'Energy equipment.', 'evidence': ['Deck, page 1'],
+    }, reference)
     return mocker.patch(
         "skills.startup_profile.startup_profile.startup_sector_as_dict", return_value=classification,
     )
@@ -159,7 +167,7 @@ async def test_temporary_profile_is_saved_in_its_own_dossier(mock_env, mocker, m
 
     assert result.directory == location.insights_rel
     assert result.content().startswith("Temporary profile\n\n- **Classification:**\n")
-    assert "  - **SICTIC sector:** EnergyTech" in result.content()
+    assert "  - **Primary-industry:** Energy." in result.content()
     assert chat.await_args.kwargs["dataset_name"] == "temp-profile"
     prepare.assert_not_called()
     [reused] = await startup_profile("temp-profile")
@@ -204,14 +212,15 @@ async def test_classification_changes_invalidate_profile_and_failure_preserves_i
     assert chat.await_count == 1
     assert classification_skill.await_count == 2
 
-    revised = dict(classification_skill.return_value)
-    revised.update(sector="insufficient evidence", sector_confidence="L")
+    revised = copy.deepcopy(classification_skill.return_value)
+    revised["result"]["classifications"]["industries"]["primary"] = None
+    revised["result"]["confidence"] = "L"
     classification_skill.return_value = revised
     [changed] = await startup_profile("temp-profile")
     assert chat.await_count == 2
     assert changed.path == first.path
     assert changed.content() != original
-    assert "**SICTIC sector:** insufficient evidence" in changed.content()
+    assert "**Primary-industry:** Insufficient evidence" in changed.content()
     assert "**Product type:**" not in changed.content()
     assert "Core industry" not in chat.await_args.kwargs["prompt"]
 
