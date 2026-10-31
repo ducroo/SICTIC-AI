@@ -234,6 +234,15 @@ document, such as a 200-page shareholder agreement, from filling the whole
 context and hiding the cap table. Chunks above the cap are demoted rather than
 dropped, so the requested number of chunks is still returned.
 
+### Oversized PDF pages
+
+Before Docling conversion, pages whose longest side exceeds 1,440 PDF points
+are proportionally scaled in a temporary PDF. This bounds OCR images while
+preserving vector content, text, page rotation and the visible crop. Original
+source files are unchanged; ordinary pages are not scaled. The temporary copy
+is removed after conversion, including on failure. Scaling is logged, and
+Pillow's image-size protections remain enabled.
+
 ### Tables and spreadsheets
 
 A table that does not fit in one chunk loses its header on the first cut, and
