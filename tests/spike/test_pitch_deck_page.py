@@ -46,7 +46,7 @@ def test_report_renderer_marks_status_cells():
 
     assert "<h1>Pitch deck review</h1>" in html
     assert "<li>Fine. Clear.</li>" in html
-    assert 'class="status-critical"' in html
+    assert 'class="status-pill status-critical"' in html
     assert "Valuation cap" in html
 
 
@@ -68,7 +68,9 @@ async def test_upload_rejects_a_non_deck():
 
 
 @pytest.mark.asyncio
-async def test_review_form_returns_the_report(mocker):
+async def test_review_form_returns_the_report(monkeypatch, mocker):
+    monkeypatch.setenv("SPIKE_SERVE_UI", "1")
+
     async def fake_review(*, filename, payload):
         assert filename == "deck.pdf"
         assert payload == b"%PDF-1.4"
@@ -88,12 +90,42 @@ async def test_review_form_returns_the_report(mocker):
 
     assert response.status == 200
     assert "Review of deck.pdf" in text
-    assert 'class="status-fine"' in text
+    assert 'class="status-pill status-fine"' in text
     assert "Hosting sponsored by Safe Swiss Cloud" in text
     assert logo.status == 200
     assert b"<svg" in logo_body
     assert mark.status == 200
     assert missing.status == 404
+
+
+@pytest.mark.asyncio
+async def test_local_html_ui_hidden_unless_enabled(monkeypatch):
+    monkeypatch.delenv("SPIKE_SERVE_UI", raising=False)
+    app = create_app()
+    async with TestClient(TestServer(app)) as client:
+        root = await client.get("/")
+        root_body = await root.json()
+        static = await client.get("/static/sictic-logo.svg")
+        health = await client.get("/healthz")
+
+    assert root.status == 404
+    assert root_body["ui"] == "https://review.sictic.ch"
+    assert static.status == 404
+    assert health.status == 200
+
+
+@pytest.mark.asyncio
+async def test_local_html_ui_served_when_enabled(monkeypatch):
+    monkeypatch.setenv("SPIKE_SERVE_UI", "1")
+    app = create_app()
+    async with TestClient(TestServer(app)) as client:
+        root = await client.get("/")
+        text = await root.text()
+        logo = await client.get("/static/sictic-logo.svg")
+
+    assert root.status == 200
+    assert "Check your pitch deck" in text
+    assert logo.status == 200
 
 
 @pytest.mark.asyncio
@@ -135,7 +167,9 @@ async def test_review_start_follows_extract_then_review(mocker, cleanup_fails, c
 
 
 @pytest.mark.asyncio
-async def test_review_start_returns_the_same_working_message(mocker):
+async def test_review_start_returns_the_same_working_message(monkeypatch, mocker):
+    monkeypatch.setenv("SPIKE_SERVE_UI", "1")
+
     async def fake_review(*, filename, payload, on_progress=None):
         if on_progress:
             on_progress("extract")

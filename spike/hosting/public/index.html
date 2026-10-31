@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check your pitch deck · SICTIC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #bc2132;
+      --ink: #212529;
+      --muted: #607382;
+      --line: #d2d6dc;
+      --paper: #f6f6f6;
+      --card: #fff;
+      --green: #0b6e4f;
+      --blue: #0070ad;
+      --orange: #b85f00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Figtree, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    a { color: var(--red); }
+    header {
+      background: var(--card);
+      border-bottom: 4px solid var(--red);
+    }
+    .bar {
+      padding: 0.9rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      max-width: 72rem;
+      margin: 0 auto;
+    }
+    .brand img { height: 36px; width: auto; display: block; }
+    .session {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .session button {
+      width: auto;
+      padding: 0.55rem 0.85rem;
+      font-size: 0.9rem;
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .session button:hover { background: #f6f6f6; }
+    .nav-link {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .nav-link:hover { color: var(--red); }
+    main {
+      padding: 2rem 1.25rem 3rem;
+      max-width: 72rem;
+      margin: 0 auto;
+    }
+    h1, h2, h3 {
+      font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
+      line-height: 1.2;
+    }
+    h1 { font-size: 2rem; margin: 0 0 0.75rem; }
+    .lead { font-size: 1.05rem; max-width: 40rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      padding: 1.25rem;
+      margin-top: 1.5rem;
+    }
+    label { display: block; font-weight: 600; margin-bottom: 0.35rem; }
+    input[type=file] { display: block; width: 100%; }
+    .hint { color: var(--muted); margin: 0.4rem 0 1rem; }
+    .check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      margin: 0 0 1rem;
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .check-row input {
+      margin-top: 0.25rem;
+      width: auto;
+      flex: 0 0 auto;
+    }
+    .check-row span { display: block; }
+    .check-row .hint { margin: 0.25rem 0 0; font-weight: 400; }
+    button {
+      background: var(--red);
+      color: #fff;
+      border: 0;
+      font: 600 1rem/1 Figtree, Helvetica, Arial, sans-serif;
+      padding: 0.85rem 1.2rem;
+      cursor: pointer;
+    }
+    button:hover { background: #a41c2b; }
+    button:disabled {
+      background: #607382;
+      cursor: not-allowed;
+    }
+    .working {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+    .steps {
+      list-style: none;
+      margin: 0.75rem 0 0;
+      padding: 0;
+    }
+    .steps li {
+      padding: 0.35rem 0 0.35rem 0.8rem;
+      border-left: 3px solid var(--line);
+      color: var(--muted);
+    }
+    .steps li.current {
+      border-left-color: var(--red);
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .steps li.done {
+      border-left-color: var(--green);
+      color: var(--green);
+    }
+    .elapsed { color: var(--muted); margin: 0.4rem 0 0; }
+    .error { color: var(--red); font-weight: 600; }
+
+    .report-shell { margin-top: 2rem; }
+    .report-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: flex-end;
+      margin-bottom: 0.85rem;
+    }
+    .report-actions button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .report-actions button.secondary:hover { background: #f6f6f6; }
+    .report-document {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--red);
+      padding: 1.75rem 1.5rem 2rem;
+      box-shadow: 0 8px 28px rgba(33, 37, 41, 0.06);
+    }
+    .report-masthead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.25rem;
+      padding-bottom: 1.25rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .report-logo { height: 42px; width: auto; display: block; }
+    .report-kicker {
+      margin: 0 0 0.25rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .report-masthead h2 {
+      margin: 0;
+      font-size: 1.45rem;
+    }
+    .report-body h1 {
+      font-size: 1.55rem;
+      margin: 0 0 1rem;
+    }
+    .report-body h2 {
+      font-size: 1.2rem;
+      margin: 1.75rem 0 0.65rem;
+      padding-bottom: 0.35rem;
+      border-bottom: 2px solid #f0d5d8;
+    }
+    .report-body h3 {
+      font-size: 1.05rem;
+      margin: 1.25rem 0 0.5rem;
+    }
+    .report-body p,
+    .report-body ul {
+      max-width: 52rem;
+    }
+    .report-body ul {
+      padding-left: 1.2rem;
+    }
+    .report-body li { margin: 0.35rem 0; }
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--line);
+      overflow-x: auto;
+      margin: 1rem 0 0.5rem;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 0;
+      table-layout: fixed;
+      font-size: 0.88rem;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 0.55rem 0.5rem;
+      border-bottom: 1px solid var(--line);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    /* No / Check / Status stay compact; text columns take the rest. */
+    th:nth-child(1), td:nth-child(1) { width: 3.5%; }
+    th:nth-child(2), td:nth-child(2) { width: 11%; }
+    th:nth-child(3), td:nth-child(3) { width: 7.5%; }
+    th:nth-child(4), td:nth-child(4) { width: 28%; }
+    th:nth-child(5), td:nth-child(5) { width: 25%; }
+    th:nth-child(6), td:nth-child(6) { width: 25%; }
+    thead th {
+      background: #fafafa;
+      font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    tbody tr:nth-child(even) { background: #fcfcfc; }
+    tbody tr:hover { background: #fff7f8; }
+    .status-pill {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.3;
+      white-space: nowrap;
+    }
+    .status-fine { color: var(--green); background: #e8f6f0; }
+    .status-sufficient { color: var(--blue); background: #e8f3fa; }
+    .status-borderline { color: var(--orange); background: #fff1e0; }
+    .status-critical { color: var(--red); background: #fdecee; }
+    .status-missing { color: var(--muted); background: #eef1f4; }
+    .report-footnote {
+      margin: 1.75rem 0 0;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    footer {
+      background: var(--card);
+      border-top: 1px solid var(--line);
+    }
+    .sponsor {
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      color: var(--muted);
+      max-width: 72rem;
+      margin: 0 auto;
+    }
+    .sponsor-logo {
+      background: #4b5563;
+      padding: 0.45rem 0.7rem;
+      line-height: 0;
+    }
+    .sponsor-logo img { height: 32px; width: auto; display: block; }
+    @media (max-width: 640px) {
+      h1 { font-size: 1.6rem; }
+      button { width: 100%; }
+      .report-actions button { width: auto; }
+      .report-masthead { flex-direction: column; align-items: flex-start; }
+      .sponsor { align-items: flex-start; flex-direction: column; }
+    }
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body { background: #fff; color: #000; }
+      /* Only the site chrome — do not hide .report-masthead (logo + title). */
+      body > header,
+      body > footer,
+      .card,
+      .lead,
+      main > h1,
+      main > p,
+      .report-actions,
+      #auth-loading {
+        display: none !important;
+      }
+      main { padding: 0; max-width: none; }
+      .report-shell { margin: 0; }
+      .report-document {
+        border: 0;
+        box-shadow: none;
+        padding: 0;
+      }
+      .report-masthead {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .report-logo {
+        height: 34px;
+        width: auto;
+        display: block !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .table-wrap { overflow: visible; }
+      table { font-size: 0.7rem; }
+      th, td { padding: 0.3rem 0.35rem; }
+      th:nth-child(1), td:nth-child(1) { width: 3.5%; }
+      th:nth-child(2), td:nth-child(2) { width: 11%; }
+      th:nth-child(3), td:nth-child(3) { width: 7.5%; }
+      th:nth-child(4), td:nth-child(4) { width: 28%; }
+      th:nth-child(5), td:nth-child(5) { width: 25%; }
+      th:nth-child(6), td:nth-child(6) { width: 25%; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+      .status-pill {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand" href="https://www.sictic.ch/">
+        <img src="/static/sictic-logo.svg" alt="SICTIC">
+      </a>
+      <div class="session" id="session" hidden>
+        <a class="nav-link" href="/privacy.html" target="_blank" rel="noopener">Privacy notice</a>
+        <span id="session-email"></span>
+        <button type="button" id="sign-out">Sign out</button>
+      </div>
+    </div>
+  </header>
+  <main id="app-main" hidden>
+    <h1>Check your pitch deck</h1>
+    <p class="lead">Upload the deck you would send to SICTIC. The review reads it against the jury criteria and the investment criteria published for startups that want to pitch at an Investor Day. This is a document check. It is not a jury decision, and it does not submit an application.</p>
+    <p><a href="https://www.sictic.ch/startups/">Read the criteria on sictic.ch</a></p>
+    <form class="card" id="review-form">
+      <p class="error" id="error" hidden role="alert"></p>
+      <label for="deck">Pitch deck</label>
+      <input id="deck" name="deck" type="file" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+      <p class="hint">PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.</p>
+      <label class="check-row" for="email-results">
+        <input id="email-results" name="email_results" type="checkbox" value="1" checked>
+        <span>
+          Send the results to my email
+          <span class="hint" id="email-results-hint">We’ll send the PDF report when the review finishes. You can close this window.</span>
+        </span>
+      </label>
+      <button type="submit" id="submit">Review this deck</button>
+      <div id="working" class="working" hidden>
+        <p id="working-message">We're working on your deck.</p>
+        <p id="elapsed" class="elapsed">Elapsed 0:00</p>
+        <ol class="steps">
+          <li data-step="receive">1. Receive the deck</li>
+          <li data-step="extract">2. Extract the text</li>
+          <li data-step="review">3. Review the deck</li>
+          <li data-step="report">4. Prepare the report</li>
+        </ol>
+      </div>
+    </form>
+    <div id="report"></div>
+  </main>
+  <p class="lead" id="auth-loading" style="padding: 2rem 1.25rem;">Checking sign-in…</p>
+  <footer>
+    <div class="sponsor">
+      <span>Hosting sponsored by Safe Swiss Cloud</span>
+      <a class="sponsor-logo" href="https://safeswisscloud.com/">
+        <img src="/static/safe-swiss-cloud-logo.svg" alt="Safe Swiss Cloud">
+      </a>
+    </div>
+  </footer>
+  <script src="/config.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

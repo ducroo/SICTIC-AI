@@ -14,6 +14,13 @@ unless they change it.
 If accepted, use the [send_gmail](skills/send_gmail/SKILL.md) skill to send the
 complete insight in the email body. This includes deep-dive invitations.
 
+### Pitch deck review emails (`gws` on the VPS)
+
+Product emails for completed reviews are separate from insight emails. They are
+sent by the review API when `SPIKE_EMAIL_REPORTS=1`, using `gws gmail +send`.
+Setup (install, OAuth export, Cursor Cloud notes) lives in
+[spike/SETUP.md](spike/SETUP.md#email-reports-via-gws-optional-testing).
+
 ## Developing the toolkit
 
 Apply this section when creating, modifying or reviewing repository code,

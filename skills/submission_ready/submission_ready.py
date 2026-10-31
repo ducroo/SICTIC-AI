@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, TypeVar
@@ -45,6 +46,11 @@ IN_SCOPE_STAGES = {
     "under review": "Under review",
 }
 MAX_ATTEMPTS = 3
+SEND_CONCERNS_ACTION = "Send concerns to startup"
+# Line prefix of the proposed action in the rendered response report.
+PROPOSED_ACTION_PREFIX = "- Proposed action: "
+ELIGIBILITY_HEADING = "## Eligibility concerns"
+MISSING_INFORMATION_HEADING = "## Missing or inconsistent information"
 
 T = TypeVar("T")
 
@@ -172,7 +178,7 @@ def _review_proposed_action(output: dict | list) -> Review[dict | list]:
         result["missing_or_inconsistent_information"]
     )
     problems = []
-    if result["proposed_action"] == "Send concerns to startup" and not concern_count:
+    if result["proposed_action"] == SEND_CONCERNS_ACTION and not concern_count:
         problems.append("Sending concerns requires at least one stated concern.")
     return Review(result, tuple(problems))
 
@@ -184,11 +190,11 @@ def _specialize_proposed_action_schema(
     allowed_actions = {
         "Application": [
             "Move to Under review",
-            "Send concerns to startup",
+            SEND_CONCERNS_ACTION,
         ],
         "Under review": [
             "Move to Jury",
-            "Send concerns to startup",
+            SEND_CONCERNS_ACTION,
         ],
     }.get(stage, ["Assessment only"])
     specialized = copy_schema(response_schema)
@@ -260,13 +266,49 @@ def _render_proposed_action(
     return (
         "# Proposed action\n\n"
         f"- Current stage: {stage}\n"
-        f"- Proposed action: {result['proposed_action']}\n"
+        f"{PROPOSED_ACTION_PREFIX}{result['proposed_action']}\n"
         f"- Rationale: {result['rationale']}\n\n"
-        "## Eligibility concerns\n\n"
+        f"{ELIGIBILITY_HEADING}\n\n"
         f"{_render_concerns(result['eligibility_concerns'])}\n\n"
-        "## Missing or inconsistent information\n\n"
+        f"{MISSING_INFORMATION_HEADING}\n\n"
         f"{_render_concerns(result['missing_or_inconsistent_information'])}\n"
     )
+
+
+def proposed_action(response_report: str) -> str | None:
+    """Return the proposed action from a rendered response report.
+
+    Returns None when the report has no proposed-action line, for example a
+    manually written report.
+    """
+    for line in response_report.splitlines():
+        if line.startswith(PROPOSED_ACTION_PREFIX):
+            return line.removeprefix(PROPOSED_ACTION_PREFIX).strip()
+    return None
+
+
+def stated_concerns(response_report: str) -> tuple[list[str], list[str]]:
+    """Return the eligibility concerns and the missing or inconsistent information.
+
+    Reads the numbered items of both sections of a rendered response report.
+    """
+    sections: dict[str, list[str]] = {
+        ELIGIBILITY_HEADING: [],
+        MISSING_INFORMATION_HEADING: [],
+    }
+    current: list[str] | None = None
+    for line in response_report.splitlines():
+        if line.startswith("## "):
+            current = sections.get(line.strip())
+            continue
+        item = re.match(r"^\d+\.\s+(.+)$", line)
+        if current is not None and item:
+            current.append(item.group(1).strip())
+        elif current and line.strip():
+            # Preserve wrapped text, sub-bullets and qualifications belonging
+            # to the preceding concern, including unindented continuation lines.
+            current[-1] += "\n" + line.rstrip()
+    return sections[ELIGIBILITY_HEADING], sections[MISSING_INFORMATION_HEADING]
 
 
 def _resolve_candidates(

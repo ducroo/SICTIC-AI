@@ -12,6 +12,22 @@ from pathlib import Path
 from aiohttp import web
 
 from lib.infrastructure.logging import get_logger
+from spike.app_check import (
+    HEADER_NAME as APP_CHECK_HEADER,
+    app_check_required,
+    firebase_project_id,
+    token_from_headers,
+    verify_app_check_token,
+)
+from spike.auth import (
+    AUTH_HEADER,
+    auth_required,
+    id_token_from_headers,
+    verify_id_token,
+)
+from spike.email_report import email_reports_enabled, send_report_email
+from spike.purge_auth_users import DEFAULT_RETENTION_DAYS, purge_auth_users_older_than
+from spike.report_pdf import render_report_pdf
 from spike.runtime import (
     SpikeStatus,
     check_pitch_deck_upload,
@@ -23,6 +39,14 @@ from spike.runtime import (
 )
 
 logger = get_logger(__name__)
+
+DEFAULT_CORS_ORIGINS = (
+    "https://review.sictic.ch",
+    "https://review-deck-a3c26.web.app",
+    "https://review-deck-a3c26.firebaseapp.com",
+)
+PROTECTED_API_PREFIXES = ("/api/review",)
+PUBLIC_UI_ORIGIN = "https://review.sictic.ch"
 
 
 @dataclass(frozen=True)
@@ -100,9 +124,14 @@ def _table(lines: list[str]) -> str:
         rendered = []
         for index, cell in enumerate(cells):
             status_class = _STATUS_CLASS.get(cell, "")
-            class_attr = f' class="{status_class}"' if status_class else ""
             tag = "th" if index == 0 else "td"
-            rendered.append(f"<{tag}{class_attr}>{_inline(cell)}</{tag}>")
+            if status_class:
+                rendered.append(
+                    f'<{tag}><span class="status-pill {status_class}">'
+                    f"{_inline(cell)}</span></{tag}>"
+                )
+            else:
+                rendered.append(f"<{tag}>{_inline(cell)}</{tag}>")
         body_html.append("<tr>" + "".join(rendered) + "</tr>")
     return (
         '<div class="table-wrap"><table><thead><tr>'
@@ -288,11 +317,20 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
     th:nth-child(4), td:nth-child(4) {{ width: 34%; }}
     th:nth-child(5), td:nth-child(5) {{ width: 16%; }}
     thead th {{ background: #f6f6f6; }}
-    .status-fine {{ color: #0b6e4f; font-weight: 600; }}
-    .status-sufficient {{ color: #0070ad; font-weight: 600; }}
-    .status-borderline {{ color: #f17e00; font-weight: 600; }}
-    .status-critical {{ color: var(--red); font-weight: 600; }}
-    .status-missing {{ color: var(--muted); font-weight: 600; }}
+    .status-pill {{
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      line-height: 1.3;
+      white-space: nowrap;
+    }}
+    .status-fine {{ color: #0b6e4f; background: #e8f6f0; }}
+    .status-sufficient {{ color: #0070ad; background: #e8f3fa; }}
+    .status-borderline {{ color: #b85f00; background: #fff1e0; }}
+    .status-critical {{ color: var(--red); background: #fdecee; }}
+    .status-missing {{ color: var(--muted); background: #eef1f4; }}
     footer {{
       background: var(--card);
       border-top: 1px solid var(--line);
@@ -420,6 +458,24 @@ def _health_payload(status: SpikeStatus) -> dict:
     }
 
 
+def serve_ui_enabled() -> bool:
+    """Local HTML UI on this host. Off by default; public UI is Firebase Hosting."""
+    value = (os.environ.get("SPIKE_SERVE_UI") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _is_local_ui_path(path: str) -> bool:
+    if path == "/":
+        return True
+    if path.startswith("/static/"):
+        return True
+    if path == "/review" or path.startswith("/review/"):
+        return True
+    if path == "/demo":
+        return True
+    return False
+
+
 async def handle_index(_request: web.Request) -> web.Response:
     return web.Response(text=render_page(), content_type="text/html")
 
@@ -434,18 +490,78 @@ async def handle_static(request: web.Request) -> web.Response:
 
 
 class ReviewJob:
-    def __init__(self, job_id: str, filename: str) -> None:
+    def __init__(
+        self,
+        job_id: str,
+        filename: str,
+        recipient_email: str = "",
+        *,
+        email_requested: bool = False,
+    ) -> None:
         self.id = job_id
         self.filename = filename
+        self.recipient_email = recipient_email
+        self.email_requested = email_requested
         self.step = "receive"
         self.started = time.monotonic()
         self.done = False
         self.error = ""
         self.report = ""
         self.status = 200
+        self.email_sent = False
+        self.email_error = ""
+        self.pdf_bytes = b""
+        self.pdf_error = ""
 
 
 _jobs: dict[str, ReviewJob] = {}
+
+
+def _truthy_form_flag(post, name: str) -> bool:
+    raw = post.get(name)
+    if raw is None:
+        return False
+    if hasattr(raw, "file"):
+        return False
+    text = str(raw).strip().lower()
+    return text in {"1", "true", "yes", "on"}
+
+
+def _build_report_artifacts(job: ReviewJob) -> None:
+    report_html = render_report(job.report)
+    try:
+        job.pdf_bytes = render_report_pdf(
+            deck_filename=job.filename,
+            report_body_html=report_html,
+        )
+    except Exception as error:
+        job.pdf_error = str(error)
+        logger.exception("Failed to build PDF for review %s", job.id)
+
+    if not job.email_requested:
+        return
+    if not email_reports_enabled():
+        job.email_error = "Email delivery is not enabled on this host."
+        return
+    if not job.recipient_email:
+        job.email_error = "No signed-in email address was available."
+        return
+    try:
+        send_report_email(
+            to_email=job.recipient_email,
+            deck_filename=job.filename,
+            report_markdown=job.report,
+            report_html=report_html,
+            pdf_bytes=job.pdf_bytes or None,
+        )
+        job.email_sent = True
+    except Exception as error:
+        job.email_error = str(error)
+        logger.exception(
+            "Failed to email review %s to %s",
+            job.id,
+            job.recipient_email,
+        )
 
 
 def _job_status(job: ReviewJob) -> dict:
@@ -475,10 +591,19 @@ def _job_status(job: ReviewJob) -> dict:
         "error": job.error,
     }
     if job.done and not job.error:
+        label = escape(job.filename)
         body["report_html"] = (
-            f'<section class="report"><h2>Review of {escape(job.filename)}</h2>'
+            f'<section class="report" data-deck="{label}">'
+            f"<h2>Review of {label}</h2>"
             f"{render_report(job.report)}</section>"
         )
+        body["deck_filename"] = job.filename
+        body["email_requested"] = job.email_requested
+        if job.email_requested or job.email_sent or job.email_error:
+            body["email_sent"] = job.email_sent
+            if job.email_error:
+                body["email_error"] = job.email_error
+        body["pdf_ready"] = bool(job.pdf_bytes)
     return body
 
 
@@ -509,6 +634,7 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
         )
         job.step = "report"
         job.done = True
+        await asyncio.to_thread(_build_report_artifacts, job)
     except ValueError as error:
         job.error = str(error)
         job.status = 400
@@ -521,7 +647,8 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
 
 
 async def handle_review_start(request: web.Request) -> web.Response:
-    filename, payload = _upload_file(await request.post())
+    post = await request.post()
+    filename, payload = _upload_file(post)
     if not filename or not payload:
         return web.json_response(
             {"error": "Choose a PDF or PowerPoint pitch deck."},
@@ -532,7 +659,15 @@ async def handle_review_start(request: web.Request) -> web.Response:
     except ValueError as error:
         return web.json_response({"error": str(error)}, status=400)
     _prune_jobs()
-    job = ReviewJob(uuid.uuid4().hex, filename)
+    claims = request.get("firebase_claims") or {}
+    recipient = str(claims.get("email") or "").strip()
+    email_requested = _truthy_form_flag(post, "email_results")
+    job = ReviewJob(
+        uuid.uuid4().hex,
+        filename,
+        recipient_email=recipient,
+        email_requested=email_requested,
+    )
     _jobs[job.id] = job
     asyncio.create_task(_finish_job(job, filename, payload))
     return web.json_response(_job_status(job))
@@ -543,6 +678,29 @@ async def handle_review_status(request: web.Request) -> web.Response:
     if job is None:
         return web.json_response({"error": "That review is no longer available."}, status=404)
     return web.json_response(_job_status(job))
+
+
+async def handle_review_pdf(request: web.Request) -> web.Response:
+    job = _jobs.get(request.match_info["job_id"])
+    if job is None:
+        return web.json_response({"error": "That review is no longer available."}, status=404)
+    if not job.done or job.error:
+        return web.json_response({"error": "The review PDF is not ready yet."}, status=409)
+    if not job.pdf_bytes:
+        detail = job.pdf_error or "The review PDF could not be generated."
+        return web.json_response({"error": detail}, status=503)
+    safe = "".join(
+        char if char.isalnum() or char in "._-" else "_"
+        for char in Path(job.filename).stem
+    ).strip("._") or "pitch-deck"
+    filename = f"{safe}-sictic-review.pdf"
+    return web.Response(
+        body=job.pdf_bytes,
+        content_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 async def handle_review(request: web.Request) -> web.Response:
@@ -651,6 +809,79 @@ async def handle_api_skill(request: web.Request) -> web.Response:
     return web.json_response(asdict(result))
 
 
+async def handle_api_review_start(request: web.Request) -> web.Response:
+    """REST alias for the upload job. Same body and response as /review/start."""
+    return await handle_review_start(request)
+
+
+async def handle_api_review_status(request: web.Request) -> web.Response:
+    """REST alias for the job status poll."""
+    return await handle_review_status(request)
+
+
+async def handle_api_review_pdf(request: web.Request) -> web.Response:
+    """Download the generated PDF for a finished review job."""
+    return await handle_review_pdf(request)
+
+
+def _admin_token() -> str:
+    return (os.environ.get("SPIKE_ADMIN_TOKEN") or "").strip()
+
+
+def _require_admin(request: web.Request) -> web.Response | None:
+    expected = _admin_token()
+    if not expected:
+        return web.json_response(
+            {"error": "SPIKE_ADMIN_TOKEN is not configured."},
+            status=503,
+        )
+    provided = (request.headers.get("X-Spike-Admin-Token") or "").strip()
+    if provided != expected:
+        return web.json_response({"error": "Admin token is invalid."}, status=401)
+    return None
+
+
+async def handle_api_purge_auth_users(request: web.Request) -> web.Response:
+    """Delete Firebase Auth profiles older than the retention window."""
+    denied = _require_admin(request)
+    if denied is not None:
+        return denied
+    dry_run = False
+    days = DEFAULT_RETENTION_DAYS
+    if request.can_read_body:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            dry_run = bool(body.get("dry_run"))
+            if body.get("days") is not None:
+                try:
+                    days = int(body["days"])
+                except (TypeError, ValueError):
+                    return web.json_response({"error": "days must be an integer."}, status=400)
+    try:
+        result = await asyncio.to_thread(
+            purge_auth_users_older_than,
+            days=days,
+            dry_run=dry_run,
+        )
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    except Exception as error:
+        logger.exception("Auth user purge failed.")
+        return web.json_response({"error": str(error)}, status=500)
+    return web.json_response(
+        {
+            "retention_days": result.retention_days,
+            "scanned": result.scanned,
+            "deleted": result.deleted,
+            "dry_run": result.dry_run,
+            "deleted_emails": list(result.deleted_emails),
+        }
+    )
+
+
 ROUTES = (
     web.get("/", handle_index),
     web.get("/static/{name}", handle_static),
@@ -662,11 +893,113 @@ ROUTES = (
     web.get("/api/status", handle_api_status),
     web.post("/api/demo", handle_api_demo),
     web.post("/api/skill", handle_api_skill),
+    web.post("/api/review", handle_api_review_start),
+    web.get("/api/review/{job_id}", handle_api_review_status),
+    web.get("/api/review/{job_id}/pdf", handle_api_review_pdf),
+    web.post("/api/admin/purge-auth-users", handle_api_purge_auth_users),
 )
 
 
+def cors_origins() -> frozenset[str]:
+    configured = (os.environ.get("SPIKE_CORS_ORIGINS") or "").strip()
+    if configured:
+        return frozenset(part.strip() for part in configured.split(",") if part.strip())
+    return frozenset(DEFAULT_CORS_ORIGINS)
+
+
+def _apply_cors(request: web.Request, response: web.StreamResponse) -> web.StreamResponse:
+    origin = request.headers.get("Origin", "").strip()
+    if origin and origin in cors_origins():
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Headers"] = (
+            f"Content-Type, {APP_CHECK_HEADER}, {AUTH_HEADER}"
+        )
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+@web.middleware
+async def cors_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS" and request.path.startswith("/api/"):
+        response = web.Response(status=204)
+        return _apply_cors(request, response)
+    response = await handler(request)
+    return _apply_cors(request, response)
+
+
+@web.middleware
+async def local_ui_middleware(request: web.Request, handler):
+    """Hide the on-host HTML UI unless SPIKE_SERVE_UI is enabled."""
+    if serve_ui_enabled() or not _is_local_ui_path(request.path):
+        return await handler(request)
+    if request.path == "/":
+        return web.json_response(
+            {
+                "service": "sictic-review-api",
+                "ui": PUBLIC_UI_ORIGIN,
+                "error": "The HTML UI is not served on this host. Use the public site.",
+            },
+            status=404,
+        )
+    raise web.HTTPNotFound()
+
+
+def _path_requires_api_auth(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in PROTECTED_API_PREFIXES)
+
+
+@web.middleware
+async def app_check_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    if not _path_requires_api_auth(request.path):
+        return await handler(request)
+    if not app_check_required():
+        return await handler(request)
+    token = token_from_headers(request.headers)
+    try:
+        verify_app_check_token(token, project_id=firebase_project_id())
+    except ValueError as error:
+        return _apply_cors(
+            request,
+            web.json_response({"error": str(error)}, status=401),
+        )
+    return await handler(request)
+
+
+@web.middleware
+async def auth_middleware(request: web.Request, handler):
+    if request.method == "OPTIONS":
+        return await handler(request)
+    if not _path_requires_api_auth(request.path):
+        return await handler(request)
+    if not auth_required():
+        return await handler(request)
+    token = id_token_from_headers(request.headers)
+    try:
+        request["firebase_claims"] = verify_id_token(
+            token,
+            project_id=firebase_project_id(),
+        )
+    except ValueError as error:
+        return _apply_cors(
+            request,
+            web.json_response({"error": str(error)}, status=401),
+        )
+    return await handler(request)
+
+
 def create_app() -> web.Application:
-    app = web.Application(client_max_size=32 * 1024 * 1024)
+    app = web.Application(
+        client_max_size=32 * 1024 * 1024,
+        middlewares=(
+            cors_middleware,
+            local_ui_middleware,
+            app_check_middleware,
+            auth_middleware,
+        ),
+    )
     app.add_routes(ROUTES)
     return app
 

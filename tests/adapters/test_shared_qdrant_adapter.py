@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date
 from types import SimpleNamespace
 
 import pytest
@@ -103,7 +102,7 @@ def clear_layout_cache():
     qdrant_module._checked_layouts.clear()
 
 
-def test_adapter_migrates_only_exact_known_legacy_collection(monkeypatch):
+def test_adapter_migrates_only_exact_known_legacy_collection(monkeypatch, caplog):
     legacy = "avientus-qwen3-embedding-8b"
     unrelated = "other-app-qwen3-embedding-8b"
     client = FakeClient(
@@ -134,6 +133,7 @@ def test_adapter_migrates_only_exact_known_legacy_collection(monkeypatch):
     assert unrelated in client.collections
     assert adapter.collection_name in client.collections
     assert reset == ["avientus"]
+    assert "Synchronize the affected datasets" in caplog.text
     assert client.created_indexes == [
         (adapter.collection_name, qdrant_module.DATASET_PAYLOAD_KEY)
     ]
@@ -190,8 +190,13 @@ def test_queries_and_dataset_deletion_are_tenant_scoped():
     assert delete_filter.must[0].match.value == "avientus"
 
 
-def test_temporary_legacy_migration_has_not_expired():
-    assert date.today() < qdrant_module.LEGACY_MIGRATION_REMOVE_AFTER, (
-        "Remove or explicitly extend the temporary automatic Qdrant legacy "
-        "migration after checking remaining installations."
-    )
+def test_shared_layout_does_not_warn_about_legacy_migration(monkeypatch, caplog):
+    collection = "sictic-ai-datasets-qwen3-embedding-8b"
+    client = FakeClient({collection: _collection_info(sparse=True, tenant_index=True)})
+    monkeypatch.setattr(qdrant_module, "QdrantClient", lambda **_kwargs: client)
+    monkeypatch.setattr("lib.datasets.paths.list_all_dataset_names", lambda: ["avientus"])
+
+    qdrant_module.QdrantAdapter("avientus", embeddings_model="ollama/qwen3-embedding:8b")
+
+    assert client.deleted_collections == []
+    assert "Legacy Qdrant collections required migration" not in caplog.text

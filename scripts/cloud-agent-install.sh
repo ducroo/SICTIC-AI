@@ -94,6 +94,10 @@ seed_cloud_env() {
 ensure_conda
 seed_cloud_env
 
+# shellcheck disable=SC1091
+source "$REPO_ROOT/scripts/cloud-agent-ssh.sh"
+materialize_vps_ssh_key
+
 SKILLS_TARGET="${INSTALLED_SKILLS_PATH:-$REPO_ROOT/.openclaw-skills}"
 mkdir -p "$SKILLS_TARGET"
 
@@ -105,6 +109,24 @@ mkdir -p "$SKILLS_TARGET"
 if [ ! -x "$REPO_ROOT/qdrant/qdrant" ]; then
   ./launch.sh start qdrant
   ./launch.sh stop qdrant || true
+fi
+
+# Optional: Google Workspace CLI for Gmail (insight emails / review-email testing).
+# Auth still requires `gws auth login` or GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE.
+if [ ! -x "$HOME/bin/gws" ]; then
+  mkdir -p "$HOME/bin"
+  gws_asset="google-workspace-cli-x86_64-unknown-linux-gnu.tar.gz"
+  curl -fsSL -o "/tmp/${gws_asset}" \
+    "https://github.com/googleworkspace/cli/releases/latest/download/${gws_asset}" || true
+  if [ -f "/tmp/${gws_asset}" ]; then
+    mkdir -p /tmp/gws-extract
+    tar -xzf "/tmp/${gws_asset}" -C /tmp/gws-extract
+    if [ -f /tmp/gws-extract/gws ]; then
+      cp /tmp/gws-extract/gws "$HOME/bin/gws"
+      chmod +x "$HOME/bin/gws"
+      echo "cloud-agent-install: installed gws to \$HOME/bin/gws" >&2
+    fi
+  fi
 fi
 
 echo "cloud-agent-install: done (conda env + Docling + skills + Qdrant binary)"

@@ -17,6 +17,10 @@ if [ -f "$REPO_ROOT/.env" ]; then
   seed_dotenv_secrets "$REPO_ROOT/.env"
 fi
 
+# shellcheck disable=SC1091
+source "$REPO_ROOT/scripts/cloud-agent-ssh.sh"
+materialize_vps_ssh_key
+
 ./launch.sh start qdrant
 
 # Wait until Qdrant answers.

@@ -1,10 +1,11 @@
 """Dealum stage labels used by bulk refresh eligibility and skill selection."""
 
+APPLICATION_STAGE = "Application"
 ALWAYS_ACTIVE_STAGES = frozenset({
     "Under Review", "Jury", "Pitching", "Jury reserves (for pitching)",
 })
 INACTIVITY_STAGES = frozenset({
-    "Application", "Rejected by Jury", "Rejected for other reason",
+    APPLICATION_STAGE, "Rejected by Jury", "Rejected for other reason",
     "Not selected to pitch",
 })
 PITCHED_STAGE = "Pitched @ SICTIC"

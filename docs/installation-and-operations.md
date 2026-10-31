@@ -319,3 +319,18 @@ Opt-in live tests require their external services and datasets:
 ```bash
 SICTIC_RUN_LIVE_SMOKE=1 conda run -n sictic-env python -m pytest -q -m live
 ```
+
+### Qdrant legacy migration
+
+The adapter retains compatibility with the old collection-per-dataset layout.
+When it finds exact legacy collections belonging to known dossiers, it prepares
+the shared collection, resets their indexing metadata and removes those legacy
+collections. Synchronize the affected datasets to rebuild their indexes.
+A warning identifies this work when it actually occurs; the calendar alone must
+not fail the test suite or disable migration for an older installation.
+
+Before removing this compatibility path, verify every maintained installation
+(including the Mac mini and cloud hosts) uses the shared collections, has no
+remaining known legacy collections, and has successfully rebuilt its datasets.
+Then remove the migration code and update its regression coverage together.
+Until that operational audit is complete, retain the migration and its tests.

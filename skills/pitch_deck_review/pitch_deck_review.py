@@ -29,7 +29,13 @@ Status meanings:
 
 
 def _report(table: str) -> str:
-    return f"{_INTRO}\n{table.strip()}\n"
+    # Hosting/PDF readers do not need the internal model line from the shared renderer.
+    table_lines = [
+        line
+        for line in table.strip().splitlines()
+        if not line.startswith("**Model:**")
+    ]
+    return f"{_INTRO}\n" + "\n".join(table_lines).strip() + "\n"
 
 
 async def pitch_deck_review(dataset_name: str) -> InsightResult:
