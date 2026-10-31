@@ -45,6 +45,9 @@ IN_SCOPE_STAGES = {
     "under review": "Under review",
 }
 MAX_ATTEMPTS = 3
+SEND_CONCERNS_ACTION = "Send concerns to startup"
+# Line prefix of the proposed action in the rendered response report.
+PROPOSED_ACTION_PREFIX = "- Proposed action: "
 
 T = TypeVar("T")
 
@@ -172,7 +175,7 @@ def _review_proposed_action(output: dict | list) -> Review[dict | list]:
         result["missing_or_inconsistent_information"]
     )
     problems = []
-    if result["proposed_action"] == "Send concerns to startup" and not concern_count:
+    if result["proposed_action"] == SEND_CONCERNS_ACTION and not concern_count:
         problems.append("Sending concerns requires at least one stated concern.")
     return Review(result, tuple(problems))
 
@@ -184,11 +187,11 @@ def _specialize_proposed_action_schema(
     allowed_actions = {
         "Application": [
             "Move to Under review",
-            "Send concerns to startup",
+            SEND_CONCERNS_ACTION,
         ],
         "Under review": [
             "Move to Jury",
-            "Send concerns to startup",
+            SEND_CONCERNS_ACTION,
         ],
     }[stage]
     specialized = copy_schema(response_schema)
@@ -260,13 +263,25 @@ def _render_proposed_action(
     return (
         "# Proposed action\n\n"
         f"- Current stage: {stage}\n"
-        f"- Proposed action: {result['proposed_action']}\n"
+        f"{PROPOSED_ACTION_PREFIX}{result['proposed_action']}\n"
         f"- Rationale: {result['rationale']}\n\n"
         "## Eligibility concerns\n\n"
         f"{_render_concerns(result['eligibility_concerns'])}\n\n"
         "## Missing or inconsistent information\n\n"
         f"{_render_concerns(result['missing_or_inconsistent_information'])}\n"
     )
+
+
+def proposed_action(response_report: str) -> str | None:
+    """Return the proposed action from a rendered response report.
+
+    Returns None when the report has no proposed-action line, for example a
+    manually written report.
+    """
+    for line in response_report.splitlines():
+        if line.startswith(PROPOSED_ACTION_PREFIX):
+            return line.removeprefix(PROPOSED_ACTION_PREFIX).strip()
+    return None
 
 
 def _resolve_candidates(

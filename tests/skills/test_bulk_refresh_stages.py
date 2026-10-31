@@ -5,8 +5,8 @@ import pytest
 
 from lib.datasets.paths import dataset_location_for_domain
 from lib.datasets.state import (
-    activate_dataset, archive_dataset, is_active_dataset, latest_dataset_edit,
-    update_dataset_inactivity,
+    activate_dataset, archive_dataset, is_active_dataset, is_archived_dataset,
+    latest_dataset_edit, update_dataset_inactivity,
 )
 from lib.startups.dealum.session import dealum_session
 from lib.startups.dealum.stages import ALWAYS_ACTIVE_STAGES, INACTIVITY_STAGES, PITCHED_STAGE
@@ -111,6 +111,29 @@ def test_stage_table_overrides_age_only_for_fixed_stages(mock_env, dealum, mocke
     assert names == ("example",)
     assert stages == {"example": stage}
     assert is_active_dataset("example") == (stage in ALWAYS_ACTIVE_STAGES)
+
+
+def test_unmarked_application_dossier_stays_unmarked_until_under_review(mock_env, dealum, mocker):
+    # The application review creates dossiers without a marker.
+    dossier("example", active=False)
+    dealum.return_value = [{"id": 1, "name": "Example", "step": "Application"}]
+    mocker.patch("skills.bulk_refresh.datasets.import_startup_from_dealum")
+    update_dataset_states(("example",), discover=False, excluded=set())
+    assert not is_active_dataset("example")
+    assert not is_archived_dataset("example")
+
+    dealum.return_value = [{"id": 1, "name": "Example", "step": "Under Review"}]
+    update_dataset_states(("example",), discover=False, excluded=set())
+    assert is_active_dataset("example")
+
+
+@pytest.mark.parametrize("stage", sorted((INACTIVITY_STAGES - {"Application"}) | {PITCHED_STAGE}))
+def test_unmarked_dossier_at_other_stages_is_archived(mock_env, dealum, mocker, stage):
+    dossier("example", active=False, timestamp=RECENT)
+    dealum.return_value = [{"id": 1, "name": "Example", "step": stage}]
+    mocker.patch("skills.bulk_refresh.datasets.import_startup_from_dealum")
+    update_dataset_states(("example",), discover=False, excluded=set())
+    assert is_archived_dataset("example")
 
 
 def test_pitched_does_not_reset_active_marker(mock_env, dealum, mocker):
