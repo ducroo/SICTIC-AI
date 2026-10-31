@@ -141,7 +141,7 @@ def test_stated_concerns_reads_both_sections_of_the_response():
 
 
 def test_draft_reviewer_rejects_extra_points_and_a_missing_signature():
-    review = module._draft_reviewer(2)
+    review = module._draft_reviewer(2, "[Screener name]")
     good = "Dear team,\n\n1. Upload the cap table.\n2. Name the CEO.\n\nBest regards,\n[Screener name]\nSICTIC"
 
     assert review(good).problems == ()
@@ -325,3 +325,30 @@ async def test_email_failure_raises_after_the_summary_is_saved(feedback_run, mon
     location = dataset_location_for_domain("application-feedback-runs", "generated")
     summaries = get_storage().list(f"{location.insights_rel}/application-feedback")
     assert len(summaries) == 1
+
+
+@pytest.mark.asyncio
+async def test_configured_signature_signs_the_drafts(feedback_run, monkeypatch):
+    _reviews, calls = feedback_run
+    monkeypatch.setenv("SCREENER_SIGNATURE", " Anna  Muster ")
+
+    [summary, _draft] = await application_feedback()
+
+    prompt = calls["prompts"][0]
+    assert 'followed by "Anna Muster" and "SICTIC"' in prompt
+    assert "{{signature}}" not in prompt
+    assert "[Screener name]" not in prompt
+    review = calls["reviewers"][0]
+    assert review("1. Upload it.\n\nBest regards,\nAnna Muster\nSICTIC").problems == ()
+    assert "[Screener name]" not in summary.content()
+
+
+@pytest.mark.asyncio
+async def test_empty_signature_keeps_the_placeholder(feedback_run, monkeypatch):
+    _reviews, calls = feedback_run
+    monkeypatch.delenv("SCREENER_SIGNATURE", raising=False)
+
+    [summary, _draft] = await application_feedback()
+
+    assert 'followed by "[Screener name]" and "SICTIC"' in calls["prompts"][0]
+    assert "replace [Screener name] and paste it" in summary.content()

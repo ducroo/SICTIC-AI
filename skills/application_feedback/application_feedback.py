@@ -42,6 +42,10 @@ SKILL_NAME = "application_feedback"
 SUMMARY_DATASET = "application-feedback-runs"
 # Environment variable with the comma-separated screener email addresses.
 SCREENER_EMAILS_VARIABLE = "SCREENER_EMAILS"
+# Environment variable with the name that signs the drafts.
+SCREENER_SIGNATURE_VARIABLE = "SCREENER_SIGNATURE"
+# Signature the screener replaces by hand when no name is configured.
+PLACEHOLDER_SIGNATURE = "[Screener name]"
 
 
 class EmailMode(StrEnum):
@@ -153,8 +157,16 @@ def _concerns_block(eligibility: list[str], missing: list[str]) -> str:
     )
 
 
-def _draft_reviewer(concern_count: int) -> Callable[[str], Review[str]]:
-    """Check that a draft raises no more points than the review contains."""
+def _screener_signature() -> str:
+    signature = get_env_var(SCREENER_SIGNATURE_VARIABLE, required=False) or ""
+    return " ".join(signature.split()) or PLACEHOLDER_SIGNATURE
+
+
+def _draft_reviewer(
+    concern_count: int,
+    signature: str,
+) -> Callable[[str], Review[str]]:
+    """Check that a draft raises no more points than the review contains and is signed."""
 
     def review(output: str) -> Review[str]:
         email = output.strip()
@@ -166,9 +178,9 @@ def _draft_reviewer(concern_count: int) -> Callable[[str], Review[str]]:
                 f"points, one per stated concern or merged concerns; it lists {points}. "
                 "Raise only the stated concerns."
             )
-        if "[Screener name]" not in email:
+        if signature not in email:
             problems.append(
-                'End with "Best regards," followed by "[Screener name]" and "SICTIC".'
+                f'End with "Best regards," followed by "{signature}" and "SICTIC".'
             )
         return Review(email, tuple(problems))
 
@@ -179,6 +191,7 @@ async def _draft_email(
     startup: str,
     response: InsightFile,
     instructions: str,
+    signature: str,
 ) -> tuple[InsightFile, bool]:
     """Draft the feedback email, reusing the stored draft while the concerns are unchanged.
 
@@ -200,7 +213,7 @@ async def _draft_email(
         model=llm_model(),
         config_key=config_cache_key(
             instructions,
-            {"startup": startup, "concerns": concerns},
+            {"startup": startup, "signature": signature, "concerns": concerns},
         ),
     )
     if reusable := draft.find(selection="reusable"):
@@ -212,9 +225,11 @@ async def _draft_email(
         f"{concerns}\n\n"
         "### CONCERNS END ###\n\n"
         "### INSTRUCTIONS ###\n\n"
-        + instructions.replace("{{startup}}", startup)
+        + instructions.replace("{{startup}}", startup).replace("{{signature}}", signature)
     )
-    email = await generate_markdown(prompt, reviewer=_draft_reviewer(concern_count))
+    email = await generate_markdown(
+        prompt, reviewer=_draft_reviewer(concern_count, signature),
+    )
     draft.save(email.strip() + "\n")
     logger.info("[%s] Feedback draft saved to %s", startup, draft.path)
     return draft, True
@@ -224,6 +239,7 @@ async def _process_application(
     application: dict[str, Any],
     dealroom_id: str,
     instructions: str,
+    signature: str,
 ) -> ApplicationOutcome:
     startup = str(application.get("name") or application.get("code") or "").strip()
     code = str(application.get("code") or "").strip() or None
@@ -247,7 +263,9 @@ async def _process_application(
             )
         draft, draft_is_new = None, False
         if action == SEND_CONCERNS_ACTION:
-            draft, draft_is_new = await _draft_email(startup, response, instructions)
+            draft, draft_is_new = await _draft_email(
+                startup, response, instructions, signature,
+            )
         return replace(
             outcome,
             action=action,
@@ -277,7 +295,11 @@ def _application_label(outcome: ApplicationOutcome) -> str:
     return f"{outcome.startup} ({outcome.code})" if outcome.code else outcome.startup
 
 
-def _summary_markdown(outcomes: list[ApplicationOutcome], run_id: str) -> str:
+def _summary_markdown(
+    outcomes: list[ApplicationOutcome],
+    run_id: str,
+    signature: str,
+) -> str:
     new_drafts = [outcome for outcome in outcomes if outcome.draft and outcome.draft_is_new]
     unchanged_drafts = [
         outcome for outcome in outcomes if outcome.draft and not outcome.draft_is_new
@@ -298,9 +320,13 @@ def _summary_markdown(outcomes: list[ApplicationOutcome], run_id: str) -> str:
         f"Unchanged drafts: {len(unchanged_drafts)}. Without concerns: "
         f"{len(complete)}. Failed: {len(failures)}.",
         "",
-        "Nothing was sent to the startups. Proofread each new or changed "
-        "draft, replace [Screener name] and paste it into the Dealum messages "
-        "of the application.",
+        "Nothing was sent to the startups. Proofread each new or changed draft"
+        + (
+            f", replace {PLACEHOLDER_SIGNATURE}"
+            if signature == PLACEHOLDER_SIGNATURE
+            else ""
+        )
+        + " and paste it into the Dealum messages of the application.",
     ]
     if new_drafts:
         lines += ["", "## New or changed drafts"]
@@ -438,17 +464,20 @@ async def application_feedback(
     # Check the recipients before the long review run.
     recipients = _screener_emails() if email != EmailMode.OFF else []
     instructions = load_repository_config(SKILL_NAME, "email_instructions")
+    signature = _screener_signature()
     run_id = _run_timestamp()
     # One shared application snapshot for the selection and every review.
     with dealum_session():
         selected = open_applications(list_applications(adapter), startups)
         logger.info("Open applications to review: %d", len(selected))
         outcomes = [
-            await _process_application(application, adapter.dealroom_id, instructions)
+            await _process_application(
+                application, adapter.dealroom_id, instructions, signature,
+            )
             for application in selected
         ]
 
-    summary_markdown = _summary_markdown(outcomes, run_id)
+    summary_markdown = _summary_markdown(outcomes, run_id, signature)
     summary = _summary_insight("summary", run_id)
     summary.save(summary_markdown)
     logger.info("Application feedback summary saved to %s", summary.path)

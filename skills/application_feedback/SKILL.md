@@ -41,10 +41,11 @@ Read the action with `submission_ready.proposed_action`. Only `Send concerns to
 startup` gets a draft: `generate_markdown` writes it in English, following
 `config/application_feedback/email_instructions.md`. The model only receives
 the concerns read with `submission_ready.stated_concerns`, not the checklist,
-so it cannot raise other points. A reviewer requires between one and as many
-numbered points as there are concerns, and the `[Screener name]` sign-off.
-A stored or manual draft is reused while the instructions and the concerns are
-unchanged.
+so it cannot raise other points. The draft is signed with `SCREENER_SIGNATURE`
+from `.env`, or with the placeholder `[Screener name]` for the screener to
+replace when it is empty. A reviewer requires between one and as many numbered
+points as there are concerns, and that signature. A stored or manual draft is
+reused while the instructions, the signature and the concerns are unchanged.
 
 `email` decides how the summary reaches the screener: `off` (default), `dry-run`
 or `send`. The recipients are the comma-separated `SCREENER_EMAILS` in `.env`;

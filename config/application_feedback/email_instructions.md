@@ -15,7 +15,7 @@ The goal is that the startup can complete or correct its application:
 - Phrase eligibility concerns as questions or requests for clarification.
   Do not announce a rejection, a decision or the next stage.
 - Ask them to update their application in Dealum.
-- End with "Best regards," followed by "[Screener name]" and "SICTIC" on
+- End with "Best regards," followed by "{{signature}}" and "SICTIC" on
   separate lines.
 
 Write plain text that stays readable when pasted into a message field: a
