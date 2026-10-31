@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, TypeVar
@@ -48,6 +49,8 @@ MAX_ATTEMPTS = 3
 SEND_CONCERNS_ACTION = "Send concerns to startup"
 # Line prefix of the proposed action in the rendered response report.
 PROPOSED_ACTION_PREFIX = "- Proposed action: "
+ELIGIBILITY_HEADING = "## Eligibility concerns"
+MISSING_INFORMATION_HEADING = "## Missing or inconsistent information"
 
 T = TypeVar("T")
 
@@ -265,9 +268,9 @@ def _render_proposed_action(
         f"- Current stage: {stage}\n"
         f"{PROPOSED_ACTION_PREFIX}{result['proposed_action']}\n"
         f"- Rationale: {result['rationale']}\n\n"
-        "## Eligibility concerns\n\n"
+        f"{ELIGIBILITY_HEADING}\n\n"
         f"{_render_concerns(result['eligibility_concerns'])}\n\n"
-        "## Missing or inconsistent information\n\n"
+        f"{MISSING_INFORMATION_HEADING}\n\n"
         f"{_render_concerns(result['missing_or_inconsistent_information'])}\n"
     )
 
@@ -282,6 +285,26 @@ def proposed_action(response_report: str) -> str | None:
         if line.startswith(PROPOSED_ACTION_PREFIX):
             return line.removeprefix(PROPOSED_ACTION_PREFIX).strip()
     return None
+
+
+def stated_concerns(response_report: str) -> tuple[list[str], list[str]]:
+    """Return the eligibility concerns and the missing or inconsistent information.
+
+    Reads the numbered items of both sections of a rendered response report.
+    """
+    sections: dict[str, list[str]] = {
+        ELIGIBILITY_HEADING: [],
+        MISSING_INFORMATION_HEADING: [],
+    }
+    current: list[str] | None = None
+    for line in response_report.splitlines():
+        if line.startswith("## "):
+            current = sections.get(line.strip())
+            continue
+        item = re.match(r"^\d+\.\s+(.+)$", line.strip())
+        if current is not None and item:
+            current.append(item.group(1).strip())
+    return sections[ELIGIBILITY_HEADING], sections[MISSING_INFORMATION_HEADING]
 
 
 def _resolve_candidates(

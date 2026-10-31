@@ -9,7 +9,7 @@ from skills.application_feedback.application_feedback import (
     application_feedback,
     open_applications,
 )
-from skills.submission_ready.submission_ready import proposed_action
+from skills.submission_ready.submission_ready import proposed_action, stated_concerns
 
 MODEL = "ollama/test_model:1b"
 
@@ -71,7 +71,7 @@ def feedback_run(mock_env, monkeypatch):
         "CODE-1": ("Send concerns to startup", ["Upload the cap table."]),
         "CODE-2": ("Move to Under review", []),
     }
-    calls = {"reviews": [], "prompts": []}
+    calls = {"reviews": [], "prompts": [], "reviewers": []}
 
     async def fake_submission_ready(selector):
         calls["reviews"].append(selector)
@@ -97,8 +97,9 @@ def feedback_run(mock_env, monkeypatch):
             insights.append(insight)
         return insights
 
-    async def fake_generate_markdown(prompt):
+    async def fake_generate_markdown(prompt, reviewer=None):
         calls["prompts"].append(prompt)
+        calls["reviewers"].append(reviewer)
         return "Dear Alpha Bio team,\n\n1. Please upload your cap table.\n"
 
     monkeypatch.setattr(module, "submission_ready", fake_submission_ready)
@@ -132,6 +133,23 @@ def test_open_applications_filters_by_name_or_code_and_rejects_unknown():
         open_applications(applications, ["Gamma"])
 
 
+def test_stated_concerns_reads_both_sections_of_the_response():
+    report = _response_report("Send concerns to startup", ["Upload the cap table.", "Name the CEO."])
+
+    assert stated_concerns(report) == ([], ["Upload the cap table.", "Name the CEO."])
+    assert stated_concerns("# Manually written review\n") == ([], [])
+
+
+def test_draft_reviewer_rejects_extra_points_and_a_missing_signature():
+    review = module._draft_reviewer(2)
+    good = "Dear team,\n\n1. Upload the cap table.\n2. Name the CEO.\n\nBest regards,\n[Screener name]\nSICTIC"
+
+    assert review(good).problems == ()
+    too_many = good.replace("2. Name the CEO.", "2. Name the CEO.\n3. State your event.")
+    assert "it lists 3" in review(too_many).problems[0]
+    assert "[Screener name]" in review(good.replace("[Screener name]", "Anna")).problems[0]
+
+
 def test_proposed_action_reads_the_rendered_response():
     assert proposed_action(_response_report("Send concerns to startup", ["x"])) == (
         "Send concerns to startup"
@@ -153,8 +171,11 @@ async def test_feedback_drafts_only_for_applications_with_concerns(feedback_run)
     )
     assert "Please upload your cap table." in draft.content()
     prompt = calls["prompts"][0]
-    assert "Upload the cap table." in prompt
+    assert "Missing or inconsistent information:\n1. Upload the cap table." in prompt
     assert "Dear Alpha Bio team," in prompt
+    # Only the stated concerns reach the model, not the detailed checklist.
+    assert "| 1 | Cap table | Unclear |" not in prompt
+    assert calls["reviewers"][0] is not None
     assert summary.path.startswith(
         "storage/generated/application-feedback-runs/insights/"
     )
@@ -164,8 +185,9 @@ async def test_feedback_drafts_only_for_applications_with_concerns(feedback_run)
         "Failed: 0." in text
     )
     assert "## New or changed drafts\n\n### Alpha Bio (CODE-1)" in text
-    assert "https://app.dealum.com/" in text
-    assert "Please upload your cap table." in text
+    assert "- [Open the application in Dealum](https://app.dealum.com/" in text
+    # The draft is a code block, so its line breaks and numbering survive copying.
+    assert "```text\nDear Alpha Bio team,\n\n1. Please upload your cap table.\n```" in text
     assert "- Beta Labs (CODE-2): Move to Under review." in text
     assert not get_storage().exists(
         "storage/startups/beta-labs/insights/application-feedback-beta-labs-test-model-1b.md"
@@ -184,7 +206,7 @@ async def test_unchanged_review_reuses_the_stored_draft(feedback_run):
     assert "New or changed drafts: 0. Unchanged drafts: 1." in text
     assert "## New or changed drafts" not in text
     assert "## Unchanged drafts" in text
-    assert "- Alpha Bio (CODE-1): https://app.dealum.com/" in text
+    assert "- Alpha Bio (CODE-1): [Open the application in Dealum](https://app.dealum.com/" in text
     assert f"Draft file: {draft.path}" in text
     assert "Please upload your cap table." not in text
 
@@ -217,3 +239,89 @@ async def test_feedback_requires_dealum_credentials(mock_env, monkeypatch):
 
     with pytest.raises(ValueError, match="DEALUM_API_KEY"):
         await application_feedback()
+
+
+@pytest.fixture
+def sent_emails(monkeypatch):
+    """Collect the emails the skill would send instead of calling gws."""
+    monkeypatch.setenv("SCREENER_EMAILS", "screener@sictic.ch, second@sictic.ch")
+    emails = []
+    monkeypatch.setattr(
+        module,
+        "send_html_email",
+        lambda recipients, subject, html: emails.append((recipients, subject, html)),
+    )
+    return emails
+
+
+@pytest.mark.asyncio
+async def test_email_dry_run_saves_the_email_instead_of_sending(feedback_run, sent_emails):
+    [summary, preview, draft] = await application_feedback(email="dry-run")
+
+    assert sent_emails == []
+    assert preview.path.startswith(summary.directory)
+    assert preview.path.endswith(".html")
+    text = preview.content()
+    assert "Dry run: this email was not sent." in text
+    assert text.index("<body") < text.index("Dry run: this email was not sent.")
+    assert "To: screener@sictic.ch, second@sictic.ch" in text
+    assert "Subject: SICTIC feedback drafts for open applications: 1 new or changed, 0 failed" in text
+    assert "Please upload your cap table." in text
+    assert draft.dataset == "alpha-bio"
+
+
+@pytest.mark.asyncio
+async def test_email_is_sent_only_when_there_is_news(feedback_run, sent_emails):
+    await application_feedback(email="send")
+    # The second run finds only unchanged drafts.
+    returned = await application_feedback(email="send")
+
+    assert len(sent_emails) == 1
+    recipients, subject, html = sent_emails[0]
+    assert recipients == ["screener@sictic.ch", "second@sictic.ch"]
+    assert subject == "SICTIC feedback drafts for open applications: 1 new or changed, 0 failed"
+    assert "Please upload your cap table." in html
+    assert [insight.identifier for insight in returned] == ["summary", None]
+    assert returned[1].dataset == "alpha-bio"
+
+
+@pytest.mark.asyncio
+async def test_failures_are_emailed_before_the_run_raises(feedback_run, sent_emails):
+    reviews, _calls = feedback_run
+    await application_feedback(email="send")
+    del reviews["CODE-2"]
+
+    with pytest.raises(RuntimeError, match="failed for 1 application"):
+        await application_feedback(email="send")
+
+    assert len(sent_emails) == 2
+    assert sent_emails[1][1].endswith("0 new or changed, 1 failed")
+    assert "review failed for CODE-2" in sent_emails[1][2]
+
+
+@pytest.mark.asyncio
+async def test_email_requires_screener_addresses_before_any_review(feedback_run, monkeypatch):
+    _reviews, calls = feedback_run
+    monkeypatch.delenv("SCREENER_EMAILS", raising=False)
+
+    with pytest.raises(ValueError, match="SCREENER_EMAILS"):
+        await application_feedback(email="dry-run")
+
+    assert calls["reviews"] == []
+
+
+@pytest.mark.asyncio
+async def test_email_failure_raises_after_the_summary_is_saved(feedback_run, monkeypatch):
+    monkeypatch.setenv("SCREENER_EMAILS", "screener@sictic.ch")
+
+    def failing_send(_recipients, _subject, _html):
+        raise RuntimeError("gws gmail +send failed (exit 2): auth missing")
+
+    monkeypatch.setattr(module, "send_html_email", failing_send)
+
+    with pytest.raises(RuntimeError, match="auth missing"):
+        await application_feedback(email="send")
+
+    location = dataset_location_for_domain("application-feedback-runs", "generated")
+    summaries = get_storage().list(f"{location.insights_rel}/application-feedback")
+    assert len(summaries) == 1

@@ -58,7 +58,8 @@ Rendering consumes the accepted result without repeating those checks.
 
 Import Dealum data, synchronize, call models and save artifacts. Do not send
 messages or change Dealum stages; humans decide on the proposed action.
-`proposed_action(report)` reads the action back from a rendered response for
+`proposed_action(report)` and `stated_concerns(report)` read the action and the
+two concern lists back from a rendered response for
 [application_feedback](../application_feedback/SKILL.md), which drafts
 feedback emails for applications with concerns.
 

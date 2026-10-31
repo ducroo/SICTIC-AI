@@ -4,13 +4,16 @@ import typer
 
 from lib.cli import format_insights, run_command
 from lib.infrastructure.logging import get_logger
-from skills.application_feedback.application_feedback import application_feedback
+from skills.application_feedback.application_feedback import (
+    EmailMode,
+    application_feedback,
+)
 
 logger = get_logger(__name__)
 app = typer.Typer(
     help=(
         "Review open Dealum applications and draft feedback emails for the "
-        "screener. Reads from Dealum only and sends nothing."
+        "screener. Reads from Dealum only and never writes to it."
     )
 )
 
@@ -27,9 +30,19 @@ def run_application_feedback(
             "Application."
         ),
     ),
+    email: EmailMode = typer.Option(
+        EmailMode.OFF,
+        "--email",
+        case_sensitive=False,
+        help=(
+            "Email the summary to SCREENER_EMAILS when there are new or "
+            "changed drafts or failures: off, dry-run (save the email instead) "
+            "or send."
+        ),
+    ),
 ):
     result = run_command(
-        lambda: application_feedback(startups or None),
+        lambda: application_feedback(startups or None, email=email),
         logger=logger,
         error_prefix="Execution failed",
     )

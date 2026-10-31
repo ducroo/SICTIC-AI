@@ -508,7 +508,11 @@ supported. Prompt caching does not replace insight freshness checks.
 
 Use `ApifyAdapter`, `DealumAdapter` and `WebSearchAdapter` for their
 provider operations. Business decisions belong in domain libraries
-or skills, not generic adapters.
+or skills, not generic adapters. The Dealum integration only reads;
+a test guards that it sends no other requests than GET and HEAD.
+Send email from code through `send_html_email` in
+`lib.infrastructure.gmail`, which wraps `gws gmail +send`. Its failures
+are not retried, because a failed send may still have been delivered.
 
 Apify API/HTTP failures use `InfrastructureError` with provider `apify` and the
 operation name; web search preserves that structured error. Capacity, credit,

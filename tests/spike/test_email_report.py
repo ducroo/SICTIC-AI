@@ -43,7 +43,7 @@ def test_send_report_email_invokes_gws(monkeypatch, mocker):
     monkeypatch.setenv("SPIKE_EMAIL_REPORTS", "1")
     monkeypatch.setenv("SPIKE_GWS_BIN", "/usr/bin/gws")
     completed = mocker.Mock(returncode=0, stdout="{}", stderr="")
-    run = mocker.patch("spike.email_report.subprocess.run", return_value=completed)
+    run = mocker.patch("lib.infrastructure.gmail.subprocess.run", return_value=completed)
 
     email_report.send_report_email(
         to_email="urs@gubser.ch",
@@ -68,7 +68,7 @@ def test_send_report_email_invokes_gws(monkeypatch, mocker):
 def test_send_report_email_surfaces_gws_failure(monkeypatch, mocker):
     monkeypatch.setenv("SPIKE_EMAIL_REPORTS", "1")
     mocker.patch(
-        "spike.email_report.subprocess.run",
+        "lib.infrastructure.gmail.subprocess.run",
         return_value=mocker.Mock(returncode=2, stdout="", stderr="auth missing"),
     )
     with pytest.raises(RuntimeError, match="gws gmail \\+send failed"):
