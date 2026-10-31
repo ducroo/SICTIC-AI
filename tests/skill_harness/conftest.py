@@ -195,13 +195,6 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
                 "confidence": 80,
                 "evidence": ["Fixture company evidence."],
             }
-        if "sector" in properties:
-            return {
-                "sector": "Other",
-                "sector_confidence": "M",
-                "rationale": "The fixture describes human-delivered consulting.",
-                "evidence": ["fixture.md: consulting services."],
-            }
         if "names" in properties:
             return {"names": [fixtures.person_name]}
         raise AssertionError("Unexpected dataset-chat JSON schema")

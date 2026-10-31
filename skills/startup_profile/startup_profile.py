@@ -13,13 +13,6 @@ logger = get_logger(__name__)
 
 def _classification_bullet(classification: dict) -> str:
     """Render validated classification data as the fifth profile bullet."""
-    if "sector" in classification:
-        return (
-            "- **Classification:**\n"
-            f"  - **SICTIC sector:** {classification['sector']}\n"
-            "  - **Technologies:** Not available from the legacy SICTIC classification."
-        )
-
     lines = ["- **Classification:**"]
     for component, primary_label, secondary_label in (
         ("industries", "Primary-industry", "Secondary-industries"),

@@ -95,14 +95,16 @@ count as evidence of absence. PitchBook ancestors are derived from industry IDs.
    cannot displace product and customer evidence in a pooled ranking. Shared
    retrieval still owns ranking and document diversity within each search.
    Deduplicate across searches by chunk ID, render passages with `Chunk.to_md()`,
-   and retain the question headings in the shared evidence prefix. Missing search
+   and retain the question headings in the evidence context. Missing search
    results are logged and explicitly marked; retrieval does not guarantee semantic
    completeness. The explicit application sections supplement the 25-chunk budget.
    Do not include or generate startup_profile.
-4. Call shared `generate_json` once for the requested provider, with evidence in
-   the cacheable prefix. The prompt contains only that provider's taxonomy and
-   the classification instructions. Provider-side prefix
-   caching is an optimisation, not a guarantee. Correction retries may add calls.
+4. Call shared `generate_json` once for the requested provider, with the evidence,
+   classification instructions and that provider's taxonomy in the normal prompt.
+   Do not supply an explicit cacheable prefix: each startup has separate evidence
+   and one provider call, so cache warming would unnecessarily serialize work.
+   The shared scheduler still enforces the cloud token budget. Correction retries
+   may add calls.
 5. Derive each response schema from its reference: valid IDs, required components,
    selection limits, uniqueness, confidence and evidence requirements. The shared
    deterministic `Review` function checks primary/secondary overlap and valid
@@ -117,7 +119,7 @@ support. Those remain grounded-generation requirements.
 Freshness includes source revisions, the selected taxonomy reference, queries,
 settings, prompts, response schema and structured-output configuration. Changing
 another provider's reference does not invalidate this provider. Old root-level
-generated files (combined or legacy SICTIC) remain untouched; the requested
+generated files (including retired SICTIC files) remain untouched; the requested
 provider is regenerated once at the new path.
 
 ## Manual compatibility
@@ -134,15 +136,9 @@ An old root-level combined manual file remains readable: only its requested
 provider is validated and returned. If that provider is absent, generation can
 proceed. A provider-specific manual file always takes precedence over it.
 
-A legacy manual file with `sector`, `sector_confidence`, `rationale` and `evidence`
-continues to be accepted against the legacy SICTIC schema and definitions. Its
-retired `product_type` and `product_type_confidence` fields are ignored on reading.
-It is returned unchanged for Dealum calls, blocking Dealum generation, with an
-INFO log explaining that the legacy override was retained. It does not block
-explicit calls for other providers. startup_profile continues to label it
-**SICTIC sector**, not **Dealum industry**. Migration to the provider structure is
-explicit manual work; the old label is never presented as a provider classification.
-`sectors.json` and `legacy_response_schema.json` exist only for this compatibility.
+The retired SICTIC-sector format is no longer supported. A manual file in that
+format fails validation and is left untouched; convert it to a provider record
+or remove it explicitly before generating a new classification.
 
 ## Side effects and failures
 
