@@ -10,7 +10,8 @@ from typing import Literal
 
 from lib.datasets.ingestion import sync_datasets
 from lib.datasets.paths import dataset_location, find_dataset_location, list_all_dataset_names
-from lib.datasets.state import is_active_dataset
+from lib.datasets.state import is_active_dataset, is_archived_dataset
+from lib.startups.dealum.stages import APPLICATION_STAGE
 from lib.infrastructure.logging import get_logger
 from lib.slugify import slugify
 from skills.skill_registry import SKILL_REGISTRY, expand_skill_dependencies
@@ -97,7 +98,7 @@ def _select_datasets(
 
 
 def _resolve_targets(
-    datasets: str | None, exclude: str | None,
+    datasets: str | None, exclude: str | None, *, skills: str | None = None,
 ) -> tuple[_DatasetScope, dict[str, str]]:
     candidates = _select_datasets(datasets, exclude, candidates=True)
     requested = _parse_selector(datasets, label="datasets")
@@ -108,6 +109,7 @@ def _resolve_targets(
         return candidates, {}
     names, stages, errors = update_dataset_states(
         candidates.names, discover=discover, excluded=excluded,
+        include_applications=skills is None or bool(requested) or bool(excluded),
     )
     domains = {}
     for name in names:
@@ -115,7 +117,9 @@ def _resolve_targets(
         if location is None:
             continue
         if not requested and not excluded and name not in errors and not is_active_dataset(name):
-            continue
+            if not (skills is None and stages.get(name) == APPLICATION_STAGE
+                    and not is_archived_dataset(name)):
+                continue
         domains[name] = location.domain
     return _DatasetScope(tuple(domains), domains, stages), errors
 
@@ -142,6 +146,7 @@ def _planned_nodes(
             for dataset in scope.names
             for key, spec in SKILL_REGISTRY.items()
             if scope.domains[dataset] in spec.domains
+            and scope.stages.get(dataset) not in spec.excluded_mandatory_stages
             and ("*" in spec.mandatory_stages or (
                 scope.domains[dataset] == "startups"
                 and dataset in scope.stages
@@ -317,7 +322,7 @@ async def bulk_refresh(
 async def _bulk_refresh(datasets: str | None, skills: str | None, exclude: str | None) -> None:
     # Reject invalid skills before any imports or marker changes.
     selected_skills = _select_skills(skills)
-    selected_datasets, state_errors = _resolve_targets(datasets, exclude)
+    selected_datasets, state_errors = _resolve_targets(datasets, exclude, skills=skills)
     logger.info(
         "Starting bulk refresh routine (skills=%s, datasets=%s)...",
         list(selected_skills) if skills is not None else "mandatory per stage",

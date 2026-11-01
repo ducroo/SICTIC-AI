@@ -29,8 +29,8 @@ without an open application raises before any review.
 
 Fetch one Dealum application snapshot through `dealum_session` and select the
 applications in the stage `Application`. Applications with an unknown stage are
-skipped with a warning. Bulk refresh deliberately never downloads
-Application-stage data, so this skill is the nightly review step for them.
+skipped with a warning. Bulk refresh also screens Application-stage dossiers;
+this separate entry point retains feedback drafting and screener delivery.
 
 For each application, run [submission_ready](../submission_ready/SKILL.md) with
 its application code. That imports the submission from Dealum without

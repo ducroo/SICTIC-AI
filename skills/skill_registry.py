@@ -34,6 +34,8 @@ class SkillSpec:
     # "*" means every resolved stage; None means positively absent from Dealum.
     mandatory_stages: frozenset[str | None] = frozenset()
     prepares_sources: bool = False
+    # Suppress wildcard defaults for these stages, never explicit selection.
+    excluded_mandatory_stages: frozenset[str] = frozenset()
 
 
 SKILL_REGISTRY = {
@@ -48,6 +50,7 @@ SKILL_REGISTRY = {
         domains=frozenset({"startups"}),
         depends_on=("startup-sector",),
         mandatory_stages=frozenset({"*"}),
+        excluded_mandatory_stages=frozenset({"Application"}),
     ),
     "startup-sector": SkillSpec(
         func=startup_sector,
@@ -57,6 +60,7 @@ SKILL_REGISTRY = {
         func=persons_in_dataset,
         domains=frozenset({"startups", "community"}),
         mandatory_stages=frozenset({"*"}),
+        excluded_mandatory_stages=frozenset({"Application"}),
     ),
     "person-profile": SkillSpec(
         func=person_profile,
@@ -109,7 +113,7 @@ SKILL_REGISTRY = {
     "submission-ready": SkillSpec(
         func=submission_ready,
         domains=frozenset({"startups"}),
-        mandatory_stages=frozenset({"Under Review"}),
+        mandatory_stages=frozenset({"Application", "Under Review"}),
     ),
     "investor-profile": SkillSpec(
         func=investor_profile,

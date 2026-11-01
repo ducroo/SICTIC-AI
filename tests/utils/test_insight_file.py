@@ -502,3 +502,60 @@ def test_timestamped_insight_can_be_reused_for_exact_model(mock_env):
         config_key="changed configuration",
     )
     assert changed_config.is_reusable() is False
+
+
+@pytest.mark.parametrize("mode", ["indexed", "unindexed", "manual"])
+@pytest.mark.parametrize("identical_content", [False, True])
+def test_refreshed_tracks_successful_save_not_content_change(mock_env, mode, identical_content):
+    if mode == "indexed":
+        _create_indexed_dataset("avientus", "startups", "revision")
+    else:
+        location = dataset_location_for_domain("avientus", "startups")
+        get_storage().mkdir(location.raw_rel)
+    model = "manual" if mode == "manual" else "ollama/qwen3:8b"
+    insight = InsightFile("avientus", "startup_profile", model, config_key="prompt")
+    assert insight.refreshed is False
+    if identical_content:
+        get_storage().write_text(insight.path, "profile")
+        get_storage().set_mtime(insight.path, 123)
+    insight.save("profile")
+    assert insight.refreshed is True
+    if identical_content:
+        assert get_storage().mtime(insight.path) == 123
+    assert InsightFile("avientus", "startup_profile", model).refreshed is False
+
+
+@pytest.mark.parametrize("model", ["manual", "ollama/qwen3:8b"])
+def test_selected_insights_are_not_marked_refreshed(mock_env, monkeypatch, model):
+    monkeypatch.setenv("RANKED_LLMS", "ollama/qwen3:8b")
+    _create_indexed_dataset("avientus", "startups", "revision")
+    saved = InsightFile("avientus", "startup_profile", model, config_key="prompt")
+    saved.save("profile")
+    assert saved.refreshed is True
+    for selection in ("any", "reusable"):
+        selected = saved.find(selection=selection)
+        assert selected is not None and selected.path == saved.path
+        assert selected.refreshed is False
+    selected = InsightFile.find_all(skill="startup_profile", datasets=["avientus"], selection="any")
+    assert len(selected) == 1
+    assert selected[0].refreshed is False
+    assert saved.refreshed is True
+    entry = saved._load_manifest()["entries"].get(saved.path, {})
+    assert "refreshed" not in entry
+
+
+@pytest.mark.parametrize("failure", ["write_if_changed", "save_insight_entry"])
+@pytest.mark.parametrize("previous_save", [False, True])
+def test_failed_save_does_not_set_refreshed_or_erase_previous_success(mock_env, monkeypatch, failure, previous_save):
+    _create_indexed_dataset("avientus", "startups", "revision")
+    insight = InsightFile("avientus", "startup_profile", "ollama/qwen3:8b")
+    if previous_save:
+        insight.save("original")
+
+    def fail(*args, **kwargs):
+        raise OSError("storage failure")
+
+    monkeypatch.setattr(f"lib.insights.file.{failure}", fail)
+    with pytest.raises(OSError, match="storage failure"):
+        insight.save("updated")
+    assert insight.refreshed is previous_save

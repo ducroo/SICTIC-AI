@@ -61,6 +61,8 @@ class InsightFile:
             raise ValueError(f"Invalid insight extension: {extension!r}")
         self.extension = normalized_extension
         self._path_override = _path_override
+        # Instance-local: true after a successful save, never restored from disk.
+        self.refreshed: bool = False
 
     @property
     def directory(self) -> str:
@@ -234,6 +236,7 @@ class InsightFile:
         storage = get_storage()
         if model_slug(self.model) == "manual":
             write_if_changed(storage, self.path, content)
+            self.refreshed = True
             return
 
         revisions = self._dataset_revisions()
@@ -244,6 +247,7 @@ class InsightFile:
                 "source dataset has no indexed revision.",
                 self.path,
             )
+            self.refreshed = True
             return
 
         write_if_changed(storage, self.path, content)
@@ -255,6 +259,7 @@ class InsightFile:
             revisions=revisions,
             config_key=self.config_key,
         )
+        self.refreshed = True
 
     def _candidate(self, model: str) -> InsightFile:
         return InsightFile(
