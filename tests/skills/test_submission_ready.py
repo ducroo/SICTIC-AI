@@ -28,6 +28,7 @@ def _application(name, step, application_id):
         "name": name,
         "code": f"CODE-{application_id}",
         "step": step,
+        "createDate": "2026-10-29T12:00:00Z",
     }
 
 
@@ -361,9 +362,11 @@ async def test_explicit_invocation_forces_fresh_import(monkeypatch, stage):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("application_day", ["2026-10-20", "2026-10-29"])
 async def test_process_candidate_writes_timestamped_pair(
     mock_env,
     monkeypatch,
+    application_day,
 ):
     from lib.storage import get_storage
 
@@ -399,14 +402,21 @@ async def test_process_candidate_writes_timestamped_pair(
         "_generate_proposed_action",
         fake_response,
     )
+    match = _match()
+    match.application["createDate"] = f"{application_day}T12:00:00Z"
+    check_config = _check_config()
+    check_config["llm_instructions"] = (
+        Path(__file__).resolve().parents[2]
+        / "config/submission_ready/llm_instructions.md"
+    ).read_text()
     result = await _process_candidate(
-        _match(),
+        match,
         "Application",
         applications=[],
         adapter=FakeAdapter([]),
         force_refresh=True,
         run_id="20260730T221500Z",
-        check_config=_check_config(),
+        check_config=check_config,
     )
 
     expected_root = (
@@ -423,6 +433,11 @@ async def test_process_candidate_writes_timestamped_pair(
     assert storage.exists(result.response_path)
     assert batch_calls[0]["skill_name"] == "submission_ready"
     assert batch_calls[0]["response_schema"] == AUDIT_SCHEMA
+    instructions = batch_calls[0]["llm_instructions"]
+    assert f"`dealum/{application_day}/`" in instructions
+    assert "{application_folder}" not in instructions
+    assert "including earlier Dealum submissions" in instructions
+    assert "Do not use them to fill gaps or identify inconsistencies" in instructions
     checklist_report = storage.read_text(result.checklist_path)
     assert "| No | Check | Status | Rationale | Source documents |" in checklist_report
     assert "| 1.1 | Founder submission | Pass | Founder evidence." in checklist_report

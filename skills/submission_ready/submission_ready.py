@@ -38,6 +38,7 @@ from lib.startups.dealum import (
 )
 from lib.storage import get_storage
 from lib.startups.dealum.session import list_applications
+from lib.startups.dealum.matching import application_create_day
 
 logger = get_logger(__name__)
 
@@ -431,10 +432,11 @@ async def _process_candidate(
         adapter=adapter,
         force_refresh=force_refresh,
     )
+    application_folder = f"dealum/{application_create_day(match.application)}/"
     llm_instructions = (
         f"{check_config['policy']}\n\n"
         f"{check_config['llm_instructions']}"
-    )
+    ).replace("{application_folder}", application_folder)
     audit_insight = await batch_audit(
         dataset_name=startup_slug,
         checklist_markdown=check_config["checklist"],

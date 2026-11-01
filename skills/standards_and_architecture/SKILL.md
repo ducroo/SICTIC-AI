@@ -212,6 +212,14 @@ Save through `save()`. Manual precedence is applied during selection;
 `save()` itself does not prevent overwriting a manual file.
 Automated generation must preserve manual overrides.
 
+`InsightFile.refreshed` is an in-memory flag, initially `False`, set to `True`
+after a successful `save()` on that instance. This includes identical-content
+saves, manual saves and saves without indexed revisions. It records a completed
+save, not necessarily an LLM call or a content change. Freshly constructed or
+selected objects start at `False`; return the saved object to preserve the flag.
+It is not persisted, does not change reuse rules, and is not a delivery receipt.
+A failed save does not set it or erase an earlier successful save on that instance.
+
 When a workflow produces partial output, describe that limitation in its Markdown
 for the deal lead. Such notices do not change InsightFile or its freshness rules.
 
@@ -661,6 +669,8 @@ Harness registration does not imply bulk-refresh registration.
 Register batch workflows in `skills/skill_registry.py` with their
 callable, supported domains and prerequisite skill keys.
 The registry also owns `mandatory_stages` for default per-dataset selection.
+`excluded_mandatory_stages` suppresses defaults at selected stages without
+affecting explicit skill selection or prerequisite expansion.
 Selected `prepares_sources` jobs run before insight jobs for the same dataset;
 this ordering does not add required dependencies or propagate failure skips.
 These acquisition jobs are not implicitly added to explicit skill selections.

@@ -200,7 +200,7 @@ def test_named_missing_scope_creates_only_selected_active_startups(mock_env, dea
     assert {(name, "startup-sector") for name in selected} <= planned
 
 
-@pytest.mark.parametrize("stage", [None, "Application", "Pitched @ SICTIC", "Rejected by Jury", "Unexpected"])
+@pytest.mark.parametrize("stage", [None, "Pitched @ SICTIC", "Rejected by Jury", "Unexpected"])
 def test_named_missing_ineligible_dossier_is_not_created(mock_env, dealum, mocker, stage):
     from lib.datasets.paths import find_dataset_location
 
@@ -444,8 +444,7 @@ def test_other_stages_keep_recent_existing_dossiers_active(mock_env, dealum, moc
     imported = mocker.patch("skills.bulk_refresh.datasets.import_startup_from_dealum")
     _, _, errors = update_dataset_states(("example",), discover=False, excluded=set())
     assert not errors and is_active_dataset("example")
-    if stage == "Application":
-        imported.assert_not_called()
+    imported.assert_called_once()
 
 
 @pytest.mark.parametrize("stage", sorted(ALWAYS_ACTIVE_STAGES | INACTIVITY_STAGES | {PITCHED_STAGE}))
@@ -461,7 +460,7 @@ def test_archive_is_terminal_even_after_stage_changes(mock_env, dealum, mocker, 
     imported.assert_not_called()
 
 
-@pytest.mark.parametrize("stage,archived", [("Application", False), ("Jury", True)])
+@pytest.mark.parametrize("stage,archived", [("Application", True), ("Jury", True)])
 def test_composed_skills_cannot_bypass_disabled_imports(mock_env, dealum, mocker, stage, archived):
     from lib.startups.dealum import import_startup_from_dealum
     dossier("example", timestamp=RECENT)
@@ -518,3 +517,80 @@ async def test_plan_is_built_before_ingestion_and_scheduling(mock_env, mocker):
     }, clear=True)
     await bulk.bulk_refresh(datasets="members", skills="all")
     assert events == ["plan", "ingest", "source", "ingest", "insight"]
+
+
+@pytest.mark.parametrize("skills", [None, "submission_ready"])
+def test_default_application_scope_preserves_explicit_skill_active_selection(mock_env, dealum, mocker, skills):
+    from lib.datasets.paths import find_dataset_location
+
+    dossier("active-app", timestamp=RECENT)
+    dossier("unmarked-app", active=False, timestamp=RECENT)
+    dossier("archived-app", timestamp=RECENT)
+    archive_dataset("archived-app")
+    dealum.return_value = [
+        {"id": index, "name": name, "step": "Application", "createDate": "2026-09-01"}
+        for index, name in enumerate(("Active App", "Unmarked App", "Archived App", "New App"), 1)
+    ]
+    imported = mocker.patch("skills.bulk_refresh.datasets.import_startup_from_dealum")
+    scope, errors = bulk._resolve_targets(None, None, skills=skills)
+    assert not errors
+    expected = {"active-app", "unmarked-app", "new-app"} if skills is None else {"active-app"}
+    assert set(scope.names) == expected
+    assert {call.args[0] for call in imported.call_args_list} == expected
+    assert not is_active_dataset("unmarked-app")
+    assert is_archived_dataset("archived-app")
+    if skills is None:
+        assert find_dataset_location("new-app") is not None
+        assert not is_active_dataset("new-app")
+        assert not is_archived_dataset("new-app")
+    else:
+        assert find_dataset_location("new-app") is None
+    _, planned, _ = bulk._plan_jobs(scope, skills)
+    assert planned == {(name, "submission-ready") for name in expected}
+
+
+def test_explicit_skills_override_application_defaults():
+    scope = bulk._DatasetScope(("app",), {"app": "startups"}, {"app": "Application"})
+    _, planned, _ = bulk._plan_jobs(scope, "startup_profile,persons_in_dataset")
+    assert planned == {("app", skill) for skill in ("startup-profile", "startup-sector", "persons-in-dataset")}
+
+
+def test_named_new_application_is_imported_without_activation(mock_env, dealum, mocker):
+    dealum.return_value = [{"id": 1, "name": "New App", "step": "Application"}]
+    imported = mocker.patch("skills.bulk_refresh.datasets.import_startup_from_dealum")
+    scope, errors = bulk._resolve_targets("new-app", None, skills="submission_ready")
+    assert not errors and scope.names == ("new-app",)
+    assert not is_active_dataset("new-app")
+    assert not is_archived_dataset("new-app")
+    imported.assert_called_once()
+    assert imported.call_args.kwargs["activate"] is False
+
+
+@pytest.mark.asyncio
+async def test_default_application_screening_reuses_bulk_import(mock_env, dealum, mocker):
+    import importlib
+    importing = importlib.import_module("lib.startups.dealum.importing")
+    screening = importlib.import_module("skills.submission_ready.submission_ready")
+    dealum.return_value = [{"id": 1, "name": "New App", "step": "Application", "createDate": "2026-09-01"}]
+    imported = mocker.spy(importing, "_import_application")
+    mocker.patch.object(bulk, "sync_datasets", return_value=[])
+    mocker.patch.object(screening, "sync_datasets", return_value=[])
+    calls = []
+
+    async def screen(dataset):
+        calls.append(dataset)
+        adapter = screening.DealumAdapter()
+        applications = screening.list_applications(adapter)
+        match = screening.reconcile_dealum_startup(dataset, adapter=adapter, applications=applications)
+        await screening._prepare_dataset(match, applications=applications, adapter=adapter, force_refresh=True)
+        return []
+
+    from dataclasses import replace
+    mocker.patch.dict(bulk.SKILL_REGISTRY, {
+        "submission-ready": replace(bulk.SKILL_REGISTRY["submission-ready"], func=screen),
+    })
+    await bulk.bulk_refresh()
+    assert calls == ["new-app"]
+    assert imported.call_count == 1
+    dealum.assert_called_once()
+    assert not is_active_dataset("new-app")

@@ -12,7 +12,9 @@ stage-mandatory or explicitly selected registry workflows.
 
 The async `bulk_refresh(datasets=None, skills=None, exclude=None)` returns `None` on success.
 Selectors are comma-separated strings or `all`. No dataset selector means
-active startup/community datasets after state updates; `all` includes inactive
+active startup/community datasets after state updates; when skills are also
+omitted, include open, unarchived Application dossiers for screening. With
+explicit skills and no dataset selector, keep the active-dataset selection; `all` includes inactive
 ones. Named datasets may also be inactive and explicit selection does not activate
 them. Generated datasets are excluded. Omitted skills select mandatory skills
 per dataset's stage; `skills=all` selects the full applicable registry. Named
@@ -21,17 +23,19 @@ skills expand their prerequisites. Domain restrictions always apply.
 ## Dataset scope and state
 
 First determine candidate datasets, resolve their Dealum stages and update markers
-using the existing local timestamps. Then acquire Dealum sources only for active,
-non-Application dossiers, including missing dossiers newly activated by stage.
+using the existing local timestamps. Then acquire Dealum sources for active
+dossiers and selected open, unarchived Application dossiers, including newly
+discovered dossiers. Application dossiers are created without an active marker.
 All candidate states are decided before downloads begin; downloads cannot keep
 an already expired dossier alive. Non-Dealum dossiers use local files from the
 separate external sync. This step performs no parsing, embedding or insight generation.
 Named selectors limit all state updates
 and imports to those named datasets. A named missing startup is created only when
-its resolved Dealum stage is always active; an absent match or other stage is an
+its resolved Dealum stage is always active or Application; an absent match or other stage is an
 error without dossier creation. Startup aliases use the shared canonical slug.
 Broad selectors also discover missing
-dossiers in the always-active stages, using the shared Dealum matcher and
+dossiers in the always-active stages and, for default skill selection or an
+explicit dataset scope, Application, using the shared Dealum matcher and
 `ensure_startup_dossier`; historical pitched/rejected applications are not imported
 just because no local dossier exists. Existing archived dossiers in scope are
 still assigned their current stage, but are not downloaded or automatically reactivated.
@@ -54,19 +58,20 @@ Active datasets outside the four always-active stages expire when their latest e
 reaches the cutoff. An archived marker takes precedence over every stage: new source
 material and later stage changes never reactivate it. Only manual activation removes
 that block. An unmarked dataset defaults to archived unless an always-active stage
-applies. An unmarked dossier at stage `Application`, as created by
-[application_feedback](../application_feedback/SKILL.md), stays unmarked, so
+applies. An unmarked dossier at stage `Application` stays unmarked, so
 it is activated once it reaches an always-active stage. Renaming the active
 marker to archived is not a qualifying source edit. Archiving changes
 eligibility only; it does not delete or zip anything.
 
-Application data is never downloaded by bulk refresh, including through composed
-skills selected with `--skills all` or explicit lists. Existing Application dossiers
-are aged using local files. Other existing, non-archived Dealum dossiers receive
-source updates after the activity decision. Missing dossiers are created only
-for Under Review, Jury, jury reserves, and Pitching; pitched and rejected history
-is never imported just because it exists in Dealum. Explicit dataset selection can
-process local archived files, but does not remove the archive or enable downloads.
+Application-stage screening does not activate unmarked dossiers. Existing active
+Application dossiers retain the inactivity rule; explicitly archived dossiers
+remain protected. Selected active Application dossiers are downloaded even with
+explicit skills. Explicit skills without a dataset selector do not discover new
+Application dossiers or include unmarked ones. Missing dossiers in Under Review,
+Jury, jury reserves and Pitching are still discovered normally. Pitched and
+rejected history is never imported merely because it exists in Dealum.
+Explicit dataset selection can process local archived files, but does not remove
+the archive or enable downloads.
 
 Missing credentials, failed lookups, ambiguous applications and unknown/missing
 stages are errors, not “absent from Dealum.” Affected startup work is skipped;
@@ -82,10 +87,14 @@ wildcard declarations also apply to supported community datasets.
 
 | Skill | Mandatory stages |
 |---|---|
-| `startup-profile`, `persons-in-dataset` | All supported datasets |
-| `submission-ready` | `Under Review` |
+| `startup-profile`, `persons-in-dataset` | All supported datasets except Application-stage startups |
+| `submission-ready` | `Application`, `Under Review` |
 | `startup-website-import` | `Jury`, jury reserves, `Pitching`, `Pitched @ SICTIC` |
 | `startup-traction` | `Pitched @ SICTIC`, absent from Dealum |
+
+Application-stage defaults run only `submission-ready`. Registry
+`excluded_mandatory_stages` suppresses the wildcard profile/discovery defaults;
+explicit skill selections and dependencies remain unaffected.
 
 `person-profile` is not mandatory at any stage. It remains available through
 explicit skill selection, `--skills all`, or as a prerequisite of a selected skill.

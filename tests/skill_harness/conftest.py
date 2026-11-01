@@ -336,6 +336,7 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
                     "name": "example-startup",
                     "code": "EXAMPLE-1",
                     "step": "Application",
+                    "createDate": "2026-10-29T12:00:00Z",
                 }
             ]
 

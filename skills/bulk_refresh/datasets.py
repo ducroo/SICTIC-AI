@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 def update_dataset_states(
     names: tuple[str, ...], *, discover: bool, excluded: set[str],
+    include_applications: bool = True,
 ) -> tuple[tuple[str, ...], dict[str, str | None], dict[str, str]]:
     """Return candidate names, resolved stages and isolated acquisition/state errors.
 
@@ -25,6 +26,7 @@ def update_dataset_states(
     stages: dict[str, str | None] = {}
     errors: dict[str, str] = {}
     imports: list[str] = []
+    creatable_stages = ALWAYS_ACTIVE_STAGES | ({APPLICATION_STAGE} if include_applications else set())
     adapter = DealumAdapter()
     applications = None
     lookup_error = None
@@ -53,7 +55,7 @@ def update_dataset_states(
             try:
                 match = reconcile_dealum_startup(name, adapter=adapter, applications=applications)
                 stage = canonical_stage(match.step)
-                if stage in ALWAYS_ACTIVE_STAGES:
+                if stage in creatable_stages:
                     names.append(slug)
             except Exception as error:
                 errors[slug] = str(error)
@@ -79,7 +81,7 @@ def update_dataset_states(
             else:
                 stage = canonical_stage(match.step)
                 stages[name] = stage
-                if location is None and stage not in ALWAYS_ACTIVE_STAGES:
+                if location is None and stage not in creatable_stages:
                     raise ValueError(
                         f"Missing dossier '{name}' cannot be created for stage '{stage}'"
                     )
@@ -90,16 +92,19 @@ def update_dataset_states(
                         ensure_startup_dossier(name, activate=True)
                     else:
                         activate_dataset(name)
-                elif stage == APPLICATION_STAGE and not is_active_dataset(name):
+                elif stage == APPLICATION_STAGE and (location is None or not is_active_dataset(name)):
                     # A dossier made by the application review has no marker yet.
                     # Keep it unmarked, so it is activated once it is under review.
-                    pass
+                    if location is None:
+                        ensure_startup_dossier(name, activate=False)
                 else:
                     update_dataset_inactivity(name, months=months)
 
                 # Activity is decided from the current local data before acquiring
                 # anything. Downloads cannot extend the life of an expired dossier.
-                if not is_active_dataset(name) or stage == APPLICATION_STAGE:
+                application_in_scope = (stage == APPLICATION_STAGE and include_applications
+                                        and not is_archived_dataset(name))
+                if not is_active_dataset(name) and not application_in_scope:
                     session = current_session()
                     if session is not None:
                         session.source_imports_disabled.add(name)
@@ -114,8 +119,8 @@ def update_dataset_states(
         except Exception as error:
             logger.exception("[%s] Dataset state/source update failed", name)
             errors[name] = str(error)
-    # All candidate states have now been decided. Only active, non-Application
-    # dossiers are hydrated, including newly created ones.
+    # All candidate states have now been decided. Hydrate active dossiers and
+    # open, unarchived applications without activating the latter.
     for name in imports:
         try:
             import_startup_from_dealum(

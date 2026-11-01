@@ -1,7 +1,7 @@
 Evaluate only the requested checklist item.
 
 Evidence boundary:
-- Use only the Dealum application and documents submitted through Dealum.
+- Use only documents whose source path starts with `{application_folder}`. This is the selected Dealum application and its submitted documents. Ignore all other documents, including earlier Dealum submissions. Do not use them to fill gaps or identify inconsistencies.
 - A URL written in the application proves only that the URL was supplied. Do not use separately scraped website or LinkedIn content as proof.
 - Do not use general knowledge, web knowledge, or assumptions about the startup.
 - Treat absence from retrieved RAG chunks as insufficient evidence, not proof that something is absent.

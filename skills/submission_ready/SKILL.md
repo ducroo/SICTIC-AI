@@ -25,9 +25,15 @@ Within bulk refresh, reuse that run's application snapshot and successful import
 instead of acquiring the same submission twice. Standalone named calls still import.
 Import preserves the prior snapshot until attachments have downloaded.
 Synchronize before the checklist audit. No profile skill is a registry prerequisite.
+Bulk refresh defaults to this skill for Application and Under Review;
+Application-stage defaults run only this skill.
 
 Use `config/submission_ready/` for policy, questions, statuses and proposed actions.
-The prompt restricts evidence to Dealum submissions; retrieval itself searches
+The prompt restricts evidence to the selected application's `dealum/YYYY-MM-DD/`
+folder, using its `createDate` through the importer's shared date helper. Other
+documents, including earlier applications, must not fill gaps or establish
+inconsistencies. The resolved folder participates in the audit's instruction
+cache key. Retrieval itself searches
 the whole startup dataset. This is the accepted prompt-based restriction, not a
 source filter. Business attractiveness and jury assessment are outside the task.
 

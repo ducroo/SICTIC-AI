@@ -16,8 +16,9 @@ def main(
         "-d",
         help=(
             "Comma-separated source datasets, or 'all'. "
-            "Named missing startups are created only for always-active Dealum stages. "
-            "Defaults to active startup and community datasets, or all when --exclude is supplied."
+            "Named missing startups are created for Application or always-active Dealum stages. "
+            "Defaults to active datasets, plus open unarchived applications when skills are omitted; "
+            "all source datasets when --exclude is supplied."
         ),
     ),
     skills: Optional[str] = typer.Option(
