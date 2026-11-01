@@ -1,37 +1,41 @@
 ---
 name: send_gmail
-description: Email a complete Markdown insight through gws, using a helper to produce readable HTML with inline styling. Use when the requester has authorized email delivery.
+description: Render a complete Markdown insight as readable HTML with inline styling and send it through gws. Use through distribution_policy, which decides who receives which insight; the CLI only converts for previews.
 ---
 
 # Send Gmail
 
-Use the requester's provided email address and a descriptive subject. Follow
-the conversation's email preference in [AGENTS.md](../../AGENTS.md#emailing-individual-insights).
-If `gws` is unavailable, provide the insight in chat without offering email.
-Send the complete content in the body, with no attachment. For a deep-dive
-invitation, send to the requester, not the recipients listed inside it.
+Render and send insight emails. Who receives which insight is decided by
+[distribution_policy](../distribution_policy/SKILL.md); agents email requested
+insights through its `requested` command, not through `gws` directly. If `gws`
+is unavailable, provide the insight in chat without offering email.
+
+## Operations and effects
+
+`send_gmail(markdown, recipients, subject)` sends the complete Markdown content
+in the body of one HTML email, without attachment, through the shared
+`send_html_email` from `lib.infrastructure.gmail`. It raises when `gws` fails.
+A failed send may still have been delivered, so callers do not retry it
+automatically.
+
+`markdown_to_email(markdown)` renders the HTML. It uses `markdown-it-py` and
+Beautiful Soup from `sictic-env`, applies inline styling for typography, lists,
+code and tables, preserves Markdown links and escapes raw HTML.
 
 ## Usage
 
-1. Convert the Markdown file to styled HTML; the helper prints the path to a
-   unique temporary file:
+Convert a Markdown file to styled HTML to preview an email; the helper prints
+the path to a unique temporary file:
 
-   ```bash
-   email_html="$(conda run -n sictic-env python -m skills.send_gmail /path/to/insight.md)"
-   ```
+```bash
+conda run -n sictic-env python -m skills.send_gmail /path/to/insight.md
+```
 
-2. Only after successful conversion, send the HTML body:
+`--output /path/to/email.html` selects an output path. The CLI only converts
+files; `gws` owns authentication and sending. There is no bulk refresh or
+harness registration.
 
-   ```bash
-   gws gmail +send --to 'recipient@example.com' --subject 'Insight title' \
-     --html --body "$(cat "$email_html")"
-   ```
+## References
 
-Confirm sending only after `gws` reports success. Report failures; do not
-automatically retry an uncertain send. Remove the temporary HTML file when done.
-
-The helper uses `markdown-it-py` and Beautiful Soup from `sictic-env`. It applies
-inline styling for typography, lists, code and tables, preserves Markdown links
-and escapes raw HTML. `--output /path/to/email.html` selects an output path.
-It only converts files; `gws` owns authentication and sending. There is no bulk
-refresh or harness registration.
+- [Rendering](render_email.py), [sending](send_gmail.py), [CLI](__main__.py)
+- [Distribution rules](../distribution_policy/SKILL.md)

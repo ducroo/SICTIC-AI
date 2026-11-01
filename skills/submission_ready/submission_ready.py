@@ -575,6 +575,34 @@ def _save_failure_report(
     return insight
 
 
+def latest_response(startup: str) -> InsightFile | None:
+    """Return the newest stored response of the current model, or None.
+
+    Run folders are named by their UTC timestamp, so the last folder with a
+    response holds the latest generated or reused review. This does not check
+    freshness; run submission_ready first when the review must be current.
+    """
+    location = find_dataset_location(slugify(startup))
+    if location is None:
+        return None
+    storage = get_storage()
+    root = f"{location.insights_rel}/{slugify('submission_ready')}"
+    for run_id in reversed(storage.list(root)):
+        if not storage.is_dir(f"{root}/{run_id}"):
+            continue
+        response = InsightFile(
+            dataset=location.slug,
+            skill="submission_ready",
+            model=llm_model(),
+            identifier="response",
+            subdir=True,
+            run_id=run_id,
+        )
+        if response.exists():
+            return response
+    return None
+
+
 def _latest_existing_artifacts(
     startup: str,
 ) -> tuple[str | None, str | None]:

@@ -89,10 +89,12 @@ wildcard declarations also apply to supported community datasets.
 |---|---|
 | `startup-profile`, `persons-in-dataset` | All supported datasets except Application-stage startups |
 | `submission-ready` | `Application`, `Under Review` |
+| `application-feedback` | `Application`, after `submission-ready` |
 | `startup-website-import` | `Jury`, jury reserves, `Pitching`, `Pitched @ SICTIC` |
 | `startup-traction` | `Pitched @ SICTIC`, absent from Dealum |
 
-Application-stage defaults run only `submission-ready`. Registry
+Application-stage defaults run only `submission-ready` and the feedback draft
+of [application_feedback](../application_feedback/SKILL.md). Registry
 `excluded_mandatory_stages` suppresses the wildcard profile/discovery defaults;
 explicit skill selections and dependencies remain unaffected.
 
@@ -137,7 +139,10 @@ imports, discovery, enrichment, conversion, indexing and report generation.
 Each skill owns artifact reuse. The command does not itself install a schedule.
 One run shares its Dealum application snapshot and successful imports across
 composed workflows. This run-local reuse does not change standalone import calls.
-Google Drive synchronization and cron scheduling remain external.
+Google Drive synchronization and cron scheduling remain external. Bulk refresh
+sends no email; the nightly schedule calls
+[distribution_policy](../distribution_policy/SKILL.md) afterwards to email the
+screener summary.
 
 ## Usage
 
