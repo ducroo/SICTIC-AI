@@ -14,5 +14,5 @@ class DocumentConversion:
 
 
 SPREADSHEET_CONVERSION_MARKER = (
-    "<!-- sictic-document-conversion: spreadsheet-values-v5 -->"
+    "<!-- sictic-document-conversion: spreadsheet-values-v6 -->"
 )

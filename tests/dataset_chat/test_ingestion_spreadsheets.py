@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from lib.datasets.conversion import spreadsheet_cache_is_current
 from lib.infrastructure.document_conversion import (
     SPREADSHEET_CONVERSION_MARKER,
@@ -48,11 +50,12 @@ def test_current_spreadsheet_conversion_cache_is_current():
     assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is True
 
 
-def test_value_only_spreadsheet_cache_is_stale():
+@pytest.mark.parametrize("version", [4, 5])
+def test_previous_spreadsheet_cache_is_stale(version):
     storage = SimpleNamespace(
         exists=lambda _path: True,
         read_text=lambda _path: (
-            "<!-- sictic-document-conversion: spreadsheet-values-v4 -->\n\n## Sheet\n"
+            f"<!-- sictic-document-conversion: spreadsheet-values-v{version} -->\n\n## Sheet\n"
         ),
     )
 

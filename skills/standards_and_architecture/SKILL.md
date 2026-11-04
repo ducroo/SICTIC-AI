@@ -545,6 +545,9 @@ source selection, persistence and indexing.
 Spreadsheet conversion prefers cached calculated values. For XLSX/XLSM formula
 cells without a cached result, retain the formula in the Markdown cell and mark
 the calculated result as unavailable; this is not a blank submitted cell.
+Exclude unavailable-formula cells from header-label inference while retaining
+them in the rendered table. What-If Data Table formulas retain deterministic
+range, input-reference and flag metadata rather than Python object descriptions.
 Conversion does not evaluate formulas. The spreadsheet conversion marker lets
 normal ingestion replace older extracts that omitted uncached formulas.
 

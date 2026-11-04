@@ -65,6 +65,7 @@ def convert_openpyxl(filepath: str) -> DocumentConversion:
                 )
 
             row_cells: dict[int, dict[int, str]] = {}
+            uncached_cells: set[tuple[int, int]] = set()
             for (row, col), cell in values_ws._cells.items():
                 if is_hidden(row, col):
                     continue
@@ -92,9 +93,8 @@ def convert_openpyxl(filepath: str) -> DocumentConversion:
                     )
                 ):
                     missing_cached_formulas += 1
-                    formula = format_cell_value(
-                        getattr(formula_cell.value, "text", formula_cell.value)
-                    )
+                    uncached_cells.add((row, col))
+                    formula = _format_formula(formula_cell.value)
                     row_cells.setdefault(row, {})[col] = (
                         f"Formula: {formula} "
                         "[calculated result unavailable: no cached value]"
@@ -104,15 +104,21 @@ def convert_openpyxl(filepath: str) -> DocumentConversion:
                 continue
             sections.append(f"## {values_ws.title}")
             rows: list[list[str]] = []
-            for row_index in sorted(row_cells):
+            non_label_cells: set[tuple[int, int]] = set()
+            for output_row, row_index in enumerate(sorted(row_cells)):
                 columns = row_cells[row_index]
+                non_label_cells.update(
+                    (output_row, column - 1)
+                    for column in columns
+                    if (row_index, column) in uncached_cells
+                )
                 rows.append(
                     [
                         columns.get(column_index, "")
                         for column_index in range(1, max(columns) + 1)
                     ]
                 )
-            sections.extend(render_rows(rows))
+            sections.extend(render_rows(rows, non_label_cells=non_label_cells))
             sections.append("")
     finally:
         values_wb.close()
@@ -181,12 +187,25 @@ def escape_markdown_cell(value: str) -> str:
     return value.replace("|", "\\|")
 
 
-def render_rows(rows: list[list[str]]) -> list[str]:
+def render_rows(
+    rows: list[list[str]], *, non_label_cells: set[tuple[int, int]] | None = None,
+) -> list[str]:
     """Render one worksheet as compact, valid Markdown."""
     if not rows:
         return []
     rendered = [render_row(row) for row in rows]
-    header_index = select_header(rendered)
+    # Formula fallback text describes data, not column labels. Mask it only
+    # for inference; keep the original content in the rendered table.
+    header_candidates = rendered
+    if non_label_cells:
+        header_candidates = [
+            render_row([
+                "" if (row_index, column) in non_label_cells else cell
+                for column, cell in enumerate(row)
+            ])
+            for row_index, row in enumerate(rows)
+        ]
+    header_index = select_header(header_candidates)
     if header_index < 0:
         width = max(len(row) for row in rows)
         return [
@@ -225,6 +244,33 @@ def render_row(row: list[str]) -> str:
 
 def render_separator(columns: int) -> str:
     return "| " + " | ".join("---" for _ in range(columns)) + " |"
+
+
+def _format_formula(value) -> str:
+    """Keep expression text or stable metadata; never emit an object repr."""
+    from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
+
+    if isinstance(value, str):
+        return format_cell_value(value)
+    if isinstance(value, DataTableFormula):
+        # openpyxl retains present XML flags as strings, including "0".
+        true_values = (True, "1", "true")
+        kind = "two-variable" if value.dt2D in true_values else "one-variable"
+        attributes = [
+            f"{key}={format_cell_value(getattr(value, key))}"
+            for key in ("ref", "r1", "r2")
+            if getattr(value, key) is not None
+        ]
+        attributes.extend(
+            f"{key}={format_cell_value(getattr(value, key) in true_values)}"
+            for key in ("dtr", "del1", "del2", "ca")
+        )
+        return f"What-If Data Table ({kind}; {'; '.join(attributes)})"
+    if isinstance(value, ArrayFormula):
+        return format_cell_value(value.text) or (
+            f"Array formula (ref={value.ref}; expression unavailable)"
+        )
+    return f"Unsupported formula type: {type(value).__name__}"
 
 
 def format_cell_value(value, number_format: str = "") -> str:

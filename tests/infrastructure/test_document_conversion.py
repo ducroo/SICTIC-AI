@@ -7,6 +7,7 @@ from zipfile import ZipFile
 import pytest
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
+from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
 
 from lib.infrastructure.document_conversion import (
     DocumentConversion,
@@ -227,13 +228,18 @@ def test_spreadsheet_conversion_warns_about_uncached_formulas(tmp_path):
         ("", "str", "General", ""),
     ],
 )
+@pytest.mark.parametrize("formula_kind", ["ordinary", "array", "data-table"])
 def test_spreadsheet_conversion_prefers_cached_formula_results(
-    tmp_path, cached_value, data_type, number_format, expected,
+    tmp_path, cached_value, data_type, number_format, expected, formula_kind,
 ):
     workbook = Workbook()
     sheet = workbook.active
     sheet.append(["Name", "Amount"])
     sheet.append(["Seed", "=40+60"])
+    if formula_kind == "array":
+        sheet["B2"] = ArrayFormula(ref="B2", text="=40+60")
+    elif formula_kind == "data-table":
+        sheet["B2"] = DataTableFormula(ref="B2:C3", r1="D5")
     sheet["B2"].number_format = number_format
     path = tmp_path / "cached.xlsx"
     workbook.save(path)
@@ -256,6 +262,7 @@ def test_spreadsheet_conversion_prefers_cached_formula_results(
 
     assert f"| Seed | {expected} |" in conversion.markdown
     assert "=40+60" not in conversion.markdown
+    assert "What-If Data Table" not in conversion.markdown
     assert "calculated result unavailable" not in conversion.markdown
     assert conversion.warnings == ()
 
@@ -271,6 +278,57 @@ def test_spreadsheet_conversion_retains_a_formula_only_sheet(tmp_path):
     assert "## Sheet" in conversion.markdown
     assert 'Formula: =IF(TRUE,"a\\|b","c")' in conversion.markdown
     assert "[calculated result unavailable: no cached value]" in conversion.markdown
+
+
+@pytest.mark.parametrize(
+    "two_variable,row_oriented,input2,kind,expected_orientation",
+    [
+        (False, False, None, "one-variable", "FALSE"),
+        (False, True, None, "one-variable", "TRUE"),
+        (True, False, "E5", "two-variable", "FALSE"),
+        ("0", "0", None, "one-variable", "FALSE"),
+        ("false", "false", None, "one-variable", "FALSE"),
+        ("1", "true", "E5", "two-variable", "TRUE"),
+    ],
+)
+def test_uncached_data_table_formula_metadata_is_stable(
+    tmp_path, two_variable, row_oriented, input2, kind, expected_orientation,
+):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Input", "Output"])
+    sheet["A2"] = 1
+    sheet["B2"] = DataTableFormula(
+        ref="B2:C3", dt2D=two_variable, dtr=row_oriented,
+        r1="D5", r2=input2, del1=True, ca=True,
+    )
+    path = tmp_path / "data-table.xlsx"
+    workbook.save(path)
+
+    first = convert_spreadsheet(path)
+    second = convert_spreadsheet(path)
+
+    assert first == second
+    assert f"Formula: What-If Data Table ({kind}; ref=B2:C3; r1=D5;" in first.markdown
+    assert f"dtr={expected_orientation}" in first.markdown
+    assert "del1=TRUE" in first.markdown
+    assert "del2=FALSE" in first.markdown
+    assert "ca=TRUE" in first.markdown
+    assert ("r2=E5" in first.markdown) == (input2 is not None)
+    assert "[calculated result unavailable: no cached value]" in first.markdown
+    assert "object at" not in first.markdown
+
+
+def test_uncached_array_formula_keeps_expression(tmp_path):
+    workbook = Workbook()
+    workbook.active["A1"] = ArrayFormula(ref="A1:A2", text="=SUM(B1:B2)")
+    path = tmp_path / "array.xlsx"
+    workbook.save(path)
+
+    conversion = convert_spreadsheet(path)
+
+    assert "Formula: =SUM(B1:B2) [calculated result unavailable" in conversion.markdown
+    assert "object at" not in conversion.markdown
 
 
 def test_spreadsheet_conversion_pads_rows_to_a_valid_table_width(tmp_path):
