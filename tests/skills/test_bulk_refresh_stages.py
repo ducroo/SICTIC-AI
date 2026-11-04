@@ -546,7 +546,11 @@ def test_default_application_scope_preserves_explicit_skill_active_selection(moc
     else:
         assert find_dataset_location("new-app") is None
     _, planned, _ = bulk._plan_jobs(scope, skills)
-    assert planned == {(name, "submission-ready") for name in expected}
+    expected_jobs = {(name, "submission-ready") for name in expected}
+    if skills is None:
+        # Application-stage defaults also draft the feedback after the review.
+        expected_jobs |= {(name, "application-feedback") for name in expected}
+    assert planned == expected_jobs
 
 
 def test_explicit_skills_override_application_defaults():
@@ -585,12 +589,21 @@ async def test_default_application_screening_reuses_bulk_import(mock_env, dealum
         await screening._prepare_dataset(match, applications=applications, adapter=adapter, force_refresh=True)
         return []
 
+    drafted = []
+
+    async def draft(dataset):
+        drafted.append((dataset, list(calls)))
+        return []
+
     from dataclasses import replace
     mocker.patch.dict(bulk.SKILL_REGISTRY, {
         "submission-ready": replace(bulk.SKILL_REGISTRY["submission-ready"], func=screen),
+        "application-feedback": replace(bulk.SKILL_REGISTRY["application-feedback"], func=draft),
     })
     await bulk.bulk_refresh()
     assert calls == ["new-app"]
+    # The feedback draft follows the review in the same run.
+    assert drafted == [("new-app", ["new-app"])]
     assert imported.call_count == 1
     dealum.assert_called_once()
     assert not is_active_dataset("new-app")

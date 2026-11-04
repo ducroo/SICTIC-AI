@@ -67,3 +67,23 @@ def test_missing_input_fails_without_creating_output(tmp_path):
     result = CliRunner().invoke(app, [str(tmp_path / "missing.md"), "--output", str(output)])
     assert result.exit_code != 0
     assert not output.exists()
+
+
+def test_send_gmail_sends_the_rendered_markdown(mocker):
+    from skills.send_gmail import send_gmail as module
+
+    send = mocker.patch.object(module, "send_html_email")
+
+    module.send_gmail("# Title\n\nBody text.", ["a@sictic.ch"], " Subject ")
+
+    recipients, subject, html = send.call_args.args
+    assert recipients == ["a@sictic.ch"]
+    assert subject == "Subject"
+    assert "<h1" in html and "Body text." in html
+
+
+def test_send_gmail_requires_a_subject():
+    from skills.send_gmail.send_gmail import send_gmail
+
+    with pytest.raises(ValueError, match="subject"):
+        send_gmail("# Title", ["a@sictic.ch"], " ")

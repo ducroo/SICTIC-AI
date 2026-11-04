@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from lib.startups.dealum.stages import PITCHED_STAGE, RESEARCH_STAGES
 from skills.startup_website_import.startup_website_import import startup_website_import
 
+from skills.application_feedback.application_feedback import application_feedback
 from skills.captable.captable import captable
 from skills.captable_build.captable_build import captable_build
 from skills.cla_review.cla_review import cla_review
@@ -114,6 +115,12 @@ SKILL_REGISTRY = {
         func=submission_ready,
         domains=frozenset({"startups"}),
         mandatory_stages=frozenset({"Application", "Under Review"}),
+    ),
+    "application-feedback": SkillSpec(
+        func=application_feedback,
+        domains=frozenset({"startups"}),
+        depends_on=("submission-ready",),
+        mandatory_stages=frozenset({"Application"}),
     ),
     "investor-profile": SkillSpec(
         func=investor_profile,
