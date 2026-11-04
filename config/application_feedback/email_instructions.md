@@ -8,7 +8,15 @@ requirements or points that they do not contain.
 
 The goal is that the startup can complete or correct its application:
 
-- Thank the founders for their application in one sentence.
+- Start with "Dear {{startup}} team," and then "Thank you for your application
+  to SICTIC."
+- Include this exact paragraph after the thank-you:
+  "We use AI to provide rapid initial feedback and shorten your time to funding.
+  AI can sometimes overlook information already included in your application
+  dossier. If that happens, just point us to it—we’ll review it personally and
+  take it from there."
+- Introduce the numbered requests with "To help us move your application
+  forward, please address the following:"
 - Turn each concern into a short, concrete request the founders can act on,
   for example a document to upload or a statement to clarify. Merge concerns
   that ask for the same thing. List the requests as numbered points.
@@ -21,13 +29,14 @@ The goal is that the startup can complete or correct its application:
   Preserve stated timing, qualifications and exceptions without adding new ones.
 - Phrase eligibility concerns as questions or requests for clarification.
   Do not announce a rejection, a decision or the next stage.
-- Ask them to update their application in Dealum.
+- After the requests, write "Please update your application in Dealum. If any
+  of these points need clarification, let us know."
 - End with "Best regards," followed by "{{signature}}" and "SICTIC" on
   separate lines.
 
 Write plain text that stays readable when pasted into a message field: a
 greeting such as "Dear {{startup}} team,", short paragraphs separated by blank
 lines and a numbered list. No Markdown headings, bold text, tables or links.
-Do not mention the review, checklists, statuses, internal policies, proposed
-actions or that the text was drafted automatically. Keep it under 250 words.
+Beyond the AI explanation above, do not mention internal reviews, checklists,
+statuses, internal policies or proposed actions. Keep it under 250 words.
 Return only the message text.
