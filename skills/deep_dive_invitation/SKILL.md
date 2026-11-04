@@ -49,9 +49,15 @@ and Bcc. Apply this filter before the Bcc limit. Configuration currently request
 16 candidates and selects at most 10 usable experts. Bcc excludes addresses already
 in To/Cc; experts appear only in Bcc, not as named rows in the email body.
 
-Render the configured template mechanically after reconciliation. Cache freshness
-uses recorded indexed revisions, so unindexed source changes and direct edits to
-member preferences, stored contacts or expert reports do not independently invalidate
+Render the configured template mechanically after reconciliation. To/Cc/Bcc
+blocks contain one email address per line, each followed by a comma, without
+display names or angle brackets around valid addresses. Copy only the address
+lines into the corresponding mail field. Missing founder addresses retain their
+visible placeholders and must be completed before sending. Names remain in the
+reconciliation and interested-investor tables.
+
+Cache freshness uses recorded indexed revisions, so unindexed source changes and
+direct edits to member preferences, stored contacts or expert reports do not independently invalidate
 the invitation. Dependency outputs are not included in its cache key. Generated
 drafts using the previous key are regenerated once; manual precedence is unchanged.
 

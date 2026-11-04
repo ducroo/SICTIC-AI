@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import importlib
+from email.utils import getaddresses
 
 import pytest
 
@@ -10,6 +11,7 @@ from lib.storage import get_storage
 from skills.deep_dive_invitation.deep_dive_invitation import (
     deep_dive_invitation,
     parse_people_csv,
+    _recipient_header,
 )
 
 
@@ -115,12 +117,12 @@ async def test_deep_dive_invitation_renders_review_only_draft(
     assert "## Informational" in content
     assert "Automatic extraction of interested investors from Dealum is not configured" in content
     assert "From:  \njoelle@sictic.ch" in email
-    assert "To:  \nJane Founder <jane@startup.ch>" in email
-    assert "Cc:  \nInterested Member <member@gmail.com>" in email
+    assert "To:  \njane@startup.ch,  \n" in email
+    assert "Cc:  \nmember@gmail.com,  \n" in email
     assert "FONGIT | <insert email here>" in email
     assert "member@investor.sictic.ch" not in email
-    assert "Bcc:  \nExpert 0 <expert0@investor.sictic.ch>,  \n" in email
-    assert "Expert 9 <expert9@investor.sictic.ch>" in email
+    assert "Bcc:  \nexpert0@investor.sictic.ch,  \n" in email
+    assert "expert9@investor.sictic.ch,  \n" in email
     body = email.split("Subject:", 1)[1]
     assert "Expert 0" not in body
     assert "reason 0" not in body
@@ -128,6 +130,37 @@ async def test_deep_dive_invitation_renders_review_only_draft(
     assert "Dear Founders, Investors and Industry Experts," in email
     assert "### Founders: Action Required" not in email
     assert "### Industry Experts: FYI" not in email
-    assert "To:  \nJane Founder <jane@startup.ch>  \n\nCc:" in email
+    assert "To:  \njane@startup.ch,  \n\nCc:" in email
     assert "Member preference opt-outs excluded from expert search: 1" in content
     assert "Interested investors with an email in Cc: 1" in content
+
+
+@pytest.mark.parametrize("label", ["To", "Cc", "Bcc"])
+def test_recipient_blocks_copy_as_plain_comma_separated_addresses(label):
+    lines = _recipient_header(label, [
+        (Person(full_name="Doe, Jane"), "jane@example.com"),
+        (Person(full_name="Zoë Founder"), "zoe@example.com"),
+    ])
+
+    assert lines[0].strip() == f"{label}:"
+    addresses = "\n".join(lines[1:])
+    # A trailing comma may produce an empty RFC list entry; Mail ignores it.
+    assert [(name, address) for name, address in getaddresses([addresses]) if address] == [
+        ("", "jane@example.com"),
+        ("", "zoe@example.com"),
+    ]
+    assert all(line.rstrip().endswith(",") for line in lines[1:])
+    assert "Doe" not in addresses
+    assert "Zoë" not in addresses
+    assert "<" not in addresses
+    assert "mailto:" not in addresses
+
+
+def test_empty_recipient_block_has_no_address_line():
+    assert _recipient_header("Cc", []) == ["Cc:  "]
+
+
+def test_missing_founder_address_remains_visible_without_display_name():
+    assert _recipient_header("To", [
+        (Person(full_name="Jane Founder"), "<insert founder email here>"),
+    ]) == ["To:  ", "<insert founder email here>,  "]

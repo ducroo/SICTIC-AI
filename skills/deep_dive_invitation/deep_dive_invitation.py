@@ -342,25 +342,15 @@ def _reconciliation_table(
     return "\n".join(lines)
 
 
-def _address_label(person: Person, email: str) -> str:
-    name = person.full_name.strip()
-    if name and email.startswith("<insert "):
-        return f"{name} {email}"
-    if name and name.casefold() != email.casefold():
-        return f"{name} <{email}>"
-    return email
-
-
 def _recipient_header(
     label: str,
     recipients: list[tuple[Person, str]],
 ) -> list[str]:
-    """Render address lines that survive native Google Docs round-tripping."""
-    values = [_address_label(person, email) for person, email in recipients]
+    """Render email-only copyable lines with commas and Markdown hard breaks."""
     lines = [f"{label}:{_MARKDOWN_HARD_BREAK}"]
     lines.extend(
-        f"{value}{',' if index < len(values) - 1 else ''}{_MARKDOWN_HARD_BREAK}"
-        for index, value in enumerate(values)
+        f"{email},{_MARKDOWN_HARD_BREAK}"
+        for _person, email in recipients
     )
     return lines
 
