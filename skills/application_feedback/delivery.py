@@ -22,7 +22,7 @@ def delivery_journal(path: str):
     storage = get_storage()
     with manifest_write_lock(Path(storage.local_path(path))):
         entries = json.loads(storage.read_text(path)) if storage.exists(path) else {}
-        schema = load_repository_config("distribution_policy", "delivery_schema")
+        schema = load_repository_config("application_feedback", "delivery_schema")
         validate_json_schema(entries, schema)
 
         def save():

@@ -11,12 +11,12 @@ and `gws` is available, ask once whether they want this and future insights
 emailed to them. Remember and follow their answer within the conversation,
 unless they change it.
 
-If accepted, use the `requested` command of the
-[distribution_policy](skills/distribution_policy/SKILL.md) skill to send the
+If accepted, use the
+[send_gmail](skills/send_gmail/SKILL.md) skill to send the
 complete requested insight in the email body. This includes deep-dive
 invitations. Send only the requested insights, not the dependencies a
-workflow produced on the way. Running or selecting skills never sends email
-by itself.
+workflow produced on the way. Application-feedback reviewer emails follow
+the separately configured rule in application_feedback.
 
 ### Pitch deck review emails (`gws` on the VPS)
 

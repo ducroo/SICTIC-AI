@@ -518,9 +518,10 @@ Use `ApifyAdapter`, `DealumAdapter` and `WebSearchAdapter` for their
 provider operations. Business decisions belong in domain libraries
 or skills, not generic adapters. The Dealum integration only reads;
 a test guards that it sends no other requests than GET and HEAD.
-Insight emails follow the rules of the `distribution_policy` skill and
-are sent through `send_gmail`; running or selecting skills never sends
-email by itself. `send_html_email` in `lib.infrastructure.gmail` wraps
+Requested insight emails follow the opt-in rule in AGENTS.md and are sent
+through send_gmail. application_feedback separately emails one startup
+draft to APPLICATION_FEEDBACK_RECIPIENTS after verifying review freshness.
+`send_html_email` in `lib.infrastructure.gmail` wraps
 `gws gmail +send` for both insight and product emails. Its failures are
 not retried, because a failed send may still have been delivered.
 

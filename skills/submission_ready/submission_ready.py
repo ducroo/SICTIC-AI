@@ -39,6 +39,7 @@ from lib.startups.dealum import (
 from lib.storage import get_storage
 from lib.startups.dealum.session import list_applications
 from lib.startups.dealum.matching import application_create_day
+from lib.startups.dealum.manifest import read_manifest
 
 logger = get_logger(__name__)
 
@@ -465,16 +466,7 @@ async def _process_candidate(
             "audit": audit,
         },
     )
-    response_config_key = config_cache_key(
-        check_config,
-        load_repository_config("structured_output"),
-        {
-            "artifact": "response",
-            "stage": stage,
-            "audit_path": audit_insight.path,
-            "audit": audit,
-        },
-    )
+    response_config_key = _response_config_key(check_config, stage, audit_insight, audit)
     reusable_response = _reusable_run_insight(
         startup_slug,
         identifier="response",
@@ -575,12 +567,29 @@ def _save_failure_report(
     return insight
 
 
-def latest_response(startup: str) -> InsightFile | None:
+def _response_config_key(
+    check_config: dict[str, Any],
+    stage: str,
+    audit_insight: InsightFile,
+    audit: dict[str, Any],
+) -> str:
+    return config_cache_key(
+        check_config,
+        load_repository_config("structured_output"),
+        {
+            "artifact": "response", "stage": stage,
+            "audit_path": audit_insight.path, "audit": audit,
+        },
+    )
+
+
+def latest_response(startup: str, *, require_fresh: bool = False) -> InsightFile | None:
     """Return the newest stored response of the current model, or None.
 
     Run folders are named by their UTC timestamp, so the last folder with a
     response holds the latest generated or reused review. This does not check
-    freshness; run submission_ready first when the review must be current.
+    freshness unless require_fresh is set. Freshness uses the same response
+    configuration, current audit, stage and indexed revisions as generation.
     """
     location = find_dataset_location(slugify(startup))
     if location is None:
@@ -599,7 +608,24 @@ def latest_response(startup: str) -> InsightFile | None:
             run_id=run_id,
         )
         if response.exists():
-            return response
+            if not require_fresh:
+                return response
+            check_config = load_repository_config("submission_ready")
+            checklist = parse_checklist(check_config["checklist"])
+            audit_insight = InsightFile(
+                dataset=location.slug, skill="batch_audit", model=llm_model(),
+                identifier=f"submission_ready-{checklist.title}",
+                subdir=True, extension="json",
+            ).find(selection="any")
+            if audit_insight is None:
+                return None
+            audit = validate_audit_document(
+                json.loads(audit_insight.content()), require_complete=True,
+            )
+            step = read_manifest(location.slug).get("step")
+            stage = _canonical_stage(step) or str(step or "").strip() or "Unknown"
+            response.config_key = _response_config_key(check_config, stage, audit_insight, audit)
+            return response if response.is_reusable() else None
     return None
 
 

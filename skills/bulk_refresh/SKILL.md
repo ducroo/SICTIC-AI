@@ -139,10 +139,9 @@ imports, discovery, enrichment, conversion, indexing and report generation.
 Each skill owns artifact reuse. The command does not itself install a schedule.
 One run shares its Dealum application snapshot and successful imports across
 composed workflows. This run-local reuse does not change standalone import calls.
-Google Drive synchronization and cron scheduling remain external. Bulk refresh
-sends no email; the nightly schedule calls
-[distribution_policy](../distribution_policy/SKILL.md) afterwards to email the
-screener summary.
+Google Drive synchronization and cron scheduling remain external. At Application
+stage, application_feedback sends one email per startup with a fresh review and
+concerns to APPLICATION_FEEDBACK_RECIPIENTS. No separate nightly sender is needed.
 
 ## Usage
 

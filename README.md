@@ -253,8 +253,7 @@ Internal building blocks are intentionally omitted.
 | `suggested_startups` | ✅ | Ranks selected stored startup profiles for each investor; default dataset selection does not verify fundraising status. |
 | **Startup selection and jury** | | |
 | `submission_ready` | 🚧 | Checks whether a Dealum application is complete and meets initial eligibility criteria. |
-| `application_feedback` | 🚧 | Drafts the feedback email for an open Dealum application for the screener to proofread and send. |
-| `distribution_policy` | 🚧 | Emails the nightly feedback summary to the screeners and requested insights to their requesters. |
+| `application_feedback` | 🚧 | Drafts and emails feedback for one startup with a fresh submission review to configured reviewers. |
 | `pitch_ready` | 🚧 | Assesses whether a startup is mature enough and ready to pitch at a SICTIC event. |
 | **Due diligence** | | |
 | `dataset_chat` | ✅ | Answers evidence-based questions about a startup or community dataset. |

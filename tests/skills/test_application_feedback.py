@@ -10,10 +10,13 @@ from lib.storage import get_storage
 from skills.application_feedback import application_feedback as module
 from skills.application_feedback.application_feedback import (
     application_feedback,
-    feedback_state,
 )
 from skills.skill_registry import SKILL_REGISTRY
 from skills.submission_ready.submission_ready import proposed_action, stated_concerns
+from skills.submission_ready.submission_ready import _response_config_key
+from lib.infrastructure.configuration import load_repository_config
+from lib.batch_audit.checklist import parse_checklist
+from tests.skills.test_submission_ready import _audit_document
 
 MODEL = "ollama/test_model:1b"
 
@@ -41,7 +44,16 @@ def save_review(slug, name, action, concerns, run_id="20261031T000000Z"):
     manifest = IngestionManifest(storage, location.parsed_rel)
     manifest.indexed_dataset_revision = "revision-1"
     manifest.save()
-    storage.write_text(dealum_manifest_path(slug), json.dumps({"startup": name}))
+    storage.write_text(dealum_manifest_path(slug), json.dumps({"startup": name, "step": "Application"}))
+    check_config = load_repository_config("submission_ready")
+    audit = _audit_document()
+    audit["dataset"] = slug
+    audit_insight = InsightFile(
+        dataset=slug, skill="batch_audit", model=MODEL,
+        identifier=f"submission_ready-{parse_checklist(check_config['checklist']).title}",
+        subdir=True, extension="json",
+    )
+    audit_insight.save(json.dumps(audit))
     for identifier, content in (
         ("checklist", "# Checklist\n\n| 1 | Cap table | Unclear |\n"),
         ("response", response_report(action, concerns)),
@@ -53,6 +65,8 @@ def save_review(slug, name, action, concerns, run_id="20261031T000000Z"):
             identifier=identifier,
             subdir=True,
             run_id=run_id,
+            config_key=_response_config_key(check_config, "Application", audit_insight, audit)
+            if identifier == "response" else "",
         ).save(content)
 
 
@@ -60,6 +74,10 @@ def save_review(slug, name, action, concerns, run_id="20261031T000000Z"):
 def drafting(mock_env, monkeypatch):
     """Collect the prompts and reviewers that would go to the model."""
     monkeypatch.setenv("RANKED_LLMS", MODEL)
+    monkeypatch.delenv("APPLICATION_FEEDBACK_RECIPIENTS", raising=False)
+    async def sync(*args, **kwargs):
+        return []
+    monkeypatch.setattr(module, "sync_datasets", sync)
     calls = {"prompts": [], "reviewers": []}
 
     async def fake_generate_markdown(prompt, reviewer=None):
@@ -117,25 +135,21 @@ async def test_unchanged_concerns_reuse_the_draft_and_changed_ones_redraft(draft
 
 
 @pytest.mark.asyncio
-async def test_draft_requires_a_stored_review(drafting):
+async def test_missing_review_does_nothing(drafting):
     get_storage().mkdir(dataset_location_for_domain("alpha-bio", "startups").raw_rel)
 
-    with pytest.raises(ValueError, match="Run /submission_ready alpha-bio first"):
-        await application_feedback("alpha-bio")
+    assert await application_feedback("alpha-bio") == []
+    assert drafting["prompts"] == []
 
 
 @pytest.mark.asyncio
-async def test_feedback_state_reads_without_generating(drafting):
+async def test_cached_draft_is_returned_without_generating(drafting):
     save_review("alpha-bio", "Alpha Bio", "Send concerns to startup", ["Upload the cap table."])
 
-    before = feedback_state("alpha-bio")
     [draft] = await application_feedback("alpha-bio")
-    after = feedback_state("alpha-bio")
+    [cached] = await application_feedback("alpha-bio")
 
-    assert before.draft is None
-    assert before.startup == "Alpha Bio"
-    assert before.action == "Send concerns to startup"
-    assert after.draft.path == draft.path
+    assert cached.path == draft.path
     assert len(drafting["prompts"]) == 1
 
 

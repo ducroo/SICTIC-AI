@@ -1,1 +1,1 @@
-"""Feedback drafts for open Dealum applications."""
+"""Per-startup feedback drafts and internal reviewer delivery."""
