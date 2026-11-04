@@ -89,7 +89,7 @@ wildcard declarations also apply to supported community datasets.
 |---|---|
 | `startup-profile`, `persons-in-dataset` | All supported datasets except Application-stage startups |
 | `submission-ready` | `Application`, `Under Review` |
-| `application-feedback` | `Application`, after `submission-ready` |
+| `application-feedback` | `Application`, `Under Review`, after `submission-ready` |
 | `startup-website-import` | `Jury`, jury reserves, `Pitching`, `Pitched @ SICTIC` |
 | `startup-traction` | `Pitched @ SICTIC`, absent from Dealum |
 
@@ -140,7 +140,7 @@ Each skill owns artifact reuse. The command does not itself install a schedule.
 One run shares its Dealum application snapshot and successful imports across
 composed workflows. This run-local reuse does not change standalone import calls.
 Google Drive synchronization and cron scheduling remain external. At Application
-stage, application_feedback sends one email per startup with a fresh review and
+and Under Review stages, application_feedback sends one email per startup with a fresh review and
 concerns to APPLICATION_FEEDBACK_RECIPIENTS. No separate nightly sender is needed.
 
 ## Usage

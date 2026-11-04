@@ -196,7 +196,10 @@ def test_named_missing_scope_creates_only_selected_active_startups(mock_env, dea
     assert find_dataset_location("unrelated") is None
     assert [call.args[0] for call in imported.call_args_list] == list(selected)
     _, planned, _ = bulk._plan_jobs(scope, None)
-    assert len(planned) == 20
+    assert len(planned) == 22
+    assert {name for name, skill in planned if skill == "application-feedback"} == {
+        "adularia", "cellkinetica",
+    }
     assert {(name, "startup-sector") for name in selected} <= planned
 
 
@@ -283,6 +286,17 @@ def test_alias_tied_dates_remain_ambiguous(mock_env, dealum):
     assert "tied latest date" in errors["checksum"]
 
 
+@pytest.mark.parametrize("stage", ["Application", "Under Review"])
+def test_review_and_feedback_share_stages_and_dependency(stage):
+    scope = bulk._DatasetScope(("example",), {"example": "startups"}, {"example": stage})
+    nodes = bulk._nodes(scope, set(bulk.SKILL_REGISTRY))
+    graph = bulk._dependency_graph(scope, nodes)
+    selected = bulk._planned_nodes(scope, None, graph)
+    assert ("example", "submission-ready") in selected
+    assert ("example", "application-feedback") in selected
+    assert graph[("example", "application-feedback")] == {("example", "submission-ready")}
+
+
 def test_mandatory_skills_are_selected_per_dataset_with_domain_restrictions():
     scope = bulk._DatasetScope(
         ("review", "jury", "pitched", "local", "members"),
@@ -291,7 +305,7 @@ def test_mandatory_skills_are_selected_per_dataset_with_domain_restrictions():
     )
     nodes = bulk._nodes(scope, set(bulk.SKILL_REGISTRY))
     selected = bulk._planned_nodes(scope, None, bulk._dependency_graph(scope, nodes))
-    assert {skill for name, skill in selected if name == "review"} == {"startup-profile", "startup-sector", "persons-in-dataset", "submission-ready"}
+    assert {skill for name, skill in selected if name == "review"} == {"startup-profile", "startup-sector", "persons-in-dataset", "submission-ready", "application-feedback"}
     assert {skill for name, skill in selected if name == "jury"} == {"startup-profile", "startup-sector", "persons-in-dataset", "startup-website-import"}
     assert {skill for name, skill in selected if name == "pitched"} == {"startup-profile", "startup-sector", "persons-in-dataset", "startup-traction", "startup-website-import"}
     assert {skill for name, skill in selected if name == "local"} == {"startup-profile", "startup-sector", "persons-in-dataset", "startup-traction"}

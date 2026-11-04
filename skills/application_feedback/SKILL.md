@@ -1,6 +1,6 @@
 ---
 name: application_feedback
-description: Draft and email feedback for one startup with a fresh submission_ready review to configured internal reviewers. Bulk refresh invokes it per Application-stage startup.
+description: Draft and email feedback for one startup with a fresh submission_ready review to configured internal reviewers. Bulk refresh invokes it for Application and Under Review startups.
 ---
 
 # Application feedback
@@ -17,7 +17,8 @@ and send it to the applicant themselves.
 
 ## Workflow and dependencies
 
-Bulk refresh invokes this single-startup operation after submission-ready.
+Bulk refresh invokes this single-startup operation after submission-ready for
+both Application and Under Review stages.
 It never runs a review or loops over applications. When a stored review exists,
 synchronize the dataset and require a fresh review through
 `submission_ready.latest_response(require_fresh=True)`. Missing or stale reviews

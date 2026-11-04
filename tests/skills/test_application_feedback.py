@@ -240,5 +240,6 @@ def test_bulk_refresh_drafts_after_the_review_at_stage_application():
 
     assert spec.func is application_feedback
     assert spec.depends_on == ("submission-ready",)
-    assert spec.mandatory_stages == frozenset({"Application"})
+    assert spec.mandatory_stages == frozenset({"Application", "Under Review"})
+    assert spec.mandatory_stages == SKILL_REGISTRY["submission-ready"].mandatory_stages
     assert spec.domains == frozenset({"startups"})
