@@ -26,7 +26,7 @@ instead of acquiring the same submission twice. Standalone named calls still imp
 Import preserves the prior snapshot until attachments have downloaded.
 Synchronize before the checklist audit. No profile skill is a registry prerequisite.
 Bulk refresh defaults to this skill for Application and Under Review;
-at Application, it is followed only by the feedback draft of
+at Application, it is followed by per-startup feedback drafting and reviewer delivery through
 [application_feedback](../application_feedback/SKILL.md).
 
 Use `config/submission_ready/` for policy, questions, statuses and proposed actions.
@@ -71,7 +71,10 @@ Rendering consumes the accepted result without repeating those checks.
 Import Dealum data, synchronize, call models and save artifacts. Do not send
 messages or change Dealum stages; humans decide on the proposed action.
 `latest_response(startup)` returns the newest stored response of the current
-model without checking its freshness. `proposed_action(report)` and
+model. With `require_fresh=True`, it verifies the response against the current
+complete audit, review configuration, stored Dealum stage and indexed revisions
+through InsightFile. A changed audit invalidates an older response even if a
+newer run failed before saving its response. `proposed_action(report)` and
 `stated_concerns(report)` read the action and the two concern lists back from a
 rendered response for
 [application_feedback](../application_feedback/SKILL.md), which drafts

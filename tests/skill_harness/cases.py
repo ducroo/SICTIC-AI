@@ -24,7 +24,6 @@ SKILL_COVERAGE = {
     "deep_dive_invitation": "local-smoke",
     "dd_checks": "local-smoke",
     "dd_priorities": "local-smoke",
-    "distribution_policy": "existing-unit",
     "dealum_import": "utility-smoke",
     "import_companyresearch": "existing-unit",
     "expert_search": "local-smoke",

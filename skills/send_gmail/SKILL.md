@@ -1,13 +1,15 @@
 ---
 name: send_gmail
-description: Render a complete Markdown insight as readable HTML with inline styling and send it through gws. Use through distribution_policy, which decides who receives which insight; the CLI only converts for previews.
+description: Render a complete Markdown insight as readable HTML with inline styling and send it through gws. Use for opted-in requested insight emails and application feedback delivery; the CLI only converts for previews.
 ---
 
 # Send Gmail
 
-Render and send insight emails. Who receives which insight is decided by
-[distribution_policy](../distribution_policy/SKILL.md); agents email requested
-insights through its `requested` command, not through `gws` directly. If `gws`
+Render and send insight emails. Follow the requester opt-in rule in AGENTS.md:
+email only the requested insights, in full, to the requester, excluding workflow
+dependencies. For deep-dive invitations, the recipient is the requester, not
+the people listed inside the invitation. The application_feedback skill uses
+this same sending API for its configured internal recipients. If `gws`
 is unavailable, provide the insight in chat without offering email.
 
 ## Operations and effects
@@ -38,4 +40,4 @@ harness registration.
 ## References
 
 - [Rendering](render_email.py), [sending](send_gmail.py), [CLI](__main__.py)
-- [Distribution rules](../distribution_policy/SKILL.md)
+- [Application feedback](../application_feedback/SKILL.md)
