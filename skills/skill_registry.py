@@ -120,7 +120,7 @@ SKILL_REGISTRY = {
         func=application_feedback,
         domains=frozenset({"startups"}),
         depends_on=("submission-ready",),
-        mandatory_stages=frozenset({"Application"}),
+        mandatory_stages=frozenset({"Application", "Under Review"}),
     ),
     "investor-profile": SkillSpec(
         func=investor_profile,

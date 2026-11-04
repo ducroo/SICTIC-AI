@@ -26,7 +26,7 @@ instead of acquiring the same submission twice. Standalone named calls still imp
 Import preserves the prior snapshot until attachments have downloaded.
 Synchronize before the checklist audit. No profile skill is a registry prerequisite.
 Bulk refresh defaults to this skill for Application and Under Review;
-at Application, it is followed by per-startup feedback drafting and reviewer delivery through
+at both stages, it is followed by per-startup feedback drafting and reviewer delivery through
 [application_feedback](../application_feedback/SKILL.md).
 
 Use `config/submission_ready/` for policy, questions, statuses and proposed actions.
