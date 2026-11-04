@@ -1,9 +1,11 @@
 import datetime
 
 import pytest
+from openpyxl import Workbook
 
 from lib.infrastructure.document_conversion.docling_stack.spreadsheets import (
     format_cell_value,
+    convert_spreadsheet,
 )
 from lib.datasets.chunking import split_markdown
 from lib.markdown_tables import select_header
@@ -145,6 +147,34 @@ def test_previously_parsed_spreadsheets_are_still_recognised():
     legacy = "<!-- sictic-spreadsheet: compact-values-v1 -->\n\n## S\n| a | b |"
 
     assert is_spreadsheet_markdown(legacy)
+
+
+@pytest.mark.parametrize("year_headers", [[2026, 2027], ["2026 forecast", "2027 forecast"]])
+def test_uncached_formulas_remain_data_after_conversion_and_chunking(tmp_path, year_headers):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Metric", *year_headers])
+    sheet.append(["Revenue", "=1+2", "=3+4"])
+    for index in range(100):
+        sheet.append([f"Cost {index}", 10 + index, 20 + index])
+    path = tmp_path / "forecast.xlsx"
+    workbook.save(path)
+
+    converted = convert_spreadsheet(path).markdown
+    section = split_sheets(converted)[0]
+    chunks = split_markdown(converted, path.name, 0.0)
+
+    assert "Revenue" not in section.header
+    assert "Formula:" not in section.header
+    assert any("| Revenue | Formula: =1+2" in row for row in section.rows)
+    assert len(chunks) > 1
+    assert sum("Formula: =1+2" in chunk.text for chunk in chunks) == 1
+    assert sum("| Revenue |" in chunk.text for chunk in chunks) == 1
+    if isinstance(year_headers[0], str):
+        assert section.header == "| Metric | 2026 forecast | 2027 forecast |"
+        assert all(section.header in chunk.text for chunk in chunks)
+    else:
+        assert "| Metric | 2026 | 2027 |" in converted
 
 
 @pytest.mark.parametrize(

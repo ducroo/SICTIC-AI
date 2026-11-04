@@ -542,6 +542,15 @@ It returns `DocumentConversion(markdown, warnings)`. Preserve warnings,
 normalization and shared format handling. Dataset ingestion owns
 source selection, persistence and indexing.
 
+Spreadsheet conversion prefers cached calculated values. For XLSX/XLSM formula
+cells without a cached result, retain the formula in the Markdown cell and mark
+the calculated result as unavailable; this is not a blank submitted cell.
+Exclude unavailable-formula cells from header-label inference while retaining
+them in the rendered table. What-If Data Table formulas retain deterministic
+range, input-reference and flag metadata rather than Python object descriptions.
+Conversion does not evaluate formulas. The spreadsheet conversion marker lets
+normal ingestion replace older extracts that omitted uncached formulas.
+
 PDF conversion uses a page-selective OCR stage before Docling layout analysis.
 A PDFium geometry heuristic detects multiple uncovered text-like vector rows;
 only flagged pages receive full-page OCR. Ordinary pages keep the standard OCR
