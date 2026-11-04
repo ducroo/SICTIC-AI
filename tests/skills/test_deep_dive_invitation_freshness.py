@@ -100,7 +100,7 @@ async def test_fresh_generated_returns_before_all_dependencies(invitation):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("change", [
     "example-startup", "sictic-members", "missing-revision", "template",
-    "settings", "founders", "investors",
+    "settings", "format-version", "founders", "investors",
 ])
 async def test_stale_generated_runs_dependencies(invitation, change):
     [first] = await invitation.run("Example Startup")
@@ -116,6 +116,8 @@ async def test_stale_generated_runs_dependencies(invitation, change):
         invitation.config["email_template"] += "\nUpdated invitation wording.\n"
     elif change == "settings":
         invitation.config["settings"]["max_experts"] = 9
+    elif change == "format-version":
+        invitation.config["settings"]["output_format_version"] += 1
     else:
         kwargs[change] = [Person(full_name="New Contact", email_addresses=["new@example.com"])]
 
@@ -193,8 +195,8 @@ async def test_cc_changes_keep_ranking_request_identical_and_filter_before_limit
         full_name="Interested Member", email_addresses=["member@gmail.com"],
     )])
     first_content = first.content()
-    assert "Cc:  \nInterested Member <member@gmail.com>" in first_content
-    assert "Bcc:  \nAvailable Expert <expert@investor.sictic.ch>" in first_content
+    assert "Cc:  \nmember@gmail.com,  \n" in first_content
+    assert "Bcc:  \nexpert@investor.sictic.ch,  \n" in first_content
     assert "member@investor.sictic.ch" not in first_content
     assert "out@investor.sictic.ch" not in first_content
     assert "Interested investors with an email in Cc: 1" in first_content
@@ -207,4 +209,4 @@ async def test_cc_changes_keep_ranking_request_identical_and_filter_before_limit
 
     assert invitation.dependencies[3].await_count == 2
     assert invitation.dependencies[3].await_args == first_request
-    assert "Bcc:  \nInterested Member <member@investor.sictic.ch>" in second.content()
+    assert "Bcc:  \nmember@investor.sictic.ch,  \n" in second.content()
