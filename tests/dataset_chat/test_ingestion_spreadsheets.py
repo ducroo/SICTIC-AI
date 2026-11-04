@@ -48,6 +48,17 @@ def test_current_spreadsheet_conversion_cache_is_current():
     assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is True
 
 
+def test_value_only_spreadsheet_cache_is_stale():
+    storage = SimpleNamespace(
+        exists=lambda _path: True,
+        read_text=lambda _path: (
+            "<!-- sictic-document-conversion: spreadsheet-values-v4 -->\n\n## Sheet\n"
+        ),
+    )
+
+    assert spreadsheet_cache_is_current(storage, "model.xlsx.md", "model.xlsx") is False
+
+
 def test_non_spreadsheet_cache_does_not_require_marker():
     storage = SimpleNamespace(
         exists=lambda _path: True,

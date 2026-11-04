@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import pytest
 from openpyxl import Workbook
@@ -206,10 +208,69 @@ def test_spreadsheet_conversion_warns_about_uncached_formulas(tmp_path):
     conversion = convert_spreadsheet(path)
 
     assert "Seed" in conversion.markdown
-    assert "=40+60" not in conversion.markdown
+    assert (
+        "| Seed | Formula: =40+60 "
+        "[calculated result unavailable: no cached value] |"
+    ) in conversion.markdown
     assert conversion.warnings == (
-        "Omitted 1 formula cell(s) without cached values",
+        "Retained 1 formula cell(s) without cached values; calculated results unavailable",
     )
+
+
+@pytest.mark.parametrize(
+    "cached_value,data_type,number_format,expected",
+    [
+        ("100", "n", "General", "100"),
+        ("0", "n", "General", "0"),
+        ("0", "b", "General", "FALSE"),
+        ("0.125", "n", "0.0%", "12.5%"),
+        ("", "str", "General", ""),
+    ],
+)
+def test_spreadsheet_conversion_prefers_cached_formula_results(
+    tmp_path, cached_value, data_type, number_format, expected,
+):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Name", "Amount"])
+    sheet.append(["Seed", "=40+60"])
+    sheet["B2"].number_format = number_format
+    path = tmp_path / "cached.xlsx"
+    workbook.save(path)
+
+    # openpyxl writes formulas but does not calculate/cache their results.
+    # Supply Excel's stored result in this fixture, including a known empty string.
+    with ZipFile(path) as archive:
+        contents = {name: archive.read(name) for name in archive.namelist()}
+    namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    xml = ElementTree.fromstring(contents["xl/worksheets/sheet1.xml"])
+    cell = xml.find(".//s:c[@r='B2']", namespace)
+    cell.set("t", data_type)
+    cell.find("s:v", namespace).text = cached_value
+    contents["xl/worksheets/sheet1.xml"] = ElementTree.tostring(xml)
+    with ZipFile(path, "w") as archive:
+        for name, content in contents.items():
+            archive.writestr(name, content)
+
+    conversion = convert_spreadsheet(path)
+
+    assert f"| Seed | {expected} |" in conversion.markdown
+    assert "=40+60" not in conversion.markdown
+    assert "calculated result unavailable" not in conversion.markdown
+    assert conversion.warnings == ()
+
+
+def test_spreadsheet_conversion_retains_a_formula_only_sheet(tmp_path):
+    workbook = Workbook()
+    workbook.active["A1"] = '=IF(TRUE,"a|b","c")'
+    path = tmp_path / "formula-only.xlsx"
+    workbook.save(path)
+
+    conversion = convert_spreadsheet(path)
+
+    assert "## Sheet" in conversion.markdown
+    assert 'Formula: =IF(TRUE,"a\\|b","c")' in conversion.markdown
+    assert "[calculated result unavailable: no cached value]" in conversion.markdown
 
 
 def test_spreadsheet_conversion_pads_rows_to_a_valid_table_width(tmp_path):
@@ -237,9 +298,12 @@ def test_spreadsheet_conversion_omits_hidden_content_and_errors(tmp_path):
     sheet.column_dimensions["B"].hidden = True
     sheet["C1"] = "#DIV/0!"
     sheet["C1"].data_type = "e"
+    sheet["D2"] = "=987654+1"
+    sheet["B3"] = "=123456+1"
     hidden_sheet = workbook.create_sheet("hidden sheet")
     hidden_sheet.sheet_state = "hidden"
     hidden_sheet["A1"] = "hidden worksheet"
+    hidden_sheet["A2"] = "=111111+1"
     path = tmp_path / "hidden-content.xlsx"
     workbook.save(path)
 
@@ -250,6 +314,9 @@ def test_spreadsheet_conversion_omits_hidden_content_and_errors(tmp_path):
     assert "hidden column" not in conversion.markdown
     assert "#DIV/0!" not in conversion.markdown
     assert "hidden worksheet" not in conversion.markdown
+    assert "987654" not in conversion.markdown
+    assert "123456" not in conversion.markdown
+    assert "111111" not in conversion.markdown
     assert conversion.warnings == ("Omitted 1 Excel error cell(s)",)
 
 

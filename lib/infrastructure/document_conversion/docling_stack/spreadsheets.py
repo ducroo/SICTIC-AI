@@ -24,7 +24,7 @@ def is_spreadsheet_filename(filename: str) -> bool:
 
 
 def convert_spreadsheet(filepath: str | Path) -> DocumentConversion:
-    """Convert spreadsheets to compact, value-only Markdown."""
+    """Convert spreadsheets to compact Markdown, retaining uncached formulas."""
     path = Path(filepath)
     if path.suffix.lower() == ".xls":
         return DocumentConversion(markdown=convert_xls(str(path)))
@@ -85,10 +85,20 @@ def convert_openpyxl(filepath: str) -> DocumentConversion:
                     formula_cell.data_type == "f"
                     and (
                         cached_cell is None
-                        or cached_cell.value in (None, "")
+                        or (
+                            cached_cell.value in (None, "")
+                            and cached_cell.data_type != "str"
+                        )
                     )
                 ):
                     missing_cached_formulas += 1
+                    formula = format_cell_value(
+                        getattr(formula_cell.value, "text", formula_cell.value)
+                    )
+                    row_cells.setdefault(row, {})[col] = (
+                        f"Formula: {formula} "
+                        "[calculated result unavailable: no cached value]"
+                    )
 
             if not row_cells:
                 continue
@@ -111,8 +121,8 @@ def convert_openpyxl(filepath: str) -> DocumentConversion:
     warnings: list[str] = []
     if missing_cached_formulas:
         warnings.append(
-            f"Omitted {missing_cached_formulas} formula cell(s) without "
-            "cached values"
+            f"Retained {missing_cached_formulas} formula cell(s) without "
+            "cached values; calculated results unavailable"
         )
     if ignored_error_cells:
         warnings.append(
