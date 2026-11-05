@@ -140,8 +140,9 @@ Each skill owns artifact reuse. The command does not itself install a schedule.
 One run shares its Dealum application snapshot and successful imports across
 composed workflows. This run-local reuse does not change standalone import calls.
 Google Drive synchronization and cron scheduling remain external. At Application
-and Under Review stages, application_feedback sends one email per startup with a fresh review and
-concerns to APPLICATION_FEEDBACK_RECIPIENTS. No separate nightly sender is needed.
+and Under Review stages, application_feedback emails each new or changed
+screening decision once per startup to APPLICATION_FEEDBACK_RECIPIENTS, with a
+draft reply when the review has concerns. No separate nightly sender is needed.
 
 ## Usage
 

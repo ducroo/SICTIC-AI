@@ -39,7 +39,6 @@ from lib.startups.dealum import (
 from lib.storage import get_storage
 from lib.startups.dealum.session import list_applications
 from lib.startups.dealum.matching import application_create_day
-from lib.startups.dealum.manifest import read_manifest
 
 logger = get_logger(__name__)
 
@@ -581,52 +580,6 @@ def _response_config_key(
             "audit_path": audit_insight.path, "audit": audit,
         },
     )
-
-
-def latest_response(startup: str, *, require_fresh: bool = False) -> InsightFile | None:
-    """Return the newest stored response of the current model, or None.
-
-    Run folders are named by their UTC timestamp, so the last folder with a
-    response holds the latest generated or reused review. This does not check
-    freshness unless require_fresh is set. Freshness uses the same response
-    configuration, current audit, stage and indexed revisions as generation.
-    """
-    location = find_dataset_location(slugify(startup))
-    if location is None:
-        return None
-    storage = get_storage()
-    root = f"{location.insights_rel}/{slugify('submission_ready')}"
-    for run_id in reversed(storage.list(root)):
-        if not storage.is_dir(f"{root}/{run_id}"):
-            continue
-        response = InsightFile(
-            dataset=location.slug,
-            skill="submission_ready",
-            model=llm_model(),
-            identifier="response",
-            subdir=True,
-            run_id=run_id,
-        )
-        if response.exists():
-            if not require_fresh:
-                return response
-            check_config = load_repository_config("submission_ready")
-            checklist = parse_checklist(check_config["checklist"])
-            audit_insight = InsightFile(
-                dataset=location.slug, skill="batch_audit", model=llm_model(),
-                identifier=f"submission_ready-{checklist.title}",
-                subdir=True, extension="json",
-            ).find(selection="any")
-            if audit_insight is None:
-                return None
-            audit = validate_audit_document(
-                json.loads(audit_insight.content()), require_complete=True,
-            )
-            step = read_manifest(location.slug).get("step")
-            stage = _canonical_stage(step) or str(step or "").strip() or "Unknown"
-            response.config_key = _response_config_key(check_config, stage, audit_insight, audit)
-            return response if response.is_reusable() else None
-    return None
 
 
 def _latest_existing_artifacts(

@@ -70,15 +70,11 @@ Rendering consumes the accepted result without repeating those checks.
 
 Import Dealum data, synchronize, call models and save artifacts. Do not send
 messages or change Dealum stages; humans decide on the proposed action.
-`latest_response(startup)` returns the newest stored response of the current
-model. With `require_fresh=True`, it verifies the response against the current
-complete audit, review configuration, stored Dealum stage and indexed revisions
-through InsightFile. A changed audit invalidates an older response even if a
-newer run failed before saving its response. `proposed_action(report)` and
-`stated_concerns(report)` read the action and the two concern lists back from a
-rendered response for
-[application_feedback](../application_feedback/SKILL.md), which drafts
-feedback emails for applications with concerns.
+[application_feedback](../application_feedback/SKILL.md) calls this skill
+for a startup and uses the returned response, so audit selection and freshness
+stay here. It reads the action and the two concern lists back with
+`proposed_action(report)` and `stated_concerns(report)`, and emails the screener
+the decision, with a draft reply for applications with concerns.
 
 Continue after individual startup failures. Successful artifacts and diagnostic
 failure reports can remain saved, but any failure raises after processing;

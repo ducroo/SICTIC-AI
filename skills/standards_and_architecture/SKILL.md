@@ -523,7 +523,9 @@ through send_gmail. application_feedback separately emails one startup
 draft to APPLICATION_FEEDBACK_RECIPIENTS after verifying review freshness.
 `send_html_email` in `lib.infrastructure.gmail` wraps
 `gws gmail +send` for both insight and product emails. Its failures are
-not retried, because a failed send may still have been delivered.
+not retried, because a failed send may still have been delivered. A missing
+`gws` program (configuration) and a failed `gws` login (authentication)
+happen before contacting Gmail, so callers may send again on a later run.
 
 Apify API/HTTP failures use `InfrastructureError` with provider `apify` and the
 operation name; web search preserves that structured error. Capacity, credit,
