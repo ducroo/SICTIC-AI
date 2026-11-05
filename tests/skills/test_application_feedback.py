@@ -6,6 +6,7 @@ from lib.datasets.manifest import IngestionManifest
 from lib.datasets.paths import dataset_location_for_domain
 from lib.insights import InsightFile
 from lib.startups.dealum.manifest import dealum_manifest_path
+from lib.startups.identity import canonical_startup_slug
 from lib.storage import get_storage
 from skills.application_feedback import application_feedback as module
 from skills.application_feedback.application_feedback import (
@@ -13,12 +14,10 @@ from skills.application_feedback.application_feedback import (
 )
 from skills.skill_registry import SKILL_REGISTRY
 from skills.submission_ready.submission_ready import proposed_action, stated_concerns
-from skills.submission_ready.submission_ready import _response_config_key
-from lib.infrastructure.configuration import load_repository_config
-from lib.batch_audit.checklist import parse_checklist
-from tests.skills.test_submission_ready import _audit_document
 
 MODEL = "ollama/test_model:1b"
+# Latest checklist and response per startup, as submission_ready returns them.
+REVIEWS: dict[str, list[InsightFile]] = {}
 
 
 def response_report(action, concerns):
@@ -37,60 +36,70 @@ def response_report(action, concerns):
 
 
 def save_review(slug, name, action, concerns, run_id="20261031T000000Z"):
-    """Save a startup dossier with a submission review, as bulk refresh leaves it."""
+    """Save a startup dossier with a submission review and return it as submission_ready would."""
     storage = get_storage()
     location = dataset_location_for_domain(slug, "startups")
     storage.mkdir(location.raw_rel)
     manifest = IngestionManifest(storage, location.parsed_rel)
     manifest.indexed_dataset_revision = "revision-1"
     manifest.save()
-    storage.write_text(dealum_manifest_path(slug), json.dumps({"startup": name, "step": "Application"}))
-    check_config = load_repository_config("submission_ready")
-    audit = _audit_document()
-    audit["dataset"] = slug
-    audit_insight = InsightFile(
-        dataset=slug, skill="batch_audit", model=MODEL,
-        identifier=f"submission_ready-{parse_checklist(check_config['checklist']).title}",
-        subdir=True, extension="json",
-    )
-    audit_insight.save(json.dumps(audit))
+    storage.write_text(dealum_manifest_path(slug), json.dumps({
+        "startup": name,
+        "step": "Application",
+        "dealum_url": f"https://app.dealum.com/#/dealroom/1?application={slug}",
+    }))
+    insights = []
     for identifier, content in (
         ("checklist", "# Checklist\n\n| 1 | Cap table | Unclear |\n"),
         ("response", response_report(action, concerns)),
     ):
-        InsightFile(
+        insight = InsightFile(
             dataset=slug,
             skill="submission_ready",
             model=MODEL,
             identifier=identifier,
             subdir=True,
             run_id=run_id,
-            config_key=_response_config_key(check_config, "Application", audit_insight, audit)
-            if identifier == "response" else "",
-        ).save(content)
+        )
+        insight.save(content)
+        insights.append(insight)
+    REVIEWS[slug] = insights
+    return insights
 
 
 @pytest.fixture
 def drafting(mock_env, monkeypatch):
-    """Collect the prompts and reviewers that would go to the model."""
+    """Answer submission_ready from the saved reviews and collect model calls."""
     monkeypatch.setenv("RANKED_LLMS", MODEL)
     monkeypatch.delenv("APPLICATION_FEEDBACK_RECIPIENTS", raising=False)
-    async def sync(*args, **kwargs):
-        return []
-    monkeypatch.setattr(module, "sync_datasets", sync)
-    calls = {"prompts": [], "reviewers": []}
+    REVIEWS.clear()
+    calls = {"reviews": [], "prompts": [], "reviewers": []}
+
+    async def fake_submission_ready(startup):
+        calls["reviews"].append(startup)
+        return list(REVIEWS.get(canonical_startup_slug(startup), []))
 
     async def fake_generate_markdown(prompt, reviewer=None):
         calls["prompts"].append(prompt)
         calls["reviewers"].append(reviewer)
         return "Dear Alpha Bio team,\n\n1. Please upload your cap table.\n"
 
+    monkeypatch.setattr(module, "submission_ready", fake_submission_ready)
     monkeypatch.setattr(module, "generate_markdown", fake_generate_markdown)
     return calls
 
 
 @pytest.mark.asyncio
-async def test_draft_uses_only_the_concerns_of_the_latest_review(drafting):
+async def test_feedback_uses_the_review_returned_by_submission_ready(drafting):
+    save_review("alpha-bio", "Alpha Bio", "Send concerns to startup", ["Upload the cap table."])
+
+    await application_feedback("Alpha Bio")
+
+    assert drafting["reviews"] == ["Alpha Bio"]
+
+
+@pytest.mark.asyncio
+async def test_draft_uses_only_the_concerns_of_the_returned_review(drafting):
     save_review("alpha-bio", "Alpha Bio", "Send concerns to startup", ["Name the CEO."], "20261030T000000Z")
     save_review("alpha-bio", "Alpha Bio", "Send concerns to startup", ["Upload the cap table."])
 
@@ -136,8 +145,6 @@ async def test_unchanged_concerns_reuse_the_draft_and_changed_ones_redraft(draft
 
 @pytest.mark.asyncio
 async def test_missing_review_does_nothing(drafting):
-    get_storage().mkdir(dataset_location_for_domain("alpha-bio", "startups").raw_rel)
-
     assert await application_feedback("alpha-bio") == []
     assert drafting["prompts"] == []
 
@@ -187,28 +194,6 @@ async def test_multiline_qualifications_reach_draft_prompt(drafting):
     await application_feedback("alpha-bio")
 
     assert "Include outstanding convertible loans." in drafting["prompts"][0]
-
-
-@pytest.mark.asyncio
-async def test_older_audit_of_a_higher_ranked_model_does_not_hide_a_fresh_review(drafting, monkeypatch):
-    save_review("alpha-bio", "Alpha Bio", "Send concerns to startup", ["Upload the cap table."])
-    # Before a model switch, a higher-ranked model reviewed the startup.
-    older_model = "openai/older-model"
-    monkeypatch.setenv("RANKED_LLMS", f"{older_model}, {MODEL}")
-    config = load_repository_config("submission_ready")
-    older_audit = _audit_document()
-    older_audit["dataset"] = "alpha-bio"
-    older_audit["chapters"][0]["checks"][0]["result"]["rationale"] = "Older evidence."
-    InsightFile(
-        dataset="alpha-bio", skill="batch_audit", model=older_model,
-        identifier=f"submission_ready-{parse_checklist(config['checklist']).title}",
-        subdir=True, extension="json",
-    ).save(json.dumps(older_audit))
-
-    [draft] = await application_feedback("alpha-bio")
-
-    assert "Please upload your cap table." in draft.content()
-    assert len(drafting["prompts"]) == 1
 
 
 def test_draft_reviewer_rejects_extra_points_and_a_missing_signature():

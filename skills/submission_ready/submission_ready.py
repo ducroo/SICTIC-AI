@@ -27,7 +27,6 @@ from lib.infrastructure.dealum import DealumAdapter
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile, InsightResult
 from lib.insights.paths import model_slug
-from lib.insights.selection import ranked_models
 from lib.model_config import llm_model
 from lib.slugify import slugify
 from lib.startups.dealum import (
@@ -40,7 +39,6 @@ from lib.startups.dealum import (
 from lib.storage import get_storage
 from lib.startups.dealum.session import list_applications
 from lib.startups.dealum.matching import application_create_day
-from lib.startups.dealum.manifest import read_manifest
 
 logger = get_logger(__name__)
 
@@ -582,73 +580,6 @@ def _response_config_key(
             "audit_path": audit_insight.path, "audit": audit,
         },
     )
-
-
-def latest_response(startup: str, *, require_fresh: bool = False) -> InsightFile | None:
-    """Return the newest stored response of the current model, or None.
-
-    Run folders are named by their UTC timestamp, so the last folder with a
-    response holds the latest generated or reused review. This does not check
-    freshness unless require_fresh is set. Freshness uses the same response
-    configuration, current audit, stage and indexed revisions as generation.
-    """
-    location = find_dataset_location(slugify(startup))
-    if location is None:
-        return None
-    storage = get_storage()
-    root = f"{location.insights_rel}/{slugify('submission_ready')}"
-    for run_id in reversed(storage.list(root)):
-        if not storage.is_dir(f"{root}/{run_id}"):
-            continue
-        response = InsightFile(
-            dataset=location.slug,
-            skill="submission_ready",
-            model=llm_model(),
-            identifier="response",
-            subdir=True,
-            run_id=run_id,
-        )
-        if response.exists():
-            if not require_fresh:
-                return response
-            check_config = load_repository_config("submission_ready")
-            checklist = parse_checklist(check_config["checklist"])
-            step = read_manifest(location.slug).get("step")
-            stage = _canonical_stage(step) or str(step or "").strip() or "Unknown"
-            # The review used whichever audit the audit engine selected: the
-            # current model's, a manual one or a still fresh one of another
-            # ranked model. It is fresh when it matches one of them.
-            for audit_insight in _stored_audits(location.slug, checklist.title):
-                try:
-                    audit = validate_audit_document(
-                        json.loads(audit_insight.content()), require_complete=True,
-                    )
-                except (ValueError, json.JSONDecodeError):
-                    # An incomplete audit never produces a review.
-                    continue
-                response.config_key = _response_config_key(
-                    check_config, stage, audit_insight, audit,
-                )
-                if response.is_reusable():
-                    return response
-            return None
-    return None
-
-
-def _stored_audits(dataset_slug: str, checklist_title: str) -> list[InsightFile]:
-    """Return the stored submission audits of every model a review may have used."""
-    models = dict.fromkeys(
-        ["manual", *(model for model, _model_slug in ranked_models()), llm_model()]
-    )
-    audits = [
-        InsightFile(
-            dataset=dataset_slug, skill="batch_audit", model=model,
-            identifier=f"submission_ready-{checklist_title}",
-            subdir=True, extension="json",
-        )
-        for model in models
-    ]
-    return [audit for audit in audits if audit.exists()]
 
 
 def _latest_existing_artifacts(

@@ -1,4 +1,4 @@
-"""Draft and deliver feedback for one startup from a fresh submission review."""
+"""Screen one startup and email the screener the decision and any draft reply."""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ from collections.abc import Callable
 from enum import StrEnum
 from hashlib import sha256
 
-from lib.datasets.ingestion import sync_datasets
-from lib.datasets.paths import dataset_location_for_domain, find_dataset_location
+from lib.datasets.paths import dataset_location_for_domain
 from lib.infrastructure.ai_text_generation import Review, generate_markdown
 from lib.infrastructure.errors import InfrastructureError, InfrastructureErrorKind
 from lib.infrastructure.configuration import (
@@ -20,14 +19,13 @@ from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile
 from lib.model_config import llm_model
 from lib.startups.dealum.manifest import dealum_url_for_startup, read_manifest
-from lib.startups.identity import canonical_startup_slug
 from skills.application_feedback.delivery import delivery_journal
 from skills.send_gmail.send_gmail import send_gmail
 from skills.submission_ready.submission_ready import (
     SEND_CONCERNS_ACTION,
-    latest_response,
     proposed_action,
     stated_concerns,
+    submission_ready,
 )
 
 logger = get_logger(__name__)
@@ -106,19 +104,6 @@ def _draft_reviewer(
     return review
 
 
-def _latest_review(startup: str) -> tuple[str, str, InsightFile, str] | None:
-    """Return a fresh review and its identity/action, or None when unavailable."""
-    startup_slug = canonical_startup_slug(startup)
-    response = latest_response(startup_slug, require_fresh=True)
-    if response is None:
-        logger.info("[%s] No fresh submission review; no feedback", startup_slug)
-        return None
-    action = proposed_action(response.content())
-    if action is None:
-        raise ValueError(f"The submission review {response.path} has no proposed action.")
-    return startup_slug, _startup_name(startup_slug), response, action
-
-
 def _review_concerns(response: InsightFile) -> tuple[str, int]:
     eligibility, missing = stated_concerns(response.content())
     concern_count = len(eligibility) + len(missing)
@@ -148,79 +133,19 @@ def _draft_insight(
     )
 
 
-def _deliver_draft(startup_slug: str, startup_name: str, draft: InsightFile) -> None:
-    value = get_env_var(APPLICATION_FEEDBACK_RECIPIENTS_VARIABLE, required=False) or ""
-    recipients = list(dict.fromkeys(
-        address.strip() for address in value.split(",") if address.strip()
-    ))
-    if not recipients:
-        logger.info("[%s] No %s configured; draft saved without email",
-                    startup_slug, APPLICATION_FEEDBACK_RECIPIENTS_VARIABLE)
-        return
-    manifest = read_manifest(startup_slug)
-    key = config_cache_key({
-        "application": dealum_url_for_startup(startup_slug) or manifest.get("code") or startup_name,
-        "recipients": sorted({address.casefold() for address in recipients}),
-    })
-    content = draft.content()
-    digest = sha256(content.encode("utf-8")).hexdigest()
-    location = dataset_location_for_domain(JOURNAL_DATASET, "generated")
-    journal_path = f"{location.insights_rel}/email-delivery.json"
-    with delivery_journal(journal_path) as (receipts, save_receipts):
-        receipt = receipts.get(key, {})
-        if receipt.get("status") == "uncertain":
-            logger.warning("[%s] Prior delivery uncertain; inspect %s before resending",
-                           startup_slug, journal_path)
-            return
-        if receipt.get("digest") == digest:
-            logger.info("[%s] Unchanged feedback already delivered", startup_slug)
-            return
-        receipts[key] = {"status": "uncertain", "digest": digest, "summary": draft.path}
-        save_receipts()
-        try:
-            send_gmail(content, recipients, f"SICTIC application feedback: {startup_name}")
-        except InfrastructureError as error:
-            if error.kind in NOT_SENT_ERROR_KINDS:
-                # Nothing was sent, so a later run sends this draft again.
-                receipts.pop(key, None)
-                save_receipts()
-            raise
-        receipts[key]["status"] = "sent"
-        save_receipts()
-        logger.info("[%s] Feedback emailed to configured reviewers", startup_slug)
-
-
-async def application_feedback(
-    startup: str, *, email: EmailMode | str = EmailMode.SEND,
-) -> list[InsightFile]:
-    """Draft and email feedback for one startup with a fresh stored review.
-
-    Returns the full email as an InsightFile, including reused/manual drafts.
-    Missing or stale reviews and reviews without concerns return an empty list.
-    Delivery to APPLICATION_FEEDBACK_RECIPIENTS is tracked separately from
-    draft reuse. Run submission_ready first; bulk refresh owns that dependency.
-    """
-    email_mode = EmailMode(email)
-    startup_slug = canonical_startup_slug(startup)
-    if find_dataset_location(startup_slug) is None or latest_response(startup_slug) is None:
-        return []
-    await sync_datasets([startup_slug], raise_on_error=True)
-    state = _latest_review(startup_slug)
-    if state is None:
-        return []
-    startup_slug, startup_name, response, action = state
-    if action != SEND_CONCERNS_ACTION:
-        logger.info("[%s] Review proposes %r; no feedback draft", startup_slug, action)
-        return []
+async def _draft_reply(
+    startup_slug: str,
+    startup_name: str,
+    response: InsightFile,
+    signature: str,
+) -> InsightFile:
+    """Draft the reply to the startup, reusing a stored or manual draft for unchanged inputs."""
     concerns, concern_count = _review_concerns(response)
     instructions = load_repository_config(SKILL_NAME, "email_instructions")
-    signature = screener_signature()
     draft = _draft_insight(startup_slug, startup_name, concerns, instructions, signature)
     if reusable := draft.find(selection="reusable"):
         logger.info("[%s] Using existing feedback draft %s", startup_slug, reusable.path)
-        if email_mode == EmailMode.SEND:
-            _deliver_draft(startup_slug, startup_name, reusable)
-        return [reusable]
+        return reusable
 
     # The model only receives the stated concerns to reduce unsupported
     # additions. The reviewer checks the format, not factual fidelity.
@@ -236,6 +161,137 @@ async def application_feedback(
     )
     draft.save(email.strip() + "\n")
     logger.info("[%s] Feedback draft saved to %s", startup_slug, draft.path)
+    return draft
+
+
+def _copyable_text(text: str) -> list[str]:
+    """Wrap text in a code block, so line breaks and numbering survive copying."""
+    longest_backticks = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    fence = "`" * max(3, longest_backticks + 1)
+    return [f"{fence}text", text, fence]
+
+
+def decision_email(
+    startup_name: str,
+    action: str,
+    dealum_url: str | None,
+    response: InsightFile,
+    draft: InsightFile | None,
+    signature: str,
+) -> str:
+    """Compose the screener email: proposed action first, then the review and any draft."""
+    lines = [
+        f"# {startup_name}: {action}",
+        "",
+        f"[Open the application in Dealum]({dealum_url})" if dealum_url else "Dealum link unknown.",
+        "",
+    ]
+    if draft is None:
+        lines += [
+            "If you agree with the review below, carry out the proposed action in Dealum.",
+            "",
+        ]
+    else:
+        lines += [
+            "If you agree with the review below, proofread the reply to the startup"
+            + (f", replace {PLACEHOLDER_SIGNATURE}" if signature == PLACEHOLDER_SIGNATURE else "")
+            + " and send it through the Dealum messages of the application.",
+            "",
+        ]
+    # The review's own headings move one level down, below the email title.
+    lines.append(re.sub(r"^#", "##", response.content().strip(), flags=re.MULTILINE))
+    if draft is not None:
+        lines += ["", "## Reply to the startup", "", *_copyable_text(draft.content().strip())]
+    return "\n".join(lines) + "\n"
+
+
+def _deliver_decision(
+    startup_slug: str,
+    startup_name: str,
+    action: str,
+    response: InsightFile,
+    draft: InsightFile | None,
+    signature: str,
+) -> None:
+    """Email the decision once per new or changed review and draft."""
+    value = get_env_var(APPLICATION_FEEDBACK_RECIPIENTS_VARIABLE, required=False) or ""
+    recipients = list(dict.fromkeys(
+        address.strip() for address in value.split(",") if address.strip()
+    ))
+    if not recipients:
+        logger.info("[%s] No %s configured; decision not emailed",
+                    startup_slug, APPLICATION_FEEDBACK_RECIPIENTS_VARIABLE)
+        return
+    manifest = read_manifest(startup_slug)
+    dealum_url = dealum_url_for_startup(startup_slug)
+    key = config_cache_key({
+        "application": dealum_url or manifest.get("code") or startup_name,
+        "recipients": sorted({address.casefold() for address in recipients}),
+    })
+    content = decision_email(startup_name, action, dealum_url, response, draft, signature)
+    # The digest covers the review and the draft, so a new or changed decision
+    # is emailed once and an unchanged one stays quiet.
+    digest = sha256(content.encode("utf-8")).hexdigest()
+    location = dataset_location_for_domain(JOURNAL_DATASET, "generated")
+    journal_path = f"{location.insights_rel}/email-delivery.json"
+    with delivery_journal(journal_path) as (receipts, save_receipts):
+        receipt = receipts.get(key, {})
+        if receipt.get("status") == "uncertain":
+            logger.warning("[%s] Prior delivery uncertain; inspect %s before resending",
+                           startup_slug, journal_path)
+            return
+        if receipt.get("digest") == digest:
+            logger.info("[%s] Unchanged screening decision already delivered", startup_slug)
+            return
+        # The legacy "summary" field records the main file of the email.
+        receipts[key] = {
+            "status": "uncertain",
+            "digest": digest,
+            "summary": (draft or response).path,
+        }
+        save_receipts()
+        try:
+            send_gmail(content, recipients, f"SICTIC screening: {startup_name}: {action}")
+        except InfrastructureError as error:
+            if error.kind in NOT_SENT_ERROR_KINDS:
+                # Nothing was sent, so a later run sends this decision again.
+                receipts.pop(key, None)
+                save_receipts()
+            raise
+        receipts[key]["status"] = "sent"
+        save_receipts()
+        logger.info("[%s] Screening decision emailed to configured reviewers", startup_slug)
+
+
+async def application_feedback(
+    startup: str, *, email: EmailMode | str = EmailMode.SEND,
+) -> list[InsightFile]:
+    """Screen one startup and email the screener its decision and any draft reply.
+
+    Calls submission_ready for the review. A review proposing "Send concerns to
+    startup" also gets a draft reply. Returns the draft, or an empty list when
+    there is no review or no concerns. Delivery to APPLICATION_FEEDBACK_RECIPIENTS
+    is tracked separately from draft reuse.
+    """
+    email_mode = EmailMode(email)
+    insights = await submission_ready(startup)
+    response = next(
+        (insight for insight in insights if insight.identifier == "response"), None,
+    )
+    if response is None:
+        logger.info("[%s] No submission review; nothing to send", startup)
+        return []
+    startup_slug = response.dataset
+    startup_name = _startup_name(startup_slug)
+    action = proposed_action(response.content())
+    if action is None:
+        raise ValueError(f"The submission review {response.path} has no proposed action.")
+    signature = screener_signature()
+    draft = None
+    if action == SEND_CONCERNS_ACTION:
+        draft = await _draft_reply(startup_slug, startup_name, response, signature)
+    else:
+        logger.info("[%s] Review proposes %r; no draft reply", startup_slug, action)
     if email_mode == EmailMode.SEND:
-        _deliver_draft(startup_slug, startup_name, draft)
-    return [draft]
+        _deliver_decision(startup_slug, startup_name, action, response, draft, signature)
+    return [draft] if draft else []
