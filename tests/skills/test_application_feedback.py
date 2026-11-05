@@ -189,6 +189,28 @@ async def test_multiline_qualifications_reach_draft_prompt(drafting):
     assert "Include outstanding convertible loans." in drafting["prompts"][0]
 
 
+@pytest.mark.asyncio
+async def test_older_audit_of_a_higher_ranked_model_does_not_hide_a_fresh_review(drafting, monkeypatch):
+    save_review("alpha-bio", "Alpha Bio", "Send concerns to startup", ["Upload the cap table."])
+    # Before a model switch, a higher-ranked model reviewed the startup.
+    older_model = "openai/older-model"
+    monkeypatch.setenv("RANKED_LLMS", f"{older_model}, {MODEL}")
+    config = load_repository_config("submission_ready")
+    older_audit = _audit_document()
+    older_audit["dataset"] = "alpha-bio"
+    older_audit["chapters"][0]["checks"][0]["result"]["rationale"] = "Older evidence."
+    InsightFile(
+        dataset="alpha-bio", skill="batch_audit", model=older_model,
+        identifier=f"submission_ready-{parse_checklist(config['checklist']).title}",
+        subdir=True, extension="json",
+    ).save(json.dumps(older_audit))
+
+    [draft] = await application_feedback("alpha-bio")
+
+    assert "Please upload your cap table." in draft.content()
+    assert len(drafting["prompts"]) == 1
+
+
 def test_draft_reviewer_rejects_extra_points_and_a_missing_signature():
     review = module._draft_reviewer(2, "[Screener name]")
     good = "Dear team,\n\n1. Upload the cap table.\n2. Name the CEO.\n\nBest regards,\n[Screener name]\nSICTIC"

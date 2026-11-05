@@ -56,7 +56,8 @@ recorded as uncertain before sending. Success records sent. Uncertain deliveries
 are logged and held for inspection, while the draft is still returned and other
 startups continue normally. Check Sent mail before marking an uncertain entry
 sent or removing it to permit a new attempt; stop the scheduled job while doing
-so. A missing gws binary is known to precede delivery and permits a later retry.
+so. A missing gws binary or a failed gws login is known to precede delivery,
+so its entry is removed and a later run sends the draft again.
 Other failures are not retried automatically. Unreadable receipts, invalid review
 contents, synchronization errors and generation/send failures propagate.
 

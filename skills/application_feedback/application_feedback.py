@@ -42,6 +42,12 @@ PLACEHOLDER_SIGNATURE = "[Screener name]"
 APPLICATION_FEEDBACK_RECIPIENTS_VARIABLE = "APPLICATION_FEEDBACK_RECIPIENTS"
 # Preserve existing receipt identities and storage across the migration.
 JOURNAL_DATASET = "application-feedback-runs"
+# Send failures that happen before gws contacts Gmail: the gws program is
+# missing or its login failed. Other failures may still have delivered the email.
+NOT_SENT_ERROR_KINDS = frozenset({
+    InfrastructureErrorKind.CONFIGURATION,
+    InfrastructureErrorKind.AUTHENTICATION,
+})
 
 
 class EmailMode(StrEnum):
@@ -174,7 +180,8 @@ def _deliver_draft(startup_slug: str, startup_name: str, draft: InsightFile) -> 
         try:
             send_gmail(content, recipients, f"SICTIC application feedback: {startup_name}")
         except InfrastructureError as error:
-            if error.kind == InfrastructureErrorKind.CONFIGURATION:
+            if error.kind in NOT_SENT_ERROR_KINDS:
+                # Nothing was sent, so a later run sends this draft again.
                 receipts.pop(key, None)
                 save_receipts()
             raise

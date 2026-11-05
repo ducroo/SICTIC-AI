@@ -112,8 +112,15 @@ def send_html_email(
             ) from error
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
+        # gws reports a missing or expired login as "error[auth]" before it
+        # contacts Gmail, so nothing was sent.
+        kind = (
+            InfrastructureErrorKind.AUTHENTICATION
+            if "error[auth]" in detail
+            else InfrastructureErrorKind.SERVICE_UNAVAILABLE
+        )
         raise _send_error(
             f"gws gmail +send failed (exit {completed.returncode}): {detail[:800]}",
-            InfrastructureErrorKind.SERVICE_UNAVAILABLE,
+            kind,
         )
     logger.info("Email accepted by gws for %s", ", ".join(addresses))

@@ -136,6 +136,21 @@ async def test_missing_gws_can_be_retried(sending, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_gws_login_failure_is_sent_on_a_later_run(sending, monkeypatch):
+    sender = module.send_gmail
+    def login_failed(*args):
+        raise InfrastructureError("Gmail auth failed", provider="gws", operation="send_email",
+                                  kind=InfrastructureErrorKind.AUTHENTICATION)
+    monkeypatch.setattr(module, "send_gmail", login_failed)
+    with pytest.raises(InfrastructureError):
+        await application_feedback("alpha-bio")
+    assert json.loads(get_storage().read_text(JOURNAL)) == {}
+    monkeypatch.setattr(module, "send_gmail", sender)
+    await application_feedback("alpha-bio")
+    assert len(sending) == 1
+
+
+@pytest.mark.asyncio
 async def test_failed_acknowledgement_does_not_duplicate_send(sending, monkeypatch):
     writer = delivery.write_if_changed
     def fail_sent(storage, path, content):

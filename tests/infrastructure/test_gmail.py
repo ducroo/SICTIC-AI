@@ -41,6 +41,7 @@ def test_send_html_email_requires_valid_recipients():
     ("failure", "kind"),
     [
         ("exit", InfrastructureErrorKind.SERVICE_UNAVAILABLE),
+        ("login", InfrastructureErrorKind.AUTHENTICATION),
         ("missing", InfrastructureErrorKind.CONFIGURATION),
         ("timeout", InfrastructureErrorKind.TIMEOUT),
     ],
@@ -49,6 +50,11 @@ def test_send_html_email_failures_are_not_retried(mocker, failure, kind):
     run = mocker.patch("lib.infrastructure.gmail.subprocess.run")
     if failure == "exit":
         run.return_value = mocker.Mock(returncode=2, stdout="", stderr="auth missing")
+    elif failure == "login":
+        run.return_value = mocker.Mock(
+            returncode=2, stdout="",
+            stderr="Using keyring backend: file\nerror[auth]: Gmail auth failed: Failed to get token",
+        )
     elif failure == "missing":
         run.side_effect = FileNotFoundError("gws")
     else:

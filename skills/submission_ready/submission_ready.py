@@ -27,6 +27,7 @@ from lib.infrastructure.dealum import DealumAdapter
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightFile, InsightResult
 from lib.insights.paths import model_slug
+from lib.insights.selection import ranked_models
 from lib.model_config import llm_model
 from lib.slugify import slugify
 from lib.startups.dealum import (
@@ -612,21 +613,42 @@ def latest_response(startup: str, *, require_fresh: bool = False) -> InsightFile
                 return response
             check_config = load_repository_config("submission_ready")
             checklist = parse_checklist(check_config["checklist"])
-            audit_insight = InsightFile(
-                dataset=location.slug, skill="batch_audit", model=llm_model(),
-                identifier=f"submission_ready-{checklist.title}",
-                subdir=True, extension="json",
-            ).find(selection="any")
-            if audit_insight is None:
-                return None
-            audit = validate_audit_document(
-                json.loads(audit_insight.content()), require_complete=True,
-            )
             step = read_manifest(location.slug).get("step")
             stage = _canonical_stage(step) or str(step or "").strip() or "Unknown"
-            response.config_key = _response_config_key(check_config, stage, audit_insight, audit)
-            return response if response.is_reusable() else None
+            # The review used whichever audit the audit engine selected: the
+            # current model's, a manual one or a still fresh one of another
+            # ranked model. It is fresh when it matches one of them.
+            for audit_insight in _stored_audits(location.slug, checklist.title):
+                try:
+                    audit = validate_audit_document(
+                        json.loads(audit_insight.content()), require_complete=True,
+                    )
+                except (ValueError, json.JSONDecodeError):
+                    # An incomplete audit never produces a review.
+                    continue
+                response.config_key = _response_config_key(
+                    check_config, stage, audit_insight, audit,
+                )
+                if response.is_reusable():
+                    return response
+            return None
     return None
+
+
+def _stored_audits(dataset_slug: str, checklist_title: str) -> list[InsightFile]:
+    """Return the stored submission audits of every model a review may have used."""
+    models = dict.fromkeys(
+        ["manual", *(model for model, _model_slug in ranked_models()), llm_model()]
+    )
+    audits = [
+        InsightFile(
+            dataset=dataset_slug, skill="batch_audit", model=model,
+            identifier=f"submission_ready-{checklist_title}",
+            subdir=True, extension="json",
+        )
+        for model in models
+    ]
+    return [audit for audit in audits if audit.exists()]
 
 
 def _latest_existing_artifacts(
