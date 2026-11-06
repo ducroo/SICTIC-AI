@@ -1,0 +1,15 @@
+{
+  "snapshot_id": "synthetic-snapshot-001",
+  "startup_id": "synthetic-startup",
+  "scope_id": "synthetic-public-scope",
+  "inventory": [
+    {
+      "document_id": "synthetic-document-01",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "document_id": "synthetic-document-02",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ]
+}
