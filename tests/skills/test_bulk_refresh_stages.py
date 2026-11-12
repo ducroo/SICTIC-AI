@@ -297,6 +297,28 @@ def test_review_and_feedback_share_stages_and_dependency(stage):
     assert graph[("example", "application-feedback")] == {("example", "submission-ready")}
 
 
+@pytest.mark.parametrize("stage", ["Matchmaking", "Selected (for Pitching)"])
+@pytest.mark.parametrize("selector", [None, "example"])
+def test_new_research_stages_discover_active_dossiers_and_select_only_research(
+    mock_env, dealum, mocker, stage, selector,
+):
+    dealum.return_value = [{"id": 1, "name": "Example", "step": stage}]
+    imported = mocker.patch("skills.bulk_refresh.datasets.import_startup_from_dealum")
+
+    scope, errors = bulk._resolve_targets(selector, None)
+
+    assert not errors
+    assert scope.names == ("example",)
+    assert scope.stages["example"] == stage
+    assert is_active_dataset("example")
+    imported.assert_called_once()
+    assert imported.call_args.args[0] == "example"
+    _, selected, _ = bulk._plan_jobs(scope, None)
+    assert {skill for name, skill in selected} == {
+        "startup-website-import", "startup-sector", "startup-profile", "persons-in-dataset",
+    }
+
+
 def test_mandatory_skills_are_selected_per_dataset_with_domain_restrictions():
     scope = bulk._DatasetScope(
         ("review", "jury", "pitched", "local", "members"),

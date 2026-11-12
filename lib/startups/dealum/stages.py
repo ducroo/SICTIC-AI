@@ -3,13 +3,17 @@
 APPLICATION_STAGE = "Application"
 ALWAYS_ACTIVE_STAGES = frozenset({
     "Under Review", "Jury", "Pitching", "Jury reserves (for pitching)",
+    "Matchmaking", "Selected (for Pitching)",
 })
 INACTIVITY_STAGES = frozenset({
     APPLICATION_STAGE, "Rejected by Jury", "Rejected for other reason",
     "Not selected to pitch",
 })
 PITCHED_STAGE = "Pitched @ SICTIC"
-RESEARCH_STAGES = frozenset({"Jury", "Pitching", "Jury reserves (for pitching)", PITCHED_STAGE})
+RESEARCH_STAGES = frozenset({
+    "Jury", "Pitching", "Jury reserves (for pitching)", PITCHED_STAGE,
+    "Matchmaking", "Selected (for Pitching)",
+})
 KNOWN_STAGES = ALWAYS_ACTIVE_STAGES | INACTIVITY_STAGES | {PITCHED_STAGE}
 
 
