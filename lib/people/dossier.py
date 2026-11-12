@@ -65,6 +65,8 @@ def person_in_filename(filename: str, person_name: str) -> bool:
 
 def is_personal_document(filename: str) -> bool:
     """Return whether the filename describes a personal-record document."""
+    # Keep typographic dashes as word boundaries when slugifying the filename.
+    filename = re.sub(r"[\u2010-\u2015]", "-", filename)
     normalized = " ".join(_filename_tokens(filename))
     return any(pattern.search(normalized) for pattern in _PERSONAL_DOCUMENT_PATTERNS)
 
@@ -105,6 +107,13 @@ def _matches_phrase(pattern, text: str) -> bool:
     return pattern is not None and pattern.search(" ".join(_name_tokens(text))) is not None
 
 
+def _without_diacritics(text: str) -> str:
+    return "".join(
+        character for character in unicodedata.normalize("NFD", text)
+        if not unicodedata.combining(character)
+    )
+
+
 def _identity_filter(dataset_name: str, name: str, person: Person | None):
     roster = persons_in_dataset(dataset_name)
     matches = person.find_matches(roster) if person is not None else []
@@ -123,23 +132,35 @@ def _identity_filter(dataset_name: str, name: str, person: Person | None):
         roster = [*roster, target]
     names = tuple(candidate.full_name for candidate in roster)
     config = load_repository_config("people", "dossier")
-    phrases = _unique_name_phrases(names, config["minimum_combination_letters"])[index]
+    min_letters = config["minimum_combination_letters"]
+    phrases = _unique_name_phrases(names, min_letters)[index]
     # An enriched display name may differ from the saved roster name. Add its
     # combinations without treating the same person as a competing identity.
     if target.full_name != names[index]:
         enriched = (*names[:index], target.full_name, *names[index + 1:])
-        phrases |= _unique_name_phrases(enriched, config["minimum_combination_letters"])[index]
-    return target, _phrase_pattern(phrases)
+        phrases |= _unique_name_phrases(enriched, min_letters)[index]
+
+    # Personal filenames can omit accents. Use only an unambiguous full name.
+    folded_names = tuple(_without_diacritics(candidate_name) for candidate_name in names)
+    folded_tokens = _name_tokens(folded_names[index])
+    filename_pattern = None
+    if len(folded_tokens) >= 2:
+        unique_phrases = _unique_name_phrases(folded_names, min_letters)[index]
+        filename_pattern = _phrase_pattern(unique_phrases & {" ".join(folded_tokens)})
+    return target, _phrase_pattern(phrases), filename_pattern
 
 
-def _scan_person_chunks(dataset_name: str, target: Person, pattern) -> list[Chunk]:
+def _scan_person_chunks(dataset_name: str, target: Person, pattern, filename_pattern) -> list[Chunk]:
     emails = set(target.email_addresses)
     selected = {}
     for chunk in iter_parsed_chunks(dataset_name):
         filename = PurePath(chunk.document_name.replace("\\", "/")).name
         if (_matches_phrase(pattern, filename) or _matches_phrase(pattern, chunk.text)
                 or emails.intersection(extract_email_addresses(chunk.text))
-                or (target.linkedin_id and target.linkedin_id in extract_linkedin_ids(chunk.text))):
+                or (target.linkedin_id and target.linkedin_id in extract_linkedin_ids(chunk.text))
+                or (filename_pattern is not None
+                    and _matches_phrase(filename_pattern, _without_diacritics(filename))
+                    and is_personal_document(filename))):
             selected.setdefault(chunk.chunk_id, chunk)
     return list(selected.values())
 
@@ -152,9 +173,9 @@ async def get_filtered_chunks(
     query is retained for compatibility; selection is now lexical, not semantic.
     As before, synchronization errors propagate rather than implying no evidence.
     """
-    target, pattern = _identity_filter(dataset_name, name, person)
+    target, pattern, filename_pattern = _identity_filter(dataset_name, name, person)
     await sync_datasets([slugify(dataset_name)], raise_on_error=True)
-    return await asyncio.to_thread(_scan_person_chunks, dataset_name, target, pattern)
+    return await asyncio.to_thread(_scan_person_chunks, dataset_name, target, pattern, filename_pattern)
 
 
 async def build_person_dossier(
@@ -171,7 +192,7 @@ async def build_person_dossier(
     dossier: List[Chunk] = []
     mentions: List[Chunk] = []
     
-    _, pattern = _identity_filter(dataset_name, person_name, person)
+    _, pattern, _ = _identity_filter(dataset_name, person_name, person)
     filtered_chunks = await get_filtered_chunks(dataset_name, person_name, query, person=person)
     
     if not filtered_chunks:

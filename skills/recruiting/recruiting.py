@@ -1,5 +1,6 @@
 """Assess applicants against shared job criteria using canonical person evidence."""
 
+import asyncio
 import json
 from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath
@@ -19,7 +20,6 @@ from lib.people.dossier import build_person_dossier
 from lib.people.model import Person
 from lib.slugify import slugify
 from skills.person_profile.person_profile import person_profile_as_person_objects
-from skills.persons_in_dataset.persons_in_dataset import persons_in_dataset
 
 logger = get_logger(__name__)
 
@@ -55,7 +55,7 @@ async def _job_criteria(dataset: str, supplied: str | None, config: dict) -> Ins
     return insight
 
 
-async def _evidence(dataset: str, person: Person, config: dict) -> str:
+async def _application_evidence(dataset: str, person: Person, config: dict) -> list[str]:
     # Always gather both kinds of evidence, whether the profile was reused or new.
     gathered_dossier, gathered_mentions = await build_person_dossier(
         dataset, person.display_name,
@@ -66,12 +66,37 @@ async def _evidence(dataset: str, person: Person, config: dict) -> str:
     mentions = list({c.chunk_id: c for c in [*person.mentions, *gathered_mentions]}.values())
     dossier_documents = {chunk.document_name for chunk in dossier}
     mentions = [chunk for chunk in mentions if chunk.document_name not in dossier_documents]
-    parts = [f"Applicant: {person.display_name}\nIdentifier: {person.identifier}"]
-    parts.extend(chunk.to_md() for chunk in dossier)
+    parts = [chunk.to_md() for chunk in dossier]
     if mentions:
         parts.append("Applicant document passages:\n" + "\n\n".join(
             chunk.to_md() for chunk in mentions
         ))
+    return parts
+
+
+async def _select_applicants(
+    dataset: str, people: list[Person], job: str, config: dict,
+) -> list[Person]:
+    async def applied(person: Person) -> bool:
+        evidence = await _application_evidence(dataset, person, config)
+        if not evidence:
+            return False
+        result = await generate_json(
+            f"{config['applicant_instructions']}\n\n"
+            f"Recruiting dataset: {dataset}\n\nRole material:\n{job}\n\n"
+            f"Person: {person.display_name}\nIdentifier: {person.identifier}\n\n"
+            "Source evidence:\n" + "\n\n".join(evidence),
+            schema=config["applicant_response_schema"],
+        )
+        return result["applied"]
+
+    decisions = await asyncio.gather(*(applied(person) for person in people))
+    return [person for person, eligible in zip(people, decisions) if eligible]
+
+
+async def _evidence(dataset: str, person: Person, config: dict) -> str:
+    parts = [f"Applicant: {person.display_name}\nIdentifier: {person.identifier}"]
+    parts.extend(await _application_evidence(dataset, person, config))
     if person.linkedin_profile:
         parts.append("LinkedIn profile:\n" + json.dumps(person.linkedin_profile, ensure_ascii=False))
     if person.person_profile_markdown:
@@ -218,14 +243,18 @@ async def recruiting(dataset_name: str, criteria: str | None = None) -> InsightR
         check for chapter in parse_checklist(_checklist(criteria_text, "applicant")).chapters
         for check in chapter.checks
     ]
-    await persons_in_dataset(dataset)
     people = await person_profile_as_person_objects(dataset)
-    if not people:
-        raise ValueError("No applicants found. Review the persons-in-dataset roster.")
+    role_material = criteria_text
+    if criteria and criteria_insight.model != "manual":
+        role_material = f"{criteria}\n\n{criteria_text}"
+    applicants = await _select_applicants(dataset, people, role_material, config)
+    logger.info("[%s] Selected %d applicants from %d people", dataset, len(applicants), len(people))
+    if not applicants:
+        raise ValueError("No applicants for this role were supported by the application evidence.")
     results = [criteria_insight]
     assessed: list[ApplicantAssessment] = []
     failures = []
-    for person in people:
+    for person in applicants:
         try:
             item = await _assess_person(dataset, person, criteria_text, checks, config)
             assessed.append(item)

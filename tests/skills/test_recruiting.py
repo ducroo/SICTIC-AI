@@ -51,16 +51,22 @@ def workflow(mock_env, monkeypatch):
         person_profile_markdown="Bob profile",
     )
     monkeypatch.setattr(module, "build_person_dossier", AsyncMock(return_value=([], [])))
-    monkeypatch.setattr(module, "persons_in_dataset", AsyncMock())
     monkeypatch.setattr(module, "person_profile_as_person_objects", AsyncMock(return_value=[alice, bob]))
     monkeypatch.setattr(module, "generate_markdown", AsyncMock(return_value=CRITERIA))
-    monkeypatch.setattr(module, "generate_json", AsyncMock(return_value={
+    rankings = {
         alice.identifier: {"rank": 2, "rationale": "Strong spreadsheet evidence."},
         bob.identifier: {"rank": 1, "rationale": "Needs clarification."},
-    }))
+    }
+    monkeypatch.setattr(module, "generate_json", AsyncMock(side_effect=lambda prompt, schema, **kwargs:
+        {"applied": True} if schema.get("required") == ["applied"] else rankings
+    ))
     monkeypatch.setattr(engine, "dataset_chat_json", AsyncMock(side_effect=AssertionError("No retrieval")))
     monkeypatch.setattr(engine, "generate_json", AsyncMock(return_value=assessment()))
     return module, engine, alice, bob
+
+
+def overview_calls(module):
+    return [call for call in module.generate_json.await_args_list if call.kwargs.get("reviewer") is module._review_ranks]
 
 
 @pytest.mark.asyncio
@@ -98,12 +104,12 @@ async def test_workflow_isolates_people_and_reuses_artifacts(workflow):
     await module.recruiting(DATASET, "Job advert")
     assert module.generate_markdown.await_count == 1
     assert engine.generate_json.await_count == 2
-    assert module.generate_json.await_count == 1
+    assert len(overview_calls(module)) == 1
     alice.dossier = [build_chunk("New Alice evidence", "resumes/alice-smith.pdf", 1, 0)]
     engine.generate_json.return_value = assessment(4)
     await module.recruiting(DATASET, "Job advert")
     assert engine.generate_json.await_count == 3
-    assert module.generate_json.await_count == 2
+    assert len(overview_calls(module)) == 2
 
 
 @pytest.mark.asyncio
@@ -137,7 +143,7 @@ async def test_failed_audit_is_not_an_unconfirmed_score(workflow):
     engine.generate_json.side_effect = RuntimeError("Provider unavailable")
     with pytest.raises(RuntimeError, match="Recruiting incomplete"):
         await module.recruiting(DATASET, "Job advert")
-    module.generate_json.assert_not_awaited()
+    assert not overview_calls(module)
 
 
 @pytest.mark.asyncio
@@ -167,14 +173,41 @@ async def test_cached_profile_gathers_dossier_again(workflow, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_missing_or_invalid_criteria_fail_before_discovery(workflow):
+async def test_missing_or_invalid_criteria_fail_before_profiling(workflow):
     module, _engine, _alice, _bob = workflow
     with pytest.raises(ValueError, match="Supply criteria"):
         await module.recruiting(DATASET)
     InsightFile(DATASET, "job_criteria", "manual").save("# Unexpected title\n" + CRITERIA)
     with pytest.raises(ValueError, match="exactly one"):
         await module.recruiting(DATASET)
-    module.persons_in_dataset.assert_not_awaited()
+    module.person_profile_as_person_objects.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_only_confirmed_applicants_are_scored(workflow):
+    module, engine, alice, bob = workflow
+    bob.dossier = [build_chunk("Application for a different position", "resumes/bob-jones.pdf", 1, 0)]
+    roster = InsightFile(DATASET, "persons_in_dataset", "manual")
+    roster_text = "| full-name | linkedin-id |\n|---|---|\n| Alice Smith | alice-smith |\n| Bob Jones | |\n"
+    roster.save(roster_text)
+
+    def generate(prompt, schema, **kwargs):
+        if schema.get("required") == ["applied"]:
+            assert "Include only people who applied for this role" in prompt
+            assert "Job advert" in prompt
+            assert "LinkedIn profile:" not in prompt
+            return {"applied": "Application for a different position" not in prompt}
+        assert schema["required"] == [alice.identifier]
+        return {alice.identifier: {"rank": 1, "rationale": "Strong spreadsheet evidence."}}
+
+    module.generate_json.side_effect = generate
+    result = await module.recruiting(DATASET, "Job advert")
+
+    assert len(result) == 4
+    engine.generate_json.assert_awaited_once()
+    assert "Alice Smith" in result[-1].content()
+    assert "Bob Jones" not in result[-1].content()
+    assert roster.content() == roster_text
 
 
 def test_criteria_reviewer_rejects_h1_and_accepts_no_keywords():
