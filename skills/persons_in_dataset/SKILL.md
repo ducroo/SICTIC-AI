@@ -78,8 +78,12 @@ Existing manual rosters are not migrated, deleted or automatically regenerated.
    Reconcile the selected evidence using shared JSON generation and schema validation.
    The LLM returns `existing_persons` selected from candidate records and
    `additional_persons` found in the supplied context/passages, each with names,
-   emails and LinkedIn IDs. Convert both lists to Person objects and enrich each
-   returned person from matching candidates through shared Person matching and merging.
+   emails and LinkedIn IDs. A JSON reviewer checks both lists for repeated
+   identities and same-name rows with conflicting LinkedIn IDs when one profile
+   is verified and the rows lack distinct contacts. It requests correction
+   through the shared generator before roster creation. Convert both lists to
+   Person objects and enrich each returned person from matching candidates
+   through shared Person matching and merging.
    Preserve returned identities and cleaned names; never restore unmatched candidates
    or split a returned person into its original fragments. Exact LinkedIn matches
    can also collect matching ID-less fragments. Different explicit LinkedIn IDs
@@ -89,7 +93,6 @@ Existing manual rosters are not migrated, deleted or automatically regenerated.
    inputs. Person.merge retains structured LinkedIn profile-name priority.
    Unmatched returned people remain accepted. Deduplicate the resulting objects
    through shared Person logic and discard objects without a canonical identifier.
-   No business reviewer or additional LLM call is used for this enrichment.
 
 
 The first priority is founders and employees; other associated people and former

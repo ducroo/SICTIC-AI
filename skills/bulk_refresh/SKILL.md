@@ -42,7 +42,7 @@ still assigned their current stage, but are not downloaded or automatically reac
 
 | Dealum stage | Refresh state |
 |---|---|
-| `Under Review`, `Jury`, `Pitching`, `Jury reserves (for pitching)` | Active regardless of age |
+| `Under Review`, `Jury`, `Pitching`, `Jury reserves (for pitching)`, `Matchmaking`, `Selected (for Pitching)` | Active regardless of age |
 | `Application`, `Rejected by Jury`, `Rejected for other reason`, `Not selected to pitch` | Three-month inactivity rule for existing dossiers |
 | `Pitched @ SICTIC` | Three-month inactivity rule |
 | Successfully confirmed absent from Dealum; community datasets | Three-month inactivity rule |
@@ -54,7 +54,7 @@ raw Dealum API JSON, manifests and the archived marker. Insights and parsed data
 are outside this source directory. A pitched stage observation never resets the
 active marker. Unchanged Dealum source files retain their timestamps on import.
 
-Active datasets outside the four always-active stages expire when their latest edit
+Active datasets outside the always-active stages expire when their latest edit
 reaches the cutoff. An archived marker takes precedence over every stage: new source
 material and later stage changes never reactivate it. Only manual activation removes
 that block. An unmarked dataset defaults to archived unless an always-active stage
@@ -68,8 +68,9 @@ Application dossiers retain the inactivity rule; explicitly archived dossiers
 remain protected. Selected active Application dossiers are downloaded even with
 explicit skills. Explicit skills without a dataset selector do not discover new
 Application dossiers or include unmarked ones. Missing dossiers in Under Review,
-Jury, jury reserves and Pitching are still discovered normally. Pitched and
-rejected history is never imported merely because it exists in Dealum.
+Jury, jury reserves, Pitching, Matchmaking and Selected (for Pitching) are still
+discovered normally. Pitched and rejected history is never imported merely
+because it exists in Dealum.
 Explicit dataset selection can process local archived files, but does not remove
 the archive or enable downloads.
 
@@ -90,7 +91,7 @@ wildcard declarations also apply to supported community datasets.
 | `startup-profile`, `persons-in-dataset` | All supported datasets except Application-stage startups |
 | `submission-ready` | `Application`, `Under Review` |
 | `application-feedback` | `Application`, `Under Review`, after `submission-ready` |
-| `startup-website-import` | `Jury`, jury reserves, `Pitching`, `Pitched @ SICTIC` |
+| `startup-website-import` | `Jury`, jury reserves, `Pitching`, `Matchmaking`, `Selected (for Pitching)`, `Pitched @ SICTIC` |
 | `startup-traction` | `Pitched @ SICTIC`, absent from Dealum |
 
 Application-stage defaults run only `submission-ready` and the feedback draft

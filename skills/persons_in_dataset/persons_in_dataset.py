@@ -42,7 +42,7 @@ def _roster_insight(dataset: str, config: dict) -> InsightFile:
         except PackageNotFoundError:
             packages[package] = None
     return InsightFile(dataset, "persons_in_dataset", llm_model(), config_key=config_cache_key(
-        "people-discovery-v3", config, sorted(sources), packages, startup_aliases(),
+        "people-discovery-v4", config, sorted(sources), packages, startup_aliases(),
         int(get_env_var("OLLAMA_CONTEXT_LENGTH_MAX")),
     ))
 

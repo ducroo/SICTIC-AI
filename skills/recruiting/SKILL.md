@@ -24,9 +24,11 @@ and saved by the standard person-profile workflow.
    Generated criteria use one H2 Criteria heading and 6–8 H3 criteria in
    importance order, with required/desirable distinctions in descriptions, no H1.
    Keywords are optional. Do not add an H1 when manually editing criteria.
-2. Run `persons_in_dataset`, then `person_profile_as_person_objects`.
-   Manual applicant rosters are authoritative. Non-startup datasets use generic
-   discovery with no startup profile, company website or company-wide search.
+2. Run `persons_in_dataset` to select the manual roster, reuse a fresh generated
+   roster, or run discovery. Read the resulting roster through
+   `person_profile_as_person_objects`. Use the recruiting applicant prompt and
+   structured generation to confirm who applied for the role from their
+   application evidence. Only confirmed applicants proceed to scoring.
 3. Gather each person's dedicated dossier through `build_person_dossier`,
    resolved LinkedIn payload, applicant mentions (including application letters)
    and standard person profile. The shared gatherer scans current parsed sources using roster-unique name
@@ -61,11 +63,11 @@ JSON audits, and linked manual reports are included when synthesising rationales
 
 ## Errors and side effects
 
-Discovery/profiling may ingest sources, resolve LinkedIn requests and call models.
-Criteria extraction and final rationales use the shared generation/reviewer APIs.
+Discovery and profiling may ingest sources, resolve LinkedIn requests and call models.
+Applicant selection, criteria extraction and final rationales use the shared generation APIs.
 No outreach occurs. No bulk-refresh registration is added.
 
-Invalid criteria fail before discovery. Missing applicants raise. Technical audit
+Invalid criteria fail before discovery. No available roster or supported applicants raises. Technical audit
 failures remain errors, not low scores; successful individual artifacts remain
 saved, but the run raises without generating a new overview if any applicant fails.
 Old overviews are not deleted. Profile-generation failures retain the standard

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from functools import partial
+from itertools import combinations
 
 from litellm import token_counter
 
@@ -11,7 +13,7 @@ from lib.model_config import llm_model
 from lib.infrastructure.ai_text_generation.json import schema_prompt_block, json_schema_response_format
 
 from lib.datasets.models import Chunk
-from lib.infrastructure.ai_text_generation import generate_json
+from lib.infrastructure.ai_text_generation import Review, generate_json
 from lib.infrastructure.configuration import get_env_var
 from lib.infrastructure.logging import get_logger
 from lib.people.extraction import merge_person, rank_people_by_document_weight
@@ -20,6 +22,39 @@ from lib.people.model import Person
 from lib.people.dossier import is_personal_document, person_in_filename
 
 logger = get_logger(__name__)
+
+
+def _review_roster(result: dict, *, verified_ids: set[str]) -> Review[dict]:
+    identifiers: set[str] = set()
+    people_by_name: dict[str, list[Person]] = {}
+    problems = []
+    for index, row in enumerate([*result["existing_persons"], *result["additional_persons"]], 1):
+        person = Person(**row)
+        identifier = person.identifier
+        if identifier:
+            if identifier in identifiers:
+                problems.append(f"Roster row {index} repeats an earlier identity. Return one row per person.")
+            identifiers.add(identifier)
+        name = " ".join(person.full_name.casefold().split())
+        if name and person.linkedin_id:
+            people_by_name.setdefault(name, []).append(person)
+
+    for people in people_by_name.values():
+        for first, second in combinations(people, 2):
+            first_verified = first.linkedin_id in verified_ids
+            second_verified = second.linkedin_id in verified_ids
+            if first_verified == second_verified:
+                continue
+            if (first.email_addresses and second.email_addresses
+                    and set(first.email_addresses).isdisjoint(second.email_addresses)):
+                continue
+            verified, unverified = (first, second) if first_verified else (second, first)
+            problems.append(
+                f"{verified.full_name} appears under both {verified.linkedin_id} (verified profile) "
+                f"and {unverified.linkedin_id} (unverified ID). Check the evidence for two distinct people. "
+                "If it describes one person, use one row with the verified ID and the person's supported contacts."
+            )
+    return Review(result, tuple(problems))
 
 
 def _enrich_person(person: Person, candidates: list[Person]) -> Person:
@@ -141,7 +176,10 @@ async def reconcile_people(people: list[Person], team_chunks: list[Chunk], *,
                                        company_names=company_names, config=config)
     logger.info("Reconciling %d candidates in one LLM request", len(selected))
     accepted: list[Person] = []
-    result = await generate_json(prompt, config["response_schema"])
+    verified_ids = {person.linkedin_id for person in selected if person.linkedin_id and person.linkedin_profile}
+    result = await generate_json(
+        prompt, config["response_schema"], reviewer=partial(_review_roster, verified_ids=verified_ids),
+    )
     for row in [*result["existing_persons"], *result["additional_persons"]]:
         merge_person(accepted, _enrich_person(Person(**row), people))
     identified = [person for person in accepted if person.identifier]

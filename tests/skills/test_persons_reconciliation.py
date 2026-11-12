@@ -1,4 +1,5 @@
 import importlib
+import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -206,7 +207,55 @@ async def test_additional_person_is_accepted_without_evidence_matching(reconcili
     assert result[0].full_name == "Additional Name"
     assert result[0].linkedin_id == "additional-id"
     assert result[0].email_addresses == ["additional@example.com"]
-    assert "reviewer" not in reconciliation.generate_json.await_args.kwargs
+    reviewer = reconciliation.generate_json.await_args.kwargs["reviewer"]
+    assert reviewer(reconciliation.generate_json.return_value).accepted
+
+
+def test_roster_review_rejects_repeated_identity_across_lists(reconciliation):
+    first = {"full_name": "Jane Doe", "linkedin_id": "jane-id", "email_addresses": []}
+    second = {**first, "email_addresses": ["jane@example.com"]}
+    review = reconciliation._review_roster(
+        {"existing_persons": [first], "additional_persons": [second]}, verified_ids=set(),
+    )
+    assert not review.accepted
+    assert "row 2 repeats an earlier identity" in review.problems[0]
+
+
+@pytest.mark.asyncio
+async def test_roster_generation_retries_same_name_with_unverified_id(reconciliation, monkeypatch):
+    generation = importlib.import_module("lib.infrastructure.ai_text_generation.generation")
+    current = {"full_name": "Jane Doe", "linkedin_id": "jane-current", "email_addresses": []}
+    outdated = {"full_name": "Jane Doe", "linkedin_id": "jane-old", "email_addresses": ["jane@example.com"]}
+    corrected = {**current, "email_addresses": outdated["email_addresses"]}
+    request = AsyncMock(side_effect=[
+        json.dumps({"existing_persons": [current, outdated], "additional_persons": []}),
+        json.dumps({"reasoning": "The documents identify one person.", "existing_persons": [corrected], "additional_persons": []}),
+    ])
+    monkeypatch.setattr(generation, "_request_text_waiting_out_rate_limits", request)
+    monkeypatch.setattr(reconciliation, "generate_json", generation.generate_json)
+    people = await reconciliation.reconcile_people(
+        [Person(**current, linkedin_profile={"fullName": "Jane Doe"}), Person(**outdated)],
+        [], startup_context="Acme", company_names=["acme"],
+        config=load_repository_config("persons_in_dataset", "discovery"),
+    )
+
+    assert request.await_count == 2
+    retry_prompt = request.await_args.kwargs["prompt"]
+    assert "jane-current (verified profile)" in retry_prompt
+    assert "jane-old (unverified ID)" in retry_prompt
+    assert [(p.linkedin_id, p.email_addresses) for p in people] == [("jane-current", ["jane@example.com"])]
+
+
+@pytest.mark.parametrize("verified_ids, second_emails", [
+    ({"jane-one", "jane-two"}, []),
+    ({"jane-one"}, ["jane.two@example.com"]),
+])
+def test_roster_review_accepts_distinct_people_with_the_same_name(reconciliation, verified_ids, second_emails):
+    result = {"existing_persons": [
+        {"full_name": "Jane Doe", "linkedin_id": "jane-one", "email_addresses": ["jane.one@example.com"]},
+        {"full_name": "Jane Doe", "linkedin_id": "jane-two", "email_addresses": second_emails},
+    ], "additional_persons": []}
+    assert reconciliation._review_roster(result, verified_ids=verified_ids).accepted
 
 
 @pytest.mark.asyncio

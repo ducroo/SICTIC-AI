@@ -74,6 +74,78 @@ async def test_personal_document_expands_once(mocker):
 
 
 @pytest.mark.asyncio
+async def test_cv_with_en_dash_expands_after_identity_match(mocker):
+    filename = "applications/CV–SKlauser-BusinessDev.pdf"
+    named_page = _chunk(filename)
+    second_page = named_page.model_copy(update={
+        "chunk_id": f"{filename}-2",
+        "page_number": 2,
+        "text": "Experience organising events.",
+    })
+    other_cv = _chunk("applications/CV–Other-Applicant.pdf", "Another applicant.")
+    mocker.patch("lib.people.dossier.sync_datasets")
+    mocker.patch(
+        "lib.people.dossier.iter_parsed_chunks",
+        return_value=iter([named_page, second_page, other_cv]),
+    )
+    storage = mocker.patch("lib.people.dossier.get_storage").return_value
+    storage.exists.return_value = True
+    storage.read_text.return_value = f"{named_page.text}\n\n{second_page.text}"
+
+    dossier, mentions = await build_person_dossier("aisot", "Stefan Klauser", "")
+
+    assert [(doc.document_name, doc.page_number, doc.text) for doc in dossier] == [
+        (filename, "all", storage.read_text.return_value),
+    ]
+    assert mentions == []
+    storage.read_text.assert_called_once_with(f"docling_data/datasets2md/aisot/{filename}.md")
+
+
+@pytest.mark.asyncio
+async def test_cv_filename_matches_unique_name_across_accent_variants(mocker):
+    from lib.people.model import Person
+
+    person = Person(full_name="Stefan Klàuser")
+    filename = "applications/CV_STEFAN_KLAUSER.pdf"
+    cv = _chunk(filename, "Stefan Kláuser\n\nExperience organising events.")
+    unrelated_mention = _chunk("meeting notes.pdf", "Stefan Klauser participated.")
+    generic_file = _chunk("Stefan Klauser meeting notes.pdf", "Unattributed notes.")
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[person])
+    mocker.patch("lib.people.dossier.sync_datasets")
+    mocker.patch(
+        "lib.people.dossier.iter_parsed_chunks",
+        return_value=[cv, unrelated_mention, generic_file],
+    )
+    storage = mocker.patch("lib.people.dossier.get_storage").return_value
+    storage.exists.return_value = True
+    storage.read_text.return_value = f"{cv.text}\n\nOther experience on page two."
+
+    dossier, mentions = await build_person_dossier("aisot", person.full_name, "", person=person)
+
+    assert [(doc.document_name, doc.page_number, doc.text) for doc in dossier] == [
+        (filename, "all", storage.read_text.return_value),
+    ]
+    assert mentions == []
+    storage.read_text.assert_called_once_with(f"docling_data/datasets2md/aisot/{filename}.md")
+
+
+@pytest.mark.asyncio
+async def test_cv_filename_accent_fallback_requires_a_unique_roster_name(mocker):
+    from lib.people.dossier import get_filtered_chunks
+    from lib.people.model import Person
+
+    first = Person(full_name="Stefan Klàuser", linkedin_id="stefan-one")
+    second = Person(full_name="Stefan Kláuser", linkedin_id="stefan-two")
+    cv = _chunk("CV_STEFAN_KLAUSER.pdf", "Experience organising events.")
+    mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[first, second])
+    mocker.patch("lib.people.dossier.sync_datasets")
+    mocker.patch("lib.people.dossier.iter_parsed_chunks", return_value=[cv])
+
+    assert await get_filtered_chunks("aisot", first.full_name, "", person=first) == []
+    assert await get_filtered_chunks("aisot", second.full_name, "", person=second) == []
+
+
+@pytest.mark.asyncio
 async def test_pdf_and_markdown_resumes_expand_from_their_parsed_paths(mocker):
     chunks = [
         _chunk(
@@ -266,7 +338,7 @@ def test_enriched_person_keeps_roster_identity(mocker):
     from lib.people.model import Person
     mocker.patch("lib.people.dossier.persons_in_dataset", return_value=[Person(full_name="Jane Doe")])
     enriched = Person(full_name="Jane Doe", linkedin_id="jane-doe")
-    target, pattern = _identity_filter("aisot", enriched.full_name, enriched)
+    target, pattern, _ = _identity_filter("aisot", enriched.full_name, enriched)
     assert target is enriched
     assert _matches_phrase(pattern, "Jane Doe")
 
