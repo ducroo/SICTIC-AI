@@ -51,6 +51,7 @@ def workflow(mock_env, monkeypatch):
         person_profile_markdown="Bob profile",
     )
     monkeypatch.setattr(module, "build_person_dossier", AsyncMock(return_value=([], [])))
+    monkeypatch.setattr(module, "persons_in_dataset", AsyncMock())
     monkeypatch.setattr(module, "person_profile_as_person_objects", AsyncMock(return_value=[alice, bob]))
     monkeypatch.setattr(module, "generate_markdown", AsyncMock(return_value=CRITERIA))
     rankings = {
@@ -173,13 +174,14 @@ async def test_cached_profile_gathers_dossier_again(workflow, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_missing_or_invalid_criteria_fail_before_profiling(workflow):
+async def test_missing_or_invalid_criteria_fail_before_discovery(workflow):
     module, _engine, _alice, _bob = workflow
     with pytest.raises(ValueError, match="Supply criteria"):
         await module.recruiting(DATASET)
     InsightFile(DATASET, "job_criteria", "manual").save("# Unexpected title\n" + CRITERIA)
     with pytest.raises(ValueError, match="exactly one"):
         await module.recruiting(DATASET)
+    module.persons_in_dataset.assert_not_awaited()
     module.person_profile_as_person_objects.assert_not_awaited()
 
 
@@ -191,6 +193,10 @@ async def test_only_confirmed_applicants_are_scored(workflow):
     roster_text = "| full-name | linkedin-id |\n|---|---|\n| Alice Smith | alice-smith |\n| Bob Jones | |\n"
     roster.save(roster_text)
 
+    def profile(dataset):
+        module.persons_in_dataset.assert_awaited_once_with(dataset)
+        return [alice, bob]
+
     def generate(prompt, schema, **kwargs):
         if schema.get("required") == ["applied"]:
             assert "Include only people who applied for this role" in prompt
@@ -200,6 +206,7 @@ async def test_only_confirmed_applicants_are_scored(workflow):
         assert schema["required"] == [alice.identifier]
         return {alice.identifier: {"rank": 1, "rationale": "Strong spreadsheet evidence."}}
 
+    module.person_profile_as_person_objects.side_effect = profile
     module.generate_json.side_effect = generate
     result = await module.recruiting(DATASET, "Job advert")
 

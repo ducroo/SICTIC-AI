@@ -20,6 +20,7 @@ from lib.people.dossier import build_person_dossier
 from lib.people.model import Person
 from lib.slugify import slugify
 from skills.person_profile.person_profile import person_profile_as_person_objects
+from skills.persons_in_dataset.persons_in_dataset import persons_in_dataset
 
 logger = get_logger(__name__)
 
@@ -243,6 +244,7 @@ async def recruiting(dataset_name: str, criteria: str | None = None) -> InsightR
         check for chapter in parse_checklist(_checklist(criteria_text, "applicant")).chapters
         for check in chapter.checks
     ]
+    await persons_in_dataset(dataset)
     people = await person_profile_as_person_objects(dataset)
     role_material = criteria_text
     if criteria and criteria_insight.model != "manual":
