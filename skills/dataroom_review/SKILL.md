@@ -37,9 +37,13 @@ startup dossier.
 
 ## Side effects and failure behavior
 
-Synchronization may convert and index documents. The review calls models and
-saves chapter audits and the report. It sends nothing. Missing evidence is an
-assessment outcome (`Not Found`), distinct from technical failure.
+Synchronization may convert and index documents. Permanent conversion problems
+on individual files (corrupt or invalid documents, unsupported formats, empty
+extracts) are skipped so the rest of the dossier still reviews; those files are
+listed in the report and treated as missing evidence. Recoverable infrastructure
+failures still fail synchronization. The review calls models and saves chapter
+audits and the report. It sends nothing. Missing evidence is an assessment
+outcome (`Not Found`), distinct from a whole-job technical failure.
 
 ## Usage
 

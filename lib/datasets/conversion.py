@@ -204,7 +204,7 @@ async def reconcile_conversions(
         completed += 1
         source = source_by_name[filename]
         state = manifest.state(filename)
-        if conversion_error is not None and not _is_unsupported_format_error(
+        if conversion_error is not None and _is_retryable_conversion_error(
             conversion_error
         ):
             error_text = _short_error(conversion_error)
@@ -233,6 +233,11 @@ async def reconcile_conversions(
             if storage.exists(parsed_path):
                 storage.remove(parsed_path)
                 result.removed_parsed += 1
+            error_text = (
+                _short_error(conversion_error)
+                if conversion_error is not None
+                else None
+            )
             state.clear()
             state.update(
                 {
@@ -246,9 +251,11 @@ async def reconcile_conversions(
                     ),
                 }
             )
+            if error_text:
+                state["last_conversion_error"] = error_text
             result.ignored += 1
             logger.warning(
-                "[%s] Ignored %s/%s with no extractable text: %s (%s)",
+                "[%s] Ignored %s/%s without usable text: %s (%s)",
                 dataset_name,
                 completed,
                 len(files_to_convert),
@@ -311,13 +318,29 @@ def _is_unsupported_format_error(error: Exception) -> bool:
     )
 
 
+def _is_retryable_conversion_error(error: Exception) -> bool:
+    """Return whether conversion should stay a hard failure and retry later.
+
+    Permanent document problems (unsupported format, corrupt/invalid files,
+    other non-recoverable infrastructure responses) are ignored so the rest of
+    the dossier can still sync and be reviewed.
+    """
+    if _is_unsupported_format_error(error):
+        return False
+    if isinstance(error, InfrastructureError):
+        return bool(error.recoverable)
+    return True
+
+
 def _ignored_reason(
     filename: str,
     files_to_convert: list[dict],
     error: Exception | None,
 ) -> str:
     if error is not None:
-        return "unsupported_format"
+        if _is_unsupported_format_error(error):
+            return "unsupported_format"
+        return "unreadable"
     path = next(
         item["local_path"]
         for item in files_to_convert
@@ -331,3 +354,89 @@ def _short_error(error: Exception, limit: int = 500) -> str:
     if len(text) > limit:
         return text[:limit].rstrip() + "..."
     return text
+
+
+def describe_ignored_document(filename: str, state: dict) -> str:
+    """Return a founder-facing reason for a document that was not ingested."""
+    reason = state.get("ignored_reason") or ""
+    detail = str(state.get("last_conversion_error") or "").strip()
+    if reason == "unsupported_format":
+        return "Unsupported file format for conversion."
+    if reason == "empty_source":
+        return "File is empty."
+    if reason == "no_extractable_text":
+        return "No extractable text."
+    if reason == "unreadable" or detail:
+        lowered = detail.casefold()
+        if "is not valid" in lowered:
+            if filename.casefold().endswith((".ppt", ".pptx")):
+                return (
+                    "PowerPoint file is not valid for conversion "
+                    "(often empty or missing slides)."
+                )
+            return (
+                "Document is not valid for conversion "
+                "(corrupt or incomplete file)."
+            )
+        if detail:
+            return _founder_facing_conversion_detail(detail)
+        return "Could not convert this document."
+    return "Document was not available for review."
+
+
+def _founder_facing_conversion_detail(detail: str) -> str:
+    text = detail
+    for prefix in (
+        "docling_stack.convert_document: ",
+        "document_conversion.convert_document: ",
+    ):
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+            break
+    if text.lower().startswith("could not convert "):
+        parts = text.split(": ", 1)
+        if len(parts) == 2:
+            text = parts[1]
+    return text.strip() or detail
+
+
+def list_ignored_documents(dataset_slug: str) -> list[tuple[str, str]]:
+    """Return ``(filename, reason)`` for documents skipped during conversion."""
+    from lib.datasets.paths import dataset_parsed_path
+    from lib.slugify import slugify
+
+    storage = get_storage()
+    parsed_rel = dataset_parsed_path(slugify(dataset_slug))
+    manifest = IngestionManifest.load(storage, parsed_rel)
+    rows: list[tuple[str, str]] = []
+    for filename, state in sorted(manifest.documents.items()):
+        if not state.get("ignored_reason"):
+            continue
+        rows.append((filename, describe_ignored_document(filename, state)))
+    return rows
+
+
+def format_ignored_documents_section(
+    dataset_slug: str,
+    *,
+    heading: str = "Documents that could not be processed",
+) -> str:
+    """Markdown section listing conversion skips, or empty when none exist."""
+    rows = list_ignored_documents(dataset_slug)
+    if not rows:
+        return ""
+    lines = [
+        f"## {heading}",
+        "",
+        "These files stayed in the upload but could not be read, so related "
+        "checklist items may show as Not Found when this was the only "
+        "evidence.",
+        "",
+        "| Document | Reason |",
+        "| --- | --- |",
+    ]
+    for filename, reason in rows:
+        safe_name = filename.replace("|", "\\|")
+        safe_reason = reason.replace("|", "\\|")
+        lines.append(f"| `{safe_name}` | {safe_reason} |")
+    return "\n".join(lines) + "\n"

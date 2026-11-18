@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from lib.datasets.conversion import format_ignored_documents_section
 from lib.datasets.paths import find_dataset_location
 from lib.infrastructure.logging import get_logger
 from lib.insights import InsightResult
@@ -16,8 +17,18 @@ Status meanings follow the shared due-diligence audit:
 - Fine / Sufficient / Borderline / Critical describe how the available documents answer each check.
 - Not Found means the dossier does not address the check.
 
-This is a document check. It is not an investment decision.
+Files that could not be converted are listed in the report and treated as missing evidence for related checks. This is a document check. It is not an investment decision.
 """
+
+
+def _with_ignored_documents(content: str, dataset_slug: str) -> str:
+    section = format_ignored_documents_section(dataset_slug)
+    if not section:
+        return content
+    marker = "**Product type:**"
+    if marker in content:
+        return content.replace(marker, f"{section}\n{marker}", 1)
+    return content.rstrip() + "\n\n" + section
 
 
 async def dataroom_review(dataset_name: str) -> InsightResult:
@@ -40,6 +51,7 @@ async def dataroom_review(dataset_name: str) -> InsightResult:
         for line in report.content().splitlines()
         if not line.startswith("**Model:**")
     ) + "\n"
+    cleaned = _with_ignored_documents(cleaned, location.slug)
     if cleaned != report.content():
         report.save(cleaned)
     logger.info("Saved data-room review for %s at %s", location.slug, report.path)

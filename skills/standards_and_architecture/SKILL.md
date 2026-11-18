@@ -415,8 +415,12 @@ obsolete chunks.
 Synchronization returns `IngestionResult` objects with counts and
 `IngestionFailure` details. Use `raise_on_error=True` when downstream
 work requires successful ingestion; the default can log failures and
-return partial results. The retained `force` parameter does not force
-a rebuild.
+return partial results. Permanent document-conversion problems
+(unsupported format, corrupt/invalid files, and other non-recoverable
+`InfrastructureError` responses) are ignored with an `ignored_reason`
+so the rest of the dossier can sync; recoverable conversion failures
+remain `IngestionFailure` entries and can still trip `raise_on_error`.
+The retained `force` parameter does not force a rebuild.
 
 Storage `refresh()` does not fetch external data in the current local
 implementation. Application-storage mirroring is external to skills.

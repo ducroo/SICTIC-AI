@@ -118,6 +118,69 @@ async def test_failed_conversion_preserves_stale_parse_and_retries(tmp_path, moc
 
 
 @pytest.mark.asyncio
+async def test_invalid_document_is_ignored_and_not_retried(tmp_path, mocker):
+    storage = LocalStorage(tmp_path)
+    raw_rel = "datasets/example"
+    parsed_rel = "cache/datasets2md/example"
+    storage.write_bytes(f"{raw_rel}/Checksum - Strategy paper.pptx", b"shell-pptx")
+    storage.write_bytes(f"{raw_rel}/ok.pdf", b"good")
+    source_document = next(
+        item
+        for item in source.snapshot_source_files(storage, raw_rel)
+        if item.filename.endswith(".pptx")
+    )
+    mocker.patch.object(conversion, "get_storage", return_value=storage)
+    mocker.patch(
+        "lib.datasets.paths.dataset_parsed_path",
+        return_value=parsed_rel,
+    )
+
+    async def convert(path):
+        if path.name.endswith(".pptx"):
+            raise InfrastructureError(
+                f"Could not convert {path.name}: Input document {path} is not valid.",
+                kind=InfrastructureErrorKind.INVALID_RESPONSE,
+                provider="docling_stack",
+                operation="convert_document",
+            )
+        return DocumentConversion(markdown="ok text")
+
+    converter = mocker.patch.object(
+        conversion,
+        "convert_document",
+        side_effect=convert,
+    )
+
+    first = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
+    second = await conversion.reconcile_conversions("example", raw_rel, parsed_rel)
+
+    assert first.converted == 1
+    assert first.ignored == 1
+    assert first.failures == []
+    assert second.converted == 0
+    assert second.ignored == 0
+    assert converter.await_count == 2
+    state = IngestionManifest.load(storage, parsed_rel).documents[
+        "Checksum - Strategy paper.pptx"
+    ]
+    assert state["ignored_reason"] == "unreadable"
+    assert state["source_sha256"] == source_document.sha256
+    assert "is not valid" in state["last_conversion_error"]
+    assert storage.read_text(f"{parsed_rel}/ok.pdf.md") == "ok text"
+    rows = conversion.list_ignored_documents("example")
+    assert rows == [
+        (
+            "Checksum - Strategy paper.pptx",
+            "PowerPoint file is not valid for conversion "
+            "(often empty or missing slides).",
+        )
+    ]
+    section = conversion.format_ignored_documents_section("example")
+    assert "Documents that could not be processed" in section
+    assert "Checksum - Strategy paper.pptx" in section
+
+
+@pytest.mark.asyncio
 async def test_empty_conversion_is_ignored_cleans_stale_state_and_is_not_retried(
     tmp_path,
     mocker,
