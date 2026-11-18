@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import re
 from html import escape
+from html.parser import HTMLParser
 from pathlib import Path
 
 from lib.infrastructure.logging import get_logger
@@ -15,7 +16,9 @@ _SPIKE_DIR = Path(__file__).resolve().parent
 _DEFAULT_LOGO = _SPIKE_DIR / "hosting" / "public" / "static" / "sictic-logo.svg"
 _FALLBACK_LOGO = _SPIKE_DIR / "static" / "sictic-logo.svg"
 
-# Matches the Hosting @media print table layout.
+# Print layout uses stacked rows instead of HTML tables. Fixed six-column
+# table widths crushed the seventh DD column (proposed next steps) and made
+# Chromium emit hundreds of mostly-blank pages.
 _PRINT_CSS = """
 @page { size: A4 landscape; margin: 10mm; }
 * { box-sizing: border-box; }
@@ -38,6 +41,8 @@ html, body {
   padding-bottom: 8pt;
   margin-bottom: 10pt;
   border-bottom: 1pt solid #d2d6dc;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .report-logo { height: 28pt; width: auto; display: block; }
 .report-logo-text {
@@ -68,34 +73,36 @@ h1, h2, h3 {
 }
 .report-body h3 { font-size: 10pt; margin: 10pt 0 4pt; }
 .table-wrap { overflow: visible; margin: 8pt 0; max-width: 100%; }
-table {
-  border-collapse: collapse;
-  width: 100%;
-  max-width: 100%;
-  table-layout: fixed;
-  font-size: 7.5pt;
-}
-th, td {
-  text-align: left;
-  vertical-align: top;
-  padding: 3pt 3.5pt;
+.print-table { width: 100%; }
+.print-row {
+  break-inside: auto;
+  page-break-inside: auto;
   border-bottom: 0.5pt solid #d2d6dc;
+  padding: 5pt 0 7pt;
+  margin: 0;
+}
+.print-row:nth-child(even) { background: #fcfcfc; }
+.print-kv {
+  display: grid;
+  grid-template-columns: 28mm 1fr;
+  gap: 3pt 6pt;
+  padding: 1.5pt 0;
+  align-items: start;
+}
+.print-label {
+  color: #607382;
+  font-size: 7pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-th:nth-child(1), td:nth-child(1) { width: 3.5%; }
-th:nth-child(2), td:nth-child(2) { width: 11%; }
-th:nth-child(3), td:nth-child(3) { width: 7.5%; }
-th:nth-child(4), td:nth-child(4) { width: 28%; }
-th:nth-child(5), td:nth-child(5) { width: 25%; }
-th:nth-child(6), td:nth-child(6) { width: 25%; }
-thead th {
-  background: #fafafa;
-  font-size: 7pt;
-  text-transform: uppercase;
-  color: #607382;
+.print-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 7.5pt;
 }
-tbody tr:nth-child(even) { background: #fcfcfc; }
 .status-pill {
   display: inline-block;
   padding: 1pt 4pt;
@@ -116,13 +123,6 @@ tbody tr:nth-child(even) { background: #fcfcfc; }
   border-top: 0.5pt solid #d2d6dc;
   color: #607382;
   font-size: 8pt;
-}
-/* Allow rows to split across pages. break-inside:avoid on tall DD rows
-   made Chromium emit mostly-blank pages (hundreds for a full data-room). */
-thead { display: table-header-group; }
-tr, td, th {
-  break-inside: auto;
-  page-break-inside: auto;
 }
 """
 
@@ -159,6 +159,141 @@ def normalize_report_body_html(report_body_html: str) -> str:
     return text.strip()
 
 
+class _TableFlattenParser(HTMLParser):
+    """Rewrite HTML tables into labeled stacked rows for Chromium print."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._in_table = False
+        self._in_thead = False
+        self._in_cell = False
+        self._headers: list[str] = []
+        self._row_cells: list[str] = []
+        self._cell_parts: list[str] = []
+        self._body_rows: list[list[str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_map = {key: (value or "") for key, value in attrs}
+        if tag == "table" and not self._in_table:
+            self._in_table = True
+            self._headers = []
+            self._body_rows = []
+            return
+        if not self._in_table:
+            self.parts.append(self._render_start(tag, attr_map))
+            return
+        if tag == "thead":
+            self._in_thead = True
+            return
+        if tag == "tr":
+            self._row_cells = []
+            return
+        if tag in {"td", "th"}:
+            self._in_cell = True
+            self._cell_parts = []
+            return
+        if self._in_cell:
+            self._cell_parts.append(self._render_start(tag, attr_map))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "table" and self._in_table:
+            self.parts.append(self._render_print_table())
+            self._in_table = False
+            self._in_thead = False
+            self._in_cell = False
+            return
+        if not self._in_table:
+            self.parts.append(f"</{tag}>")
+            return
+        if tag == "thead":
+            self._in_thead = False
+            return
+        if tag in {"td", "th"} and self._in_cell:
+            cell_html = "".join(self._cell_parts).strip()
+            self._row_cells.append(cell_html)
+            self._in_cell = False
+            self._cell_parts = []
+            return
+        if tag == "tr":
+            if self._in_thead and not self._headers:
+                self._headers = [
+                    re.sub(r"<[^>]+>", "", cell).strip() or f"Column {index + 1}"
+                    for index, cell in enumerate(self._row_cells)
+                ]
+            elif not self._in_thead:
+                self._body_rows.append(list(self._row_cells))
+            self._row_cells = []
+            return
+        if self._in_cell:
+            self._cell_parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        if self._in_cell:
+            self._cell_parts.append(escape(data))
+        elif not self._in_table:
+            self.parts.append(escape(data))
+
+    def handle_entityref(self, name: str) -> None:
+        text = f"&{name};"
+        if self._in_cell:
+            self._cell_parts.append(text)
+        elif not self._in_table:
+            self.parts.append(text)
+
+    def handle_charref(self, name: str) -> None:
+        text = f"&#{name};"
+        if self._in_cell:
+            self._cell_parts.append(text)
+        elif not self._in_table:
+            self.parts.append(text)
+
+    @staticmethod
+    def _render_start(tag: str, attr_map: dict[str, str]) -> str:
+        if not attr_map:
+            return f"<{tag}>"
+        attrs = " ".join(
+            f'{key}="{escape(value, quote=True)}"' for key, value in attr_map.items()
+        )
+        return f"<{tag} {attrs}>"
+
+    def _render_print_table(self) -> str:
+        if not self._body_rows:
+            return ""
+        headers = list(self._headers)
+        width = max([len(headers), *(len(row) for row in self._body_rows)], default=0)
+        while len(headers) < width:
+            headers.append(f"Column {len(headers) + 1}")
+        rows_html: list[str] = []
+        for row in self._body_rows:
+            cells = list(row) + [""] * (width - len(row))
+            # Chapter banner rows are mostly empty; keep only filled cells.
+            pairs = [
+                (headers[index], cells[index])
+                for index in range(width)
+                if cells[index].strip()
+            ]
+            if not pairs:
+                continue
+            fields = "".join(
+                f'<div class="print-kv"><div class="print-label">{escape(label)}</div>'
+                f'<div class="print-value">{value}</div></div>'
+                for label, value in pairs
+            )
+            rows_html.append(f'<div class="print-row">{fields}</div>')
+        if not rows_html:
+            return ""
+        return '<div class="print-table">' + "".join(rows_html) + "</div>"
+
+
+def flatten_tables_for_print(report_body_html: str) -> str:
+    """Convert checklist tables into stacked labeled rows for PDF print."""
+    parser = _TableFlattenParser()
+    parser.feed(report_body_html or "")
+    parser.close()
+    return "".join(parser.parts)
+
+
 def build_report_document_html(
     *,
     deck_filename: str,
@@ -176,7 +311,7 @@ def build_report_document_html(
         )
     else:
         logo_html = '<p class="report-logo-text">SICTIC</p>'
-    body = normalize_report_body_html(report_body_html)
+    body = flatten_tables_for_print(normalize_report_body_html(report_body_html))
     note = footnote or (
         "This is an automated document check against SICTIC Investor Day criteria. "
         "It is not a jury decision and does not submit an application."

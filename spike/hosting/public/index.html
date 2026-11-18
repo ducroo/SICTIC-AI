@@ -216,7 +216,7 @@
       border-collapse: collapse;
       width: 100%;
       min-width: 0;
-      table-layout: fixed;
+      table-layout: auto;
       font-size: 0.88rem;
     }
     th, td {
@@ -227,13 +227,12 @@
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    /* No / Check / Status stay compact; text columns take the rest. */
-    th:nth-child(1), td:nth-child(1) { width: 3.5%; }
-    th:nth-child(2), td:nth-child(2) { width: 11%; }
-    th:nth-child(3), td:nth-child(3) { width: 7.5%; }
-    th:nth-child(4), td:nth-child(4) { width: 28%; }
-    th:nth-child(5), td:nth-child(5) { width: 25%; }
-    th:nth-child(6), td:nth-child(6) { width: 25%; }
+    /* Keep compact checklist labels narrow; let evidence columns share space.
+       Avoid fixed six-column widths: DD tables also include next-steps. */
+    th:nth-child(1), td:nth-child(1) { width: 4%; white-space: nowrap; }
+    th:nth-child(2), td:nth-child(2) { width: 8%; }
+    th:nth-child(3), td:nth-child(3) { width: 10%; }
+    th:nth-child(4), td:nth-child(4) { width: 8%; }
     thead th {
       background: #fafafa;
       font-family: Montserrat, Figtree, Helvetica, Arial, sans-serif;
@@ -345,23 +344,36 @@
         print-color-adjust: exact;
       }
       .table-wrap { overflow: visible; }
-      table { font-size: 0.7rem; }
-      th, td { padding: 0.3rem 0.35rem; }
-      th:nth-child(1), td:nth-child(1) { width: 3.5%; }
-      th:nth-child(2), td:nth-child(2) { width: 11%; }
-      th:nth-child(3), td:nth-child(3) { width: 7.5%; }
-      th:nth-child(4), td:nth-child(4) { width: 28%; }
-      th:nth-child(5), td:nth-child(5) { width: 25%; }
-      th:nth-child(6), td:nth-child(6) { width: 25%; }
-      /* Tall checklist rows must be allowed to split; avoid creates blank pages. */
-      thead { display: table-header-group; }
-      tr, td, th {
+      /* Stack table rows for print. Fixed multi-column tables with a squeezed
+         next-steps column made Chromium emit hundreds of blank pages. */
+      .table-wrap table,
+      .table-wrap thead,
+      .table-wrap tbody,
+      .table-wrap tr,
+      .table-wrap th,
+      .table-wrap td {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .table-wrap thead { display: none !important; }
+      .table-wrap tr {
         break-inside: auto;
         page-break-inside: auto;
+        border-bottom: 1px solid var(--line);
+        padding: 0.45rem 0 0.65rem;
+        margin: 0;
+      }
+      .table-wrap th,
+      .table-wrap td {
+        border-bottom: none !important;
+        padding: 0.15rem 0 !important;
+        font-size: 0.72rem;
       }
       .status-pill {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        white-space: normal;
       }
     }
   </style>
