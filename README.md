@@ -261,8 +261,8 @@ Internal building blocks are intentionally omitted.
 | `team_profile` | ✅ | Assesses founders and the overall team. |
 | `person_profile` | ✅ | Creates a comprehensive profile of a founder, member, or other person. |
 | `startup_traction` | ✅ | Summarizes and quantifies commercial traction. |
-| `dd_checks` | ✅ | Runs a broad suite of due-diligence checks and lists the most important findings first. |
-| `dd_priorities` | ✅ | Merges the most important findings of a saved `dd_checks` report into up to five priorities, including risks that grow when findings occur together. |
+| `dd_checks` | ✅ | An agent reads the data room, runs a broad suite of due-diligence checks, lists the most important findings first and writes the DD priorities. |
+| `dd_priorities` | ✅ | Returns up to five priorities from the DD checks, including risks that grow when findings occur together; merges them itself for a manual report. |
 | `startup_website_import` | ✅ | Imports a startup's public website into its due-diligence dataset. |
 | `market_review` | ◻️ | Reviews market size, customer needs, competition, and substitutes. |
 | `sha_review` | 🚧 | Reviews a selected Shareholders' Agreement against a reference SHA and legal checklists. |

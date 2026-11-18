@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import sys
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -174,6 +175,29 @@ def mocked_skill_boundaries(monkeypatch, skill_fixture_storage):
 
     async def fake_sync_datasets(*_args, **_kwargs):
         return []
+
+    async def fake_dd_agent_run(review, _config):
+        """Record every check and the priorities, like a finished DD agent run."""
+        from lib.infrastructure.ai_text_generation.agent_model import TokenUsage
+
+        review.get_checklists("general")
+        for number in review.expected_checks():
+            review.record_check(number, json.dumps({
+                "status": "Borderline",
+                "importance": 7,
+                "rationale": "Fixture evidence.",
+                "source_documents": ["fixture.md"],
+                "proposed_next_steps_and_questions": [],
+            }))
+        review.submit_priorities("## 1. Fixture priority")
+        return TokenUsage(), False
+
+    # The DD agent imports its SDK wiring only for a run; replace the model run.
+    monkeypatch.setitem(
+        sys.modules,
+        "skills.dd_checks.agent_runner",
+        SimpleNamespace(run_review=fake_dd_agent_run),
+    )
 
     async def fake_dataset_chat(*_args, **_kwargs):
         return '{"status": "Found", "summary": "Fixture answer", "concerns": "None"}'

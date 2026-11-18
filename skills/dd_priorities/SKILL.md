@@ -18,10 +18,16 @@ Resolve the canonical startup slug and read the preferred stored `dd_checks`
 report with `find(selection="any")`. Input selection does not establish freshness.
 The registry declares `dd-checks`; direct calls never rerun it.
 
-Take the report's most important findings through
-`dd_checks.most_important_findings`. These are the checks with the highest
-importance, sorted by it. A report without that section, such as a manual one,
-is used completely.
+With the `agent` engine of [dd_checks](../dd_checks/SKILL.md), the agent writes
+the priorities together with its report. For a generated report, return a
+manual priorities file or the agent's priorities with
+`find(selection="reusable")`, using the agent's configuration and the indexed
+startup revision. There is no model call. A manual report is merged as below.
+
+With the `pipeline` engine, and for a manual report, take the report's most
+important findings through `dd_checks.most_important_findings`. These are the
+checks with the highest importance, sorted by it. A report without that
+section, such as a manual one, is used completely.
 
 Read the report before checking manual-first output reuse. The cache covers
 indexed startup revisions, effective synthesis instructions and the selected
@@ -31,13 +37,15 @@ The prompt asks for up to five distinct priorities: merge findings about the
 same issue, name combinations that make a risk larger, and order the result by
 importance for the investment decision. Each priority keeps supporting check
 IDs, citations and follow-ups. These semantic requirements are not
-mechanically verified.
+mechanically verified. The agent receives the same instructions.
 
 ## Side effects and failure behavior
 
 Read stored inputs, call a model when needed and save the synthesis. No discovery,
 source import, semantic search or ranking engine is involved. Missing or empty
 DD reports raise with instructions to run DD checks; generation failures propagate.
+With the agent engine, missing or outdated agent priorities, for example after
+new documents, raise with instructions to run DD checks again.
 
 ## Usage
 

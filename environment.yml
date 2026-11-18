@@ -26,9 +26,6 @@ dependencies:
   - typer<0.25
   - xlrd
 
-  # LLM access
-  - litellm>=1.97.0
-
   # Dataset chunking
   - langchain-text-splitters
 
@@ -58,6 +55,11 @@ dependencies:
   # Packages that cannot currently be handled reliably and portably through
   # conda-forge across all supported platforms.
   - pip:
+      # LLM access. LiteLLM comes from pip together with the OpenAI Agents
+      # SDK that runs the DD agent: the SDK needs openai 3.x, which LiteLLM
+      # supports from 1.109.1.
+      - litellm>=1.109.1
+      - openai-agents[litellm]==0.24.0
       - apify-client
       - google-auth
       - 'ocrmac>=1,<2; platform_system == "Darwin"'

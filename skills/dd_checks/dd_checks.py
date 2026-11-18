@@ -32,6 +32,8 @@ logger = get_logger(__name__)
 
 # Heading of the report section that lists the most important checks first.
 TOP_FINDINGS_HEADING = "## Most important findings"
+# Who writes the DD checks: the agent, or the earlier pipeline as a fallback.
+DD_ENGINES = ("agent", "pipeline")
 
 
 @dataclass(frozen=True)
@@ -164,7 +166,7 @@ def audit_instructions_with_context(dd_config: dict, industry_type: str) -> str:
     )
 
 
-def _top_findings_section(
+def top_findings_section(
     audits: list[InsightFile],
     dd_config: dict,
 ) -> str:
@@ -210,16 +212,51 @@ def most_important_findings(report: str) -> str | None:
     return "\n".join(lines[start:end]).strip()
 
 
-async def chapter_by_chapter(
-    startup_name_lower: str,
-    sorted_chapters: list,
-    industry_type: str,
+def dd_engine(dd_config: dict) -> str:
+    """Return who writes the DD checks, from `settings.json`: "agent" or "pipeline"."""
+    engine = dd_config["settings"]["engine"]
+    if engine not in DD_ENGINES:
+        raise ValueError(
+            f"dd_checks.settings.engine must be one of {', '.join(DD_ENGINES)}, "
+            f"not {engine!r}."
+        )
+    return engine
+
+
+def agent_config_key(config: dict) -> str:
+    """Return the cache key of the DD agent's report, priorities and chapter audits."""
+    return config_cache_key(
+        config["dd_checks"],
+        config["dd_priorities"]["llm_instructions"],
+    )
+
+
+def checklist_chapters_and_types(dd_config: dict) -> tuple[list[str], set[str]]:
+    """Return the sorted checklist chapters and the product types they cover.
+
+    Checklist keys are `<chapter>_<product type>`, for example `7_product_software`.
+    """
+    chapters, product_types = set(), set()
+    for key in dd_config["checklists"]:
+        parts = key.rsplit("_", 1)
+        if len(parts) == 2:
+            chapters.add(parts[0])
+            product_types.add(parts[1])
+    return sorted(chapters), product_types
+
+
+def select_checklists(
     dd_config: dict,
-    batch_instructions: str,
-) -> list[ChapterAudit]:
-    checklists = dd_config['checklists']
+    chapters: list[str],
+    industry_type: str,
+) -> list[tuple[str, str]]:
+    """Return (chapter, checklist Markdown) pairs for a product type.
+
+    Each chapter uses its product-type variant, or its general fallback.
+    """
+    checklists = dd_config["checklists"]
     selected_checklists: list[tuple[str, str]] = []
-    for chapter in sorted_chapters:
+    for chapter in chapters:
         target_key = f"{chapter}_{industry_type}"
         fallback_key = f"{chapter}_general"
         checklist_key = (
@@ -227,10 +264,19 @@ async def chapter_by_chapter(
             if target_key in checklists
             else fallback_key if fallback_key in checklists else None
         )
-        if not checklist_key:
-            continue
+        if checklist_key:
+            selected_checklists.append((chapter, checklists[checklist_key]))
+    return selected_checklists
 
-        selected_checklists.append((chapter, checklists[checklist_key]))
+
+async def chapter_by_chapter(
+    startup_name_lower: str,
+    sorted_chapters: list,
+    industry_type: str,
+    dd_config: dict,
+    batch_instructions: str,
+) -> list[ChapterAudit]:
+    selected_checklists = select_checklists(dd_config, sorted_chapters, industry_type)
 
     async def audit_chapter(
         chapter: str,
@@ -272,6 +318,16 @@ async def chapter_by_chapter(
         )
     return chapters
 
+
+async def sync_dd_dataset(dataset_slug: str) -> None:
+    """Check that the dataset exists, then convert and index its current documents."""
+    storage = get_storage()
+    raw_path = dataset_raw_path(dataset_slug)
+    if not storage.exists(raw_path):
+        raise ValueError(f"Dataset for {dataset_slug} not found at {raw_path}.")
+    await sync_datasets([dataset_slug], raise_on_error=True)
+
+
 async def assess_dd_dataset(
     dataset_slug: str,
     *,
@@ -282,14 +338,11 @@ async def assess_dd_dataset(
 ) -> InsightResult:
     """Run industry-aware DD chapter audits on an already prepared dataset.
 
-    Callers that own Dealum/startup preparation use ``dd_checks``. Ephemeral
-    upload flows prepare a generated dataset first, then call this helper.
+    This is the pipeline engine. Callers that own Dealum/startup preparation
+    use ``dd_checks``. Ephemeral upload flows prepare a generated dataset
+    first, then call this helper.
     """
-    storage = get_storage()
-    raw_path = dataset_raw_path(dataset_slug)
-    if not storage.exists(raw_path):
-        raise ValueError(f"Dataset for {dataset_slug} not found at {raw_path}.")
-    await sync_datasets([dataset_slug], raise_on_error=True)
+    await sync_dd_dataset(dataset_slug)
 
     config = load_repository_config()
     dd_config = config["dd_checks"]
@@ -306,16 +359,7 @@ async def assess_dd_dataset(
     if reusable := insight.find(selection="reusable"):
         return [reusable]
 
-    checklists = dd_config["checklists"]
-
-    chapters, allowed_industry_types = set(), set()
-    for key in checklists.keys():
-        parts = key.rsplit("_", 1)
-        if len(parts) == 2:
-            chapters.add(parts[0])
-            allowed_industry_types.add(parts[1])
-
-    sorted_chapters = sorted(list(chapters))
+    sorted_chapters, allowed_industry_types = checklist_chapters_and_types(dd_config)
     if not sorted_chapters:
         raise ValueError("No valid chapters found in the configuration.")
 
@@ -329,7 +373,7 @@ async def assess_dd_dataset(
         dd_config,
         audit_instructions_with_context(dd_config, industry_type),
     )
-    top_findings = _top_findings_section(
+    top_findings = top_findings_section(
         [chapter.audit for chapter in chapter_audits],
         dd_config,
     )
@@ -351,11 +395,22 @@ async def assess_dd_dataset(
 async def dd_checks(startup: str) -> InsightResult:
     """
     Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, product-type-aware checklists. It automatically identifies the startup's product type, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
+
+    With the "agent" engine, an agent reads the data room and also saves the
+    DD priorities; with the "pipeline" engine, dd_priorities writes them.
     """
     startup_slug = slugify(startup)
     from lib.startups.sources import ensure_startup_dataset
 
     status = await ensure_startup_dataset(startup_slug)
+    config = load_repository_config()
+    if dd_engine(config["dd_checks"]) == "agent":
+        await sync_dd_dataset(status.dataset_slug)
+        # Imported here, because the agent module uses this module's helpers.
+        from skills.dd_checks.agent import agent_dd_checks
+
+        return await agent_dd_checks(status.dataset_slug, startup, config)
+
     return await assess_dd_dataset(
         status.dataset_slug,
         display_name=startup,
