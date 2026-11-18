@@ -117,7 +117,13 @@ tbody tr:nth-child(even) { background: #fcfcfc; }
   color: #607382;
   font-size: 8pt;
 }
-tr { break-inside: avoid; page-break-inside: avoid; }
+/* Allow rows to split across pages. break-inside:avoid on tall DD rows
+   made Chromium emit mostly-blank pages (hundreds for a full data-room). */
+thead { display: table-header-group; }
+tr, td, th {
+  break-inside: auto;
+  page-break-inside: auto;
+}
 """
 
 
