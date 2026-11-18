@@ -217,11 +217,11 @@ function ensureAppCheck() {
   return appCheck;
 }
 
-async function apiHeaders() {
+async function apiHeaders(forceRefresh = false) {
   const instance = ensureAppCheck();
   const [{ token: appCheckToken }, idToken] = await Promise.all([
-    getToken(instance, false),
-    currentIdToken(false),
+    getToken(instance, forceRefresh),
+    currentIdToken(forceRefresh),
   ]);
   return {
     "X-Firebase-AppCheck": appCheckToken,
@@ -229,13 +229,41 @@ async function apiHeaders() {
   };
 }
 
-async function pollStatus(jobId, headers) {
+function isAuthTokenError(message) {
+  const text = String(message || "").toLowerCase();
+  return (
+    text.includes("app check") ||
+    text.includes("sign-in token") ||
+    text.includes("unauthorized") ||
+    text.includes("401")
+  );
+}
+
+async function readJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch (_error) {
+    return {};
+  }
+}
+
+async function pollStatus(jobId) {
   const url = `${config.apiBaseUrl}/api/review/${jobId}`;
+  let forceRefreshNext = false;
   while (true) {
+    // Refresh tokens every poll so long reviews outlive App Check / Auth TTL.
+    const headers = await apiHeaders(forceRefreshNext);
+    const forcedRefresh = forceRefreshNext;
+    forceRefreshNext = false;
     const response = await fetch(url, { headers });
-    const payload = await response.json();
+    const payload = await readJsonResponse(response);
     if (!response.ok) {
-      throw new Error(payload.error || "The review status could not be read.");
+      const detail = payload.error || "The review status could not be read.";
+      if (response.status === 401 && !forcedRefresh) {
+        forceRefreshNext = true;
+        continue;
+      }
+      throw new Error(detail);
     }
     setSteps(payload.steps);
     if (typeof payload.elapsed_seconds === "number") {
@@ -330,10 +358,16 @@ async function downloadReportPdf(jobId, baseName, button) {
     button.textContent = "Preparing PDF…";
   }
   try {
-    const headers = await apiHeaders();
-    const response = await fetch(`${config.apiBaseUrl}/api/review/${jobId}/pdf`, {
+    let headers = await apiHeaders();
+    let response = await fetch(`${config.apiBaseUrl}/api/review/${jobId}/pdf`, {
       headers,
     });
+    if (response.status === 401) {
+      headers = await apiHeaders(true);
+      response = await fetch(`${config.apiBaseUrl}/api/review/${jobId}/pdf`, {
+        headers,
+      });
+    }
     if (!response.ok) {
       let detail = "The PDF could not be downloaded.";
       try {
@@ -380,8 +414,7 @@ function updateEmailHint() {
 async function followJob(jobId) {
   beginBusy(workingMessageForKind(selectedKind()));
   try {
-    const headers = await apiHeaders();
-    const finished = await pollStatus(jobId, headers);
+    const finished = await pollStatus(jobId);
     if (finished.report_html) {
       presentReport(
         finished.report_html,
@@ -398,11 +431,15 @@ async function followJob(jobId) {
     } else {
       showWorking("The review is ready.");
     }
+    clearActiveJob();
   } catch (error) {
     const message = error.message || String(error);
     showError(message);
     showWorking(message);
-    clearActiveJob();
+    // Keep the job id so a refresh can resume after a transient auth failure.
+    if (!isAuthTokenError(message)) {
+      clearActiveJob();
+    }
   } finally {
     release();
   }
@@ -516,7 +553,7 @@ form.addEventListener("submit", async (event) => {
         `Review started. We’ll email the PDF to ${email} when it’s ready — you can close this window.`,
       );
     }
-    const finished = await pollStatus(jobId, headers);
+    const finished = await pollStatus(jobId);
     if (finished.report_html) {
       presentReport(
         finished.report_html,
@@ -533,11 +570,14 @@ form.addEventListener("submit", async (event) => {
     } else {
       showWorking("The review is ready.");
     }
+    clearActiveJob();
   } catch (error) {
     const message = error.message || String(error);
     showError(message);
     showWorking(message);
-    clearActiveJob();
+    if (!isAuthTokenError(message)) {
+      clearActiveJob();
+    }
   } finally {
     release();
   }
