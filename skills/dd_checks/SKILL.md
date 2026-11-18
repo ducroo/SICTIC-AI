@@ -21,10 +21,11 @@ manual one, has none.
 
 ## Workflow and dependencies
 
-Prepare the startup through `ensure_startup_dataset` and synchronize before
-assessment. Classify product type with the configured JSON schema; select each
-chapter's matching variant or its general fallback. Product has biology,
-hardware and software variants plus a general fallback.
+Prepare the startup through `ensure_startup_dataset`, then assess through
+`assess_dd_dataset` (also used by [dataroom_review](../dataroom_review/SKILL.md)
+for ephemeral uploads without Dealum). Classify product type with the configured
+JSON schema; select each chapter's matching variant or its general fallback.
+Product has biology, hardware and software variants plus a general fallback.
 
 This is the sole owner of the Software/Hardware/Biology/General classification;
 it does not consume product type from startup_sector. Existing internal

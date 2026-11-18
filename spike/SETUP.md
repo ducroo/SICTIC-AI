@@ -126,7 +126,12 @@ The raw IP has no public certificate. Open the API at `https://api.sictic.ch`. T
 
 Public users use `https://review.sictic.ch` (Firebase Hosting). This host exposes the JSON API:
 
-- `POST /api/review` with multipart field `deck` starts a job.
+- `POST /api/review` with multipart field `deck` (pitch deck) or `dataroom`
+  (ZIP) starts a job. Include `review_kind=pitch_deck` (default) or
+  `review_kind=dataroom`. Pitch decks remain PDF/PPT/PPTX up to 25 MB. Data-room
+  ZIPs are extracted safely (no path traversal, nested archives skipped) up to
+  100 MB compressed / 400 MB uncompressed, then assessed with the shared
+  `dd_checks` chapter engine via `dataroom_review`.
 - `GET /api/review/{job_id}` returns progress and, when finished, `report_html`.
 
 Those two routes require a Firebase App Check token in the `X-Firebase-AppCheck` header and a Firebase Auth ID token in the `Authorization: Bearer …` header when `FIREBASE_PROJECT_ID` is set.

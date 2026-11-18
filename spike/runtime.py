@@ -68,6 +68,9 @@ logger = get_logger(__name__)
 
 DECK_SUFFIXES = {".pdf", ".ppt", ".pptx"}
 MAX_DECK_BYTES = 25 * 1024 * 1024
+DATAROOM_SUFFIXES = {".zip"}
+MAX_DATAROOM_BYTES = 100 * 1024 * 1024
+REVIEW_KINDS = frozenset({"pitch_deck", "dataroom"})
 
 
 def _repo_root() -> Path:
@@ -231,3 +234,59 @@ async def review_pitch_deck_upload(*, filename: str, payload: bytes, on_progress
             await discard_ephemeral_dataset(dataset_name)
         except Exception:
             logger.exception("Failed to remove pitch-deck dataset %s", dataset_name)
+
+
+def check_dataroom_upload(filename: str, payload: bytes) -> str:
+    """Return a safe ZIP filename, or raise ValueError before extraction."""
+    safe_name = _safe_filename(filename)
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in DATAROOM_SUFFIXES:
+        raise ValueError("Upload a ZIP archive of the data room.")
+    if not payload:
+        raise ValueError("The file is empty.")
+    if len(payload) > MAX_DATAROOM_BYTES:
+        raise ValueError("The ZIP is larger than 100 MB.")
+    return safe_name
+
+
+async def review_dataroom_upload(*, filename: str, payload: bytes, on_progress=None) -> str:
+    """Extract an uploaded ZIP, review the dossier, and remove the temporary dataset."""
+    from lib.zip_extract import extract_dataroom_zip
+
+    safe_name = check_dataroom_upload(filename, payload)
+
+    def progress(step: str) -> None:
+        if on_progress is not None:
+            on_progress(step)
+
+    dataset_name = f"dataroom-{uuid.uuid4().hex[:12]}"
+    progress("extract")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "extracted"
+        extracted = extract_dataroom_zip(payload, root)
+        abs_files = [str(root / rel) for rel in extracted.files]
+        await prepare_ephemeral_dataset(
+            abs_files,
+            temp_name=dataset_name,
+            relative_paths=list(extracted.files),
+        )
+    try:
+        from skills.dataroom_review.dataroom_review import dataroom_review
+
+        progress("review")
+        insights = await dataroom_review(dataset_name)
+        if not insights:
+            raise RuntimeError("The review did not produce a report.")
+        return insights[0].content()
+    finally:
+        try:
+            await discard_ephemeral_dataset(dataset_name)
+        except Exception:
+            logger.exception("Failed to remove data-room dataset %s", dataset_name)
+
+
+def normalize_review_kind(value: str | None) -> str:
+    kind = (value or "pitch_deck").strip().lower().replace("-", "_")
+    if kind not in REVIEW_KINDS:
+        raise ValueError("Choose pitch deck or data room.")
+    return kind

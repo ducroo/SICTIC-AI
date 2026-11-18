@@ -11,10 +11,15 @@ import {
 } from "./auth-session.js";
 
 const WORKING_MESSAGE = "We're working on your deck.";
+const DATAROOM_WORKING_MESSAGE = "We're working on your data room.";
 const ACTIVE_JOB_KEY = "sictic.review.activeJob";
 const config = window.REVIEW_CONFIG;
 const form = document.getElementById("review-form");
-const fileInput = document.getElementById("deck");
+const fileInput = document.getElementById("upload");
+const fileLabel = document.getElementById("file-label");
+const fileHint = document.getElementById("file-hint");
+const modePitch = document.getElementById("mode-pitch");
+const modeDataroom = document.getElementById("mode-dataroom");
 const emailResultsInput = document.getElementById("email-results");
 const emailResultsHint = document.getElementById("email-results-hint");
 const submit = document.getElementById("submit");
@@ -28,7 +33,63 @@ const sessionEmail = document.getElementById("session-email");
 const signOutButton = document.getElementById("sign-out");
 const appMain = document.getElementById("app-main");
 const authLoading = document.getElementById("auth-loading");
+const reviewSteps = document.getElementById("review-steps");
 const buttonLabel = submit.textContent;
+
+const PITCH_ACCEPT =
+  ".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const DATAROOM_ACCEPT = ".zip,application/zip,application/x-zip-compressed";
+const PITCH_STEPS = [
+  "1. Receive the deck",
+  "2. Extract the text",
+  "3. Review the deck",
+  "4. Prepare the report",
+];
+const DATAROOM_STEPS = [
+  "1. Receive the archive",
+  "2. Extract the documents",
+  "3. Review the data room",
+  "4. Prepare the report",
+];
+
+function selectedKind() {
+  if (modeDataroom && modeDataroom.checked) {
+    return "dataroom";
+  }
+  return "pitch_deck";
+}
+
+function workingMessageForKind(kind) {
+  return kind === "dataroom" ? DATAROOM_WORKING_MESSAGE : WORKING_MESSAGE;
+}
+
+function syncModeUi() {
+  const kind = selectedKind();
+  const dataroom = kind === "dataroom";
+  fileLabel.textContent = dataroom ? "Data room ZIP" : "Pitch deck";
+  fileInput.name = dataroom ? "dataroom" : "deck";
+  fileInput.accept = dataroom ? DATAROOM_ACCEPT : PITCH_ACCEPT;
+  fileHint.textContent = dataroom
+    ? "One ZIP of the dossier (up to 100 MB). Nested archives are skipped. A full room can take several minutes."
+    : "PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.";
+  submit.textContent = dataroom ? "Review this data room" : "Review this deck";
+  const steps = dataroom ? DATAROOM_STEPS : PITCH_STEPS;
+  const stepIds = ["receive", "extract", "review", "report"];
+  reviewSteps.innerHTML = steps
+    .map((label, index) => `<li data-step="${stepIds[index]}">${label}</li>`)
+    .join("");
+  if (!busy) {
+    workingMessage.textContent = workingMessageForKind(kind);
+  }
+}
+
+if (modePitch) {
+  modePitch.addEventListener("change", syncModeUi);
+}
+if (modeDataroom) {
+  modeDataroom.addEventListener("change", syncModeUi);
+}
+syncModeUi();
 
 let appCheck = null;
 let busy = false;
@@ -74,8 +135,10 @@ function release() {
   timer = null;
   busy = false;
   submit.disabled = false;
-  submit.textContent = buttonLabel;
   fileInput.disabled = false;
+  if (modePitch) modePitch.disabled = false;
+  if (modeDataroom) modeDataroom.disabled = false;
+  syncModeUi();
 }
 
 function saveActiveJob(jobId) {
@@ -105,8 +168,10 @@ function loadActiveJobId() {
 function beginBusy(message = WORKING_MESSAGE) {
   busy = true;
   submit.disabled = true;
-  submit.textContent = WORKING_MESSAGE;
+  submit.textContent = message;
   fileInput.disabled = true;
+  if (modePitch) modePitch.disabled = true;
+  if (modeDataroom) modeDataroom.disabled = true;
   showWorking(message);
   const startedAt = Date.now();
   tick(0);
@@ -191,10 +256,18 @@ function reportBodyHtml(reportHtml) {
   return inner.trim();
 }
 
-function presentReport(reportHtml, deckName, jobId) {
-  const label = deckLabelFromReport(reportHtml, deckName || "your deck");
+function presentReport(reportHtml, deckName, jobId, reviewKind = "pitch_deck") {
+  const label = deckLabelFromReport(reportHtml, deckName || "your upload");
   const body = reportBodyHtml(reportHtml);
-  const safeName = label.replace(/[^\w.\-]+/g, "_").replace(/^_+|_+$/g, "") || "pitch-deck";
+  const safeName =
+    label.replace(/[^\w.\-]+/g, "_").replace(/^_+|_+$/g, "") ||
+    (reviewKind === "dataroom" ? "dataroom" : "pitch-deck");
+  const kicker =
+    reviewKind === "dataroom" ? "SICTIC data-room review" : "SICTIC pitch deck review";
+  const footnote =
+    reviewKind === "dataroom"
+      ? "This is an automated document check against SICTIC’s published due diligence checklist topics. It is not an investment decision."
+      : "This is an automated document check against SICTIC Investor Day criteria. It is not a jury decision and does not submit an application.";
   if (jobId) {
     activeJobId = jobId;
   }
@@ -204,16 +277,16 @@ function presentReport(reportHtml, deckName, jobId) {
         <button type="button" class="secondary" id="print-report">Print</button>
         <button type="button" id="download-report" ${jobId ? "" : "disabled"}>Download PDF</button>
       </div>
-      <article id="report-print" class="report-document" data-download-name="${safeName}" data-job-id="${jobId || ""}">
+      <article id="report-print" class="report-document" data-download-name="${safeName}" data-job-id="${jobId || ""}" data-review-kind="${reviewKind}">
         <div class="report-masthead">
           <img class="report-logo" src="/static/sictic-logo.svg" alt="SICTIC" width="156" height="42">
           <div>
-            <p class="report-kicker">SICTIC pitch deck review</p>
+            <p class="report-kicker">${kicker}</p>
             <h2>Review of ${label}</h2>
           </div>
         </div>
         <div class="report-body">${body}</div>
-        <p class="report-footnote">This is an automated document check against SICTIC Investor Day criteria. It is not a jury decision and does not submit an application.</p>
+        <p class="report-footnote">${footnote}</p>
       </article>
     </div>
   `;
@@ -285,12 +358,17 @@ function updateEmailHint() {
 }
 
 async function followJob(jobId) {
-  beginBusy(WORKING_MESSAGE);
+  beginBusy(workingMessageForKind(selectedKind()));
   try {
     const headers = await apiHeaders();
     const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
-      presentReport(finished.report_html, finished.deck_filename, jobId);
+      presentReport(
+        finished.report_html,
+        finished.deck_filename,
+        jobId,
+        finished.review_kind || "pitch_deck",
+      );
     }
     if (finished.email_requested && finished.email_sent) {
       showWorking("The review is ready. We also emailed you the PDF.");
@@ -354,7 +432,7 @@ signOutButton.addEventListener("click", async () => {
 
 submit.addEventListener("click", () => {
   if (busy) {
-    showWorking(WORKING_MESSAGE);
+    showWorking(workingMessageForKind(selectedKind()));
   }
 });
 
@@ -364,25 +442,32 @@ form.addEventListener("submit", async (event) => {
     window.location.replace("/login.html");
     return;
   }
+  const kind = selectedKind();
+  const working = workingMessageForKind(kind);
   if (busy) {
-    showWorking(WORKING_MESSAGE);
+    showWorking(working);
     return;
   }
   showError("");
   reportEl.innerHTML = "";
   const file = fileInput.files && fileInput.files[0];
   if (!file) {
-    showError("Choose a PDF or PowerPoint pitch deck.");
+    showError(
+      kind === "dataroom"
+        ? "Choose a ZIP archive of the data room."
+        : "Choose a PDF or PowerPoint pitch deck.",
+    );
     return;
   }
 
-  beginBusy(WORKING_MESSAGE);
+  beginBusy(working);
   const emailResults = Boolean(emailResultsInput && emailResultsInput.checked);
 
   try {
     const headers = await apiHeaders();
     const body = new FormData();
-    body.append("deck", file, file.name);
+    body.append("review_kind", kind);
+    body.append(kind === "dataroom" ? "dataroom" : "deck", file, file.name);
     if (emailResults) {
       body.append("email_results", "1");
     }
@@ -413,7 +498,12 @@ form.addEventListener("submit", async (event) => {
     }
     const finished = await pollStatus(jobId, headers);
     if (finished.report_html) {
-      presentReport(finished.report_html, finished.deck_filename || file.name, jobId);
+      presentReport(
+        finished.report_html,
+        finished.deck_filename || file.name,
+        jobId,
+        finished.review_kind || kind,
+      );
     }
     if (finished.email_requested && finished.email_sent) {
       showWorking("The review is ready. We also emailed you the PDF.");

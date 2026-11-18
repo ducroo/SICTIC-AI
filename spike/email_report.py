@@ -1,4 +1,4 @@
-"""Send completed pitch-deck reports through the Google Workspace CLI (`gws`)."""
+"""Send completed review reports through the Google Workspace CLI (`gws`)."""
 
 from __future__ import annotations
 
@@ -15,13 +15,24 @@ def email_reports_enabled() -> bool:
     return flag in {"1", "true", "yes", "on"}
 
 
-def build_report_email_html(*, deck_filename: str, report_markdown: str, report_html: str) -> str:
+def build_report_email_html(
+    *,
+    deck_filename: str,
+    report_markdown: str,
+    report_html: str,
+    review_kind: str = "pitch_deck",
+) -> str:
     """Short HTML body; the full report is the attached PDF."""
     del report_markdown, report_html  # kept for call-site compatibility
     title = f"Review of {deck_filename}"
+    label = (
+        "data-room review"
+        if review_kind == "dataroom"
+        else "pitch deck review"
+    )
     return (
         f"<h1>{title}</h1>"
-        "<p>Your SICTIC pitch deck review is ready. The PDF report is attached.</p>"
+        f"<p>Your SICTIC {label} is ready. The PDF report is attached.</p>"
     )
 
 
@@ -33,6 +44,7 @@ def send_report_email(
     report_html: str,
     pdf_bytes: bytes | None = None,
     subject: str | None = None,
+    review_kind: str = "pitch_deck",
 ) -> None:
     """Send one report email via `gws gmail +send`. Raises on failure."""
     recipient = (to_email or "").strip()
@@ -41,16 +53,22 @@ def send_report_email(
     if not email_reports_enabled():
         raise RuntimeError("SPIKE_EMAIL_REPORTS is not enabled.")
 
-    mail_subject = subject or f"{DEFAULT_SUBJECT_PREFIX}: {deck_filename}"
+    prefix = (
+        "SICTIC data-room review"
+        if review_kind == "dataroom"
+        else DEFAULT_SUBJECT_PREFIX
+    )
+    mail_subject = subject or f"{prefix}: {deck_filename}"
     html = build_report_email_html(
         deck_filename=deck_filename,
         report_markdown=report_markdown,
         report_html=report_html,
+        review_kind=review_kind,
     )
     safe_stem = "".join(
         char if char.isalnum() or char in "._-" else "_"
         for char in Path(deck_filename).stem
-    ).strip("._") or "pitch-deck"
+    ).strip("._") or ("dataroom" if review_kind == "dataroom" else "pitch-deck")
     attach_name = f"{safe_stem}-sictic-review.pdf"
     send_html_email(
         [recipient],

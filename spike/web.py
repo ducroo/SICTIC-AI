@@ -30,8 +30,11 @@ from spike.purge_auth_users import DEFAULT_RETENTION_DAYS, purge_auth_users_olde
 from spike.report_pdf import render_report_pdf
 from spike.runtime import (
     SpikeStatus,
+    check_dataroom_upload,
     check_pitch_deck_upload,
+    normalize_review_kind,
     parse_skill_call,
+    review_dataroom_upload,
     review_pitch_deck_upload,
     run_demo,
     run_skill,
@@ -62,13 +65,29 @@ STATIC_FILES = {
     "review.js": "text/javascript",
 }
 
-REVIEW_STEPS = (
+PITCH_DECK_STEPS = (
     ("receive", "Receive the deck"),
     ("extract", "Extract the text"),
     ("review", "Review the deck"),
     ("report", "Prepare the report"),
 )
+DATAROOM_STEPS = (
+    ("receive", "Receive the archive"),
+    ("extract", "Extract the documents"),
+    ("review", "Review the data room"),
+    ("report", "Prepare the report"),
+)
+REVIEW_STEPS = PITCH_DECK_STEPS
 WORKING_MESSAGE = "We're working on your deck."
+DATAROOM_WORKING_MESSAGE = "We're working on your data room."
+
+
+def _steps_for_kind(kind: str):
+    return DATAROOM_STEPS if kind == "dataroom" else PITCH_DECK_STEPS
+
+
+def _working_message_for_kind(kind: str) -> str:
+    return DATAROOM_WORKING_MESSAGE if kind == "dataroom" else WORKING_MESSAGE
 
 _STATUS_CLASS = {
     "Fine": "status-fine",
@@ -497,11 +516,13 @@ class ReviewJob:
         recipient_email: str = "",
         *,
         email_requested: bool = False,
+        review_kind: str = "pitch_deck",
     ) -> None:
         self.id = job_id
         self.filename = filename
         self.recipient_email = recipient_email
         self.email_requested = email_requested
+        self.review_kind = review_kind
         self.step = "receive"
         self.started = time.monotonic()
         self.done = False
@@ -529,10 +550,16 @@ def _truthy_form_flag(post, name: str) -> bool:
 
 def _build_report_artifacts(job: ReviewJob) -> None:
     report_html = render_report(job.report)
+    kicker = (
+        "SICTIC data-room review"
+        if job.review_kind == "dataroom"
+        else "SICTIC pitch deck review"
+    )
     try:
         job.pdf_bytes = render_report_pdf(
             deck_filename=job.filename,
             report_body_html=report_html,
+            kicker=kicker,
         )
     except Exception as error:
         job.pdf_error = str(error)
@@ -547,12 +574,19 @@ def _build_report_artifacts(job: ReviewJob) -> None:
         job.email_error = "No signed-in email address was available."
         return
     try:
+        subject_prefix = (
+            "SICTIC data-room review"
+            if job.review_kind == "dataroom"
+            else "SICTIC pitch deck review"
+        )
         send_report_email(
             to_email=job.recipient_email,
             deck_filename=job.filename,
             report_markdown=job.report,
             report_html=report_html,
             pdf_bytes=job.pdf_bytes or None,
+            subject=f"{subject_prefix}: {job.filename}",
+            review_kind=job.review_kind,
         )
         job.email_sent = True
     except Exception as error:
@@ -565,13 +599,14 @@ def _build_report_artifacts(job: ReviewJob) -> None:
 
 
 def _job_status(job: ReviewJob) -> dict:
-    keys = [key for key, _label in REVIEW_STEPS]
+    step_defs = _steps_for_kind(job.review_kind)
+    keys = [key for key, _label in step_defs]
     if job.done and not job.error:
         index = len(keys)
     else:
         index = keys.index(job.step) if job.step in keys else 0
     steps = []
-    for position, (key, label) in enumerate(REVIEW_STEPS):
+    for position, (key, label) in enumerate(step_defs):
         if job.done and not job.error:
             state = "done"
         elif position < index:
@@ -583,7 +618,8 @@ def _job_status(job: ReviewJob) -> dict:
         steps.append({"id": key, "label": label, "state": state})
     body = {
         "job_id": job.id,
-        "message": WORKING_MESSAGE,
+        "message": _working_message_for_kind(job.review_kind),
+        "review_kind": job.review_kind,
         "step": "report" if job.done and not job.error else job.step,
         "steps": steps,
         "elapsed_seconds": max(0, int(time.monotonic() - job.started)),
@@ -614,20 +650,34 @@ def _prune_jobs() -> None:
             del _jobs[key]
 
 
-def _upload_file(post) -> tuple[str, bytes]:
-    upload = post.get("deck")
+def _upload_file(post, *, field: str = "deck") -> tuple[str, bytes]:
+    upload = post.get(field)
+    if upload is None and field != "deck":
+        upload = post.get("deck")
     filename = Path(getattr(upload, "filename", "") or "").name
     file_obj = getattr(upload, "file", None)
     payload = file_obj.read() if file_obj is not None else b""
     return filename, payload
 
 
+def _review_kind_from_post(post) -> str:
+    raw = post.get("review_kind")
+    if hasattr(raw, "file"):
+        raw = None
+    return normalize_review_kind(None if raw is None else str(raw))
+
+
 async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
     def on_progress(step: str) -> None:
         job.step = step
 
+    runner = (
+        review_dataroom_upload
+        if job.review_kind == "dataroom"
+        else review_pitch_deck_upload
+    )
     try:
-        job.report = await review_pitch_deck_upload(
+        job.report = await runner(
             filename=filename,
             payload=payload,
             on_progress=on_progress,
@@ -640,7 +690,7 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
         job.status = 400
         job.done = True
     except Exception as error:
-        logger.exception("Pitch deck review failed.")
+        logger.exception("%s review failed.", job.review_kind)
         job.error = str(error)
         job.status = 500
         job.done = True
@@ -648,14 +698,24 @@ async def _finish_job(job: ReviewJob, filename: str, payload: bytes) -> None:
 
 async def handle_review_start(request: web.Request) -> web.Response:
     post = await request.post()
-    filename, payload = _upload_file(post)
-    if not filename or not payload:
-        return web.json_response(
-            {"error": "Choose a PDF or PowerPoint pitch deck."},
-            status=400,
-        )
     try:
-        check_pitch_deck_upload(filename, payload)
+        kind = _review_kind_from_post(post)
+    except ValueError as error:
+        return web.json_response({"error": str(error)}, status=400)
+    field = "dataroom" if kind == "dataroom" else "deck"
+    filename, payload = _upload_file(post, field=field)
+    if not filename or not payload:
+        message = (
+            "Choose a ZIP archive of the data room."
+            if kind == "dataroom"
+            else "Choose a PDF or PowerPoint pitch deck."
+        )
+        return web.json_response({"error": message}, status=400)
+    try:
+        if kind == "dataroom":
+            check_dataroom_upload(filename, payload)
+        else:
+            check_pitch_deck_upload(filename, payload)
     except ValueError as error:
         return web.json_response({"error": str(error)}, status=400)
     _prune_jobs()
@@ -667,6 +727,7 @@ async def handle_review_start(request: web.Request) -> web.Response:
         filename,
         recipient_email=recipient,
         email_requested=email_requested,
+        review_kind=kind,
     )
     _jobs[job.id] = job
     asyncio.create_task(_finish_job(job, filename, payload))
