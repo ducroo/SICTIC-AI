@@ -272,41 +272,45 @@ async def chapter_by_chapter(
         )
     return chapters
 
-async def dd_checks(startup: str) -> InsightResult:
-    """
-    Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, product-type-aware checklists. It automatically identifies the startup's product type, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
-    """
-    startup_slug = slugify(startup)
-    from lib.startups.sources import ensure_startup_dataset
+async def assess_dd_dataset(
+    dataset_slug: str,
+    *,
+    display_name: str | None = None,
+    skill_name: str = "dd_checks",
+    report_title: str | None = None,
+    report_preamble: str | None = None,
+) -> InsightResult:
+    """Run industry-aware DD chapter audits on an already prepared dataset.
 
-    status = await ensure_startup_dataset(startup_slug)
-    startup_slug = status.dataset_slug
+    Callers that own Dealum/startup preparation use ``dd_checks``. Ephemeral
+    upload flows prepare a generated dataset first, then call this helper.
+    """
     storage = get_storage()
-    raw_path = dataset_raw_path(startup_slug)
+    raw_path = dataset_raw_path(dataset_slug)
     if not storage.exists(raw_path):
-        raise ValueError(f"Dataset for {startup_slug} not found at {raw_path}.")
-    await sync_datasets([startup_slug], raise_on_error=True)
-        
+        raise ValueError(f"Dataset for {dataset_slug} not found at {raw_path}.")
+    await sync_datasets([dataset_slug], raise_on_error=True)
+
     config = load_repository_config()
-    dd_config = config['dd_checks']
+    dd_config = config["dd_checks"]
     effective_config_key = config_cache_key(
         dd_config,
         config["structured_output"],
     )
     insight = InsightFile(
-        dataset=startup_slug,
-        skill="dd_checks",
+        dataset=dataset_slug,
+        skill=skill_name,
         model=llm_model(),
         config_key=effective_config_key,
     )
     if reusable := insight.find(selection="reusable"):
         return [reusable]
 
-    checklists = dd_config['checklists']
+    checklists = dd_config["checklists"]
 
     chapters, allowed_industry_types = set(), set()
     for key in checklists.keys():
-        parts = key.rsplit('_', 1)
+        parts = key.rsplit("_", 1)
         if len(parts) == 2:
             chapters.add(parts[0])
             allowed_industry_types.add(parts[1])
@@ -315,9 +319,11 @@ async def dd_checks(startup: str) -> InsightResult:
     if not sorted_chapters:
         raise ValueError("No valid chapters found in the configuration.")
 
-    industry_type = await find_industry_type(startup_slug, dd_config, allowed_industry_types)
+    industry_type = await find_industry_type(
+        dataset_slug, dd_config, allowed_industry_types
+    )
     chapter_audits = await chapter_by_chapter(
-        startup_slug,
+        dataset_slug,
         sorted_chapters,
         industry_type,
         dd_config,
@@ -327,11 +333,31 @@ async def dd_checks(startup: str) -> InsightResult:
         [chapter.audit for chapter in chapter_audits],
         dd_config,
     )
-    report = (
-        f"# M&A Due Diligence Checks for {startup}\n\n"
+    label = display_name or dataset_slug
+    title = report_title or f"M&A Due Diligence Checks for {label}"
+    body = (
         f"**Product type:** {industry_type}\n\n"
         + "\n\n".join([top_findings, *(chapter.section for chapter in chapter_audits)])
         + "\n"
     )
+    if report_preamble:
+        report = f"{report_preamble.rstrip()}\n\n{body}"
+    else:
+        report = f"# {title}\n\n{body}"
     insight.save(report)
     return [insight]
+
+
+async def dd_checks(startup: str) -> InsightResult:
+    """
+    Performs a comprehensive M&A-style due diligence review of a startup's data room using predefined, product-type-aware checklists. It automatically identifies the startup's product type, selects the appropriate checklists, searches the data room, and generates a single, complete Markdown report file in the background.
+    """
+    startup_slug = slugify(startup)
+    from lib.startups.sources import ensure_startup_dataset
+
+    status = await ensure_startup_dataset(startup_slug)
+    return await assess_dd_dataset(
+        status.dataset_slug,
+        display_name=startup,
+        skill_name="dd_checks",
+    )

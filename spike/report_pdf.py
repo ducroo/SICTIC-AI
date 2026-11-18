@@ -158,6 +158,8 @@ def build_report_document_html(
     deck_filename: str,
     report_body_html: str,
     logo: Path | None = None,
+    kicker: str = "SICTIC pitch deck review",
+    footnote: str | None = None,
 ) -> str:
     """Full HTML document styled like Hosting print output."""
     title = escape(f"Review of {deck_filename}")
@@ -169,6 +171,10 @@ def build_report_document_html(
     else:
         logo_html = '<p class="report-logo-text">SICTIC</p>'
     body = normalize_report_body_html(report_body_html)
+    note = footnote or (
+        "This is an automated document check against SICTIC Investor Day criteria. "
+        "It is not a jury decision and does not submit an application."
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -181,13 +187,12 @@ def build_report_document_html(
     <div class="report-masthead">
       {logo_html}
       <div>
-        <p class="report-kicker">SICTIC pitch deck review</p>
+        <p class="report-kicker">{escape(kicker)}</p>
         <h2>{title}</h2>
       </div>
     </div>
     <div class="report-body">{body}</div>
-    <p class="report-footnote">This is an automated document check against SICTIC Investor Day criteria.
-    It is not a jury decision and does not submit an application.</p>
+    <p class="report-footnote">{escape(note)}</p>
   </article>
 </body>
 </html>
@@ -232,12 +237,16 @@ def render_report_pdf(
     deck_filename: str,
     report_body_html: str,
     logo: Path | None = None,
+    kicker: str = "SICTIC pitch deck review",
+    footnote: str | None = None,
 ) -> bytes:
     """Return PDF bytes using Chromium print (same idea as browser Print)."""
     document = build_report_document_html(
         deck_filename=deck_filename,
         report_body_html=report_body_html,
         logo=logo,
+        kicker=kicker,
+        footnote=footnote,
     )
     errors: list[str] = []
     try:

@@ -46,14 +46,26 @@ async def discard_ephemeral_dataset(temp_name: str = "temp") -> None:
             raise OSError(f"Could not clear temporary dataset directory: {path}")
 
 
-async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -> str:
+async def prepare_ephemeral_dataset(
+    files: List[str],
+    temp_name: str = "temp",
+    *,
+    relative_paths: List[str] | None = None,
+) -> str:
     """
     1. Clears a generated dataset's dossier, including insights, parsed data and index.
     2. Sets up a temporary dataset directory.
     3. Copies the provided files into it.
     4. Runs the ingestion pipeline to parse and embed them.
     5. Returns the dataset name (e.g., 'temp') for the skill to use.
+
+    When ``relative_paths`` is set, each entry is the destination path under the
+    dataset raw folder for the matching ``files`` item (same length required).
+    Otherwise each file is stored under its basename.
     """
+    if relative_paths is not None and len(relative_paths) != len(files):
+        raise ValueError("relative_paths must match files one-for-one.")
+
     await discard_ephemeral_dataset(temp_name)
     storage = get_storage()
     location = dataset_location_for_domain(temp_name, "generated")
@@ -61,12 +73,22 @@ async def prepare_ephemeral_dataset(files: List[str], temp_name: str = "temp") -
 
     # 2. Setup: Copy external files (absolute OS paths) into the storage tree
     storage.mkdir(raw_dataset_rel)
-    for file_path in files:
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as src:
-                storage.write_bytes(f"{raw_dataset_rel}/{os.path.basename(file_path)}", src.read())
-        else:
+    for index, file_path in enumerate(files):
+        if not os.path.exists(file_path):
             logger.warning(f"Provided file does not exist: {file_path}")
+            continue
+        if relative_paths is None:
+            dest_name = os.path.basename(file_path)
+        else:
+            dest = PurePosixPath(relative_paths[index].replace("\\", "/"))
+            if dest.is_absolute() or ".." in dest.parts or not dest.name:
+                raise ValueError(f"Unsafe ephemeral destination: {relative_paths[index]!r}")
+            dest_name = dest.as_posix()
+            parent = PurePosixPath(dest_name).parent
+            if str(parent) not in {".", ""}:
+                storage.mkdir(f"{raw_dataset_rel}/{parent.as_posix()}")
+        with open(file_path, "rb") as src:
+            storage.write_bytes(f"{raw_dataset_rel}/{dest_name}", src.read())
 
     # 3. Ingest: Parse to markdown and embed in Qdrant
     logger.info(f"Ingesting ephemeral dataset '{temp_name}'...")

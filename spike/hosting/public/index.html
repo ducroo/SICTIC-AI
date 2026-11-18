@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Check your pitch deck · SICTIC</title>
+  <title>Document review · SICTIC</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
@@ -284,6 +284,24 @@
       line-height: 0;
     }
     .sponsor-logo img { height: 32px; width: auto; display: block; }
+    .mode-row {
+      display: grid;
+      gap: 0.65rem;
+      margin: 0 0 1rem;
+    }
+    .mode-option {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.65rem;
+      align-items: start;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--line);
+      background: #fff;
+      cursor: pointer;
+    }
+    .mode-option input { margin-top: 0.2rem; }
+    .mode-option strong { display: block; font-size: 0.98rem; }
+    .mode-option span { display: block; color: var(--muted); font-size: 0.9rem; margin-top: 0.15rem; }
     @media (max-width: 640px) {
       h1 { font-size: 1.6rem; }
       button { width: 100%; }
@@ -357,14 +375,31 @@
     </div>
   </header>
   <main id="app-main" hidden>
-    <h1>Check your pitch deck</h1>
-    <p class="lead">Upload the deck you would send to SICTIC. The review reads it against the jury criteria and the investment criteria published for startups that want to pitch at an Investor Day. This is a document check. It is not a jury decision, and it does not submit an application.</p>
-    <p><a href="https://www.sictic.ch/startups/">Read the criteria on sictic.ch</a></p>
+    <h1>SICTIC document review</h1>
+    <p class="lead">Choose a pitch-deck check for Investor Day criteria, or upload a ZIP of your data room for the published due-diligence document checklist. This is a document check. It is not a jury or investment decision, and it does not submit an application.</p>
+    <p><a href="https://www.sictic.ch/startups/">Investor Day criteria</a> · <a href="https://www.sictic.ch/startup-resources/" target="_blank" rel="noopener">Due diligence checklist</a></p>
     <form class="card" id="review-form">
       <p class="error" id="error" hidden role="alert"></p>
-      <label for="deck">Pitch deck</label>
-      <input id="deck" name="deck" type="file" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
-      <p class="hint">PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.</p>
+      <fieldset class="mode-row" id="review-mode">
+        <legend class="hint" style="margin:0 0 0.35rem;">What do you want to review?</legend>
+        <label class="mode-option" for="mode-pitch">
+          <input id="mode-pitch" type="radio" name="review_kind" value="pitch_deck" checked>
+          <span>
+            <strong>Pitch deck</strong>
+            <span>PDF or PowerPoint against jury and investment criteria.</span>
+          </span>
+        </label>
+        <label class="mode-option" for="mode-dataroom">
+          <input id="mode-dataroom" type="radio" name="review_kind" value="dataroom">
+          <span>
+            <strong>Data room (ZIP)</strong>
+            <span>Whole dossier against the SICTIC due diligence document list.</span>
+          </span>
+        </label>
+      </fieldset>
+      <label id="file-label" for="upload">Pitch deck</label>
+      <input id="upload" name="deck" type="file" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+      <p class="hint" id="file-hint">PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.</p>
       <label class="check-row" for="email-results">
         <input id="email-results" name="email_results" type="checkbox" value="1" checked>
         <span>
@@ -376,7 +411,7 @@
       <div id="working" class="working" hidden>
         <p id="working-message">We're working on your deck.</p>
         <p id="elapsed" class="elapsed">Elapsed 0:00</p>
-        <ol class="steps">
+        <ol class="steps" id="review-steps">
           <li data-step="receive">1. Receive the deck</li>
           <li data-step="extract">2. Extract the text</li>
           <li data-step="review">3. Review the deck</li>

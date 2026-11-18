@@ -8,6 +8,7 @@ ADMIN_ONLY_HARNESS_COMMANDS = {
 # These commands exercise dispatch with their workflow-specific fixtures.
 FOCUSED_HARNESS_TESTS = {
     "/recruiting": "tests/skills/test_recruiting.py",
+    "/dataroom_review": "tests/skills/test_dataroom_review.py",
 }
 
 SKILL_COVERAGE = {
@@ -34,6 +35,7 @@ SKILL_COVERAGE = {
     "member_preferences": "utility-smoke",
     "person_profile": "local-smoke",
     "pitch_deck_review": "harness-smoke",
+    "dataroom_review": "existing-unit",
     "persons_in_dataset": "existing-unit",
     "potential_investors": "local-smoke",
     "ranking": "utility-smoke",
