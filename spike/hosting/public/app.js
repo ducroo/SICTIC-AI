@@ -83,6 +83,13 @@ function syncModeUi() {
   }
 }
 
+let appCheck = null;
+let busy = false;
+let timer = null;
+let readyUser = null;
+let resumeStarted = false;
+let activeJobId = null;
+
 if (modePitch) {
   modePitch.addEventListener("change", syncModeUi);
 }
@@ -90,13 +97,6 @@ if (modeDataroom) {
   modeDataroom.addEventListener("change", syncModeUi);
 }
 syncModeUi();
-
-let appCheck = null;
-let busy = false;
-let timer = null;
-let readyUser = null;
-let resumeStarted = false;
-let activeJobId = null;
 
 function showError(message) {
   errorEl.hidden = !message;
