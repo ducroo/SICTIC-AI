@@ -90,11 +90,31 @@ let readyUser = null;
 let resumeStarted = false;
 let activeJobId = null;
 
+const modeFieldset = document.getElementById("review-mode");
+function onModeInteraction() {
+  // Radios can be toggled via label click; sync on change and click.
+  syncModeUi();
+}
 if (modePitch) {
-  modePitch.addEventListener("change", syncModeUi);
+  modePitch.addEventListener("change", onModeInteraction);
+  modePitch.addEventListener("click", onModeInteraction);
 }
 if (modeDataroom) {
-  modeDataroom.addEventListener("change", syncModeUi);
+  modeDataroom.addEventListener("change", onModeInteraction);
+  modeDataroom.addEventListener("click", onModeInteraction);
+}
+if (modeFieldset) {
+  modeFieldset.addEventListener("change", onModeInteraction);
+  modeFieldset.querySelectorAll(".mode-option").forEach((option) => {
+    option.addEventListener("click", () => {
+      // Ensure the radio under this label is selected before syncing.
+      const input = option.querySelector('input[type="radio"]');
+      if (input && !input.checked) {
+        input.checked = true;
+      }
+      syncModeUi();
+    });
+  });
 }
 syncModeUi();
 
