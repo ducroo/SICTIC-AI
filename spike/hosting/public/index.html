@@ -353,7 +353,12 @@
       th:nth-child(4), td:nth-child(4) { width: 28%; }
       th:nth-child(5), td:nth-child(5) { width: 25%; }
       th:nth-child(6), td:nth-child(6) { width: 25%; }
-      tr { break-inside: avoid; page-break-inside: avoid; }
+      /* Tall checklist rows must be allowed to split; avoid creates blank pages. */
+      thead { display: table-header-group; }
+      tr, td, th {
+        break-inside: auto;
+        page-break-inside: auto;
+      }
       .status-pill {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;

@@ -16,6 +16,9 @@ def test_build_report_document_html_includes_masthead_and_body():
     assert "A4 landscape" in html
     assert 'src="data:image/svg+xml;base64,' in html
     assert "file://" not in html
+    # Tall data-room rows must be allowed to split across pages.
+    assert "break-inside: auto" in html
+    assert "page-break-inside: avoid" not in html
 
 
 def test_logo_data_uri_reads_svg(tmp_path):
