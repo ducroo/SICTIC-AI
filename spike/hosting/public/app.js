@@ -70,8 +70,8 @@ function syncModeUi() {
   fileInput.name = dataroom ? "dataroom" : "deck";
   fileInput.accept = dataroom ? DATAROOM_ACCEPT : PITCH_ACCEPT;
   fileHint.textContent = dataroom
-    ? "One ZIP of the dossier (up to 100 MB). Nested archives are skipped. A full room can take several minutes."
-    : "PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.";
+    ? "One ZIP of the dossier (up to 100 MB). Nested archives are skipped. A full room can take more than 30 minutes."
+    : "PDF or PowerPoint. The review uses the text in the file. A long deck can take 15-20 minutes.";
   submit.textContent = dataroom ? "Review this data room" : "Review this deck";
   const steps = dataroom ? DATAROOM_STEPS : PITCH_STEPS;
   const stepIds = ["receive", "extract", "review", "report"];

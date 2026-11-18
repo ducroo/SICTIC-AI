@@ -390,7 +390,7 @@ def render_page(*, error: str = "", report: str = "", filename: str = "") -> str
       {error_html}
       <label for="deck">Pitch deck</label>
       <input id="deck" name="deck" type="file" accept=".pdf,.ppt,.pptx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
-      <p class="hint">PDF or PowerPoint. The review uses the text in the file. A long deck can take a few minutes.</p>
+      <p class="hint">PDF or PowerPoint. The review uses the text in the file. A long deck can take 15-20 minutes.</p>
       <button type="submit">Review this deck</button>
       <div id="working" class="working" hidden>
         <p id="working-message">{WORKING_MESSAGE}</p>
