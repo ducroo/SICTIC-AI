@@ -985,7 +985,13 @@ async def cors_middleware(request: web.Request, handler):
     if request.method == "OPTIONS" and request.path.startswith("/api/"):
         response = web.Response(status=204)
         return _apply_cors(request, response)
-    response = await handler(request)
+    try:
+        response = await handler(request)
+    except web.HTTPException as error:
+        # Body-limit and other HTTP errors must still carry CORS headers.
+        # Without them the browser reports a misleading CORS failure.
+        _apply_cors(request, error)
+        raise
     return _apply_cors(request, response)
 
 
@@ -1052,8 +1058,11 @@ async def auth_middleware(request: web.Request, handler):
 
 
 def create_app() -> web.Application:
+    # Allow data-room ZIPs up to MAX_DATAROOM_BYTES plus multipart overhead.
+    from spike.runtime import MAX_DATAROOM_BYTES
+
     app = web.Application(
-        client_max_size=32 * 1024 * 1024,
+        client_max_size=MAX_DATAROOM_BYTES + (8 * 1024 * 1024),
         middlewares=(
             cors_middleware,
             local_ui_middleware,
