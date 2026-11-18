@@ -8,17 +8,44 @@ from spike import report_pdf
 def test_build_report_document_html_includes_masthead_and_body():
     html = report_pdf.build_report_document_html(
         deck_filename="deck.pdf",
-        report_body_html="<table><tr><td>Fine</td></tr></table>",
+        report_body_html=(
+            '<div class="table-wrap"><table><thead><tr>'
+            "<th>Status</th></tr></thead><tbody><tr>"
+            '<td><span class="status-pill status-fine">Fine</span></td>'
+            "</tr></tbody></table></div>"
+        ),
     )
     assert "Review of deck.pdf" in html
     assert "SICTIC pitch deck review" in html
-    assert "<table><tr><td>Fine</td></tr></table>" in html
+    assert "Fine" in html
+    assert "print-row" in html
+    assert "print-label" in html
+    assert "<table>" not in html
     assert "A4 landscape" in html
     assert 'src="data:image/svg+xml;base64,' in html
     assert "file://" not in html
-    # Tall data-room rows must be allowed to split across pages.
-    assert "break-inside: auto" in html
-    assert "page-break-inside: avoid" not in html
+    assert "table-layout: fixed" not in html
+
+
+def test_flatten_tables_for_print_keeps_all_columns_as_labeled_rows():
+    body = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Importance</th><th>No</th><th>Check</th><th>Status</th>"
+        "<th>Rationale</th><th>Source Documents</th>"
+        "<th>Proposed next steps and questions</th>"
+        "</tr></thead><tbody><tr>"
+        "<th>9</th><td>2.2.1</td><td>Equity Accuracy</td>"
+        '<td><span class="status-pill status-missing">Not Found</span></td>'
+        "<td>Missing reconciliation.</td>"
+        "<td>cap-table.pdf</td>"
+        "<td>Request signed Aktienbuch match.</td>"
+        "</tr></tbody></table></div>"
+    )
+    flat = report_pdf.flatten_tables_for_print(body)
+    assert "<table>" not in flat
+    assert "Proposed next steps and questions" in flat
+    assert "Request signed Aktienbuch match." in flat
+    assert 'class="status-pill status-missing"' in flat
 
 
 def test_logo_data_uri_reads_svg(tmp_path):
