@@ -4,7 +4,11 @@ from lib.model_config import llm_model
 from lib.startups.identity import canonical_startup_slug
 from lib.infrastructure.configuration import load_repository_config
 from lib.infrastructure.ai_text_generation import generate_markdown
-from skills.dd_checks.dd_checks import most_important_findings
+from skills.dd_checks.dd_checks import (
+    agent_config_key,
+    dd_engine,
+    most_important_findings,
+)
 
 logger = get_logger(__name__)
 
@@ -26,6 +30,24 @@ def _find_dd_checks_report(startup_slug: str) -> InsightFile:
     return report
 
 
+def _agent_priorities(startup_slug: str, config: dict) -> InsightFile:
+    """Return the priorities the DD agent saved with its report, or a manual version."""
+    priorities = InsightFile(
+        dataset=startup_slug,
+        skill="dd_priorities",
+        model=llm_model(),
+        config_key=agent_config_key(config),
+    ).find(selection="reusable")
+    if priorities is None:
+        raise ValueError(
+            f"No current DD priorities for '{startup_slug}'. Run /dd_checks "
+            f"{startup_slug}; the DD agent writes the checks and the priorities "
+            "together."
+        )
+    logger.info("[%s] Using the DD agent's priorities from %s", startup_slug, priorities.path)
+    return priorities
+
+
 def _dd_findings(startup_slug: str, source_report: str) -> str:
     """Select the most important findings, or the whole report when it has none.
 
@@ -44,7 +66,11 @@ def _dd_findings(startup_slug: str, source_report: str) -> str:
 
 
 async def dd_priorities(startup: str) -> InsightResult:
-    """Merge the most important DD findings into up to five priorities."""
+    """Return up to five priorities from the DD checks.
+
+    The DD agent saves them together with its report. For a manual report, or
+    with the "pipeline" engine, the most important findings are merged here.
+    """
     startup_slug = canonical_startup_slug(startup)
     source_insight = _find_dd_checks_report(startup_slug)
     source_report = source_insight.content()
@@ -53,10 +79,12 @@ async def dd_priorities(startup: str) -> InsightResult:
             f"The dd_checks report for '{startup_slug}' is empty. "
             f"Run /dd_checks {startup_slug} again."
         )
+    config = load_repository_config()
+    if dd_engine(config["dd_checks"]) == "agent" and source_insight.model != "manual":
+        return [_agent_priorities(startup_slug, config)]
     findings = _dd_findings(startup_slug, source_report)
 
-    config = load_repository_config("dd_priorities")
-    instructions = config["llm_instructions"].replace(
+    instructions = config["dd_priorities"]["llm_instructions"].replace(
         "{{startup}}",
         startup,
     )

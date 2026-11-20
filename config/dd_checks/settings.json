@@ -1,6 +1,17 @@
 {
+  "engine": "agent",
   "top_findings": {
     "minimum_importance": 6,
     "maximum_count": 15
+  },
+  "agent": {
+    "max_turns": 80,
+    "chapter_max_turns": 120,
+    "max_total_tokens": 10000000,
+    "request_timeout_seconds": 180,
+    "max_read_characters": 60000,
+    "max_search_results": 25,
+    "search_excerpt_characters": 300,
+    "document_preview_characters": 150
   }
 }

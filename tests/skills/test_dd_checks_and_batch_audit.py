@@ -31,6 +31,18 @@ INDUSTRY_SCHEMA = json.loads(
 )
 
 
+@pytest.fixture
+def pipeline_engine(monkeypatch):
+    """Let dd_checks use the pipeline engine instead of the configured agent."""
+    from copy import deepcopy
+    from skills.dd_checks import dd_checks as module
+
+    config = deepcopy(load_repository_config())
+    config["dd_checks"]["settings"]["engine"] = "pipeline"
+    monkeypatch.setattr(module, "load_repository_config", lambda: config)
+    return config
+
+
 def _audit_insight(checks: list[tuple[str, str, int]]) -> SimpleNamespace:
     """Build a fake DD chapter audit from (number, name, importance) checks."""
     audit = {
@@ -340,7 +352,9 @@ async def test_configured_dd_product_fallback_preserves_specialist_selection(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('change', [None, 'revision', 'config', 'manual'])
-async def test_dd_final_report_reuse_precedes_classification(mock_env, monkeypatch, change):
+async def test_dd_final_report_reuse_precedes_classification(
+    mock_env, monkeypatch, pipeline_engine, change,
+):
     from copy import deepcopy
     from unittest.mock import AsyncMock
     from lib.datasets.manifest import IngestionManifest
@@ -377,7 +391,7 @@ async def test_dd_final_report_reuse_precedes_classification(mock_env, monkeypat
             manifest.save()
         sync.side_effect = update_revision
     elif change == 'config':
-        config = deepcopy(load_repository_config())
+        config = deepcopy(pipeline_engine)
         config['dd_checks']['audit_instructions'] += '\nChanged assessment guidance.'
         monkeypatch.setattr(module, 'load_repository_config', lambda: config)
     elif change == 'manual':
@@ -421,7 +435,7 @@ def test_dd_audit_context_requires_configured_industry_focus():
 
 @pytest.mark.asyncio
 async def test_dd_report_lists_most_important_findings_before_chapters(
-    mock_env, monkeypatch,
+    mock_env, monkeypatch, pipeline_engine,
 ):
     from unittest.mock import AsyncMock
     from skills.dd_checks import dd_checks as module
@@ -466,6 +480,43 @@ async def test_dd_report_lists_most_important_findings_before_chapters(
     assert top_findings.index("| 9 | 7.1.1 |") < top_findings.index("| 7 | 3.1.2 |")
     # The configured minimum importance is 6.
     assert "3.1.1" not in top_findings
+
+
+@pytest.mark.asyncio
+async def test_assess_dd_dataset_uses_the_pipeline_with_the_agent_engine(
+    mock_env, monkeypatch,
+):
+    """dataroom_review calls assess_dd_dataset; it stays on the pipeline."""
+    from unittest.mock import AsyncMock
+    from skills.dd_checks import agent
+    from skills.dd_checks import dd_checks as module
+
+    assert load_repository_config("dd_checks")["settings"]["engine"] == "agent"
+    get_storage().mkdir(
+        dataset_location_for_domain("uploaded-room", "generated").raw_rel
+    )
+    model = "ollama/test_model:1b"
+    monkeypatch.setenv("RANKED_LLMS", model)
+    monkeypatch.setattr(module, "llm_model", lambda: model)
+    monkeypatch.setattr(module, "sync_datasets", AsyncMock())
+    monkeypatch.setattr(module, "find_industry_type", AsyncMock(return_value="software"))
+    chapters = AsyncMock(return_value=[
+        module.ChapterAudit(
+            section="## Chapter: 3_team\n\nTeam table\n",
+            audit=_audit_insight([("3.1.1", "Org chart", 7)]),
+        ),
+    ])
+    monkeypatch.setattr(module, "chapter_by_chapter", chapters)
+    agent_run = AsyncMock()
+    monkeypatch.setattr(agent, "agent_dd_checks", agent_run)
+
+    [insight] = await module.assess_dd_dataset(
+        "uploaded-room", skill_name="dataroom_review", report_title="Data-room review",
+    )
+
+    chapters.assert_awaited_once()
+    agent_run.assert_not_awaited()
+    assert insight.content().startswith("# Data-room review\n\n**Product type:** software")
 
 
 def test_most_important_findings_returns_only_that_section():
