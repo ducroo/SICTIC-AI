@@ -34,7 +34,7 @@ def build_agent(review: DdReview, model: Any, config: dict[str, Any]) -> Any:
 
     @function_tool
     def list_documents(ctx: RunContextWrapper[DdReview]) -> str:
-        """List the startup's documents with their pages and length."""
+        """List the startup's documents with their pages, length and first words."""
         return call(ctx, "list_documents")
 
     @function_tool
@@ -56,6 +56,9 @@ def build_agent(review: DdReview, model: Any, config: dict[str, Any]) -> Any:
     @function_tool
     def search_text(ctx: RunContextWrapper[DdReview], pattern: str) -> str:
         """Search all documents for a word, phrase or regular expression, ignoring case.
+
+        It finds the exact text, not its meaning. Join the same term in every
+        language of the data room with "|".
 
         Args:
             pattern: Text or regular expression to find, for example "cap table|shareholder".

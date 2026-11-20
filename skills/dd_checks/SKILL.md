@@ -78,8 +78,8 @@ Otherwise the OpenAI Agents SDK runs two agents with the configured model
 through LiteLLM:
 
 - The main agent decides the product type with the classification rules in
-  `industry_type_llm_instructions.md`, calls the checklist agent once per
-  checklist, checks the questions that could change its conclusions against
+  `industry_type_llm_instructions.md`, calls the checklist agent for all
+  checklists at once, checks the questions that could change its conclusions against
   the documents, and submits the priorities in the format of
   `config/dd_priorities/llm_instructions.md`. Each priority also gets a
   `**Verified:**` line that says what the agent checked in the documents.
@@ -88,11 +88,14 @@ through LiteLLM:
 The workflow instructions are `agent_instructions.md` and
 `agent_chapter_instructions.md`; the limits are under `agent` in
 `settings.json`. The tools only reach the startup's current parsed documents:
-`list_documents`, `read_document` (by page), `search_text` (text or regular
-expression, no Qdrant), `get_checklists`, `get_checklist`, `record_check`,
-`recorded_checks` and `submit_priorities`. `record_check` validates each result
-against the audit result schema and rejects unknown check numbers; checklist
-selection and numbering are those of the pipeline.
+`list_documents` (with each document's first words), `read_document` (by
+page), `search_text` (text or regular expression, no Qdrant),
+`get_checklists`, `get_checklist`, `record_check`, `recorded_checks` and
+`submit_priorities`. `search_text` finds exact words, not meaning, so the
+agents see the data room's languages in the first words and search each topic
+in all of them. `record_check` validates each result against the audit result
+schema and rejects unknown check numbers; checklist selection and numbering are
+those of the pipeline.
 
 ### Pipeline
 

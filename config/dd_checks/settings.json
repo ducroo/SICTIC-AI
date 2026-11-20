@@ -11,6 +11,7 @@
     "request_timeout_seconds": 180,
     "max_read_characters": 60000,
     "max_search_results": 25,
-    "search_excerpt_characters": 300
+    "search_excerpt_characters": 300,
+    "document_preview_characters": 150
   }
 }

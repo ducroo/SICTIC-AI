@@ -25,6 +25,7 @@ SETTINGS = {
     "max_read_characters": 60000,
     "max_search_results": 25,
     "search_excerpt_characters": 60,
+    "document_preview_characters": 30,
 }
 DECK = (
     "<!-- sictic-page:1 -->\nAlpha Bio develops a diagnostic test.\n"
@@ -83,6 +84,27 @@ def test_documents_are_the_startups_current_sources_with_pages(review):
     assert "- data-room/deck.pdf (pages 1-3," in listing
     assert "- data-room/notes.md (no page numbers," in listing
     assert "secret" not in listing
+
+
+def test_documents_are_listed_with_their_first_words_without_markup(review):
+    make_startup("gamma-ag", {
+        "data-room/contrat.pdf": (
+            "<!-- sictic-page:1 -->\n<!-- image -->\n## Contrat de services\n\n"
+            "| Parties | Rôle |\n| --- | --- |\n| Gamma SA | Client |\n"
+        ),
+        "data-room/empty.pdf": "<!-- sictic-page:1 -->\n<!-- image -->\n",
+    })
+    data_room = DataRoom.for_startup("gamma-ag", SETTINGS)
+
+    listing = data_room.list_documents()
+
+    contract, empty = listing.splitlines()
+    # The first 30 characters, without the image comment, heading and table markup.
+    assert contract.startswith("- data-room/contrat.pdf (pages 1-1, ")
+    assert contract.endswith(" characters): Contrat de services Parties Rô…")
+    # A document without text shows no first words.
+    assert empty.startswith("- data-room/empty.pdf (pages 1-1, ")
+    assert empty.endswith(" characters)")
 
 
 def test_read_document_returns_the_requested_pages(review):

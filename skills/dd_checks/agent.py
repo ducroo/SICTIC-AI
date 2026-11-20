@@ -55,6 +55,8 @@ class DataRoom:
     max_search_results: int
     # Length of the text shown around a search match, in characters.
     excerpt_characters: int
+    # Length of each document's first words in list_documents, in characters.
+    preview_characters: int
     documents_read: set[str] = field(default_factory=set)
 
     @classmethod
@@ -73,6 +75,7 @@ class DataRoom:
             max_read_characters=settings["max_read_characters"],
             max_search_results=settings["max_search_results"],
             excerpt_characters=settings["search_excerpt_characters"],
+            preview_characters=settings["document_preview_characters"],
         )
 
     def _pages(self, document: str) -> list[tuple[int | str, str]]:
@@ -85,8 +88,23 @@ class DataRoom:
             numbered = [page for page, _text in pages if isinstance(page, int)]
             characters = sum(len(text) for _page, text in pages)
             page_info = f"pages {min(numbered)}-{max(numbered)}" if numbered else "no page numbers"
-            lines.append(f"- {document} ({page_info}, {characters} characters)")
+            first_words = self._first_words(pages)
+            lines.append(
+                f"- {document} ({page_info}, {characters} characters)"
+                + (f": {first_words}" if first_words else "")
+            )
         return "\n".join(lines) or "The data room contains no parsed documents."
+
+    def _first_words(self, pages: list[tuple[int | str, str]]) -> str:
+        """Return the start of a document's text without markup, so the agent sees its language."""
+        text = " ".join(page_text for _page, page_text in pages)
+        # Conversion comments such as <!-- image -->, headings and table lines.
+        text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+        text = re.sub(r"[#|*]+|-{3,}", " ", text)
+        text = " ".join(text.split())
+        if len(text) <= self.preview_characters:
+            return text
+        return text[: self.preview_characters] + "…"
 
     def read_document(
         self,

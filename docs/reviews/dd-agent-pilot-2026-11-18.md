@@ -69,6 +69,57 @@ per minute, because the checklist agents run in parallel.
 | Failed agent runs with `gpt-6.1-sol` | $2.70 |
 | **Total** | **$9.34** |
 
+## Follow-up tests, 19–20 November 2026
+
+The agent marked some checks "Not Found" for which the pipeline had cited
+evidence. Most of these were judgement differences: the agent had read the
+passage but judged it differently. Only a few were passages the agent never
+found. Some of those were in French, while the agent had searched the topic
+only with English words. Three changes were tested on data rooms B and D with
+`gpt-6-luna`:
+
+1. **First words:** `list_documents` shows each document's first 150
+   characters, so the agent sees which languages the data room uses and
+   searches each topic in all of them.
+2. **Parallel start:** the main agent starts all checklist agents at once.
+   Before, it sometimes started them one after another, which doubled the
+   runtime (10.6 instead of 5.5 minutes for B).
+3. **Semantic search:** an optional `semantic_search` tool on the existing
+   Qdrant search.
+
+Each data room ran three times with 1 and 2, and three times with 1, 2 and 3
+(92 checks each). Four known passages, two in French and two in English, that
+the pipeline had cited and the first agent version had missed, were followed
+separately.
+
+| | B without / with semantic search | D without / with semantic search |
+|---|---|---|
+| Checks "Not Found" | 35–36 / 35–37 | 23–27 / 24–27 |
+| Pipeline found evidence, the agent didn't | 4–6 / 5 | 6–10 / 9 |
+| Known passages cited | 3 of 6 / 0 of 6 | 1 of 6 / 2 of 6 |
+| Same status, two runs of the same version | 84% | 77% |
+| Same status, one run of each version | 82% | 75% |
+| Runtime in minutes | 3.8–5.5 / 4.7–5.4 | 5.5–9.2 / 5.8–7.0 |
+
+- The agent used semantic search 73–99 times per run and searched less by
+  words, but it found no more.
+- Runs of different versions agreed almost as often as two runs of the same
+  version, so the effect of semantic search is smaller than the run-to-run
+  variation.
+- In two runs, the agent cited one of the French passages and still judged
+  the check "Not Found". There, the miss is in the judgement, not in the
+  search.
+- Of the status differences between two runs, about 60% were judgement, for
+  example "Borderline" against "Sufficient", and 40% were "Not Found" against
+  a found status.
+- Each run cost $0.09–0.14, with and without semantic search. The follow-up
+  tests cost about $1.40; with the check runs on 18 November, the pilot cost
+  about $10.90 in total.
+
+The first words and the parallel start are kept. Semantic search is not added:
+it would keep Qdrant and the embeddings for the agent without a measurable
+benefit.
+
 ## Decision
 
 The agent's priorities are the same or better, and it costs about the same.
@@ -96,14 +147,18 @@ Its results are stable in small data rooms; in large ones this is still open
 ## Open points
 
 - Two agent runs agree on only 71–81% of check statuses in the larger data
-  rooms. The pipeline's own run-to-run agreement was not measured, so it is
-  unknown whether this is worse than today.
+  rooms, and on 74–87% in the follow-up tests. About 60% of the differences are
+  judgement, so more search tools will not reduce them; clearer status
+  definitions or a second pass on the important checks might. The pipeline's
+  own run-to-run agreement was not measured, so it is unknown whether this is
+  worse than today.
 - In large data rooms the agent opened 40–75 documents. It reached the others
-  only through their names and the text search. The text search finds exact
-  words, not meanings, so it can miss a document that uses other words or
-  another language. The pipeline finds text by meaning, but gives the model
-  only 25 short pieces per check. The blind rating showed no problem, but four
-  startups are a small sample.
+  only through their names, their first words and the text search. The text
+  search finds exact words, not meanings, so it can miss a document that uses
+  other words. Semantic search did not help in the follow-up tests. The
+  pipeline finds text by meaning, but gives the model only 25 short pieces per
+  check. The blind rating showed no problem, but four startups are a small
+  sample.
 - With a local model instead of OpenAI, the agent would be about three times
   slower than the pipeline. This only matters if SICTIC-AI switches back to a
   local model.
