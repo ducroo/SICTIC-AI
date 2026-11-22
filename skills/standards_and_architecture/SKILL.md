@@ -482,6 +482,15 @@ Do not hardcode providers, endpoints or credentials in skills.
 Text generation and embeddings must use the shared LiteLLM-backed
 services. Skills must not call provider APIs directly.
 
+Agent workflows run the OpenAI Agents SDK with `agent_model` and
+`agent_model_settings` from
+`lib.infrastructure.ai_text_generation.agent_model`. Each model call goes
+through LiteLLM and the shared scheduler, counts its tokens against a run
+limit and is retried by the SDK on rate limits, timeouts and outages. Instead
+of `generate_*` correction loops, the agent's tools validate what it records,
+and the skill checks that the run is complete before saving. Disable SDK
+tracing. The DD agent in `dd_checks` is the first such workflow.
+
 Use the generation APIs' schema validation and `Review` mechanism;
 reviewers are supported for both Markdown and JSON. Do not recreate
 JSON repair or output-correction loops in skills.

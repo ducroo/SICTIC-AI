@@ -126,3 +126,44 @@ async def test_dd_priorities_resolves_startup_alias(
     path = insight.path
 
     assert path.startswith("storage/startups/expertvision/insights/dd-priorities-")
+
+
+@pytest.mark.asyncio
+async def test_dd_priorities_merges_a_generated_report_with_the_pipeline_engine(
+    mock_env,
+    monkeypatch,
+):
+    from copy import deepcopy
+
+    from lib.infrastructure.configuration import load_repository_config
+
+    model = "ollama/test_model:1b"
+    monkeypatch.setenv("RANKED_LLMS", model)
+    monkeypatch.setattr("skills.dd_priorities.dd_priorities.llm_model", lambda: model)
+    config = deepcopy(load_repository_config())
+    config["dd_checks"]["settings"]["engine"] = "pipeline"
+    monkeypatch.setattr(
+        "skills.dd_priorities.dd_priorities.load_repository_config",
+        lambda: config,
+    )
+    _create_startup_dataset("avientus")
+    InsightFile("avientus", "dd_checks", model).save(
+        "# M&A Due Diligence Checks for Avientus\n\n"
+        "## Most important findings\n\n"
+        "| 9 | 4.1.3 | Cash Position | Critical |\n"
+    )
+    prompts = []
+
+    async def fake_llm_chat(prompt):
+        prompts.append(prompt)
+        return "## 1. Unverified liquidity"
+
+    monkeypatch.setattr(
+        "skills.dd_priorities.dd_priorities.generate_markdown",
+        fake_llm_chat,
+    )
+
+    [insight] = await dd_priorities("avientus")
+
+    assert "| 9 | 4.1.3 | Cash Position | Critical |" in prompts[0]
+    assert insight.content() == "## 1. Unverified liquidity"
