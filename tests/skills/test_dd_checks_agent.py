@@ -136,6 +136,67 @@ def test_read_document_stops_at_the_reading_limit(review):
     assert "Call read_document with first_page=2 to continue." in text
 
 
+@pytest.mark.parametrize(("text", "parts"), [
+    ("short", ["short"]),
+    # At line breaks where possible, else at spaces.
+    ("aaaa bbbb\ncccc dddd", ["aaaa", "bbbb", "cccc", "dddd"]),
+    # A line without spaces is cut at the limit.
+    ("abcdefghij", ["abcdefgh", "ij"]),
+])
+def test_long_text_is_split_into_parts_within_the_limit(text, parts):
+    assert module.split_into_parts(text, 8) == parts
+
+
+# Twelve table rows of 16 characters each: four fit into 80 characters.
+ROWS = [f"| Row {number:02} | {number * 10:03} |" for number in range(1, 13)]
+
+
+def test_a_long_document_without_page_numbers_is_read_in_parts(review):
+    make_startup("gamma-ag", {"data-room/plan.xlsx": "\n".join(ROWS)})
+    data_room = DataRoom.for_startup("gamma-ag", {**SETTINGS, "max_read_characters": 80})
+
+    reads = [data_room.read_document("data-room/plan.xlsx", None, None, part) for part in (None, 2, 3)]
+
+    assert reads[0].startswith("## data-room/plan.xlsx, page n/a, part 1 of 3\n\n| Row 01 | 010 |")
+    assert reads[0].endswith(
+        "[Stopped before page n/a, part 2 of 3 to stay within the reading limit. "
+        "Call read_document with part=2 to continue.]"
+    )
+    assert "Call read_document with part=3 to continue." in reads[1]
+    assert "Stopped" not in reads[2]
+    # Every row is read once and whole.
+    assert [line for text in reads for line in text.splitlines() if line.startswith("| Row")] == ROWS
+
+
+def test_a_long_page_is_read_in_parts_and_keeps_its_page_number(review):
+    make_startup("gamma-ag", {"data-room/report.pdf": (
+        "<!-- sictic-page:1 -->\nSummary.\n<!-- sictic-page:2 -->\n"
+        + "\n".join(ROWS) + "\n<!-- sictic-page:3 -->\nEnd.\n"
+    )})
+    data_room = DataRoom.for_startup("gamma-ag", {**SETTINGS, "max_read_characters": 80})
+
+    first = data_room.read_document("data-room/report.pdf", 2, None, None)
+    last = data_room.read_document("data-room/report.pdf", 2, None, 3)
+
+    assert first.startswith("## data-room/report.pdf, page 2, part 1 of 3\n\n| Row 01 |")
+    assert "Call read_document with first_page=2 and part=2 to continue." in first
+    assert last.startswith("## data-room/report.pdf, page 2, part 3 of 3\n\n| Row 09 |")
+    assert "Call read_document with first_page=3 to continue." in last
+    assert data_room.read_document("data-room/report.pdf", 2, None, 4) == (
+        "data-room/report.pdf, page 2 has 3 parts, so there is no part 4."
+    )
+    assert data_room.read_document("data-room/report.pdf", 1, None, 2) == (
+        "data-room/report.pdf, page 1 has 1 part, so there is no part 2."
+    )
+
+
+def test_search_text_names_the_part_of_a_long_page(review):
+    make_startup("gamma-ag", {"data-room/plan.xlsx": "\n".join(ROWS)})
+    data_room = DataRoom.for_startup("gamma-ag", {**SETTINGS, "max_read_characters": 80})
+
+    assert data_room.search_text("Row 11").startswith("- data-room/plan.xlsx, page n/a, part 3 of 3: …")
+
+
 def test_search_text_returns_document_page_and_excerpt(review):
     assert "- data-room/deck.pdf, page 2: …The cap table lists two founders.…" in (
         review.data_room.search_text("cap table")

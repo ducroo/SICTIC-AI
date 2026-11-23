@@ -93,9 +93,13 @@ page), `search_text` (text or regular expression, no Qdrant),
 `get_checklists`, `get_checklist`, `record_check`, `recorded_checks` and
 `submit_priorities`. `search_text` finds exact words, not meaning, so the
 agents see the data room's languages in the first words and search each topic
-in all of them. `record_check` validates each result against the audit result
-schema and rejects unknown check numbers; checklist selection and numbering are
-those of the pipeline.
+in all of them. `read_document` returns at most `max_read_characters` per call
+and says where to continue. A page, or a document without page numbers, that is
+longer than this is split into parts at line breaks; `read_document` and
+`search_text` name the part, for example "page 2, part 1 of 3". Nothing is cut
+off. `record_check` validates each result against the audit result schema and
+rejects unknown check numbers; checklist selection and numbering are those of
+the pipeline.
 
 ### Pipeline
 

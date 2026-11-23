@@ -15,7 +15,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 from lib.batch_audit.checklist import Checklist, ChecklistCheck, parse_checklist
 from lib.batch_audit.rendering import json_to_markdown_table
@@ -40,6 +40,55 @@ logger = get_logger(__name__)
 
 # Skill name in the chapter audits, the same as in the pipeline's audits.
 AUDIT_SKILL = "dd_checks"
+
+
+def split_into_parts(text: str, limit: int) -> list[str]:
+    """Split text longer than the limit into parts of at most limit characters.
+
+    Each cut is at the last line break before the limit, so table rows stay
+    whole. A line longer than the limit is cut at a space, or else at the limit.
+    """
+    parts = []
+    start = 0
+    while len(text) - start > limit:
+        end = start + limit
+        cut = text.rfind("\n", start + 1, end + 1)
+        if cut == -1:
+            cut = text.rfind(" ", start + 1, end + 1)
+        if cut == -1:
+            cut = end
+        parts.append(text[start:cut].rstrip())
+        start = cut
+        while text[start].isspace():
+            start += 1
+    parts.append(text[start:])
+    return parts
+
+
+class Section(NamedTuple):
+    """A page of a document, or a part of a page that is longer than the reading limit.
+
+    A document without page markers is one page with the page "n/a".
+    """
+
+    page: int | str
+    # Number of this part and number of parts of the page; both 1 for a page that is not split.
+    part: int
+    part_count: int
+    text: str
+
+    def location(self) -> str:
+        """Return where the section is, for example "page 4" or "page 4, part 2 of 3"."""
+        if self.part_count == 1:
+            return f"page {self.page}"
+        return f"page {self.page}, part {self.part} of {self.part_count}"
+
+    def read_arguments(self) -> str:
+        """Return the read_document arguments that start reading at this section."""
+        arguments = [f"first_page={self.page}"] if isinstance(self.page, int) else []
+        if self.part > 1:
+            arguments.append(f"part={self.part}")
+        return " and ".join(arguments)
 
 
 @dataclass
@@ -81,6 +130,17 @@ class DataRoom:
     def _pages(self, document: str) -> list[tuple[int | str, str]]:
         return split_text_by_pages(get_storage().read_text(self.parsed_paths[document]))
 
+    def _sections(self, document: str) -> list[Section]:
+        """Return the document's pages, with pages longer than the reading limit split into parts."""
+        sections = []
+        for page, text in self._pages(document):
+            parts = split_into_parts(text, self.max_read_characters)
+            sections.extend(
+                Section(page, number, len(parts), part_text)
+                for number, part_text in enumerate(parts, start=1)
+            )
+        return sections
+
     def list_documents(self) -> str:
         lines = []
         for document in self.parsed_paths:
@@ -111,30 +171,45 @@ class DataRoom:
         document: str,
         first_page: int | None = None,
         last_page: int | None = None,
+        part: int | None = None,
     ) -> str:
+        """Return the requested pages up to the reading limit, saying where to continue.
+
+        `part` is the part of the first requested page to start with, for a page
+        or a document without page markers that is longer than the limit.
+        """
         if document not in self.parsed_paths:
             return f"Unknown document: {document!r}. Use a path from list_documents."
         self.documents_read.add(document)
         sections = []
-        for page, text in self._pages(document):
-            if isinstance(page, int):
-                if first_page is not None and page < first_page:
+        for section in self._sections(document):
+            if isinstance(section.page, int):
+                if first_page is not None and section.page < first_page:
                     continue
-                if last_page is not None and page > last_page:
+                if last_page is not None and section.page > last_page:
                     continue
-            sections.append((page, text))
+            sections.append(section)
         if not sections:
             return f"{document} has no text on the requested pages."
+        if part is not None and part > 1:
+            start = sections[0]
+            if part > start.part_count:
+                parts = "1 part" if start.part_count == 1 else f"{start.part_count} parts"
+                return f"{document}, page {start.page} has {parts}, so there is no part {part}."
+            sections = [
+                section for section in sections
+                if section.page != start.page or section.part >= part
+            ]
         output, length = [], 0
-        for page, text in sections:
-            block = f"## {document}, page {page}\n\n{text}"
+        for section in sections:
+            block = f"## {document}, {section.location()}\n\n{section.text}"
             if output and length + len(block) > self.max_read_characters:
                 output.append(
-                    f"[Stopped before page {page} to stay within the reading limit. "
-                    f"Call read_document with first_page={page} to continue.]"
+                    f"[Stopped before {section.location()} to stay within the reading limit. "
+                    f"Call read_document with {section.read_arguments()} to continue.]"
                 )
                 break
-            output.append(block[: self.max_read_characters])
+            output.append(block)
             length += len(block)
         return "\n\n".join(output)
 
@@ -146,10 +221,11 @@ class DataRoom:
         half = self.excerpt_characters // 2
         matches = []
         for document in self.parsed_paths:
-            for page, text in self._pages(document):
+            for section in self._sections(document):
+                text = section.text
                 for match in expression.finditer(text):
                     excerpt = " ".join(text[max(0, match.start() - half): match.end() + half].split())
-                    matches.append(f"- {document}, page {page}: …{excerpt}…")
+                    matches.append(f"- {document}, {section.location()}: …{excerpt}…")
                     if len(matches) > self.max_search_results:
                         return "\n".join(matches[: self.max_search_results]) + (
                             "\n[More matches exist; use a more specific pattern.]"
