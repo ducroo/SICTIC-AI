@@ -43,15 +43,20 @@ def build_agent(review: DdReview, model: Any, config: dict[str, Any]) -> Any:
         document: str,
         first_page: int | None,
         last_page: int | None,
+        part: int | None,
     ) -> str:
         """Read a document, or a range of its pages.
+
+        A page, or a document without page numbers, that is longer than the
+        reading limit is read in parts. The result says how to continue.
 
         Args:
             document: Document path exactly as shown by list_documents.
             first_page: First page to read, or null to start at the beginning.
             last_page: Last page to read, or null to read to the end.
+            part: Part of the first page to start with, or null to start with its first part.
         """
-        return call(ctx, "read_document", document, first_page, last_page)
+        return call(ctx, "read_document", document, first_page, last_page, part)
 
     @function_tool
     def search_text(ctx: RunContextWrapper[DdReview], pattern: str) -> str:
